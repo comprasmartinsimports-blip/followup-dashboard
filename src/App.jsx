@@ -1,10 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 
 const ML = (path) => `/api/ml${path}`;
 const fmt = (n) => `R$ ${Number(n).toFixed(2).replace(".", ",")}`;
 const fmtPct = (n) => `${(n * 100).toFixed(1)}%`;
 
-// Pega o SKU do produto — pode estar em seller_sku ou nos attributes
 function getSku(listing) {
   if (listing.seller_sku) return listing.seller_sku;
   const skuAttr = listing.attributes?.find(a =>
@@ -13,13 +12,11 @@ function getSku(listing) {
   return skuAttr?.value_name ?? null;
 }
 
-// Pega a tarifa real do anúncio
 function getRealFeeRate(listing) {
-  // Tenta pegar do listing_type_id
   const type = listing.listing_type_id;
+  if (type === "gold_premium") return 0.17;
   if (type === "gold_special") return 0.16;
   if (type === "gold_pro") return 0.16;
-  if (type === "gold_premium") return 0.17;
   if (type === "gold") return 0.13;
   if (type === "silver") return 0.10;
   if (type === "bronze") return 0.06;
@@ -27,11 +24,38 @@ function getRealFeeRate(listing) {
   return 0.16;
 }
 
-function calcMargin(price, cost, feeRate = 0.16, shippingCost = 0) {
-  const mlFee = price * feeRate;
-  const revenue = price - mlFee - shippingCost;
+function getListingTypeLabel(type) {
+  const map = {
+    gold_premium: { label: "Premium · 17%", color: "#7c3aed" },
+    gold_special: { label: "Clássico · 16%", color: "#2563eb" },
+    gold_pro: { label: "Premium · 16%", color: "#7c3aed" },
+    gold: { label: "Ouro · 13%", color: "#d97706" },
+    silver: { label: "Prata · 10%", color: "#64748b" },
+    bronze: { label: "Bronze · 6%", color: "#92400e" },
+    free: { label: "Grátis · 0%", color: "#94a3b8" },
+  };
+  return map[type] ?? { label: `${fmtPct(getRealFeeRate({ listing_type_id: type }))}`, color: "#64748b" };
+}
+
+// Pega preço de venda real (pode ser promocional)
+function getSalePrice(listing) {
+  // Verifica se há preço promocional ativo
+  const promo = listing.sale_price;
+  if (promo && promo.amount && promo.amount < listing.price) {
+    return { salePrice: promo.amount, originalPrice: listing.price, hasPromo: true };
+  }
+  // Tenta também em deals
+  if (listing.deal_price && listing.deal_price < listing.price) {
+    return { salePrice: listing.deal_price, originalPrice: listing.price, hasPromo: true };
+  }
+  return { salePrice: listing.price, originalPrice: listing.price, hasPromo: false };
+}
+
+function calcMargin(salePrice, cost, feeRate = 0.16, shippingCost = 0) {
+  const mlFee = salePrice * feeRate;
+  const revenue = salePrice - mlFee - shippingCost;
   const profit = revenue - cost;
-  const margin = cost > 0 ? profit / price : null;
+  const margin = cost > 0 ? profit / salePrice : null;
   return { fee: mlFee, revenue, profit, margin, feeRate };
 }
 
@@ -57,7 +81,7 @@ async function analyzeWithAI(listing) {
   const prompt = `Você é um especialista em otimização de anúncios do Mercado Livre Brasil. 
 Analise este anúncio e retorne SOMENTE um JSON válido (sem markdown, sem backticks) com esta estrutura:
 {"score_commentary":"comentário em 1 frase","strengths":["ponto1","ponto2"],"improvements":[{"field":"campo","suggestion":"sugestão"},{"field":"campo","suggestion":"sugestão"},{"field":"campo","suggestion":"sugestão"}],"title_suggestion":"título otimizado máx 60 chars","keywords":["palavra1","palavra2","palavra3","palavra4","palavra5"]}
-Anúncio: Título: ${listing.title}, Preço: R$${listing.price}, Fotos: ${listing.pictures?.length ?? 0}, Frete grátis: ${listing.shipping?.free_shipping ? "Sim" : "Não"}, Descrição: "${listing.description?.plain_text ?? "(vazia)"}", Atributos: ${listing.attributes?.map(a => `${a.name}: ${a.value_name}`).join(", ") || "nenhum"}, Condição: ${listing.condition ?? "não informada"}, Vendidos: ${listing.sold_quantity ?? 0}`;
+Anúncio: Título: ${listing.title}, Preço: R$${listing.salePrice}, Fotos: ${listing.pictures?.length ?? 0}, Frete grátis: ${listing.shipping?.free_shipping ? "Sim" : "Não"}, Descrição: "${listing.description?.plain_text ?? "(vazia)"}", Atributos: ${listing.attributes?.map(a => `${a.name}: ${a.value_name}`).join(", ") || "nenhum"}, Condição: ${listing.condition ?? "não informada"}, Vendidos: ${listing.sold_quantity ?? 0}`;
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "Content-Type": "application/json", "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
@@ -102,21 +126,17 @@ async function fetchAllOrders(userId, tk) {
   return allOrders;
 }
 
-// Busca o custo de frete do comprador para um anúncio
-async function fetchShippingCost(itemId, tk) {
+// Busca frete do comprador para um item
+async function fetchBuyerShippingCost(itemId, tk) {
   try {
     const res = await fetch(ML(`/items/${itemId}/shipping_options?zip_code=01310100`), {
       headers: { Authorization: `Bearer ${tk}` }
     });
     const data = await res.json();
     const options = data.options ?? [];
-    if (options.length === 0) return 0;
-    // Pega o menor custo de frete disponível
-    const costs = options.map(o => o.cost ?? o.list_cost ?? 0).filter(c => c > 0);
+    const costs = options.map(o => parseFloat(o.cost ?? o.list_cost ?? 0)).filter(c => c > 0);
     return costs.length > 0 ? Math.min(...costs) : 0;
-  } catch {
-    return 0;
-  }
+  } catch { return 0; }
 }
 
 function MarginBar({ value }) {
@@ -176,8 +196,8 @@ function AIPanel({ listing, onClose }) {
           </div>
         </div>
         {state === "idle" && <div style={{ textAlign: "center", padding: "28px 0" }}><div style={{ color: "#94a3b8", fontSize: 13, marginBottom: 16 }}>Analise com IA para receber sugestões personalizadas</div><button onClick={runAnalysis} style={{ background: "#0f172a", border: "none", color: "#fff", fontWeight: 700, padding: "11px 32px", borderRadius: 10, cursor: "pointer", fontSize: 14 }}>✦ Analisar com IA</button></div>}
-        {state === "loading" && <div style={{ textAlign: "center", padding: "32px 0", color: "#94a3b8" }}><div style={{ fontSize: 28, marginBottom: 12, animation: "spin 1.2s linear infinite", display: "inline-block" }}>⟳</div><style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style><div style={{ fontSize: 13 }}>Analisando seu anúncio...</div></div>}
-        {state === "error" && <div style={{ textAlign: "center", padding: "24px 0" }}><div style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>Erro: {errorMsg || "Não foi possível analisar."}</div><button onClick={runAnalysis} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", color: "#374151", padding: "8px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>Tentar novamente</button></div>}
+        {state === "loading" && <div style={{ textAlign: "center", padding: "32px 0", color: "#94a3b8" }}><div style={{ fontSize: 28, marginBottom: 12, animation: "spin 1.2s linear infinite", display: "inline-block" }}>⟳</div><style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style><div style={{ fontSize: 13 }}>Analisando...</div></div>}
+        {state === "error" && <div style={{ textAlign: "center", padding: "24px 0" }}><div style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>Erro: {errorMsg}</div><button onClick={runAnalysis} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", color: "#374151", padding: "8px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>Tentar novamente</button></div>}
         {state === "done" && result && (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10, padding: "14px 18px" }}>
@@ -238,6 +258,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [realListings, setRealListings] = useState([]);
   const [realOrders, setRealOrders] = useState([]);
+  const [shippingCosts, setShippingCosts] = useState({});
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
   const [showTokenModal, setShowTokenModal] = useState(false);
@@ -262,17 +283,29 @@ export default function App() {
       setLoadingMsg("Buscando pedidos...");
       const orders = await fetchAllOrders(me.id, tk);
       setRealOrders(orders);
+
+      // Busca custo de frete dos anúncios sem frete grátis (em lotes para não sobrecarregar)
+      setLoadingMsg("Buscando custos de frete...");
+      const paidShipping = listings.filter(l => !l.shipping?.free_shipping).slice(0, 50);
+      const shippingMap = {};
+      for (let i = 0; i < paidShipping.length; i += 5) {
+        const batch = paidShipping.slice(i, i + 5);
+        const results = await Promise.all(batch.map(l => fetchBuyerShippingCost(l.id, tk).then(cost => ({ id: l.id, cost }))));
+        results.forEach(r => { shippingMap[r.id] = r.cost; });
+      }
+      setShippingCosts(shippingMap);
+
     } catch (e) { setLoadError(e.message); }
     setLoading(false); setLoadingMsg("");
   }
 
   const MOCK_LISTINGS = [
-    { id: "MLB6685879548", seller_sku: "1461", listing_type_id: "gold_premium", title: "Lanterna Traseira Gol G4 2006 2007 2008 A 2014 Fume", price: 62.34, sold_quantity: 0, status: "active", permalink: "https://www.mercadolivre.com.br", shipping: { free_shipping: false, logistic_type: "fulfillment" }, pictures: [{}], description: { plain_text: "Lanterna traseira." }, attributes: [{ id: "BRAND", name: "Marca", value_name: "Genérico" }], condition: "new" },
-    { id: "MLB001", seller_sku: "SKU-001", listing_type_id: "gold_special", title: "Lanterna Traseira Uno Fire 2004 2005 2006", price: 70.47, sold_quantity: 5, status: "active", permalink: "https://www.mercadolivre.com.br", shipping: { free_shipping: true, logistic_type: "fulfillment" }, pictures: [{},{},{},{},{},{}], description: { plain_text: "Lanterna traseira original." }, attributes: [{ id: "BRAND", name: "Marca", value_name: "Genérico" },{ id: "SELLER_SKU", name: "SKU", value_name: "SKU-001" }], condition: "new" },
+    { id: "MLB6685879548", seller_sku: "1461", listing_type_id: "gold_premium", title: "Lanterna Traseira Gol G4 2006 2007 2008 A 2014 Fume", price: 62.34, sale_price: null, sold_quantity: 0, status: "active", permalink: "https://www.mercadolivre.com.br", shipping: { free_shipping: false, logistic_type: "xd_drop_off", cost: 8.55 }, pictures: [{}], description: { plain_text: "Lanterna traseira." }, attributes: [{ id: "SELLER_SKU", name: "SKU", value_name: "1461" }], condition: "new" },
+    { id: "MLB001", seller_sku: "SKU-001", listing_type_id: "gold_special", title: "Lanterna Traseira Uno Fire 2004 2005 2006 Original Nova", price: 70.47, sale_price: { amount: 61.69 }, sold_quantity: 5, status: "active", permalink: "https://www.mercadolivre.com.br", shipping: { free_shipping: true, logistic_type: "fulfillment" }, pictures: [{},{},{},{},{},{}], description: { plain_text: "Lanterna traseira original para Uno Fire." }, attributes: [{ id: "BRAND", name: "Marca", value_name: "Genérico" }, { id: "SELLER_SKU", name: "SKU", value_name: "SKU-001" }], condition: "new" },
   ];
 
   const MOCK_ORDERS = [
-    { id: "2000001", listing_id: "MLB001", date: "2026-05-13", price: 70.47, qty: 2, shipping_cost: 0 },
+    { id: "2000001", listing_id: "MLB001", date: "2026-05-13", price: 61.69, qty: 2, shipping_cost: 0 },
     { id: "2000002", listing_id: "MLB6685879548", date: "2026-05-10", price: 62.34, qty: 1, shipping_cost: 8.55 },
   ];
 
@@ -289,11 +322,12 @@ export default function App() {
   const enriched = listings.map(l => {
     const cost = costs[l.id] ?? 0;
     const feeRate = getRealFeeRate(l);
-    const shippingCost = l.shipping?.free_shipping ? 0 : (l.shipping?.cost ?? 0);
-    const margin = calcMargin(l.price, cost, feeRate, 0);
+    const { salePrice, originalPrice, hasPromo } = getSalePrice(l);
+    const buyerShipping = l.shipping?.free_shipping ? 0 : (shippingCosts[l.id] ?? l.shipping?.cost ?? 0);
+    const margin = calcMargin(salePrice, cost, feeRate, 0);
     const { score, checks } = calcQualityScore(l);
     const sku = getSku(l);
-    return { ...l, ...margin, cost, sku, shippingCost, totalProfit: margin.profit * (l.sold_quantity ?? 0), score, checks };
+    return { ...l, ...margin, cost, sku, salePrice, originalPrice, hasPromo, buyerShipping, totalProfit: margin.profit * (l.sold_quantity ?? 0), score, checks };
   });
 
   const filteredListings = useMemo(() => {
@@ -348,23 +382,9 @@ export default function App() {
       if (type === "xd_drop_off") return { label: "Grátis · Flex", color: "#15803d", bg: "#f0fdf4" };
       return { label: "Frete grátis", color: "#15803d", bg: "#f0fdf4" };
     }
-    // Frete cobrado — mostra valor se disponível
-    const cost = l.shipping?.cost;
-    if (cost && cost > 0) return { label: fmt(cost), color: "#d97706", bg: "#fffbeb" };
-    return { label: "Cobrado do comprador", color: "#d97706", bg: "#fffbeb" };
-  }
-
-  function getListingTypeLabel(type) {
-    const map = {
-      gold_premium: { label: "Premium · 17%", color: "#7c3aed" },
-      gold_special: { label: "Clássico · 16%", color: "#2563eb" },
-      gold_pro: { label: "Premium · 16%", color: "#7c3aed" },
-      gold: { label: "Ouro · 13%", color: "#d97706" },
-      silver: { label: "Prata · 10%", color: "#64748b" },
-      bronze: { label: "Bronze · 6%", color: "#92400e" },
-      free: { label: "Grátis · 0%", color: "#94a3b8" },
-    };
-    return map[type] ?? { label: `${fmtPct(getRealFeeRate({ listing_type_id: type }))}`, color: "#64748b" };
+    const cost = l.buyerShipping;
+    if (cost > 0) return { label: fmt(cost), color: "#d97706", bg: "#fffbeb", sub: "cobrado comprador" };
+    return { label: "A cobrar", color: "#94a3b8", bg: "#f8fafc" };
   }
 
   return (
@@ -393,7 +413,6 @@ export default function App() {
         @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}.fade-up{animation:fadeUp .3s ease forwards}
       `}</style>
 
-      {/* Header */}
       <header style={{ background: "#fff", borderBottom: "1px solid #e2e8f0", padding: "14px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ width: 36, height: 36, borderRadius: 10, background: "#0f172a", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 16, color: "#ffe000" }}>M</div>
@@ -414,7 +433,6 @@ export default function App() {
       </header>
 
       <main style={{ maxWidth: 1440, margin: "0 auto", padding: "24px 32px" }}>
-        {/* KPIs */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 24 }} className="fade-up">
           {[
             { label: "Receita líquida", value: fmt(totalRevenue), color: "#0f172a" },
@@ -432,7 +450,6 @@ export default function App() {
           ))}
         </div>
 
-        {/* Tabs */}
         <div style={{ display: "flex", gap: 2, marginBottom: 20, background: "#f1f5f9", padding: 4, borderRadius: 10, width: "fit-content" }}>
           <button className={`tab-btn ${tab === "listings" ? "active" : ""}`} onClick={() => setTab("listings")}>Anúncios ({enriched.length})</button>
           <button className={`tab-btn ${tab === "orders" ? "active" : ""}`} onClick={() => setTab("orders")}>Pedidos ({enrichedOrders.length})</button>
@@ -443,7 +460,7 @@ export default function App() {
             <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
               <div style={{ position: "relative", flex: 1, minWidth: 260 }}>
                 <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", fontSize: 14 }}>🔍</span>
-                <input className="search-input" value={searchListings} onChange={e => setSearchListings(e.target.value)} placeholder="Buscar por título, código MLB ou SKU..." />
+                <input className="search-input" value={searchListings} onChange={e => setSearchListings(e.target.value)} placeholder="Buscar por título, MLB ou SKU..." />
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 500 }}>Ordenar:</span>
@@ -463,9 +480,9 @@ export default function App() {
                     <th>Anúncio</th>
                     <th>MLB / SKU</th>
                     <th>Score</th>
-                    <th>Tipo / Tarifa</th>
-                    <th>Preço</th>
-                    <th>Frete</th>
+                    <th>Tipo</th>
+                    <th>Preço venda</th>
+                    <th>Frete comprador</th>
                     <th>Custo (R$)</th>
                     <th>Taxa ML</th>
                     <th>Lucro unit.</th>
@@ -499,7 +516,7 @@ export default function App() {
                         <td>
                           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                             <span style={{ fontSize: 11, color: "#334155", fontFamily: "monospace", fontWeight: 600 }}>{l.id}</span>
-                            <button className="copy-btn" onClick={() => navigator.clipboard.writeText(l.id)} title="Copiar MLB">⎘</button>
+                            <button className="copy-btn" onClick={() => navigator.clipboard.writeText(l.id)}>⎘</button>
                           </div>
                           {l.sku ? (
                             <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3 }}>
@@ -518,9 +535,20 @@ export default function App() {
                         <td>
                           <span style={{ fontSize: 11, color: typeInfo.color, fontWeight: 600 }}>{typeInfo.label}</span>
                         </td>
-                        <td style={{ fontWeight: 700, color: "#0f172a" }}>{fmt(l.price)}</td>
                         <td>
-                          <span style={{ fontSize: 11, color: ship.color, background: ship.bg, padding: "3px 8px", borderRadius: 6, fontWeight: 600 }}>{ship.label}</span>
+                          {l.hasPromo ? (
+                            <div>
+                              <div style={{ fontWeight: 700, color: "#dc2626", fontSize: 13 }}>{fmt(l.salePrice)}</div>
+                              <div style={{ fontSize: 10, color: "#94a3b8", textDecoration: "line-through" }}>{fmt(l.originalPrice)}</div>
+                              <div style={{ fontSize: 10, color: "#dc2626", fontWeight: 600 }}>Em promoção</div>
+                            </div>
+                          ) : (
+                            <span style={{ fontWeight: 700, color: "#0f172a" }}>{fmt(l.salePrice)}</span>
+                          )}
+                        </td>
+                        <td>
+                          <span style={{ fontSize: 12, color: ship.color, background: ship.bg, padding: "3px 8px", borderRadius: 6, fontWeight: 600 }}>{ship.label}</span>
+                          {ship.sub && <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>{ship.sub}</div>}
                         </td>
                         <td>
                           <input type="number" value={l.cost || ""} onChange={e => setCosts(c => ({ ...c, [l.id]: Number(e.target.value) }))} placeholder="0,00"

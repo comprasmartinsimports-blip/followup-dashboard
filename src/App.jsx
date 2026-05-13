@@ -1,6 +1,5 @@
 import { useState, useCallback } from "react";
 
-// ─── MOCK DATA ────────────────────────────────────────────────────────────────
 const MOCK_LISTINGS = [
   {
     id: "MLB001", title: "Fone Bluetooth Premium XZ900", price: 189.9,
@@ -60,7 +59,6 @@ const MOCK_ORDERS = [
 
 const ML_FEES = { default: 0.16, electronics: 0.14, fashion: 0.16, home: 0.15, sports: 0.15 };
 
-// ─── UTILS ───────────────────────────────────────────────────────────────────
 const fmt = (n) => `R$ ${Number(n).toFixed(2).replace(".", ",")}`;
 const fmtPct = (n) => `${(n * 100).toFixed(1)}%`;
 
@@ -99,7 +97,6 @@ function scoreLabel(s) {
   return "Fraco";
 }
 
-// ─── AI ANALYSIS ─────────────────────────────────────────────────────────────
 async function analyzeWithAI(listing) {
   const prompt = `Você é um especialista em otimização de anúncios do Mercado Livre Brasil. 
 Analise este anúncio e retorne SOMENTE um JSON válido (sem markdown, sem texto extra) com esta estrutura exata:
@@ -141,7 +138,6 @@ Dados do anúncio:
   return JSON.parse(clean);
 }
 
-// ─── COMPONENTS ──────────────────────────────────────────────────────────────
 function ScoreRing({ score }) {
   const r = 22;
   const circ = 2 * Math.PI * r;
@@ -176,7 +172,7 @@ function MarginBar({ value }) {
 }
 
 function AIPanel({ listing, onClose }) {
-  const [state, setState] = useState("idle"); // idle | loading | done | error
+  const [state, setState] = useState("idle");
   const [result, setResult] = useState(null);
   const { score, checks } = calcQualityScore(listing);
 
@@ -202,7 +198,6 @@ function AIPanel({ listing, onClose }) {
         borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 720,
         maxHeight: "85vh", overflowY: "auto", padding: "28px 32px 40px",
       }}>
-        {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
           <div>
             <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 900, fontSize: 18, marginBottom: 4 }}>
@@ -219,7 +214,6 @@ function AIPanel({ listing, onClose }) {
           }}>✕</button>
         </div>
 
-        {/* Score Overview */}
         <div style={{
           display: "flex", gap: 16, alignItems: "center",
           background: "#0f1117", border: "1px solid #1e2130",
@@ -242,7 +236,6 @@ function AIPanel({ listing, onClose }) {
           </div>
         </div>
 
-        {/* AI Section */}
         {state === "idle" && (
           <div style={{ textAlign: "center", padding: "24px 0" }}>
             <div style={{ color: "#555", fontSize: 13, marginBottom: 16 }}>
@@ -279,47 +272,35 @@ function AIPanel({ listing, onClose }) {
 
         {state === "done" && result && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {/* Commentary */}
             <div style={{
               background: "#0f1117", border: "1px solid #2a3050",
-              borderRadius: 12, padding: "16px 20px",
-              borderLeft: "3px solid #ffe000",
+              borderRadius: 12, padding: "16px 20px", borderLeft: "3px solid #ffe000",
             }}>
               <div style={{ fontSize: 12, color: "#ffe000", marginBottom: 6, letterSpacing: 1, textTransform: "uppercase" }}>Avaliação Geral</div>
               <div style={{ fontSize: 14, color: "#ccc", lineHeight: 1.6 }}>{result.score_commentary}</div>
             </div>
 
-            {/* Two cols */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {/* Strengths */}
               {result.strengths?.length > 0 && (
                 <div style={{ background: "#0f1117", border: "1px solid #1e2130", borderRadius: 12, padding: "16px 20px" }}>
                   <div style={{ fontSize: 12, color: "#00e5a0", marginBottom: 10, letterSpacing: 1, textTransform: "uppercase" }}>✓ Pontos Fortes</div>
                   {result.strengths.map((s, i) => (
-                    <div key={i} style={{ fontSize: 13, color: "#aaa", marginBottom: 6, paddingLeft: 12, borderLeft: "2px solid #00e5a020" }}>
-                      {s}
-                    </div>
+                    <div key={i} style={{ fontSize: 13, color: "#aaa", marginBottom: 6, paddingLeft: 12, borderLeft: "2px solid #00e5a020" }}>{s}</div>
                   ))}
                 </div>
               )}
-
-              {/* Keywords */}
               {result.keywords?.length > 0 && (
                 <div style={{ background: "#0f1117", border: "1px solid #1e2130", borderRadius: 12, padding: "16px 20px" }}>
                   <div style={{ fontSize: 12, color: "#888", marginBottom: 10, letterSpacing: 1, textTransform: "uppercase" }}>Palavras-chave</div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                     {result.keywords.map((k, i) => (
-                      <span key={i} style={{
-                        background: "#1e2130", color: "#ccc", fontSize: 12,
-                        padding: "4px 10px", borderRadius: 20,
-                      }}>{k}</span>
+                      <span key={i} style={{ background: "#1e2130", color: "#ccc", fontSize: 12, padding: "4px 10px", borderRadius: 20 }}>{k}</span>
                     ))}
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Improvements */}
             {result.improvements?.length > 0 && (
               <div style={{ background: "#0f1117", border: "1px solid #1e2130", borderRadius: 12, padding: "16px 20px" }}>
                 <div style={{ fontSize: 12, color: "#f5c542", marginBottom: 12, letterSpacing: 1, textTransform: "uppercase" }}>⚡ O que Melhorar</div>
@@ -342,12 +323,10 @@ function AIPanel({ listing, onClose }) {
               </div>
             )}
 
-            {/* Title suggestion */}
             {result.title_suggestion && (
               <div style={{
                 background: "#0f1117", border: "1px solid #2a3050",
-                borderRadius: 12, padding: "16px 20px",
-                borderLeft: "3px solid #00e5a0",
+                borderRadius: 12, padding: "16px 20px", borderLeft: "3px solid #00e5a0",
               }}>
                 <div style={{ fontSize: 12, color: "#00e5a0", marginBottom: 8, letterSpacing: 1, textTransform: "uppercase" }}>✦ Sugestão de Título</div>
                 <div style={{ fontSize: 14, color: "#f0f0f0", fontWeight: 600 }}>{result.title_suggestion}</div>
@@ -361,7 +340,6 @@ function AIPanel({ listing, onClose }) {
   );
 }
 
-// ─── MAIN ─────────────────────────────────────────────────────────────────────
 export default function App() {
   const [tab, setTab] = useState("listings");
   const [costs, setCosts] = useState({});
@@ -372,6 +350,13 @@ export default function App() {
 
   const listings = MOCK_LISTINGS;
   const orders = MOCK_ORDERS;
+
+  function handleConnect() {
+    const appId = "6544342750807693";
+    const redirectUri = window.location.href.split("?")[0].split("#")[0];
+    const url = `https://auth.mercadolibre.com.br/authorization?response_type=token&client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    window.location.href = url;
+  }
 
   const enriched = listings.map(l => {
     const cost = costs[l.id] ?? 0;
@@ -430,7 +415,6 @@ export default function App() {
         .fade-up { animation: fadeUp .35s ease forwards; }
       `}</style>
 
-      {/* Top Bar */}
       <header style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "16px 28px", background: "#080a0f",
@@ -454,7 +438,7 @@ export default function App() {
               📊 demonstração
             </span>
           )}
-          <button style={{
+          <button onClick={handleConnect} style={{
             background: "linear-gradient(135deg,#ffe000,#ff9500)",
             border: "none", color: "#0f1117", fontWeight: 800,
             padding: "8px 18px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontFamily: "inherit",
@@ -463,8 +447,6 @@ export default function App() {
       </header>
 
       <main style={{ maxWidth: 1200, margin: "0 auto", padding: "28px 24px" }}>
-
-        {/* KPI Row */}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 24 }} className="fade-up">
           {[
             { label: "Receita líquida", value: fmt(totalRevenue), accent: null },
@@ -483,7 +465,6 @@ export default function App() {
           ))}
         </div>
 
-        {/* Tabs */}
         <div style={{ display: "flex", gap: 2, marginBottom: 18, background: "#0a0c12", padding: 3, borderRadius: 9, width: "fit-content", border: "1px solid #13151d" }}>
           <button className={`tab-btn ${tab === "listings" ? "active" : ""}`} onClick={() => setTab("listings")}>Anúncios</button>
           <button className={`tab-btn ${tab === "orders" ? "active" : ""}`} onClick={() => setTab("orders")}>Pedidos</button>
@@ -504,7 +485,6 @@ export default function App() {
                 </select>
               </div>
             </div>
-
             <div style={{ background: "#0a0c12", border: "1px solid #13151d", borderRadius: 14, overflow: "auto" }}>
               <table>
                 <thead>
@@ -524,51 +504,28 @@ export default function App() {
                   {sorted.map(l => (
                     <tr key={l.id}>
                       <td>
-                        <div style={{ fontWeight: 500, maxWidth: 210, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#ddd" }}>
-                          {l.title}
-                        </div>
+                        <div style={{ fontWeight: 500, maxWidth: 210, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#ddd" }}>{l.title}</div>
                         <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
                           {l.checks.filter(c => !c.pass).slice(0, 2).map(c => (
-                            <span key={c.key} style={{
-                              fontSize: 10, color: "#ff5b5b", background: "#ff5b5b10",
-                              border: "1px solid #ff5b5b20", padding: "1px 7px", borderRadius: 20,
-                            }}>✗ {c.label}</span>
+                            <span key={c.key} style={{ fontSize: 10, color: "#ff5b5b", background: "#ff5b5b10", border: "1px solid #ff5b5b20", padding: "1px 7px", borderRadius: 20 }}>✗ {c.label}</span>
                           ))}
-                          <span style={{
-                            fontSize: 10, padding: "1px 7px", borderRadius: 20,
-                            background: l.status === "active" ? "#00e5a010" : "#1e2130",
-                            color: l.status === "active" ? "#00e5a0" : "#555",
-                            border: `1px solid ${l.status === "active" ? "#00e5a020" : "#2a3050"}`,
-                          }}>
+                          <span style={{ fontSize: 10, padding: "1px 7px", borderRadius: 20, background: l.status === "active" ? "#00e5a010" : "#1e2130", color: l.status === "active" ? "#00e5a0" : "#555", border: `1px solid ${l.status === "active" ? "#00e5a020" : "#2a3050"}` }}>
                             {l.status === "active" ? "● ativo" : "○ pausado"}
                           </span>
                         </div>
                       </td>
                       <td>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <div style={{
-                            width: 36, height: 36, borderRadius: 8,
-                            border: `2px solid ${scoreColor(l.score)}`,
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            fontSize: 12, fontWeight: 800, color: scoreColor(l.score),
-                          }}>{l.score}</div>
+                          <div style={{ width: 36, height: 36, borderRadius: 8, border: `2px solid ${scoreColor(l.score)}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: scoreColor(l.score) }}>{l.score}</div>
                           <span style={{ fontSize: 11, color: scoreColor(l.score) }}>{scoreLabel(l.score)}</span>
                         </div>
                       </td>
                       <td style={{ fontWeight: 700, color: "#f0f0f0" }}>{fmt(l.price)}</td>
                       <td>
-                        <input type="number" value={l.cost || ""} onChange={e => setCosts(c => ({ ...c, [l.id]: Number(e.target.value) }))}
-                          placeholder="0,00"
-                          style={{
-                            background: "#0f1117", border: "1px solid #1e2130", color: "#f0f0f0",
-                            padding: "4px 8px", borderRadius: 6, width: 80, fontSize: 12,
-                            fontFamily: "inherit", textAlign: "right",
-                          }} />
+                        <input type="number" value={l.cost || ""} onChange={e => setCosts(c => ({ ...c, [l.id]: Number(e.target.value) }))} placeholder="0,00"
+                          style={{ background: "#0f1117", border: "1px solid #1e2130", color: "#f0f0f0", padding: "4px 8px", borderRadius: 6, width: 80, fontSize: 12, fontFamily: "inherit", textAlign: "right" }} />
                       </td>
-                      <td style={{ color: "#f5c542" }}>
-                        {fmt(l.fee)}
-                        <div style={{ fontSize: 10, color: "#555" }}>{fmtPct(l.feeRate)}</div>
-                      </td>
+                      <td style={{ color: "#f5c542" }}>{fmt(l.fee)}<div style={{ fontSize: 10, color: "#555" }}>{fmtPct(l.feeRate)}</div></td>
                       <td style={{ color: l.profit >= 0 ? "#00e5a0" : "#ff5b5b", fontWeight: 700 }}>{fmt(l.profit)}</td>
                       <td style={{ minWidth: 130 }}><MarginBar value={l.margin} /></td>
                       <td style={{ color: l.totalProfit >= 0 ? "#00e5a0" : "#ff5b5b" }}>
@@ -576,13 +533,7 @@ export default function App() {
                         <div style={{ fontSize: 10, color: "#555" }}>{l.sold_quantity} vendidos</div>
                       </td>
                       <td>
-                        <button onClick={() => setSelectedListing(l)} style={{
-                          background: "linear-gradient(135deg,#ffe00022,#ff950022)",
-                          border: "1px solid #ffe00033",
-                          color: "#ffe000", fontSize: 11, padding: "5px 12px",
-                          borderRadius: 7, cursor: "pointer", fontFamily: "inherit",
-                          whiteSpace: "nowrap", transition: "all .15s",
-                        }}>✦ Analisar</button>
+                        <button onClick={() => setSelectedListing(l)} style={{ background: "linear-gradient(135deg,#ffe00022,#ff950022)", border: "1px solid #ffe00033", color: "#ffe000", fontSize: 11, padding: "5px 12px", borderRadius: 7, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>✦ Analisar</button>
                       </td>
                     </tr>
                   ))}
@@ -597,34 +548,20 @@ export default function App() {
             <table>
               <thead>
                 <tr>
-                  <th>Pedido</th>
-                  <th>Produto</th>
-                  <th>Data</th>
-                  <th>Preço</th>
-                  <th>Qtd</th>
-                  <th>Tarifa ML</th>
-                  <th>Frete</th>
-                  <th>Lucro unit.</th>
-                  <th>Margem</th>
+                  <th>Pedido</th><th>Produto</th><th>Data</th><th>Preço</th><th>Qtd</th><th>Tarifa ML</th><th>Frete</th><th>Lucro unit.</th><th>Margem</th>
                 </tr>
               </thead>
               <tbody>
                 {enrichedOrders.map(o => (
                   <tr key={o.id}>
                     <td style={{ color: "#444", fontSize: 11 }}>#{o.id}</td>
-                    <td>
-                      <div style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#ccc" }}>
-                        {o.listing?.title ?? "—"}
-                      </div>
-                    </td>
+                    <td><div style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#ccc" }}>{o.listing?.title ?? "—"}</div></td>
                     <td style={{ color: "#555", fontSize: 11 }}>{o.date}</td>
                     <td style={{ fontWeight: 700, color: "#f0f0f0" }}>{fmt(o.price)}</td>
                     <td style={{ color: "#666" }}>×{o.qty}</td>
                     <td style={{ color: "#f5c542" }}>{fmt(o.fee)}</td>
                     <td style={{ color: "#666" }}>{o.shipping_cost > 0 ? fmt(o.shipping_cost) : "Grátis"}</td>
-                    <td style={{ color: o.profit >= 0 ? "#00e5a0" : "#ff5b5b", fontWeight: 700 }}>
-                      {o.cost > 0 ? fmt(o.profit) : "—"}
-                    </td>
+                    <td style={{ color: o.profit >= 0 ? "#00e5a0" : "#ff5b5b", fontWeight: 700 }}>{o.cost > 0 ? fmt(o.profit) : "—"}</td>
                     <td style={{ minWidth: 130 }}><MarginBar value={o.margin} /></td>
                   </tr>
                 ))}

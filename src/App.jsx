@@ -3,83 +3,9 @@ import { useState, useEffect } from "react";
 const APP_ID = "6544342790807693";
 const REDIRECT_URI = "https://followup-dashboard.vercel.app/";
 
-const MOCK_LISTINGS = [
-  {
-    id: "MLB001", title: "Fone Bluetooth Premium XZ900", price: 189.9,
-    sold_quantity: 42, category: "electronics", status: "active",
-    pictures: [{ url: "https://placehold.co/400x400" }],
-    description: { plain_text: "Fone de ouvido bluetooth com cancelamento de ruído." },
-    attributes: [{ id: "BRAND", name: "Marca", value_name: "XZ" }],
-    shipping: { free_shipping: true }, condition: "new",
-  },
-  {
-    id: "MLB002", title: "Tênis Running Masculino Air Pro", price: 349.0,
-    sold_quantity: 28, category: "fashion", status: "active",
-    pictures: [{ url: "" }, { url: "" }],
-    description: { plain_text: "" },
-    attributes: [{ id: "BRAND", name: "Marca", value_name: "Air" }, { id: "SIZE", name: "Tamanho", value_name: "42" }],
-    shipping: { free_shipping: false }, condition: "new",
-  },
-  {
-    id: "MLB003", title: "Kit Panelas", price: 279.9,
-    sold_quantity: 15, category: "home", status: "active",
-    pictures: [],
-    description: { plain_text: "Kit com panelas." },
-    attributes: [],
-    shipping: { free_shipping: false }, condition: "new",
-  },
-  {
-    id: "MLB004", title: "Mochila Táctica 40L Impermeável Militar Reforçada", price: 159.9,
-    sold_quantity: 67, category: "sports", status: "active",
-    pictures: [{ url: "" }, { url: "" }, { url: "" }, { url: "" }, { url: "" }, { url: "" }],
-    description: { plain_text: "Mochila tática impermeável 40L com vários compartimentos, material resistente, ideal para camping, trilha e uso diário. Alças acolchoadas e reguláveis. Disponível em preto e verde." },
-    attributes: [
-      { id: "BRAND", name: "Marca", value_name: "TacPro" },
-      { id: "COLOR", name: "Cor", value_name: "Preto" },
-      { id: "MATERIAL", name: "Material", value_name: "Nylon 600D" },
-      { id: "VOLUME", name: "Volume", value_name: "40L" },
-    ],
-    shipping: { free_shipping: true }, condition: "new",
-  },
-  {
-    id: "MLB005", title: "Smart Watch Fitness Pro Band", price: 219.9,
-    sold_quantity: 33, category: "electronics", status: "paused",
-    pictures: [{ url: "" }],
-    description: { plain_text: "Smartwatch com monitor cardíaco." },
-    attributes: [{ id: "BRAND", name: "Marca", value_name: "FitPro" }],
-    shipping: { free_shipping: true }, condition: "new",
-  },
-];
-
-const MOCK_ORDERS = [
-  { id: "2000001", listing_id: "MLB001", date: "2026-05-12", price: 189.9, qty: 2, shipping_cost: 0 },
-  { id: "2000002", listing_id: "MLB002", date: "2026-05-11", price: 349.0, qty: 1, shipping_cost: 18.5 },
-  { id: "2000003", listing_id: "MLB004", date: "2026-05-11", price: 159.9, qty: 3, shipping_cost: 0 },
-  { id: "2000004", listing_id: "MLB003", date: "2026-05-10", price: 279.9, qty: 1, shipping_cost: 22.0 },
-  { id: "2000005", listing_id: "MLB001", date: "2026-05-09", price: 189.9, qty: 1, shipping_cost: 0 },
-  { id: "2000006", listing_id: "MLB005", date: "2026-05-08", price: 219.9, qty: 2, shipping_cost: 0 },
-];
-
 const ML_FEES = { default: 0.16, electronics: 0.14, fashion: 0.16, home: 0.15, sports: 0.15 };
 const fmt = (n) => `R$ ${Number(n).toFixed(2).replace(".", ",")}`;
 const fmtPct = (n) => `${(n * 100).toFixed(1)}%`;
-
-// PKCE helpers
-function base64urlEncode(buffer) {
-  return btoa(String.fromCharCode(...new Uint8Array(buffer)))
-    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
-}
-async function generateCodeVerifier() {
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  return base64urlEncode(array);
-}
-async function generateCodeChallenge(verifier) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(verifier);
-  const digest = await crypto.subtle.digest("SHA-256", data);
-  return base64urlEncode(digest);
-}
 
 function calcMargin(price, cost, category = "default", shipping = 0) {
   const fee = ML_FEES[category] ?? ML_FEES.default;
@@ -212,10 +138,12 @@ export default function App() {
   const [realListings, setRealListings] = useState([]);
   const [realOrders, setRealOrders] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
   const usingMock = !token;
 
-  // Check for token in URL hash after OAuth redirect
   useEffect(() => {
+    // Pega token do hash da URL (implicit flow)
     const hash = window.location.hash;
     if (hash) {
       const params = new URLSearchParams(hash.replace("#", ""));
@@ -224,71 +152,80 @@ export default function App() {
         setToken(t);
         window.history.replaceState({}, "", window.location.pathname);
         loadRealData(t);
+        return;
       }
-    }
-    // Also check for authorization code (PKCE flow)
-    const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get("code");
-    const verifier = sessionStorage.getItem("pkce_verifier");
-    if (code && verifier) {
-      exchangeCodeForToken(code, verifier);
     }
   }, []);
 
-  async function exchangeCodeForToken(code, verifier) {
-    try {
-      const res = await fetch("https://api.mercadolibre.com/oauth/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          grant_type: "authorization_code",
-          client_id: APP_ID,
-          code,
-          redirect_uri: REDIRECT_URI,
-          code_verifier: verifier,
-        }),
-      });
-      const data = await res.json();
-      if (data.access_token) {
-        setToken(data.access_token);
-        sessionStorage.removeItem("pkce_verifier");
-        window.history.replaceState({}, "", window.location.pathname);
-        loadRealData(data.access_token);
-      }
-    } catch (e) { console.error(e); }
-  }
-
   async function loadRealData(tk) {
     setLoading(true);
+    setError(null);
     try {
-      const meRes = await fetch("https://api.mercadolibre.com/users/me", { headers: { Authorization: `Bearer ${tk}` } });
+      const meRes = await fetch("https://api.mercadolibre.com/users/me", {
+        headers: { Authorization: `Bearer ${tk}` }
+      });
       const me = await meRes.json();
-      const lRes = await fetch(`https://api.mercadolibre.com/users/${me.id}/items/search?limit=50`, { headers: { Authorization: `Bearer ${tk}` } });
+      if (!me.id) throw new Error("Token inválido");
+
+      const lRes = await fetch(
+        `https://api.mercadolibre.com/users/${me.id}/items/search?limit=50`,
+        { headers: { Authorization: `Bearer ${tk}` } }
+      );
       const lData = await lRes.json();
-      const details = await Promise.all((lData.results ?? []).slice(0, 20).map(id =>
-        fetch(`https://api.mercadolibre.com/items/${id}`, { headers: { Authorization: `Bearer ${tk}` } }).then(r => r.json())
-      ));
-      setRealListings(details);
-      const oRes = await fetch(`https://api.mercadolibre.com/orders/search?seller=${me.id}&sort=date_desc&limit=50`, { headers: { Authorization: `Bearer ${tk}` } });
+      const ids = lData.results ?? [];
+
+      const details = await Promise.all(
+        ids.slice(0, 20).map(id =>
+          fetch(`https://api.mercadolibre.com/items/${id}`, {
+            headers: { Authorization: `Bearer ${tk}` }
+          }).then(r => r.json())
+        )
+      );
+      setRealListings(details.filter(d => d.id));
+
+      const oRes = await fetch(
+        `https://api.mercadolibre.com/orders/search?seller=${me.id}&sort=date_desc&limit=50`,
+        { headers: { Authorization: `Bearer ${tk}` } }
+      );
       const oData = await oRes.json();
       setRealOrders(oData.results ?? []);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      setError("Erro ao carregar dados. Tente reconectar.");
+      setToken(null);
+    }
     setLoading(false);
   }
 
-  async function handleConnect() {
-    const verifier = await generateCodeVerifier();
-    const challenge = await generateCodeChallenge(verifier);
-    sessionStorage.setItem("pkce_verifier", verifier);
-    const url = `https://auth.mercadolivre.com.br/authorization?response_type=code&client_id=${APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&code_challenge=${challenge}&code_challenge_method=S256`;
+  function handleConnect() {
+    const url = `https://auth.mercadolivre.com.br/authorization?response_type=token&client_id=${APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
     window.location.href = url;
   }
 
+  const MOCK_LISTINGS = [
+    { id: "MLB001", title: "Fone Bluetooth Premium XZ900", price: 189.9, sold_quantity: 42, category: "electronics", status: "active", pictures: [{ url: "" }], description: { plain_text: "Fone de ouvido bluetooth." }, attributes: [{ id: "BRAND", name: "Marca", value_name: "XZ" }], shipping: { free_shipping: true }, condition: "new" },
+    { id: "MLB002", title: "Tênis Running Masculino Air Pro", price: 349.0, sold_quantity: 28, category: "fashion", status: "active", pictures: [{ url: "" }, { url: "" }], description: { plain_text: "" }, attributes: [{ id: "BRAND", name: "Marca", value_name: "Air" }], shipping: { free_shipping: false }, condition: "new" },
+    { id: "MLB003", title: "Kit Panelas", price: 279.9, sold_quantity: 15, category: "home", status: "active", pictures: [], description: { plain_text: "Kit com panelas." }, attributes: [], shipping: { free_shipping: false }, condition: "new" },
+    { id: "MLB004", title: "Mochila Táctica 40L Impermeável Militar Reforçada", price: 159.9, sold_quantity: 67, category: "sports", status: "active", pictures: [{},{},{},{},{},{}], description: { plain_text: "Mochila tática impermeável 40L com vários compartimentos, material resistente, ideal para camping e trilha." }, attributes: [{ id: "BRAND", name: "Marca", value_name: "TacPro" },{ id: "COLOR", name: "Cor", value_name: "Preto" },{ id: "MATERIAL", name: "Material", value_name: "Nylon" },{ id: "VOLUME", name: "Volume", value_name: "40L" }], shipping: { free_shipping: true }, condition: "new" },
+    { id: "MLB005", title: "Smart Watch Fitness Pro Band", price: 219.9, sold_quantity: 33, category: "electronics", status: "paused", pictures: [{ url: "" }], description: { plain_text: "Smartwatch com monitor cardíaco." }, attributes: [{ id: "BRAND", name: "Marca", value_name: "FitPro" }], shipping: { free_shipping: true }, condition: "new" },
+  ];
+
+  const MOCK_ORDERS = [
+    { id: "2000001", listing_id: "MLB001", date: "2026-05-12", price: 189.9, qty: 2, shipping_cost: 0 },
+    { id: "2000002", listing_id: "MLB002", date: "2026-05-11", price: 349.0, qty: 1, shipping_cost: 18.5 },
+    { id: "2000003", listing_id: "MLB004", date: "2026-05-11", price: 159.9, qty: 3, shipping_cost: 0 },
+    { id: "2000004", listing_id: "MLB003", date: "2026-05-10", price: 279.9, qty: 1, shipping_cost: 22.0 },
+    { id: "2000005", listing_id: "MLB001", date: "2026-05-09", price: 189.9, qty: 1, shipping_cost: 0 },
+    { id: "2000006", listing_id: "MLB005", date: "2026-05-08", price: 219.9, qty: 2, shipping_cost: 0 },
+  ];
+
   const listings = usingMock ? MOCK_LISTINGS : realListings;
   const orders = usingMock ? MOCK_ORDERS : realOrders.map(o => ({
-    id: o.id, listing_id: o.order_items?.[0]?.item?.id,
-    date: o.date_created?.slice(0, 10), price: o.total_amount,
-    qty: o.order_items?.[0]?.quantity ?? 1, shipping_cost: 0,
+    id: o.id,
+    listing_id: o.order_items?.[0]?.item?.id,
+    date: o.date_created?.slice(0, 10),
+    price: o.total_amount ?? o.order_items?.[0]?.unit_price ?? 0,
+    qty: o.order_items?.[0]?.quantity ?? 1,
+    shipping_cost: 0,
   }));
 
   const enriched = listings.map(l => {
@@ -299,13 +236,15 @@ export default function App() {
   });
 
   const sorted = [...enriched].sort((a, b) =>
-    sortBy === "score" ? a.score - b.score : sortBy === "margin" ? (b.margin ?? -1) - (a.margin ?? -1) : b.totalProfit - a.totalProfit
+    sortBy === "score" ? a.score - b.score :
+    sortBy === "margin" ? (b.margin ?? -1) - (a.margin ?? -1) :
+    b.totalProfit - a.totalProfit
   );
 
   const enrichedOrders = orders.map(o => {
     const listing = listings.find(l => l.id === o.listing_id);
     const cost = costs[listing?.id] ?? 0;
-    return { ...o, listing, ...calcMargin(o.price, cost, listing?.category, o.shipping_cost / o.qty), cost };
+    return { ...o, listing, ...calcMargin(o.price, cost, listing?.category, o.shipping_cost / Math.max(o.qty, 1)), cost };
   });
 
   const totalRevenue = enrichedOrders.reduce((s, o) => s + o.revenue * o.qty, 0);
@@ -320,8 +259,7 @@ export default function App() {
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800;900&display=swap');
         *{box-sizing:border-box;margin:0;padding:0}
         ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:#080a0f}::-webkit-scrollbar-thumb{background:#2a3050;border-radius:99px}
-        input[type=number]::-webkit-inner-spin-button{opacity:.4}
-        input:focus{outline:2px solid #ffe000;outline-offset:1px}
+        input[type=number]::-webkit-inner-spin-button{opacity:.4}input:focus{outline:2px solid #ffe000;outline-offset:1px}
         table{border-collapse:collapse;width:100%}
         th{font-size:10px;color:#444;text-transform:uppercase;letter-spacing:1.2px;padding:10px 14px;border-bottom:1px solid #13151d;text-align:left;font-weight:500}
         td{padding:11px 14px;font-size:12.5px;border-bottom:1px solid #0d0f18;vertical-align:middle}
@@ -329,8 +267,7 @@ export default function App() {
         .tab-btn{background:transparent;border:none;color:#555;padding:7px 16px;cursor:pointer;font-family:inherit;font-size:12px;border-radius:7px;transition:all .15s}
         .tab-btn.active{background:#1a1d2a;color:#f0f0f0}
         select{background:#0f1117;border:1px solid #1e2130;color:#aaa;padding:5px 10px;border-radius:7px;font-family:inherit;font-size:11px;cursor:pointer}
-        @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-        .fade-up{animation:fadeUp .35s ease forwards}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}.fade-up{animation:fadeUp .35s ease forwards}
       `}</style>
 
       <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 28px", background: "#080a0f", borderBottom: "1px solid #13151d", position: "sticky", top: 0, zIndex: 100 }}>
@@ -344,7 +281,8 @@ export default function App() {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {usingMock && <span style={{ background: "#13151d", border: "1px solid #1e2130", color: "#555", fontSize: 10, padding: "3px 10px", borderRadius: 20 }}>📊 demonstração</span>}
           {token && <span style={{ background: "#00e5a010", border: "1px solid #00e5a030", color: "#00e5a0", fontSize: 10, padding: "3px 10px", borderRadius: 20 }}>● conectado</span>}
-          {loading && <span style={{ color: "#555", fontSize: 11 }}>Carregando...</span>}
+          {loading && <span style={{ color: "#555", fontSize: 11 }}>⏳ Carregando dados...</span>}
+          {error && <span style={{ color: "#ff5b5b", fontSize: 11 }}>{error}</span>}
           <button onClick={handleConnect} style={{ background: "linear-gradient(135deg,#ffe000,#ff9500)", border: "none", color: "#0f1117", fontWeight: 800, padding: "8px 18px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>
             {token ? "Reconectar ML" : "Conectar ML"}
           </button>

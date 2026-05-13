@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 
 const ML_FEES = { default: 0.16, electronics: 0.14, fashion: 0.16, home: 0.15, sports: 0.15 };
 const fmt = (n) => `R$ ${Number(n).toFixed(2).replace(".", ",")}`;
@@ -130,17 +130,13 @@ function AIPanel({ listing, onClose }) {
 function TokenModal({ onConnect }) {
   const [tokenInput, setTokenInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
   async function handleSubmit() {
     const tk = tokenInput.trim();
     if (!tk) return;
     setLoading(true);
-    setError("");
     onConnect(tk, { nickname: "Minha Conta ML", id: null });
     setLoading(false);
   }
-
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 24 }}>
       <div style={{ background: "#0a0c12", border: "1px solid #1e2130", borderRadius: 20, width: "100%", maxWidth: 520, padding: "32px 36px" }}>
@@ -148,15 +144,9 @@ function TokenModal({ onConnect }) {
         <p style={{ color: "#666", fontSize: 13, lineHeight: 1.7, marginBottom: 24 }}>Cole o token gerado via Terminal para conectar sua conta.</p>
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 11, color: "#555", marginBottom: 8, letterSpacing: 1, textTransform: "uppercase" }}>Cole seu token aqui</div>
-          <textarea
-            value={tokenInput}
-            onChange={e => setTokenInput(e.target.value)}
-            placeholder="APP_USR-..."
-            rows={3}
-            style={{ width: "100%", background: "#080a0f", border: "1px solid #2a3050", color: "#f0f0f0", padding: "10px 14px", borderRadius: 10, fontFamily: "monospace", fontSize: 12, resize: "none", outline: "none" }}
-          />
+          <textarea value={tokenInput} onChange={e => setTokenInput(e.target.value)} placeholder="APP_USR-..." rows={3}
+            style={{ width: "100%", background: "#080a0f", border: "1px solid #2a3050", color: "#f0f0f0", padding: "10px 14px", borderRadius: 10, fontFamily: "monospace", fontSize: 12, resize: "none", outline: "none" }} />
         </div>
-        {error && <div style={{ color: "#ff5b5b", fontSize: 12, marginBottom: 12 }}>⚠ {error}</div>}
         <button onClick={handleSubmit} disabled={loading || !tokenInput.trim()}
           style={{ width: "100%", background: loading ? "#1e2130" : "linear-gradient(135deg,#ffe000,#ff9500)", border: "none", color: loading ? "#555" : "#0f1117", fontWeight: 800, padding: "12px", borderRadius: 10, cursor: loading ? "not-allowed" : "pointer", fontFamily: "inherit", fontSize: 14 }}>
           {loading ? "Conectando..." : "Conectar"}
@@ -166,16 +156,63 @@ function TokenModal({ onConnect }) {
   );
 }
 
+// Busca TODOS os anúncios paginando
+async function fetchAllListings(userId, tk) {
+  const pageSize = 50;
+  let offset = 0;
+  let allIds = [];
+  while (true) {
+    const res = await fetch(ML(`/users/${userId}/items/search?limit=${pageSize}&offset=${offset}`), {
+      headers: { Authorization: `Bearer ${tk}` }
+    });
+    const data = await res.json();
+    const ids = data.results ?? [];
+    allIds = [...allIds, ...ids];
+    if (ids.length < pageSize) break;
+    offset += pageSize;
+  }
+  // Busca detalhes em lotes de 20
+  const details = [];
+  for (let i = 0; i < allIds.length; i += 20) {
+    const batch = allIds.slice(i, i + 20);
+    const batchDetails = await Promise.all(
+      batch.map(id => fetch(ML(`/items/${id}`), { headers: { Authorization: `Bearer ${tk}` } }).then(r => r.json()))
+    );
+    details.push(...batchDetails);
+  }
+  return details.filter(d => d.id);
+}
+
+// Busca TODOS os pedidos paginando
+async function fetchAllOrders(userId, tk) {
+  const pageSize = 50;
+  let offset = 0;
+  let allOrders = [];
+  while (true) {
+    const res = await fetch(ML(`/orders/search?seller=${userId}&sort=date_desc&limit=${pageSize}&offset=${offset}`), {
+      headers: { Authorization: `Bearer ${tk}` }
+    });
+    const data = await res.json();
+    const orders = data.results ?? [];
+    allOrders = [...allOrders, ...orders];
+    if (orders.length < pageSize) break;
+    offset += pageSize;
+  }
+  return allOrders;
+}
+
 export default function App() {
   const [tab, setTab] = useState("listings");
   const [costs, setCosts] = useState({});
   const [selectedListing, setSelectedListing] = useState(null);
   const [sortBy, setSortBy] = useState("score");
+  const [orderFilter, setOrderFilter] = useState("all");
   const [token, setToken] = useState(null);
   const [user, setUser] = useState(null);
   const [realListings, setRealListings] = useState([]);
   const [realOrders, setRealOrders] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMsg, setLoadingMsg] = useState("");
   const [showTokenModal, setShowTokenModal] = useState(false);
   const [loadError, setLoadError] = useState(null);
 
@@ -188,32 +225,22 @@ export default function App() {
     setLoading(true);
     setLoadError(null);
     try {
-      const meRes = await fetch(ML("/users/me"), {
-        headers: { Authorization: `Bearer ${tk}` }
-      });
+      setLoadingMsg("Identificando conta...");
+      const meRes = await fetch(ML("/users/me"), { headers: { Authorization: `Bearer ${tk}` } });
       const me = await meRes.json();
       const userId = me.id;
       if (!userId) throw new Error("Token inválido ou sem permissão");
       setUser({ nickname: me.nickname ?? "Minha Conta ML", id: userId });
 
-      const lRes = await fetch(ML(`/users/${userId}/items/search?limit=50`), {
-        headers: { Authorization: `Bearer ${tk}` }
-      });
-      const lData = await lRes.json();
-      const ids = lData.results ?? [];
+      setLoadingMsg("Buscando todos os anúncios...");
+      const listings = await fetchAllListings(userId, tk);
+      setRealListings(listings);
 
-      const details = await Promise.all(
-        ids.slice(0, 20).map(id =>
-          fetch(ML(`/items/${id}`), { headers: { Authorization: `Bearer ${tk}` } }).then(r => r.json())
-        )
-      );
-      setRealListings(details.filter(d => d.id));
+      setLoadingMsg("Buscando todos os pedidos...");
+      const orders = await fetchAllOrders(userId, tk);
+      setRealOrders(orders);
 
-      const oRes = await fetch(ML(`/orders/search?seller=${userId}&sort=date_desc&limit=50`), {
-        headers: { Authorization: `Bearer ${tk}` }
-      });
-      const oData = await oRes.json();
-      setRealOrders(oData.results ?? []);
+      setLoadingMsg("");
     } catch (e) {
       setLoadError(e.message);
     }
@@ -221,31 +248,44 @@ export default function App() {
   }
 
   const MOCK_LISTINGS = [
-    { id: "MLB001", title: "Fone Bluetooth Premium XZ900", price: 189.9, sold_quantity: 42, category: "electronics", status: "active", pictures: [{}], description: { plain_text: "Fone de ouvido bluetooth." }, attributes: [{ id: "BRAND", name: "Marca", value_name: "XZ" }], shipping: { free_shipping: true }, condition: "new" },
-    { id: "MLB002", title: "Tênis Running Masculino Air Pro", price: 349.0, sold_quantity: 28, category: "fashion", status: "active", pictures: [{}, {}], description: { plain_text: "" }, attributes: [{ id: "BRAND", name: "Marca", value_name: "Air" }], shipping: { free_shipping: false }, condition: "new" },
-    { id: "MLB003", title: "Kit Panelas", price: 279.9, sold_quantity: 15, category: "home", status: "active", pictures: [], description: { plain_text: "Kit com panelas." }, attributes: [], shipping: { free_shipping: false }, condition: "new" },
-    { id: "MLB004", title: "Mochila Táctica 40L Impermeável Militar Reforçada", price: 159.9, sold_quantity: 67, category: "sports", status: "active", pictures: [{},{},{},{},{},{}], description: { plain_text: "Mochila tática impermeável 40L com vários compartimentos, material resistente, ideal para camping e trilha. Alças acolchoadas." }, attributes: [{ id: "BRAND", name: "Marca", value_name: "TacPro" },{ id: "COLOR", name: "Cor", value_name: "Preto" },{ id: "MATERIAL", name: "Material", value_name: "Nylon" },{ id: "VOLUME", name: "Volume", value_name: "40L" }], shipping: { free_shipping: true }, condition: "new" },
-    { id: "MLB005", title: "Smart Watch Fitness Pro Band", price: 219.9, sold_quantity: 33, category: "electronics", status: "paused", pictures: [{}], description: { plain_text: "Smartwatch com monitor cardíaco." }, attributes: [{ id: "BRAND", name: "Marca", value_name: "FitPro" }], shipping: { free_shipping: true }, condition: "new" },
+    { id: "MLB001", seller_sku: "SKU-001", title: "Fone Bluetooth Premium XZ900", price: 189.9, sold_quantity: 42, category: "electronics", status: "active", permalink: "https://www.mercadolivre.com.br", shipping: { free_shipping: true, logistic_type: "fulfillment" }, pictures: [{}], description: { plain_text: "Fone de ouvido bluetooth." }, attributes: [{ id: "BRAND", name: "Marca", value_name: "XZ" }], condition: "new" },
+    { id: "MLB002", seller_sku: "SKU-002", title: "Tênis Running Masculino Air Pro", price: 349.0, sold_quantity: 28, category: "fashion", status: "active", permalink: "https://www.mercadolivre.com.br", shipping: { free_shipping: false, logistic_type: "drop_off" }, pictures: [{}, {}], description: { plain_text: "" }, attributes: [{ id: "BRAND", name: "Marca", value_name: "Air" }], condition: "new" },
+    { id: "MLB003", seller_sku: null, title: "Kit Panelas Inox", price: 279.9, sold_quantity: 15, category: "home", status: "active", permalink: "https://www.mercadolivre.com.br", shipping: { free_shipping: false, logistic_type: "drop_off" }, pictures: [], description: { plain_text: "Kit com panelas." }, attributes: [], condition: "new" },
+    { id: "MLB004", seller_sku: "SKU-004", title: "Mochila Táctica 40L Impermeável Militar Reforçada", price: 159.9, sold_quantity: 67, category: "sports", status: "active", permalink: "https://www.mercadolivre.com.br", shipping: { free_shipping: true, logistic_type: "fulfillment" }, pictures: [{},{},{},{},{},{}], description: { plain_text: "Mochila tática impermeável 40L com vários compartimentos, material resistente, ideal para camping e trilha. Alças acolchoadas." }, attributes: [{ id: "BRAND", name: "Marca", value_name: "TacPro" },{ id: "COLOR", name: "Cor", value_name: "Preto" },{ id: "MATERIAL", name: "Material", value_name: "Nylon" },{ id: "VOLUME", name: "Volume", value_name: "40L" }], condition: "new" },
+    { id: "MLB005", seller_sku: "SKU-005", title: "Smart Watch Fitness Pro Band", price: 219.9, sold_quantity: 33, category: "electronics", status: "paused", permalink: "https://www.mercadolivre.com.br", shipping: { free_shipping: true, logistic_type: "xd_drop_off" }, pictures: [{}], description: { plain_text: "Smartwatch com monitor cardíaco." }, attributes: [{ id: "BRAND", name: "Marca", value_name: "FitPro" }], condition: "new" },
   ];
 
   const MOCK_ORDERS = [
-    { id: "2000001", listing_id: "MLB001", date: "2026-05-12", price: 189.9, qty: 2, shipping_cost: 0 },
-    { id: "2000002", listing_id: "MLB002", date: "2026-05-11", price: 349.0, qty: 1, shipping_cost: 18.5 },
-    { id: "2000003", listing_id: "MLB004", date: "2026-05-11", price: 159.9, qty: 3, shipping_cost: 0 },
-    { id: "2000004", listing_id: "MLB003", date: "2026-05-10", price: 279.9, qty: 1, shipping_cost: 22.0 },
-    { id: "2000005", listing_id: "MLB001", date: "2026-05-09", price: 189.9, qty: 1, shipping_cost: 0 },
-    { id: "2000006", listing_id: "MLB005", date: "2026-05-08", price: 219.9, qty: 2, shipping_cost: 0 },
+    { id: "2000001", listing_id: "MLB001", date: "2026-05-13", price: 189.9, qty: 2, shipping_cost: 0 },
+    { id: "2000002", listing_id: "MLB002", date: "2026-05-13", price: 349.0, qty: 1, shipping_cost: 18.5 },
+    { id: "2000003", listing_id: "MLB004", date: "2026-05-10", price: 159.9, qty: 3, shipping_cost: 0 },
+    { id: "2000004", listing_id: "MLB003", date: "2026-05-08", price: 279.9, qty: 1, shipping_cost: 22.0 },
+    { id: "2000005", listing_id: "MLB001", date: "2026-04-30", price: 189.9, qty: 1, shipping_cost: 0 },
+    { id: "2000006", listing_id: "MLB005", date: "2026-04-15", price: 219.9, qty: 2, shipping_cost: 0 },
+    { id: "2000007", listing_id: "MLB002", date: "2026-03-20", price: 349.0, qty: 1, shipping_cost: 18.5 },
   ];
 
   const listings = usingMock ? MOCK_LISTINGS : realListings;
-  const orders = usingMock ? MOCK_ORDERS : realOrders.map(o => ({
+  const rawOrders = usingMock ? MOCK_ORDERS : realOrders.map(o => ({
     id: o.id,
     listing_id: o.order_items?.[0]?.item?.id,
     date: o.date_created?.slice(0, 10),
     price: o.total_amount ?? o.order_items?.[0]?.unit_price ?? 0,
     qty: o.order_items?.[0]?.quantity ?? 1,
-    shipping_cost: 0,
+    shipping_cost: o.shipping?.cost ?? 0,
   }));
+
+  // Filtro de pedidos por período
+  const filteredOrders = useMemo(() => {
+    if (orderFilter === "all") return rawOrders;
+    const now = new Date();
+    const cutoff = new Date();
+    if (orderFilter === "today") cutoff.setHours(0, 0, 0, 0);
+    else if (orderFilter === "week") cutoff.setDate(now.getDate() - 7);
+    else if (orderFilter === "month") cutoff.setMonth(now.getMonth() - 1);
+    else if (orderFilter === "3months") cutoff.setMonth(now.getMonth() - 3);
+    return rawOrders.filter(o => o.date && new Date(o.date) >= cutoff);
+  }, [rawOrders, orderFilter]);
 
   const enriched = listings.map(l => {
     const cost = costs[l.id] ?? 0;
@@ -260,7 +300,7 @@ export default function App() {
     b.totalProfit - a.totalProfit
   );
 
-  const enrichedOrders = orders.map(o => {
+  const enrichedOrders = filteredOrders.map(o => {
     const listing = listings.find(l => l.id === o.listing_id);
     const cost = costs[listing?.id] ?? 0;
     return { ...o, listing, ...calcMargin(o.price, cost, listing?.category, o.shipping_cost / Math.max(o.qty, 1)), cost };
@@ -271,6 +311,16 @@ export default function App() {
   const totalFees = enrichedOrders.reduce((s, o) => s + o.fee * o.qty, 0);
   const avgMargin = enrichedOrders.length > 0 ? enrichedOrders.reduce((s, o) => s + (o.margin ?? 0), 0) / enrichedOrders.length : 0;
   const avgScore = Math.round(enriched.reduce((s, l) => s + l.score, 0) / (enriched.length || 1));
+
+  function getShippingLabel(listing) {
+    if (listing.shipping?.free_shipping) {
+      const type = listing.shipping?.logistic_type;
+      if (type === "fulfillment") return { label: "Grátis · Full", color: "#00e5a0" };
+      return { label: "Frete grátis", color: "#00e5a0" };
+    }
+    if (listing.shipping?.logistic_type === "not_specified") return { label: "A combinar", color: "#666" };
+    return { label: "Frete cobrado", color: "#f5c542" };
+  }
 
   return (
     <div style={{ minHeight: "100vh", background: "#080a0f", color: "#f0f0f0", fontFamily: "'DM Mono','Courier New',monospace" }}>
@@ -285,8 +335,14 @@ export default function App() {
         tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.015)}
         .tab-btn{background:transparent;border:none;color:#555;padding:7px 16px;cursor:pointer;font-family:inherit;font-size:12px;border-radius:7px;transition:all .15s}
         .tab-btn.active{background:#1a1d2a;color:#f0f0f0}
+        .filter-btn{background:transparent;border:1px solid #1e2130;color:#555;padding:5px 14px;cursor:pointer;font-family:inherit;font-size:11px;border-radius:20px;transition:all .15s}
+        .filter-btn.active{background:#1a1d2a;border-color:#2a3050;color:#f0f0f0}
         select{background:#0f1117;border:1px solid #1e2130;color:#aaa;padding:5px 10px;border-radius:7px;font-family:inherit;font-size:11px;cursor:pointer}
         @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}.fade-up{animation:fadeUp .35s ease forwards}
+        .title-link{color:#ddd;text-decoration:none;cursor:pointer;transition:color .15s}
+        .title-link:hover{color:#ffe000;text-decoration:underline}
+        .copy-btn{background:transparent;border:none;color:#555;cursor:pointer;padding:2px 4px;border-radius:4px;font-size:10px;transition:all .15s}
+        .copy-btn:hover{background:#1e2130;color:#f0f0f0}
       `}</style>
 
       <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 28px", background: "#080a0f", borderBottom: "1px solid #13151d", position: "sticky", top: 0, zIndex: 100 }}>
@@ -300,7 +356,7 @@ export default function App() {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {usingMock && !token && <span style={{ background: "#13151d", border: "1px solid #1e2130", color: "#555", fontSize: 10, padding: "3px 10px", borderRadius: 20 }}>📊 demonstração</span>}
           {token && <span style={{ background: "#00e5a010", border: "1px solid #00e5a030", color: "#00e5a0", fontSize: 10, padding: "3px 10px", borderRadius: 20 }}>● {user?.nickname ?? "conectado"}</span>}
-          {loading && <span style={{ color: "#555", fontSize: 11 }}>⏳ carregando...</span>}
+          {loading && <span style={{ color: "#555", fontSize: 11 }}>⏳ {loadingMsg}</span>}
           {loadError && <span style={{ color: "#ff5b5b", fontSize: 11 }}>⚠ {loadError}</span>}
           <button onClick={() => setShowTokenModal(true)} style={{ background: "linear-gradient(135deg,#ffe000,#ff9500)", border: "none", color: "#0f1117", fontWeight: 800, padding: "8px 18px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>
             {token ? "Reconectar ML" : "Conectar ML"}
@@ -308,7 +364,7 @@ export default function App() {
         </div>
       </header>
 
-      <main style={{ maxWidth: 1200, margin: "0 auto", padding: "28px 24px" }}>
+      <main style={{ maxWidth: 1400, margin: "0 auto", padding: "28px 24px" }}>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 24 }} className="fade-up">
           {[
             { label: "Receita líquida", value: fmt(totalRevenue) },
@@ -316,23 +372,25 @@ export default function App() {
             { label: "Tarifas ML", value: fmt(totalFees), accent: "#f5c542" },
             { label: "Margem média", value: fmtPct(avgMargin), accent: avgMargin >= .25 ? "#00e5a0" : avgMargin >= .15 ? "#f5c542" : "#ff5b5b" },
             { label: "Score médio", value: `${avgScore}/100`, accent: scoreColor(avgScore) },
+            { label: "Total anúncios", value: enriched.length },
+            { label: "Pedidos período", value: enrichedOrders.length },
           ].map(k => (
-            <div key={k.label} style={{ flex: 1, minWidth: 150, background: "#0a0c12", border: "1px solid #13151d", borderRadius: 12, padding: "16px 20px" }}>
+            <div key={k.label} style={{ flex: 1, minWidth: 130, background: "#0a0c12", border: "1px solid #13151d", borderRadius: 12, padding: "14px 18px" }}>
               <div style={{ fontSize: 10, color: "#444", marginBottom: 6, letterSpacing: 1, textTransform: "uppercase" }}>{k.label}</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: k.accent ?? "#f0f0f0", fontFamily: "'Syne',sans-serif", letterSpacing: -1 }}>{k.value}</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: k.accent ?? "#f0f0f0", fontFamily: "'Syne',sans-serif", letterSpacing: -1 }}>{k.value}</div>
             </div>
           ))}
         </div>
 
         <div style={{ display: "flex", gap: 2, marginBottom: 18, background: "#0a0c12", padding: 3, borderRadius: 9, width: "fit-content", border: "1px solid #13151d" }}>
-          <button className={`tab-btn ${tab === "listings" ? "active" : ""}`} onClick={() => setTab("listings")}>Anúncios</button>
-          <button className={`tab-btn ${tab === "orders" ? "active" : ""}`} onClick={() => setTab("orders")}>Pedidos</button>
+          <button className={`tab-btn ${tab === "listings" ? "active" : ""}`} onClick={() => setTab("listings")}>Anúncios ({enriched.length})</button>
+          <button className={`tab-btn ${tab === "orders" ? "active" : ""}`} onClick={() => setTab("orders")}>Pedidos ({enrichedOrders.length})</button>
         </div>
 
         {tab === "listings" && (
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <div style={{ fontSize: 11, color: "#444" }}>💡 Preencha o custo · <span style={{ color: "#ffe000" }}>✦ Analisar</span> para sugestões de IA</div>
+              <div style={{ fontSize: 11, color: "#444" }}>💡 Clique no título para abrir no ML · <span style={{ color: "#ffe000" }}>✦ Analisar</span> para sugestões de IA</div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 11, color: "#444" }}>Ordenar por</span>
                 <select value={sortBy} onChange={e => setSortBy(e.target.value)}>
@@ -344,27 +402,82 @@ export default function App() {
             </div>
             <div style={{ background: "#0a0c12", border: "1px solid #13151d", borderRadius: 14, overflow: "auto" }}>
               <table>
-                <thead><tr><th>Anúncio</th><th>Score ML</th><th>Preço</th><th>Custo (R$)</th><th>Tarifa ML</th><th>Lucro unit.</th><th>Margem</th><th>Lucro total</th><th>IA</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th>Anúncio</th>
+                    <th>MLB / SKU</th>
+                    <th>Score</th>
+                    <th>Preço</th>
+                    <th>Frete</th>
+                    <th>Custo (R$)</th>
+                    <th>Tarifa ML</th>
+                    <th>Lucro unit.</th>
+                    <th>Margem</th>
+                    <th>Lucro total</th>
+                    <th>IA</th>
+                  </tr>
+                </thead>
                 <tbody>
-                  {sorted.map(l => (
-                    <tr key={l.id}>
-                      <td>
-                        <div style={{ fontWeight: 500, maxWidth: 210, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#ddd" }}>{l.title}</div>
-                        <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
-                          {l.checks.filter(c => !c.pass).slice(0, 2).map(c => <span key={c.key} style={{ fontSize: 10, color: "#ff5b5b", background: "#ff5b5b10", border: "1px solid #ff5b5b20", padding: "1px 7px", borderRadius: 20 }}>✗ {c.label}</span>)}
-                          <span style={{ fontSize: 10, padding: "1px 7px", borderRadius: 20, background: l.status === "active" ? "#00e5a010" : "#1e2130", color: l.status === "active" ? "#00e5a0" : "#555", border: `1px solid ${l.status === "active" ? "#00e5a020" : "#2a3050"}` }}>{l.status === "active" ? "● ativo" : "○ pausado"}</span>
-                        </div>
-                      </td>
-                      <td><div style={{ display: "flex", alignItems: "center", gap: 8 }}><div style={{ width: 36, height: 36, borderRadius: 8, border: `2px solid ${scoreColor(l.score)}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: scoreColor(l.score) }}>{l.score}</div><span style={{ fontSize: 11, color: scoreColor(l.score) }}>{scoreLabel(l.score)}</span></div></td>
-                      <td style={{ fontWeight: 700, color: "#f0f0f0" }}>{fmt(l.price)}</td>
-                      <td><input type="number" value={l.cost || ""} onChange={e => setCosts(c => ({ ...c, [l.id]: Number(e.target.value) }))} placeholder="0,00" style={{ background: "#0f1117", border: "1px solid #1e2130", color: "#f0f0f0", padding: "4px 8px", borderRadius: 6, width: 80, fontSize: 12, fontFamily: "inherit", textAlign: "right" }} /></td>
-                      <td style={{ color: "#f5c542" }}>{fmt(l.fee)}<div style={{ fontSize: 10, color: "#555" }}>{fmtPct(l.feeRate)}</div></td>
-                      <td style={{ color: l.profit >= 0 ? "#00e5a0" : "#ff5b5b", fontWeight: 700 }}>{fmt(l.profit)}</td>
-                      <td style={{ minWidth: 130 }}><MarginBar value={l.margin} /></td>
-                      <td style={{ color: l.totalProfit >= 0 ? "#00e5a0" : "#ff5b5b" }}>{l.cost > 0 ? fmt(l.totalProfit) : "—"}<div style={{ fontSize: 10, color: "#555" }}>{l.sold_quantity} vendidos</div></td>
-                      <td><button onClick={() => setSelectedListing(l)} style={{ background: "linear-gradient(135deg,#ffe00022,#ff950022)", border: "1px solid #ffe00033", color: "#ffe000", fontSize: 11, padding: "5px 12px", borderRadius: 7, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>✦ Analisar</button></td>
-                    </tr>
-                  ))}
+                  {sorted.map(l => {
+                    const shipping = getShippingLabel(l);
+                    return (
+                      <tr key={l.id}>
+                        <td style={{ maxWidth: 220 }}>
+                          <a href={l.permalink ?? `https://www.mercadolivre.com.br/p/${l.id}`} target="_blank" rel="noreferrer" className="title-link"
+                            style={{ display: "block", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={l.title}>
+                            🔗 {l.title}
+                          </a>
+                          <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
+                            {l.checks.filter(c => !c.pass).slice(0, 2).map(c => (
+                              <span key={c.key} style={{ fontSize: 10, color: "#ff5b5b", background: "#ff5b5b10", border: "1px solid #ff5b5b20", padding: "1px 7px", borderRadius: 20 }}>✗ {c.label}</span>
+                            ))}
+                            <span style={{ fontSize: 10, padding: "1px 7px", borderRadius: 20, background: l.status === "active" ? "#00e5a010" : "#1e2130", color: l.status === "active" ? "#00e5a0" : "#555", border: `1px solid ${l.status === "active" ? "#00e5a020" : "#2a3050"}` }}>
+                              {l.status === "active" ? "● ativo" : "○ pausado"}
+                            </span>
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <span style={{ fontSize: 11, color: "#aaa", fontFamily: "monospace" }}>{l.id}</span>
+                            <button className="copy-btn" onClick={() => navigator.clipboard.writeText(l.id)} title="Copiar MLB">⎘</button>
+                          </div>
+                          {l.seller_sku ? (
+                            <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3 }}>
+                              <span style={{ fontSize: 10, color: "#555" }}>SKU:</span>
+                              <span style={{ fontSize: 11, color: "#888", fontFamily: "monospace" }}>{l.seller_sku}</span>
+                              <button className="copy-btn" onClick={() => navigator.clipboard.writeText(l.seller_sku)} title="Copiar SKU">⎘</button>
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: 10, color: "#333", marginTop: 3 }}>SKU: —</div>
+                          )}
+                        </td>
+                        <td>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{ width: 36, height: 36, borderRadius: 8, border: `2px solid ${scoreColor(l.score)}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: scoreColor(l.score) }}>{l.score}</div>
+                            <span style={{ fontSize: 11, color: scoreColor(l.score) }}>{scoreLabel(l.score)}</span>
+                          </div>
+                        </td>
+                        <td style={{ fontWeight: 700, color: "#f0f0f0" }}>{fmt(l.price)}</td>
+                        <td>
+                          <span style={{ fontSize: 11, color: shipping.color, fontWeight: 600 }}>{shipping.label}</span>
+                        </td>
+                        <td>
+                          <input type="number" value={l.cost || ""} onChange={e => setCosts(c => ({ ...c, [l.id]: Number(e.target.value) }))} placeholder="0,00"
+                            style={{ background: "#0f1117", border: "1px solid #1e2130", color: "#f0f0f0", padding: "4px 8px", borderRadius: 6, width: 80, fontSize: 12, fontFamily: "inherit", textAlign: "right" }} />
+                        </td>
+                        <td style={{ color: "#f5c542" }}>{fmt(l.fee)}<div style={{ fontSize: 10, color: "#555" }}>{fmtPct(l.feeRate)}</div></td>
+                        <td style={{ color: l.profit >= 0 ? "#00e5a0" : "#ff5b5b", fontWeight: 700 }}>{fmt(l.profit)}</td>
+                        <td style={{ minWidth: 130 }}><MarginBar value={l.margin} /></td>
+                        <td style={{ color: l.totalProfit >= 0 ? "#00e5a0" : "#ff5b5b" }}>
+                          {l.cost > 0 ? fmt(l.totalProfit) : "—"}
+                          <div style={{ fontSize: 10, color: "#555" }}>{l.sold_quantity} vendidos</div>
+                        </td>
+                        <td>
+                          <button onClick={() => setSelectedListing(l)} style={{ background: "linear-gradient(135deg,#ffe00022,#ff950022)", border: "1px solid #ffe00033", color: "#ffe000", fontSize: 11, padding: "5px 12px", borderRadius: 7, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>✦ Analisar</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -372,26 +485,53 @@ export default function App() {
         )}
 
         {tab === "orders" && (
-          <div style={{ background: "#0a0c12", border: "1px solid #13151d", borderRadius: 14, overflow: "auto" }}>
-            <table>
-              <thead><tr><th>Pedido</th><th>Produto</th><th>Data</th><th>Preço</th><th>Qtd</th><th>Tarifa ML</th><th>Frete</th><th>Lucro unit.</th><th>Margem</th></tr></thead>
-              <tbody>
-                {enrichedOrders.map(o => (
-                  <tr key={o.id}>
-                    <td style={{ color: "#444", fontSize: 11 }}>#{o.id}</td>
-                    <td><div style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#ccc" }}>{o.listing?.title ?? "—"}</div></td>
-                    <td style={{ color: "#555", fontSize: 11 }}>{o.date}</td>
-                    <td style={{ fontWeight: 700, color: "#f0f0f0" }}>{fmt(o.price)}</td>
-                    <td style={{ color: "#666" }}>×{o.qty}</td>
-                    <td style={{ color: "#f5c542" }}>{fmt(o.fee)}</td>
-                    <td style={{ color: "#666" }}>{o.shipping_cost > 0 ? fmt(o.shipping_cost) : "Grátis"}</td>
-                    <td style={{ color: o.profit >= 0 ? "#00e5a0" : "#ff5b5b", fontWeight: 700 }}>{o.cost > 0 ? fmt(o.profit) : "—"}</td>
-                    <td style={{ minWidth: 130 }}><MarginBar value={o.margin} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 11, color: "#555" }}>Filtrar por período:</span>
+              {[
+                { key: "today", label: "Hoje" },
+                { key: "week", label: "7 dias" },
+                { key: "month", label: "30 dias" },
+                { key: "3months", label: "3 meses" },
+                { key: "all", label: "Todos" },
+              ].map(f => (
+                <button key={f.key} className={`filter-btn ${orderFilter === f.key ? "active" : ""}`} onClick={() => setOrderFilter(f.key)}>
+                  {f.label}
+                </button>
+              ))}
+              <span style={{ fontSize: 11, color: "#444", marginLeft: 8 }}>
+                {enrichedOrders.length} pedido{enrichedOrders.length !== 1 ? "s" : ""} · Total: {fmt(enrichedOrders.reduce((s, o) => s + o.price * o.qty, 0))}
+              </span>
+            </div>
+            <div style={{ background: "#0a0c12", border: "1px solid #13151d", borderRadius: 14, overflow: "auto" }}>
+              <table>
+                <thead><tr><th>Pedido</th><th>Produto</th><th>Data</th><th>Preço</th><th>Qtd</th><th>Tarifa ML</th><th>Frete</th><th>Lucro unit.</th><th>Margem</th></tr></thead>
+                <tbody>
+                  {enrichedOrders.length === 0 ? (
+                    <tr><td colSpan={9} style={{ textAlign: "center", color: "#444", padding: 32 }}>Nenhum pedido neste período</td></tr>
+                  ) : enrichedOrders.map(o => (
+                    <tr key={o.id}>
+                      <td style={{ color: "#444", fontSize: 11 }}>#{o.id}</td>
+                      <td>
+                        <div style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#ccc" }}>
+                          {o.listing?.permalink ? (
+                            <a href={o.listing.permalink} target="_blank" rel="noreferrer" className="title-link">{o.listing.title}</a>
+                          ) : (o.listing?.title ?? "—")}
+                        </div>
+                      </td>
+                      <td style={{ color: "#555", fontSize: 11 }}>{o.date}</td>
+                      <td style={{ fontWeight: 700, color: "#f0f0f0" }}>{fmt(o.price)}</td>
+                      <td style={{ color: "#666" }}>×{o.qty}</td>
+                      <td style={{ color: "#f5c542" }}>{fmt(o.fee)}</td>
+                      <td style={{ color: "#666" }}>{o.shipping_cost > 0 ? fmt(o.shipping_cost) : "Grátis"}</td>
+                      <td style={{ color: o.profit >= 0 ? "#00e5a0" : "#ff5b5b", fontWeight: 700 }}>{o.cost > 0 ? fmt(o.profit) : "—"}</td>
+                      <td style={{ minWidth: 130 }}><MarginBar value={o.margin} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </main>
 

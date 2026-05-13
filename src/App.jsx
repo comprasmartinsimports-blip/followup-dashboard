@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 
 const MOCK_LISTINGS = [
   {
@@ -190,8 +190,7 @@ function AIPanel({ listing, onClose }) {
   return (
     <div style={{
       position: "fixed", inset: 0, background: "rgba(0,0,0,.85)",
-      display: "flex", alignItems: "flex-end", justifyContent: "center",
-      zIndex: 300, padding: "0 0 0 0",
+      display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 300,
     }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{
         background: "#0a0c12", border: "1px solid #1e2130",
@@ -200,30 +199,16 @@ function AIPanel({ listing, onClose }) {
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
           <div>
-            <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 900, fontSize: 18, marginBottom: 4 }}>
-              Qualidade do Anúncio
-            </div>
-            <div style={{ color: "#666", fontSize: 13, maxWidth: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {listing.title}
-            </div>
+            <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 900, fontSize: 18, marginBottom: 4 }}>Qualidade do Anúncio</div>
+            <div style={{ color: "#666", fontSize: 13, maxWidth: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{listing.title}</div>
           </div>
-          <button onClick={onClose} style={{
-            background: "#1e2130", border: "none", color: "#888",
-            width: 32, height: 32, borderRadius: 8, cursor: "pointer",
-            fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center",
-          }}>✕</button>
+          <button onClick={onClose} style={{ background: "#1e2130", border: "none", color: "#888", width: 32, height: 32, borderRadius: 8, cursor: "pointer", fontSize: 16 }}>✕</button>
         </div>
 
-        <div style={{
-          display: "flex", gap: 16, alignItems: "center",
-          background: "#0f1117", border: "1px solid #1e2130",
-          borderRadius: 14, padding: "20px 24px", marginBottom: 20,
-        }}>
+        <div style={{ display: "flex", gap: 16, alignItems: "center", background: "#0f1117", border: "1px solid #1e2130", borderRadius: 14, padding: "20px 24px", marginBottom: 20 }}>
           <ScoreRing score={score} />
           <div>
-            <div style={{ fontWeight: 800, fontSize: 22, color: scoreColor(score), fontFamily: "'Syne',sans-serif" }}>
-              {scoreLabel(score)}
-            </div>
+            <div style={{ fontWeight: 800, fontSize: 22, color: scoreColor(score), fontFamily: "'Syne',sans-serif" }}>{scoreLabel(score)}</div>
             <div style={{ color: "#666", fontSize: 13 }}>Score baseado nos critérios do ML</div>
           </div>
           <div style={{ marginLeft: "auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -238,18 +223,10 @@ function AIPanel({ listing, onClose }) {
 
         {state === "idle" && (
           <div style={{ textAlign: "center", padding: "24px 0" }}>
-            <div style={{ color: "#555", fontSize: 13, marginBottom: 16 }}>
-              Analise este anúncio com IA para receber sugestões personalizadas de melhoria
-            </div>
-            <button onClick={runAnalysis} style={{
-              background: "linear-gradient(135deg,#ffe000,#ff9500)",
-              border: "none", color: "#0f1117", fontWeight: 800,
-              padding: "11px 28px", borderRadius: 10, cursor: "pointer",
-              fontFamily: "inherit", fontSize: 14,
-            }}>✦ Analisar com IA</button>
+            <div style={{ color: "#555", fontSize: 13, marginBottom: 16 }}>Analise este anúncio com IA para receber sugestões personalizadas</div>
+            <button onClick={runAnalysis} style={{ background: "linear-gradient(135deg,#ffe000,#ff9500)", border: "none", color: "#0f1117", fontWeight: 800, padding: "11px 28px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit", fontSize: 14 }}>✦ Analisar com IA</button>
           </div>
         )}
-
         {state === "loading" && (
           <div style={{ textAlign: "center", padding: "32px 0", color: "#555" }}>
             <div style={{ fontSize: 28, marginBottom: 12, animation: "spin 1.5s linear infinite", display: "inline-block" }}>⟳</div>
@@ -257,63 +234,40 @@ function AIPanel({ listing, onClose }) {
             <div style={{ fontSize: 13 }}>Analisando seu anúncio com IA...</div>
           </div>
         )}
-
         {state === "error" && (
           <div style={{ textAlign: "center", padding: "24px 0", color: "#ff5b5b", fontSize: 13 }}>
-            Erro ao conectar com a IA. Verifique sua conexão e tente novamente.
-            <br />
-            <button onClick={runAnalysis} style={{
-              marginTop: 12, background: "#1e2130", border: "1px solid #2a3050",
-              color: "#f0f0f0", padding: "8px 16px", borderRadius: 8,
-              cursor: "pointer", fontFamily: "inherit",
-            }}>Tentar novamente</button>
+            Erro ao conectar. Tente novamente.<br />
+            <button onClick={runAnalysis} style={{ marginTop: 12, background: "#1e2130", border: "1px solid #2a3050", color: "#f0f0f0", padding: "8px 16px", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" }}>Tentar novamente</button>
           </div>
         )}
-
         {state === "done" && result && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div style={{
-              background: "#0f1117", border: "1px solid #2a3050",
-              borderRadius: 12, padding: "16px 20px", borderLeft: "3px solid #ffe000",
-            }}>
+            <div style={{ background: "#0f1117", border: "1px solid #2a3050", borderRadius: 12, padding: "16px 20px", borderLeft: "3px solid #ffe000" }}>
               <div style={{ fontSize: 12, color: "#ffe000", marginBottom: 6, letterSpacing: 1, textTransform: "uppercase" }}>Avaliação Geral</div>
               <div style={{ fontSize: 14, color: "#ccc", lineHeight: 1.6 }}>{result.score_commentary}</div>
             </div>
-
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               {result.strengths?.length > 0 && (
                 <div style={{ background: "#0f1117", border: "1px solid #1e2130", borderRadius: 12, padding: "16px 20px" }}>
                   <div style={{ fontSize: 12, color: "#00e5a0", marginBottom: 10, letterSpacing: 1, textTransform: "uppercase" }}>✓ Pontos Fortes</div>
-                  {result.strengths.map((s, i) => (
-                    <div key={i} style={{ fontSize: 13, color: "#aaa", marginBottom: 6, paddingLeft: 12, borderLeft: "2px solid #00e5a020" }}>{s}</div>
-                  ))}
+                  {result.strengths.map((s, i) => <div key={i} style={{ fontSize: 13, color: "#aaa", marginBottom: 6, paddingLeft: 12, borderLeft: "2px solid #00e5a020" }}>{s}</div>)}
                 </div>
               )}
               {result.keywords?.length > 0 && (
                 <div style={{ background: "#0f1117", border: "1px solid #1e2130", borderRadius: 12, padding: "16px 20px" }}>
                   <div style={{ fontSize: 12, color: "#888", marginBottom: 10, letterSpacing: 1, textTransform: "uppercase" }}>Palavras-chave</div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {result.keywords.map((k, i) => (
-                      <span key={i} style={{ background: "#1e2130", color: "#ccc", fontSize: 12, padding: "4px 10px", borderRadius: 20 }}>{k}</span>
-                    ))}
+                    {result.keywords.map((k, i) => <span key={i} style={{ background: "#1e2130", color: "#ccc", fontSize: 12, padding: "4px 10px", borderRadius: 20 }}>{k}</span>)}
                   </div>
                 </div>
               )}
             </div>
-
             {result.improvements?.length > 0 && (
               <div style={{ background: "#0f1117", border: "1px solid #1e2130", borderRadius: 12, padding: "16px 20px" }}>
                 <div style={{ fontSize: 12, color: "#f5c542", marginBottom: 12, letterSpacing: 1, textTransform: "uppercase" }}>⚡ O que Melhorar</div>
                 {result.improvements.map((imp, i) => (
-                  <div key={i} style={{
-                    display: "flex", gap: 12, marginBottom: 12,
-                    paddingBottom: 12, borderBottom: i < result.improvements.length - 1 ? "1px solid #1e2130" : "none",
-                  }}>
-                    <div style={{
-                      minWidth: 28, height: 28, borderRadius: 8, background: "#1e2130",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 12, color: "#f5c542", fontWeight: 800,
-                    }}>{i + 1}</div>
+                  <div key={i} style={{ display: "flex", gap: 12, marginBottom: 12, paddingBottom: 12, borderBottom: i < result.improvements.length - 1 ? "1px solid #1e2130" : "none" }}>
+                    <div style={{ minWidth: 28, height: 28, borderRadius: 8, background: "#1e2130", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#f5c542", fontWeight: 800 }}>{i + 1}</div>
                     <div>
                       <div style={{ fontSize: 12, color: "#f5c542", marginBottom: 4, fontWeight: 600 }}>{imp.field}</div>
                       <div style={{ fontSize: 13, color: "#aaa", lineHeight: 1.5 }}>{imp.suggestion}</div>
@@ -322,12 +276,8 @@ function AIPanel({ listing, onClose }) {
                 ))}
               </div>
             )}
-
             {result.title_suggestion && (
-              <div style={{
-                background: "#0f1117", border: "1px solid #2a3050",
-                borderRadius: 12, padding: "16px 20px", borderLeft: "3px solid #00e5a0",
-              }}>
+              <div style={{ background: "#0f1117", border: "1px solid #2a3050", borderRadius: 12, padding: "16px 20px", borderLeft: "3px solid #00e5a0" }}>
                 <div style={{ fontSize: 12, color: "#00e5a0", marginBottom: 8, letterSpacing: 1, textTransform: "uppercase" }}>✦ Sugestão de Título</div>
                 <div style={{ fontSize: 14, color: "#f0f0f0", fontWeight: 600 }}>{result.title_suggestion}</div>
                 <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>{result.title_suggestion.length} caracteres</div>
@@ -345,7 +295,6 @@ export default function App() {
   const [costs, setCosts] = useState({});
   const [selectedListing, setSelectedListing] = useState(null);
   const [sortBy, setSortBy] = useState("score");
-  const [connected] = useState(false);
   const usingMock = true;
 
   const listings = MOCK_LISTINGS;
@@ -354,7 +303,7 @@ export default function App() {
   function handleConnect() {
     const appId = "6544342750807693";
     const redirectUri = window.location.href.split("?")[0].split("#")[0];
-    const url = `https://auth.mercadolibre.com.br/authorization?response_type=token&client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    const url = `https://auth.mercadolivre.com.br/authorization?response_type=token&client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
     window.location.href = url;
   }
 
@@ -383,15 +332,11 @@ export default function App() {
   const totalRevenue = enrichedOrders.reduce((s, o) => s + o.revenue * o.qty, 0);
   const totalProfit = enrichedOrders.reduce((s, o) => s + o.profit * o.qty, 0);
   const totalFees = enrichedOrders.reduce((s, o) => s + o.fee * o.qty, 0);
-  const avgMargin = enrichedOrders.length > 0
-    ? enrichedOrders.reduce((s, o) => s + (o.margin ?? 0), 0) / enrichedOrders.length : 0;
+  const avgMargin = enrichedOrders.length > 0 ? enrichedOrders.reduce((s, o) => s + (o.margin ?? 0), 0) / enrichedOrders.length : 0;
   const avgScore = Math.round(enriched.reduce((s, l) => s + l.score, 0) / (enriched.length || 1));
 
   return (
-    <div style={{
-      minHeight: "100vh", background: "#080a0f", color: "#f0f0f0",
-      fontFamily: "'DM Mono','Courier New',monospace",
-    }}>
+    <div style={{ minHeight: "100vh", background: "#080a0f", color: "#f0f0f0", fontFamily: "'DM Mono','Courier New',monospace" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Syne:wght@700;800;900&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -401,48 +346,28 @@ export default function App() {
         input[type=number]::-webkit-inner-spin-button { opacity: .4; }
         input:focus { outline: 2px solid #ffe000; outline-offset: 1px; }
         table { border-collapse: collapse; width: 100%; }
-        th { font-size: 10px; color: #444; text-transform: uppercase; letter-spacing: 1.2px;
-             padding: 10px 14px; border-bottom: 1px solid #13151d; text-align: left; font-weight: 500; }
+        th { font-size: 10px; color: #444; text-transform: uppercase; letter-spacing: 1.2px; padding: 10px 14px; border-bottom: 1px solid #13151d; text-align: left; font-weight: 500; }
         td { padding: 11px 14px; font-size: 12.5px; border-bottom: 1px solid #0d0f18; vertical-align: middle; }
         tr:last-child td { border-bottom: none; }
         tr:hover td { background: rgba(255,255,255,.015); }
-        .tab-btn { background: transparent; border: none; color: #555; padding: 7px 16px;
-                   cursor: pointer; font-family: inherit; font-size: 12px; border-radius: 7px; transition: all .15s; }
+        .tab-btn { background: transparent; border: none; color: #555; padding: 7px 16px; cursor: pointer; font-family: inherit; font-size: 12px; border-radius: 7px; transition: all .15s; }
         .tab-btn.active { background: #1a1d2a; color: #f0f0f0; }
-        select { background: #0f1117; border: 1px solid #1e2130; color: #aaa;
-                 padding: 5px 10px; border-radius: 7px; font-family: inherit; font-size: 11px; cursor: pointer; }
+        select { background: #0f1117; border: 1px solid #1e2130; color: #aaa; padding: 5px 10px; border-radius: 7px; font-family: inherit; font-size: 11px; cursor: pointer; }
         @keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
         .fade-up { animation: fadeUp .35s ease forwards; }
       `}</style>
 
-      <header style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "16px 28px", background: "#080a0f",
-        borderBottom: "1px solid #13151d", position: "sticky", top: 0, zIndex: 100,
-      }}>
+      <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 28px", background: "#080a0f", borderBottom: "1px solid #13151d", position: "sticky", top: 0, zIndex: 100 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{
-            width: 34, height: 34, borderRadius: 9,
-            background: "linear-gradient(135deg,#ffe000,#ff9500)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontWeight: 900, fontSize: 17, color: "#0f1117",
-          }}>M</div>
+          <div style={{ width: 34, height: 34, borderRadius: 9, background: "linear-gradient(135deg,#ffe000,#ff9500)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 17, color: "#0f1117" }}>M</div>
           <div>
             <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 900, fontSize: 14, color: "#f0f0f0", letterSpacing: -.3 }}>ML Margem</div>
             <div style={{ fontSize: 10, color: "#444", letterSpacing: .8 }}>DASHBOARD DE LUCRATIVIDADE</div>
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {usingMock && (
-            <span style={{ background: "#13151d", border: "1px solid #1e2130", color: "#555", fontSize: 10, padding: "3px 10px", borderRadius: 20 }}>
-              📊 demonstração
-            </span>
-          )}
-          <button onClick={handleConnect} style={{
-            background: "linear-gradient(135deg,#ffe000,#ff9500)",
-            border: "none", color: "#0f1117", fontWeight: 800,
-            padding: "8px 18px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontFamily: "inherit",
-          }}>Conectar ML</button>
+          {usingMock && <span style={{ background: "#13151d", border: "1px solid #1e2130", color: "#555", fontSize: 10, padding: "3px 10px", borderRadius: 20 }}>📊 demonstração</span>}
+          <button onClick={handleConnect} style={{ background: "linear-gradient(135deg,#ffe000,#ff9500)", border: "none", color: "#0f1117", fontWeight: 800, padding: "8px 18px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>Conectar ML</button>
         </div>
       </header>
 
@@ -455,10 +380,7 @@ export default function App() {
             { label: "Margem média", value: fmtPct(avgMargin), accent: avgMargin >= .25 ? "#00e5a0" : avgMargin >= .15 ? "#f5c542" : "#ff5b5b" },
             { label: "Score médio anúncios", value: `${avgScore}/100`, accent: scoreColor(avgScore) },
           ].map(k => (
-            <div key={k.label} style={{
-              flex: 1, minWidth: 150, background: "#0a0c12",
-              border: "1px solid #13151d", borderRadius: 12, padding: "16px 20px",
-            }}>
+            <div key={k.label} style={{ flex: 1, minWidth: 150, background: "#0a0c12", border: "1px solid #13151d", borderRadius: 12, padding: "16px 20px" }}>
               <div style={{ fontSize: 10, color: "#444", marginBottom: 6, letterSpacing: 1, textTransform: "uppercase" }}>{k.label}</div>
               <div style={{ fontSize: 22, fontWeight: 800, color: k.accent ?? "#f0f0f0", fontFamily: "'Syne',sans-serif", letterSpacing: -1 }}>{k.value}</div>
             </div>
@@ -473,9 +395,7 @@ export default function App() {
         {tab === "listings" && (
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <div style={{ fontSize: 11, color: "#444" }}>
-                💡 Preencha o custo · Clique em <span style={{ color: "#ffe000" }}>✦ Analisar</span> para sugestões de IA
-              </div>
+              <div style={{ fontSize: 11, color: "#444" }}>💡 Preencha o custo · Clique em <span style={{ color: "#ffe000" }}>✦ Analisar</span> para sugestões de IA</div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 11, color: "#444" }}>Ordenar por</span>
                 <select value={sortBy} onChange={e => setSortBy(e.target.value)}>
@@ -488,17 +408,7 @@ export default function App() {
             <div style={{ background: "#0a0c12", border: "1px solid #13151d", borderRadius: 14, overflow: "auto" }}>
               <table>
                 <thead>
-                  <tr>
-                    <th>Anúncio</th>
-                    <th>Score ML</th>
-                    <th>Preço</th>
-                    <th>Custo (R$)</th>
-                    <th>Tarifa ML</th>
-                    <th>Lucro unit.</th>
-                    <th>Margem</th>
-                    <th>Lucro total</th>
-                    <th>IA</th>
-                  </tr>
+                  <tr><th>Anúncio</th><th>Score ML</th><th>Preço</th><th>Custo (R$)</th><th>Tarifa ML</th><th>Lucro unit.</th><th>Margem</th><th>Lucro total</th><th>IA</th></tr>
                 </thead>
                 <tbody>
                   {sorted.map(l => (
@@ -521,10 +431,7 @@ export default function App() {
                         </div>
                       </td>
                       <td style={{ fontWeight: 700, color: "#f0f0f0" }}>{fmt(l.price)}</td>
-                      <td>
-                        <input type="number" value={l.cost || ""} onChange={e => setCosts(c => ({ ...c, [l.id]: Number(e.target.value) }))} placeholder="0,00"
-                          style={{ background: "#0f1117", border: "1px solid #1e2130", color: "#f0f0f0", padding: "4px 8px", borderRadius: 6, width: 80, fontSize: 12, fontFamily: "inherit", textAlign: "right" }} />
-                      </td>
+                      <td><input type="number" value={l.cost || ""} onChange={e => setCosts(c => ({ ...c, [l.id]: Number(e.target.value) }))} placeholder="0,00" style={{ background: "#0f1117", border: "1px solid #1e2130", color: "#f0f0f0", padding: "4px 8px", borderRadius: 6, width: 80, fontSize: 12, fontFamily: "inherit", textAlign: "right" }} /></td>
                       <td style={{ color: "#f5c542" }}>{fmt(l.fee)}<div style={{ fontSize: 10, color: "#555" }}>{fmtPct(l.feeRate)}</div></td>
                       <td style={{ color: l.profit >= 0 ? "#00e5a0" : "#ff5b5b", fontWeight: 700 }}>{fmt(l.profit)}</td>
                       <td style={{ minWidth: 130 }}><MarginBar value={l.margin} /></td>
@@ -532,9 +439,7 @@ export default function App() {
                         {l.cost > 0 ? fmt(l.totalProfit) : "—"}
                         <div style={{ fontSize: 10, color: "#555" }}>{l.sold_quantity} vendidos</div>
                       </td>
-                      <td>
-                        <button onClick={() => setSelectedListing(l)} style={{ background: "linear-gradient(135deg,#ffe00022,#ff950022)", border: "1px solid #ffe00033", color: "#ffe000", fontSize: 11, padding: "5px 12px", borderRadius: 7, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>✦ Analisar</button>
-                      </td>
+                      <td><button onClick={() => setSelectedListing(l)} style={{ background: "linear-gradient(135deg,#ffe00022,#ff950022)", border: "1px solid #ffe00033", color: "#ffe000", fontSize: 11, padding: "5px 12px", borderRadius: 7, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>✦ Analisar</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -547,9 +452,7 @@ export default function App() {
           <div style={{ background: "#0a0c12", border: "1px solid #13151d", borderRadius: 14, overflow: "auto" }}>
             <table>
               <thead>
-                <tr>
-                  <th>Pedido</th><th>Produto</th><th>Data</th><th>Preço</th><th>Qtd</th><th>Tarifa ML</th><th>Frete</th><th>Lucro unit.</th><th>Margem</th>
-                </tr>
+                <tr><th>Pedido</th><th>Produto</th><th>Data</th><th>Preço</th><th>Qtd</th><th>Tarifa ML</th><th>Frete</th><th>Lucro unit.</th><th>Margem</th></tr>
               </thead>
               <tbody>
                 {enrichedOrders.map(o => (

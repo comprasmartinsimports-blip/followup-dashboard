@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 
 const ML = (path) => `/api/ml${path}`;
 const fmt = (n) => `R$ ${Number(n).toFixed(2).replace(".", ",")}`;
@@ -15,43 +15,26 @@ function getSku(listing) {
 function getRealFeeRate(listing) {
   const type = listing.listing_type_id;
   if (type === "gold_premium") return 0.17;
-  if (type === "gold_special") return 0.16;
-  if (type === "gold_pro") return 0.16;
-  if (type === "gold") return 0.13;
-  if (type === "silver") return 0.10;
-  if (type === "bronze") return 0.06;
-  if (type === "free") return 0.00;
-  return 0.16;
+  return 0.12;
 }
 
 function getListingTypeLabel(type) {
-  const map = {
-    gold_premium: { label: "Premium · 17%", color: "#7c3aed" },
-    gold_special: { label: "Clássico · 16%", color: "#2563eb" },
-    gold_pro: { label: "Premium · 16%", color: "#7c3aed" },
-    gold: { label: "Ouro · 13%", color: "#d97706" },
-    silver: { label: "Prata · 10%", color: "#64748b" },
-    bronze: { label: "Bronze · 6%", color: "#92400e" },
-    free: { label: "Grátis · 0%", color: "#94a3b8" },
-  };
-  return map[type] ?? { label: `${fmtPct(getRealFeeRate({ listing_type_id: type }))}`, color: "#64748b" };
+  if (type === "gold_premium") return { label: "Premium · 17%", color: "#7c3aed" };
+  return { label: "Clássico · 12%", color: "#2563eb" };
 }
 
-// Pega preço de venda real (pode ser promocional)
 function getSalePrice(listing) {
-  // Verifica se há preço promocional ativo
   const promo = listing.sale_price;
   if (promo && promo.amount && promo.amount < listing.price) {
     return { salePrice: promo.amount, originalPrice: listing.price, hasPromo: true };
   }
-  // Tenta também em deals
   if (listing.deal_price && listing.deal_price < listing.price) {
     return { salePrice: listing.deal_price, originalPrice: listing.price, hasPromo: true };
   }
   return { salePrice: listing.price, originalPrice: listing.price, hasPromo: false };
 }
 
-function calcMargin(salePrice, cost, feeRate = 0.16, shippingCost = 0) {
+function calcMargin(salePrice, cost, feeRate = 0.12, shippingCost = 0) {
   const mlFee = salePrice * feeRate;
   const revenue = salePrice - mlFee - shippingCost;
   const profit = revenue - cost;
@@ -126,12 +109,9 @@ async function fetchAllOrders(userId, tk) {
   return allOrders;
 }
 
-// Busca frete do comprador para um item
 async function fetchBuyerShippingCost(itemId, tk) {
   try {
-    const res = await fetch(ML(`/items/${itemId}/shipping_options?zip_code=01310100`), {
-      headers: { Authorization: `Bearer ${tk}` }
-    });
+    const res = await fetch(ML(`/items/${itemId}/shipping_options?zip_code=01310100`), { headers: { Authorization: `Bearer ${tk}` } });
     const data = await res.json();
     const options = data.options ?? [];
     const costs = options.map(o => parseFloat(o.cost ?? o.list_cost ?? 0)).filter(c => c > 0);
@@ -284,7 +264,6 @@ export default function App() {
       const orders = await fetchAllOrders(me.id, tk);
       setRealOrders(orders);
 
-      // Busca custo de frete dos anúncios sem frete grátis (em lotes para não sobrecarregar)
       setLoadingMsg("Buscando custos de frete...");
       const paidShipping = listings.filter(l => !l.shipping?.free_shipping).slice(0, 50);
       const shippingMap = {};
@@ -300,8 +279,8 @@ export default function App() {
   }
 
   const MOCK_LISTINGS = [
-    { id: "MLB6685879548", seller_sku: "1461", listing_type_id: "gold_premium", title: "Lanterna Traseira Gol G4 2006 2007 2008 A 2014 Fume", price: 62.34, sale_price: null, sold_quantity: 0, status: "active", permalink: "https://www.mercadolivre.com.br", shipping: { free_shipping: false, logistic_type: "xd_drop_off", cost: 8.55 }, pictures: [{}], description: { plain_text: "Lanterna traseira." }, attributes: [{ id: "SELLER_SKU", name: "SKU", value_name: "1461" }], condition: "new" },
-    { id: "MLB001", seller_sku: "SKU-001", listing_type_id: "gold_special", title: "Lanterna Traseira Uno Fire 2004 2005 2006 Original Nova", price: 70.47, sale_price: { amount: 61.69 }, sold_quantity: 5, status: "active", permalink: "https://www.mercadolivre.com.br", shipping: { free_shipping: true, logistic_type: "fulfillment" }, pictures: [{},{},{},{},{},{}], description: { plain_text: "Lanterna traseira original para Uno Fire." }, attributes: [{ id: "BRAND", name: "Marca", value_name: "Genérico" }, { id: "SELLER_SKU", name: "SKU", value_name: "SKU-001" }], condition: "new" },
+    { id: "MLB6685879548", seller_sku: "1461", listing_type_id: "gold_premium", title: "Lanterna Traseira Gol G4 2006 2007 2008 A 2014 Fume", price: 62.34, sale_price: null, sold_quantity: 0, status: "active", permalink: "https://www.mercadolivre.com.br", shipping: { free_shipping: false, logistic_type: "xd_drop_off" }, pictures: [{}], description: { plain_text: "Lanterna traseira." }, attributes: [{ id: "SELLER_SKU", name: "SKU", value_name: "1461" }], condition: "new" },
+    { id: "MLB001", seller_sku: "SKU-001", listing_type_id: "gold_special", title: "Lanterna Traseira Uno Fire 2004 2005 2006 Original Nova", price: 70.47, sale_price: { amount: 61.69 }, sold_quantity: 5, status: "active", permalink: "https://www.mercadolivre.com.br", shipping: { free_shipping: true, logistic_type: "fulfillment" }, pictures: [{},{},{},{},{},{}], description: { plain_text: "Lanterna traseira original para Uno Fire." }, attributes: [{ id: "SELLER_SKU", name: "SKU", value_name: "SKU-001" }], condition: "new" },
   ];
 
   const MOCK_ORDERS = [
@@ -365,7 +344,7 @@ export default function App() {
   const enrichedOrders = filteredOrders.map(o => {
     const listing = listings.find(l => l.id === o.listing_id);
     const cost = costs[listing?.id] ?? 0;
-    const feeRate = listing ? getRealFeeRate(listing) : 0.16;
+    const feeRate = listing ? getRealFeeRate(listing) : 0.12;
     return { ...o, listing, ...calcMargin(o.price, cost, feeRate, o.shipping_cost / Math.max(o.qty, 1)), cost };
   });
 
@@ -383,7 +362,7 @@ export default function App() {
       return { label: "Frete grátis", color: "#15803d", bg: "#f0fdf4" };
     }
     const cost = l.buyerShipping;
-    if (cost > 0) return { label: fmt(cost), color: "#d97706", bg: "#fffbeb", sub: "cobrado comprador" };
+    if (cost > 0) return { label: fmt(cost), color: "#d97706", bg: "#fffbeb", sub: "cobrado do comprador" };
     return { label: "A cobrar", color: "#94a3b8", bg: "#f8fafc" };
   }
 
@@ -532,9 +511,7 @@ export default function App() {
                             <span style={{ fontSize: 11, color: scoreColor(l.score), fontWeight: 600 }}>{scoreLabel(l.score)}</span>
                           </div>
                         </td>
-                        <td>
-                          <span style={{ fontSize: 11, color: typeInfo.color, fontWeight: 600 }}>{typeInfo.label}</span>
-                        </td>
+                        <td><span style={{ fontSize: 11, color: typeInfo.color, fontWeight: 600 }}>{typeInfo.label}</span></td>
                         <td>
                           {l.hasPromo ? (
                             <div>

@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react";
 
 const APP_ID = "6544342790807693";
-const REDIRECT_URI = "https://followup-dashboard.vercel.app/";
-
 const ML_FEES = { default: 0.16, electronics: 0.14, fashion: 0.16, home: 0.15, sports: 0.15 };
 const fmt = (n) => `R$ ${Number(n).toFixed(2).replace(".", ",")}`;
 const fmtPct = (n) => `${(n * 100).toFixed(1)}%`;
@@ -129,51 +127,106 @@ function AIPanel({ listing, onClose }) {
   );
 }
 
+function TokenModal({ onConnect }) {
+  const [tokenInput, setTokenInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit() {
+    if (!tokenInput.trim()) return;
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("https://api.mercadolibre.com/users/me", {
+        headers: { Authorization: `Bearer ${tokenInput.trim()}` }
+      });
+      const data = await res.json();
+      if (data.id) {
+        onConnect(tokenInput.trim(), data);
+      } else {
+        setError("Token inválido. Verifique e tente novamente.");
+      }
+    } catch (e) {
+      setError("Erro ao validar token.");
+    }
+    setLoading(false);
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 24 }}>
+      <div style={{ background: "#0a0c12", border: "1px solid #1e2130", borderRadius: 20, width: "100%", maxWidth: 520, padding: "32px 36px" }}>
+        <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 900, fontSize: 22, marginBottom: 8 }}>Conectar Mercado Livre</div>
+        <p style={{ color: "#666", fontSize: 13, lineHeight: 1.7, marginBottom: 24 }}>
+          Para conectar, você precisa gerar um token de acesso do ML. Siga os passos:
+        </p>
+
+        <div style={{ background: "#080a0f", border: "1px solid #1e2130", borderRadius: 12, padding: "16px 20px", marginBottom: 24 }}>
+          <div style={{ fontSize: 12, color: "#ffe000", marginBottom: 12, letterSpacing: 1, textTransform: "uppercase" }}>Como gerar o token</div>
+          {[
+            "Acesse o site do Mercado Livre e faça login",
+            `Cole esta URL no navegador: https://auth.mercadolivre.com.br/authorization?response_type=token&client_id=${APP_ID}&redirect_uri=https://followup-dashboard.vercel.app/`,
+            'Clique em "Autorizar" na página do ML',
+            "Copie o token da URL que aparecer (após access_token=)",
+            "Cole o token abaixo",
+          ].map((step, i) => (
+            <div key={i} style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+              <div style={{ minWidth: 22, height: 22, borderRadius: 6, background: "#1e2130", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#ffe000", fontWeight: 800 }}>{i + 1}</div>
+              <div style={{ fontSize: 12, color: "#888", lineHeight: 1.5, wordBreak: "break-all" }}>{step}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: "#555", marginBottom: 8, letterSpacing: 1, textTransform: "uppercase" }}>Cole seu token aqui</div>
+          <textarea
+            value={tokenInput}
+            onChange={e => setTokenInput(e.target.value)}
+            placeholder="APP_USR-..."
+            rows={3}
+            style={{ width: "100%", background: "#080a0f", border: "1px solid #2a3050", color: "#f0f0f0", padding: "10px 14px", borderRadius: 10, fontFamily: "inherit", fontSize: 12, resize: "none", outline: "none" }}
+          />
+        </div>
+
+        {error && <div style={{ color: "#ff5b5b", fontSize: 12, marginBottom: 12 }}>⚠ {error}</div>}
+
+        <button
+          onClick={handleSubmit}
+          disabled={loading || !tokenInput.trim()}
+          style={{ width: "100%", background: loading ? "#1e2130" : "linear-gradient(135deg,#ffe000,#ff9500)", border: "none", color: loading ? "#555" : "#0f1117", fontWeight: 800, padding: "12px", borderRadius: 10, cursor: loading ? "not-allowed" : "pointer", fontFamily: "inherit", fontSize: 14 }}
+        >
+          {loading ? "Validando..." : "Conectar"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [tab, setTab] = useState("listings");
   const [costs, setCosts] = useState({});
   const [selectedListing, setSelectedListing] = useState(null);
   const [sortBy, setSortBy] = useState("score");
   const [token, setToken] = useState(null);
+  const [user, setUser] = useState(null);
   const [realListings, setRealListings] = useState([]);
   const [realOrders, setRealOrders] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [showTokenModal, setShowTokenModal] = useState(false);
 
   const usingMock = !token;
 
-  useEffect(() => {
-    // Pega token do hash da URL (implicit flow)
-    const hash = window.location.hash;
-    if (hash) {
-      const params = new URLSearchParams(hash.replace("#", ""));
-      const t = params.get("access_token");
-      if (t) {
-        setToken(t);
-        window.history.replaceState({}, "", window.location.pathname);
-        loadRealData(t);
-        return;
-      }
-    }
-  }, []);
-
-  async function loadRealData(tk) {
+  async function handleConnect(tk, userData) {
+    setToken(tk);
+    setUser(userData);
+    setShowTokenModal(false);
     setLoading(true);
-    setError(null);
     try {
-      const meRes = await fetch("https://api.mercadolibre.com/users/me", {
-        headers: { Authorization: `Bearer ${tk}` }
-      });
-      const me = await meRes.json();
-      if (!me.id) throw new Error("Token inválido");
-
       const lRes = await fetch(
-        `https://api.mercadolibre.com/users/${me.id}/items/search?limit=50`,
+        `https://api.mercadolibre.com/users/${userData.id}/items/search?limit=50`,
         { headers: { Authorization: `Bearer ${tk}` } }
       );
       const lData = await lRes.json();
       const ids = lData.results ?? [];
-
       const details = await Promise.all(
         ids.slice(0, 20).map(id =>
           fetch(`https://api.mercadolibre.com/items/${id}`, {
@@ -184,29 +237,23 @@ export default function App() {
       setRealListings(details.filter(d => d.id));
 
       const oRes = await fetch(
-        `https://api.mercadolibre.com/orders/search?seller=${me.id}&sort=date_desc&limit=50`,
+        `https://api.mercadolibre.com/orders/search?seller=${userData.id}&sort=date_desc&limit=50`,
         { headers: { Authorization: `Bearer ${tk}` } }
       );
       const oData = await oRes.json();
       setRealOrders(oData.results ?? []);
     } catch (e) {
-      setError("Erro ao carregar dados. Tente reconectar.");
-      setToken(null);
+      console.error(e);
     }
     setLoading(false);
   }
 
-  function handleConnect() {
-    const url = `https://auth.mercadolivre.com.br/authorization?response_type=token&client_id=${APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
-    window.location.href = url;
-  }
-
   const MOCK_LISTINGS = [
-    { id: "MLB001", title: "Fone Bluetooth Premium XZ900", price: 189.9, sold_quantity: 42, category: "electronics", status: "active", pictures: [{ url: "" }], description: { plain_text: "Fone de ouvido bluetooth." }, attributes: [{ id: "BRAND", name: "Marca", value_name: "XZ" }], shipping: { free_shipping: true }, condition: "new" },
-    { id: "MLB002", title: "Tênis Running Masculino Air Pro", price: 349.0, sold_quantity: 28, category: "fashion", status: "active", pictures: [{ url: "" }, { url: "" }], description: { plain_text: "" }, attributes: [{ id: "BRAND", name: "Marca", value_name: "Air" }], shipping: { free_shipping: false }, condition: "new" },
+    { id: "MLB001", title: "Fone Bluetooth Premium XZ900", price: 189.9, sold_quantity: 42, category: "electronics", status: "active", pictures: [{}], description: { plain_text: "Fone de ouvido bluetooth." }, attributes: [{ id: "BRAND", name: "Marca", value_name: "XZ" }], shipping: { free_shipping: true }, condition: "new" },
+    { id: "MLB002", title: "Tênis Running Masculino Air Pro", price: 349.0, sold_quantity: 28, category: "fashion", status: "active", pictures: [{}, {}], description: { plain_text: "" }, attributes: [{ id: "BRAND", name: "Marca", value_name: "Air" }], shipping: { free_shipping: false }, condition: "new" },
     { id: "MLB003", title: "Kit Panelas", price: 279.9, sold_quantity: 15, category: "home", status: "active", pictures: [], description: { plain_text: "Kit com panelas." }, attributes: [], shipping: { free_shipping: false }, condition: "new" },
-    { id: "MLB004", title: "Mochila Táctica 40L Impermeável Militar Reforçada", price: 159.9, sold_quantity: 67, category: "sports", status: "active", pictures: [{},{},{},{},{},{}], description: { plain_text: "Mochila tática impermeável 40L com vários compartimentos, material resistente, ideal para camping e trilha." }, attributes: [{ id: "BRAND", name: "Marca", value_name: "TacPro" },{ id: "COLOR", name: "Cor", value_name: "Preto" },{ id: "MATERIAL", name: "Material", value_name: "Nylon" },{ id: "VOLUME", name: "Volume", value_name: "40L" }], shipping: { free_shipping: true }, condition: "new" },
-    { id: "MLB005", title: "Smart Watch Fitness Pro Band", price: 219.9, sold_quantity: 33, category: "electronics", status: "paused", pictures: [{ url: "" }], description: { plain_text: "Smartwatch com monitor cardíaco." }, attributes: [{ id: "BRAND", name: "Marca", value_name: "FitPro" }], shipping: { free_shipping: true }, condition: "new" },
+    { id: "MLB004", title: "Mochila Táctica 40L Impermeável Militar Reforçada", price: 159.9, sold_quantity: 67, category: "sports", status: "active", pictures: [{},{},{},{},{},{}], description: { plain_text: "Mochila tática impermeável 40L com vários compartimentos, material resistente, ideal para camping e trilha. Alças acolchoadas." }, attributes: [{ id: "BRAND", name: "Marca", value_name: "TacPro" },{ id: "COLOR", name: "Cor", value_name: "Preto" },{ id: "MATERIAL", name: "Material", value_name: "Nylon" },{ id: "VOLUME", name: "Volume", value_name: "40L" }], shipping: { free_shipping: true }, condition: "new" },
+    { id: "MLB005", title: "Smart Watch Fitness Pro Band", price: 219.9, sold_quantity: 33, category: "electronics", status: "paused", pictures: [{}], description: { plain_text: "Smartwatch com monitor cardíaco." }, attributes: [{ id: "BRAND", name: "Marca", value_name: "FitPro" }], shipping: { free_shipping: true }, condition: "new" },
   ];
 
   const MOCK_ORDERS = [
@@ -259,7 +306,7 @@ export default function App() {
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800;900&display=swap');
         *{box-sizing:border-box;margin:0;padding:0}
         ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:#080a0f}::-webkit-scrollbar-thumb{background:#2a3050;border-radius:99px}
-        input[type=number]::-webkit-inner-spin-button{opacity:.4}input:focus{outline:2px solid #ffe000;outline-offset:1px}
+        input[type=number]::-webkit-inner-spin-button{opacity:.4}input:focus,textarea:focus{outline:2px solid #ffe000;outline-offset:1px}
         table{border-collapse:collapse;width:100%}
         th{font-size:10px;color:#444;text-transform:uppercase;letter-spacing:1.2px;padding:10px 14px;border-bottom:1px solid #13151d;text-align:left;font-weight:500}
         td{padding:11px 14px;font-size:12.5px;border-bottom:1px solid #0d0f18;vertical-align:middle}
@@ -280,10 +327,9 @@ export default function App() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {usingMock && <span style={{ background: "#13151d", border: "1px solid #1e2130", color: "#555", fontSize: 10, padding: "3px 10px", borderRadius: 20 }}>📊 demonstração</span>}
-          {token && <span style={{ background: "#00e5a010", border: "1px solid #00e5a030", color: "#00e5a0", fontSize: 10, padding: "3px 10px", borderRadius: 20 }}>● conectado</span>}
-          {loading && <span style={{ color: "#555", fontSize: 11 }}>⏳ Carregando dados...</span>}
-          {error && <span style={{ color: "#ff5b5b", fontSize: 11 }}>{error}</span>}
-          <button onClick={handleConnect} style={{ background: "linear-gradient(135deg,#ffe000,#ff9500)", border: "none", color: "#0f1117", fontWeight: 800, padding: "8px 18px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>
+          {token && <span style={{ background: "#00e5a010", border: "1px solid #00e5a030", color: "#00e5a0", fontSize: 10, padding: "3px 10px", borderRadius: 20 }}>● {user?.nickname ?? "conectado"}</span>}
+          {loading && <span style={{ color: "#555", fontSize: 11 }}>⏳ carregando...</span>}
+          <button onClick={() => setShowTokenModal(true)} style={{ background: "linear-gradient(135deg,#ffe000,#ff9500)", border: "none", color: "#0f1117", fontWeight: 800, padding: "8px 18px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>
             {token ? "Reconectar ML" : "Conectar ML"}
           </button>
         </div>
@@ -375,6 +421,8 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {showTokenModal && <TokenModal onConnect={handleConnect} />}
       {selectedListing && <AIPanel listing={selectedListing} onClose={() => setSelectedListing(null)} />}
     </div>
   );

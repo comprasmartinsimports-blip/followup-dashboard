@@ -133,22 +133,16 @@ function TokenModal({ onConnect }) {
   const [error, setError] = useState("");
 
   async function handleSubmit() {
-    if (!tokenInput.trim()) return;
+    const tk = tokenInput.trim();
+    if (!tk) return;
+    if (!tk.startsWith("APP_USR-") && !tk.startsWith("APP_")) {
+      setError("Token inválido. Deve começar com APP_USR-");
+      return;
+    }
     setLoading(true);
     setError("");
-    try {
-      const res = await fetch("https://api.mercadolibre.com/users/me", {
-        headers: { Authorization: `Bearer ${tokenInput.trim()}` }
-      });
-      const data = await res.json();
-      if (data.id) {
-        onConnect(tokenInput.trim(), data);
-      } else {
-        setError("Token inválido. Verifique e tente novamente.");
-      }
-    } catch (e) {
-      setError("Erro ao validar token.");
-    }
+    // Aceita o token direto sem validar via API (evita CORS)
+    onConnect(tk, { nickname: "Minha Conta ML", id: null });
     setLoading(false);
   }
 
@@ -156,22 +150,20 @@ function TokenModal({ onConnect }) {
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 24 }}>
       <div style={{ background: "#0a0c12", border: "1px solid #1e2130", borderRadius: 20, width: "100%", maxWidth: 520, padding: "32px 36px" }}>
         <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 900, fontSize: 22, marginBottom: 8 }}>Conectar Mercado Livre</div>
-        <p style={{ color: "#666", fontSize: 13, lineHeight: 1.7, marginBottom: 24 }}>
-          Para conectar, você precisa gerar um token de acesso do ML. Siga os passos:
-        </p>
+        <p style={{ color: "#666", fontSize: 13, lineHeight: 1.7, marginBottom: 24 }}>Cole o token gerado via Terminal para conectar sua conta.</p>
 
         <div style={{ background: "#080a0f", border: "1px solid #1e2130", borderRadius: 12, padding: "16px 20px", marginBottom: 24 }}>
-          <div style={{ fontSize: 12, color: "#ffe000", marginBottom: 12, letterSpacing: 1, textTransform: "uppercase" }}>Como gerar o token</div>
+          <div style={{ fontSize: 12, color: "#ffe000", marginBottom: 12, letterSpacing: 1, textTransform: "uppercase" }}>Como gerar o token via Terminal (Mac)</div>
           {[
-            "Acesse o site do Mercado Livre e faça login",
-            `Cole esta URL no navegador: https://auth.mercadolivre.com.br/authorization?response_type=token&client_id=${APP_ID}&redirect_uri=https://followup-dashboard.vercel.app/`,
-            'Clique em "Autorizar" na página do ML',
-            "Copie o token da URL que aparecer (após access_token=)",
-            "Cole o token abaixo",
+            "Abra o Terminal (Cmd + Espaço → Terminal)",
+            "Cole o comando abaixo substituindo SUA_CHAVE pela chave secreta do seu app no ML:",
+            "curl -X POST https://api.mercadolibre.com/oauth/token -d \"grant_type=client_credentials&client_id=6544342790807693&client_secret=SUA_CHAVE\"",
+            "Copie o valor de access_token do resultado",
+            "Cole abaixo e clique em Conectar",
           ].map((step, i) => (
             <div key={i} style={{ display: "flex", gap: 10, marginBottom: 10 }}>
-              <div style={{ minWidth: 22, height: 22, borderRadius: 6, background: "#1e2130", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#ffe000", fontWeight: 800 }}>{i + 1}</div>
-              <div style={{ fontSize: 12, color: "#888", lineHeight: 1.5, wordBreak: "break-all" }}>{step}</div>
+              <div style={{ minWidth: 22, height: 22, borderRadius: 6, background: "#1e2130", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#ffe000", fontWeight: 800, flexShrink: 0 }}>{i + 1}</div>
+              <div style={{ fontSize: 12, color: i === 2 ? "#00e5a0" : "#888", lineHeight: 1.5, wordBreak: "break-all", fontFamily: i === 2 ? "monospace" : "inherit" }}>{step}</div>
             </div>
           ))}
         </div>
@@ -183,7 +175,7 @@ function TokenModal({ onConnect }) {
             onChange={e => setTokenInput(e.target.value)}
             placeholder="APP_USR-..."
             rows={3}
-            style={{ width: "100%", background: "#080a0f", border: "1px solid #2a3050", color: "#f0f0f0", padding: "10px 14px", borderRadius: 10, fontFamily: "inherit", fontSize: 12, resize: "none", outline: "none" }}
+            style={{ width: "100%", background: "#080a0f", border: "1px solid #2a3050", color: "#f0f0f0", padding: "10px 14px", borderRadius: 10, fontFamily: "monospace", fontSize: 12, resize: "none", outline: "none" }}
           />
         </div>
 
@@ -194,7 +186,7 @@ function TokenModal({ onConnect }) {
           disabled={loading || !tokenInput.trim()}
           style={{ width: "100%", background: loading ? "#1e2130" : "linear-gradient(135deg,#ffe000,#ff9500)", border: "none", color: loading ? "#555" : "#0f1117", fontWeight: 800, padding: "12px", borderRadius: 10, cursor: loading ? "not-allowed" : "pointer", fontFamily: "inherit", fontSize: 14 }}
         >
-          {loading ? "Validando..." : "Conectar"}
+          {loading ? "Conectando..." : "Conectar"}
         </button>
       </div>
     </div>
@@ -212,21 +204,34 @@ export default function App() {
   const [realOrders, setRealOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showTokenModal, setShowTokenModal] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
-  const usingMock = !token;
+  const usingMock = !token || realListings.length === 0;
 
   async function handleConnect(tk, userData) {
     setToken(tk);
     setUser(userData);
     setShowTokenModal(false);
     setLoading(true);
+    setLoadError(null);
     try {
+      // Primeiro tenta pegar o user_id do token
+      const meRes = await fetch("https://api.mercadolibre.com/users/me", {
+        headers: { Authorization: `Bearer ${tk}` }
+      });
+      const me = await meRes.json();
+      const userId = me.id ?? userData.id;
+      if (!userId) throw new Error("Não foi possível identificar o usuário");
+
+      setUser({ ...userData, nickname: me.nickname ?? userData.nickname, id: userId });
+
       const lRes = await fetch(
-        `https://api.mercadolibre.com/users/${userData.id}/items/search?limit=50`,
+        `https://api.mercadolibre.com/users/${userId}/items/search?limit=50`,
         { headers: { Authorization: `Bearer ${tk}` } }
       );
       const lData = await lRes.json();
       const ids = lData.results ?? [];
+
       const details = await Promise.all(
         ids.slice(0, 20).map(id =>
           fetch(`https://api.mercadolibre.com/items/${id}`, {
@@ -237,13 +242,13 @@ export default function App() {
       setRealListings(details.filter(d => d.id));
 
       const oRes = await fetch(
-        `https://api.mercadolibre.com/orders/search?seller=${userData.id}&sort=date_desc&limit=50`,
+        `https://api.mercadolibre.com/orders/search?seller=${userId}&sort=date_desc&limit=50`,
         { headers: { Authorization: `Bearer ${tk}` } }
       );
       const oData = await oRes.json();
       setRealOrders(oData.results ?? []);
     } catch (e) {
-      console.error(e);
+      setLoadError("Erro ao carregar dados: " + e.message);
     }
     setLoading(false);
   }
@@ -326,9 +331,10 @@ export default function App() {
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {usingMock && <span style={{ background: "#13151d", border: "1px solid #1e2130", color: "#555", fontSize: 10, padding: "3px 10px", borderRadius: 20 }}>📊 demonstração</span>}
+          {usingMock && !token && <span style={{ background: "#13151d", border: "1px solid #1e2130", color: "#555", fontSize: 10, padding: "3px 10px", borderRadius: 20 }}>📊 demonstração</span>}
           {token && <span style={{ background: "#00e5a010", border: "1px solid #00e5a030", color: "#00e5a0", fontSize: 10, padding: "3px 10px", borderRadius: 20 }}>● {user?.nickname ?? "conectado"}</span>}
           {loading && <span style={{ color: "#555", fontSize: 11 }}>⏳ carregando...</span>}
+          {loadError && <span style={{ color: "#ff5b5b", fontSize: 11 }}>⚠ {loadError}</span>}
           <button onClick={() => setShowTokenModal(true)} style={{ background: "linear-gradient(135deg,#ffe000,#ff9500)", border: "none", color: "#0f1117", fontWeight: 800, padding: "8px 18px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>
             {token ? "Reconectar ML" : "Conectar ML"}
           </button>

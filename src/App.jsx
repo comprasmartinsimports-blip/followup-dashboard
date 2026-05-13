@@ -188,15 +188,8 @@ function AIPanel({ listing, onClose }) {
   }
 
   return (
-    <div style={{
-      position: "fixed", inset: 0, background: "rgba(0,0,0,.85)",
-      display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 300,
-    }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{
-        background: "#0a0c12", border: "1px solid #1e2130",
-        borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 720,
-        maxHeight: "85vh", overflowY: "auto", padding: "28px 32px 40px",
-      }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.85)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 300 }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "#0a0c12", border: "1px solid #1e2130", borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 720, maxHeight: "85vh", overflowY: "auto", padding: "28px 32px 40px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
           <div>
             <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 900, fontSize: 18, marginBottom: 4 }}>Qualidade do Anúncio</div>
@@ -204,7 +197,6 @@ function AIPanel({ listing, onClose }) {
           </div>
           <button onClick={onClose} style={{ background: "#1e2130", border: "none", color: "#888", width: 32, height: 32, borderRadius: 8, cursor: "pointer", fontSize: 16 }}>✕</button>
         </div>
-
         <div style={{ display: "flex", gap: 16, alignItems: "center", background: "#0f1117", border: "1px solid #1e2130", borderRadius: 14, padding: "20px 24px", marginBottom: 20 }}>
           <ScoreRing score={score} />
           <div>
@@ -220,7 +212,6 @@ function AIPanel({ listing, onClose }) {
             ))}
           </div>
         </div>
-
         {state === "idle" && (
           <div style={{ textAlign: "center", padding: "24px 0" }}>
             <div style={{ color: "#555", fontSize: 13, marginBottom: 16 }}>Analise este anúncio com IA para receber sugestões personalizadas</div>
@@ -301,7 +292,7 @@ export default function App() {
   const orders = MOCK_ORDERS;
 
   function handleConnect() {
-    const appId = "6544342750807693";
+    const appId = "6544342790807693";
     const redirectUri = window.location.href.split("?")[0].split("#")[0];
     const url = `https://auth.mercadolivre.com.br/authorization?response_type=token&client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
     window.location.href = url;

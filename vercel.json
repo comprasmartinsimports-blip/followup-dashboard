@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/ml/:path*",
+      "destination": "https://api.mercadolibre.com/:path*"
+    }
+  ]
+}

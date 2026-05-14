@@ -122,21 +122,18 @@ async function fetchAllOrders(userId, tk) {
 
 // Busca o custo de frete que o VENDEDOR paga ao ML para cada anúncio
 // O ML sempre cobra um custo de envio do vendedor, mesmo quando o comprador paga o frete
-async function fetchSellerShippingCost(itemId, tk) {
+async function fetchSellerShippingCost(itemId, userId, tk) {
   try {
-    const res = await fetch(ML(`/items/${itemId}/shipping_options?zip_code=01310100`), {
+    // Endpoint correto que retorna o custo real que o VENDEDOR paga ao ML
+    // Retorna o campo list_cost que corresponde exatamente ao valor mostrado na tela do vendedor
+    const res = await fetch(ML(`/users/${userId}/shipping_options/free?item_id=${itemId}`), {
       headers: { Authorization: `Bearer ${tk}` }
     });
     const data = await res.json();
-    if (!data.options || data.options.length === 0) return 0;
-    // Pega o MAIOR custo — o ML cobra o custo da modalidade mais cara disponível
-    // pois é o que aparece na tela do vendedor como custo de envio
-    const costs = data.options
-      .map(o => parseFloat(o.cost ?? 0))
-      .filter(c => c > 0);
-    if (costs.length === 0) return 0;
-    // Usa o maior valor (que corresponde ao que o ML mostra na tela do vendedor)
-    return Math.max(...costs);
+    // O custo está em coverage.all_country.list_cost
+    const cost = data?.coverage?.all_country?.list_cost;
+    if (cost && parseFloat(cost) > 0) return parseFloat(cost);
+    return 0;
   } catch { return 0; }
 }
 
@@ -284,12 +281,13 @@ export default function App() {
       setRealOrders(orders);
 
       // Busca custo de frete do VENDEDOR para TODOS os anúncios
+      // Usa endpoint correto: /users/{userId}/shipping_options/free?item_id={itemId}
       setLoadingMsg("Buscando custo de frete por anúncio...");
       const shippingMap = {};
       for (let i = 0; i < listings.length; i += 5) {
         const batch = listings.slice(i, i + 5);
         const results = await Promise.all(
-          batch.map(l => fetchSellerShippingCost(l.id, tk).then(cost => ({ id: l.id, cost })))
+          batch.map(l => fetchSellerShippingCost(l.id, me.id, tk).then(cost => ({ id: l.id, cost })))
         );
         results.forEach(r => { shippingMap[r.id] = r.cost; });
         if (i % 50 === 0) setLoadingMsg(`Buscando frete... ${Math.min(i + 5, listings.length)}/${listings.length}`);

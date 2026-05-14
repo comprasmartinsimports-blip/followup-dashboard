@@ -367,27 +367,12 @@ export default function App() {
         const batch = ordersWithShipping.slice(i, i + 10);
         await Promise.all(batch.map(async o => {
           try {
-            // Endpoint /costs retorna breakdown exato: sender_cost = o que o vendedor paga
+            // /shipments/{id}/costs → senders[0].save = custo líquido do vendedor (confirmado)
             const res = await fetch(ML(`/shipments/${o.shipping.id}/costs`), { headers: { Authorization: `Bearer ${tk}` } });
             const data = await res.json();
-            // sender_cost = custo total do vendedor; gross_amount = valor bruto
-            // Se não tiver /costs, tenta o shipment direto e usa cost_components
-            let cost = 0;
-            if (data?.sender_cost !== undefined) {
-              cost = parseFloat(data.sender_cost) || 0;
-            } else if (data?.gross_amount !== undefined) {
-              cost = parseFloat(data.gross_amount) || 0;
-            } else {
-              // Fallback: shipment direto
-              const res2 = await fetch(ML(`/shipments/${o.shipping.id}`), { headers: { Authorization: `Bearer ${tk}` } });
-              const data2 = await res2.json();
-              // cost_components.gap_discount = desconto aplicado
-              // seller paga: base_cost - buyer portion
-              const bc = parseFloat(data2?.base_cost) || 0;
-              const gap = parseFloat(data2?.cost_components?.gap_discount ?? data2?.gap_discount ?? 0);
-              const buyerPays = parseFloat(data2?.cost_components?.buyer_cost ?? data2?.receiver_cost ?? 0);
-              cost = Math.max(0, bc - gap - buyerPays);
-            }
+            // senders[0].save = valor exato que o vendedor paga ao ML após descontos
+            const senderSave = parseFloat(data?.senders?.[0]?.save);
+            const cost = !isNaN(senderSave) && senderSave >= 0 ? senderSave : 0;
             shipmentCostMap[String(o.id)] = cost;
           } catch { shipmentCostMap[String(o.id)] = 0; }
         }));

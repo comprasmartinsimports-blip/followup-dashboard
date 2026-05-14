@@ -389,23 +389,25 @@ export default function App() {
 
   const rawOrders = usingMock ? MOCK_ORDERS : realOrders.map(o => {
     const item = o.order_items?.[0];
-    // Frete: tenta sender_cost, depois base_cost, depois cost
+    // O ML retorna o custo de frete do vendedor em order.shipping.cost (não sender_cost)
+    // O shipping do pedido tem: { id, status, cost, sender_cost, ... }
+    const sh = o.shipping ?? {};
+    console.log("SHIPPING RAW", o.id, JSON.stringify(sh));
     const freteSeller =
-      o.shipping?.sender_cost ??
-      o.shipping?.base_cost ??
-      o.shipping?.cost ??
-      o.shipping?.shipping_option?.cost ??
+      (sh.cost !== undefined && sh.cost !== null) ? parseFloat(sh.cost) :
+      (sh.sender_cost !== undefined && sh.sender_cost !== null) ? parseFloat(sh.sender_cost) :
+      (sh.base_cost !== undefined && sh.base_cost !== null) ? parseFloat(sh.base_cost) :
       0;
     return {
       id: String(o.id),
       listing_id: item?.item?.id,
-      // Título vem direto do pedido — não depende de buscar nos anúncios
       title: item?.item?.title ?? null,
       date: o.date_created?.slice(0, 10),
       price: item?.unit_price ?? o.total_amount ?? 0,
       qty: item?.quantity ?? 1,
-      seller_shipping_cost: parseFloat(freteSeller) || 0,
+      seller_shipping_cost: freteSeller,
       permalink: item?.item?.id ? `https://www.mercadolivre.com.br/p/${item.item.id}` : null,
+      shipping_id: sh.id ?? null,
     };
   });
 

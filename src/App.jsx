@@ -387,14 +387,27 @@ export default function App() {
   const shippingData = usingMock ? MOCK_SHIPPING : sellerShipping;
   const promosData = usingMock ? MOCK_PROMOS : promos;
 
-  const rawOrders = usingMock ? MOCK_ORDERS : realOrders.map(o => ({
-    id: String(o.id),
-    listing_id: o.order_items?.[0]?.item?.id,
-    date: o.date_created?.slice(0, 10),
-    price: o.total_amount ?? o.order_items?.[0]?.unit_price ?? 0,
-    qty: o.order_items?.[0]?.quantity ?? 1,
-    seller_shipping_cost: o.shipping?.sender_cost ?? 0,
-  }));
+  const rawOrders = usingMock ? MOCK_ORDERS : realOrders.map(o => {
+    const item = o.order_items?.[0];
+    // Frete: tenta sender_cost, depois base_cost, depois cost
+    const freteSeller =
+      o.shipping?.sender_cost ??
+      o.shipping?.base_cost ??
+      o.shipping?.cost ??
+      o.shipping?.shipping_option?.cost ??
+      0;
+    return {
+      id: String(o.id),
+      listing_id: item?.item?.id,
+      // Título vem direto do pedido — não depende de buscar nos anúncios
+      title: item?.item?.title ?? null,
+      date: o.date_created?.slice(0, 10),
+      price: item?.unit_price ?? o.total_amount ?? 0,
+      qty: item?.quantity ?? 1,
+      seller_shipping_cost: parseFloat(freteSeller) || 0,
+      permalink: item?.item?.id ? `https://www.mercadolivre.com.br/p/${item.item.id}` : null,
+    };
+  });
 
   const enriched = listings.map(l => {
     const cost = costs[l.id] ?? 0;
@@ -773,9 +786,16 @@ export default function App() {
                       <tr key={o.id}>
                         <td style={{ color: "#64748b", fontSize: 12, fontFamily: "monospace", fontWeight: 600 }}>#{o.id}</td>
                         <td>
-                          <div style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {o.listing?.permalink ? <a href={o.listing.permalink} target="_blank" rel="noreferrer" className="title-link">{o.listing.title}</a>
-                              : <span style={{ color: "#94a3b8" }}>{o.listing?.title ?? "—"}</span>}
+                          <div style={{ maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {(() => {
+                              // Título: prioriza o título direto do pedido, depois o do anúncio carregado
+                              const title = o.title ?? o.listing?.title;
+                              const link = o.permalink ?? o.listing?.permalink;
+                              if (!title) return <span style={{ color: "#94a3b8" }}>—</span>;
+                              return link
+                                ? <a href={link} target="_blank" rel="noreferrer" className="title-link">{title}</a>
+                                : <span>{title}</span>;
+                            })()}
                           </div>
                         </td>
                         <td style={{ color: "#64748b", fontSize: 12 }}>{o.date}</td>

@@ -370,7 +370,12 @@ export default function App() {
             const res = await fetch(ML(`/shipments/${o.shipping.id}`), { headers: { Authorization: `Bearer ${tk}` } });
             const data = await res.json();
             // base_cost = custo líquido que o vendedor paga ao ML
-            const cost = parseFloat(data?.base_cost) || 0;
+            // base_cost = total cobrado pelo ML pelo envio
+            // receiver_cost / buyer_cost = parte que o comprador paga
+            // Custo do vendedor = base_cost - o que o comprador paga
+            const baseCost = parseFloat(data?.base_cost) || 0;
+            const buyerCost = parseFloat(data?.receiver_cost ?? data?.buyer_cost ?? 0) || 0;
+            const cost = Math.max(0, baseCost - buyerCost);
             shipmentCostMap[String(o.id)] = cost;
           } catch { shipmentCostMap[String(o.id)] = 0; }
         }));

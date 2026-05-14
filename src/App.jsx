@@ -13,12 +13,13 @@ function getSku(listing) {
 }
 
 function getRealFeeRate(listing) {
-  if (listing.listing_type_id === "gold_premium") return 0.17;
+  // gold_pro = Premium 17%, gold_special = Clássico 12%
+  if (listing.listing_type_id === "gold_premium" || listing.listing_type_id === "gold_pro") return 0.17;
   return 0.12;
 }
 
 function getListingTypeLabel(type) {
-  if (type === "gold_premium") return { label: "Premium · 17%", color: "#7c3aed" };
+  if (type === "gold_premium" || type === "gold_pro") return { label: "Premium · 17%", color: "#7c3aed" };
   return { label: "Clássico · 12%", color: "#2563eb" };
 }
 

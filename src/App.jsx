@@ -79,7 +79,7 @@ Anúncio: Título: ${listing.title}, Preço venda: R$${listing.salePrice}, Fotos
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "Content-Type": "application/json", "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-    body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
+    body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 2000, messages: [{ role: "user", content: prompt }] }),
   });
   const data = await response.json();
   const text = data.content?.map(b => b.text || "").join("") ?? "";

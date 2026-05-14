@@ -23,15 +23,14 @@ function getListingTypeLabel(type) {
 }
 
 // Na API do ML: quando há promoção, price = preço promocional, original_price = preço original
-function getSalePrice(listing) {
+function getPrices(listing) {
   if (listing.original_price && listing.original_price > listing.price) {
     return { salePrice: listing.price, originalPrice: listing.original_price, hasPromo: true };
   }
   return { salePrice: listing.price, originalPrice: listing.price, hasPromo: false };
 }
 
-// freteSeller = frete que o VENDEDOR paga (desconta do lucro)
-// freteBuyer = frete que o COMPRADOR paga (não desconta do lucro)
+// Calcula margem — freteSeller é o frete que o VENDEDOR paga ao ML (sempre desconta)
 function calcMargin(salePrice, cost, feeRate = 0.12, freteSeller = 0) {
   const mlFee = salePrice * feeRate;
   const revenue = salePrice - mlFee - freteSeller;
@@ -45,7 +44,7 @@ function calcQualityScore(listing) {
     { key: "title_length", label: "Título com 60+ caracteres", pass: listing.title?.length >= 60, weight: 15 },
     { key: "photos_count", label: "6+ fotos", pass: (listing.pictures?.length ?? 0) >= 6, weight: 20 },
     { key: "description", label: "Descrição detalhada (100+ chars)", pass: (listing.description?.plain_text?.length ?? 0) >= 100, weight: 20 },
-    { key: "free_shipping", label: "Frete grátis", pass: listing.shipping?.free_shipping === true, weight: 15 },
+    { key: "free_shipping", label: "Frete grátis ao comprador", pass: listing.shipping?.free_shipping === true, weight: 15 },
     { key: "attributes", label: "4+ atributos preenchidos", pass: (listing.attributes?.length ?? 0) >= 4, weight: 20 },
     { key: "condition", label: "Condição informada", pass: !!listing.condition, weight: 10 },
   ];
@@ -62,7 +61,7 @@ async function analyzeWithAI(listing) {
   const prompt = `Você é um especialista em otimização de anúncios do Mercado Livre Brasil. 
 Analise este anúncio e retorne SOMENTE um JSON válido (sem markdown, sem backticks) com esta estrutura:
 {"score_commentary":"comentário em 1 frase","strengths":["ponto1","ponto2"],"improvements":[{"field":"campo","suggestion":"sugestão"},{"field":"campo","suggestion":"sugestão"},{"field":"campo","suggestion":"sugestão"}],"title_suggestion":"título otimizado máx 60 chars","keywords":["palavra1","palavra2","palavra3","palavra4","palavra5"]}
-Anúncio: Título: ${listing.title}, Preço: R$${listing.salePrice}, Fotos: ${listing.pictures?.length ?? 0}, Frete grátis: ${listing.shipping?.free_shipping ? "Sim" : "Não"}, Descrição: "${listing.description?.plain_text ?? "(vazia)"}", Atributos: ${listing.attributes?.map(a => `${a.name}: ${a.value_name}`).join(", ") || "nenhum"}, Condição: ${listing.condition ?? "não informada"}, Vendidos: ${listing.sold_quantity ?? 0}`;
+Anúncio: Título: ${listing.title}, Preço venda: R$${listing.salePrice}, Fotos: ${listing.pictures?.length ?? 0}, Frete grátis ao comprador: ${listing.shipping?.free_shipping ? "Sim" : "Não"}, Descrição: "${listing.description?.plain_text ?? "(vazia)"}", Atributos: ${listing.attributes?.map(a => `${a.name}: ${a.value_name}`).join(", ") || "nenhum"}, Condição: ${listing.condition ?? "não informada"}, Vendidos: ${listing.sold_quantity ?? 0}`;
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "Content-Type": "application/json", "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
@@ -107,13 +106,21 @@ async function fetchAllOrders(userId, tk) {
   return allOrders;
 }
 
+// Busca o custo de frete que o VENDEDOR paga ao ML para cada anúncio
+// O ML sempre cobra um custo de envio do vendedor, mesmo quando o comprador paga o frete
 async function fetchSellerShippingCost(itemId, tk) {
   try {
-    const res = await fetch(ML(`/items/${itemId}/shipping_options?zip_code=01310100`), { headers: { Authorization: `Bearer ${tk}` } });
+    // Usa CEP de SP como referência para calcular o frete
+    const res = await fetch(ML(`/items/${itemId}/shipping_options?zip_code=01310100`), {
+      headers: { Authorization: `Bearer ${tk}` }
+    });
     const data = await res.json();
-    // Custo que o vendedor paga ao ML pelo frete
-    const sellerCost = data.options?.map(o => parseFloat(o.cost ?? 0)).filter(c => c > 0) ?? [];
-    return sellerCost.length > 0 ? Math.min(...sellerCost) : 0;
+    if (!data.options || data.options.length === 0) return 0;
+    // Pega o menor custo que o vendedor paga (cost = custo do vendedor após subsídios)
+    const costs = data.options
+      .map(o => parseFloat(o.cost ?? o.list_cost ?? 0))
+      .filter(c => c > 0);
+    return costs.length > 0 ? Math.min(...costs) : 0;
   } catch { return 0; }
 }
 
@@ -260,14 +267,16 @@ export default function App() {
       const orders = await fetchAllOrders(me.id, tk);
       setRealOrders(orders);
 
-      // Busca custo de frete que o VENDEDOR paga (anúncios com frete grátis ao comprador)
-      setLoadingMsg("Buscando custos de frete do vendedor...");
-      const freeShippingListings = listings.filter(l => l.shipping?.free_shipping).slice(0, 50);
+      // Busca custo de frete do VENDEDOR para TODOS os anúncios
+      setLoadingMsg("Buscando custo de frete por anúncio...");
       const shippingMap = {};
-      for (let i = 0; i < freeShippingListings.length; i += 5) {
-        const batch = freeShippingListings.slice(i, i + 5);
-        const results = await Promise.all(batch.map(l => fetchSellerShippingCost(l.id, tk).then(cost => ({ id: l.id, cost }))));
+      for (let i = 0; i < listings.length; i += 5) {
+        const batch = listings.slice(i, i + 5);
+        const results = await Promise.all(
+          batch.map(l => fetchSellerShippingCost(l.id, tk).then(cost => ({ id: l.id, cost })))
+        );
         results.forEach(r => { shippingMap[r.id] = r.cost; });
+        if (i % 50 === 0) setLoadingMsg(`Buscando frete... ${Math.min(i + 5, listings.length)}/${listings.length}`);
       }
       setSellerShipping(shippingMap);
 
@@ -278,7 +287,7 @@ export default function App() {
   const MOCK_LISTINGS = [
     {
       id: "MLB6685879548", seller_sku: "1461", listing_type_id: "gold_premium",
-      title: "Lanterna Traseira Gol G4 2006 2007 2008 A 2014 Fume Vermelho Direito",
+      title: "Lanterna Traseira Gol G4 2006 2007 2008 A 2014 Fume Vermelho Direito Passageiro",
       price: 61.69, original_price: 62.34,
       sold_quantity: 0, status: "active",
       permalink: "https://www.mercadolivre.com.br",
@@ -287,44 +296,53 @@ export default function App() {
       attributes: [{ id: "SELLER_SKU", name: "SKU", value_name: "1461" }], condition: "new"
     },
     {
-      id: "MLB001", seller_sku: "SKU-001", listing_type_id: "gold_special",
-      title: "Lanterna Traseira Uno Fire 2004 2005 2006 Original Nova Completa",
-      price: 70.47, original_price: null,
-      sold_quantity: 5, status: "active",
+      id: "MLB6581658690", seller_sku: "012", listing_type_id: "gold_premium",
+      title: "Break Light Toyota Hilux 2016 2017 2018 2019 2020 A 2026",
+      price: 102.99, original_price: 121.16,
+      sold_quantity: 0, status: "active",
       permalink: "https://www.mercadolivre.com.br",
-      shipping: { free_shipping: true, logistic_type: "fulfillment" },
+      shipping: { free_shipping: true, logistic_type: "xd_drop_off" },
       pictures: [{},{},{},{},{},{}],
-      description: { plain_text: "Lanterna traseira original para Uno Fire 2004 a 2010. Produto novo em embalagem original." },
-      attributes: [{ id: "SELLER_SKU", name: "SKU", value_name: "SKU-001" }], condition: "new"
+      description: { plain_text: "Break light Toyota Hilux original novo." },
+      attributes: [{ id: "SELLER_SKU", name: "SKU", value_name: "012" }], condition: "new"
     },
   ];
 
+  // Custos de frete mock baseados nos prints reais
+  const MOCK_SHIPPING = {
+    "MLB6685879548": 8.55,   // comprador paga frete mas ML cobra R$8,55 do vendedor
+    "MLB6581658690": 15.45,  // frete grátis ao comprador, ML cobra R$15,45 do vendedor
+  };
+
   const MOCK_ORDERS = [
-    { id: "2000001", listing_id: "MLB001", date: "2026-05-13", price: 70.47, qty: 2, seller_shipping_cost: 8.20 },
-    { id: "2000002", listing_id: "MLB6685879548", date: "2026-05-10", price: 61.69, qty: 1, seller_shipping_cost: 0 },
+    { id: "2000001", listing_id: "MLB6685879548", date: "2026-05-13", price: 61.69, qty: 1, seller_shipping_cost: 8.55 },
+    { id: "2000002", listing_id: "MLB6581658690", date: "2026-05-10", price: 102.99, qty: 1, seller_shipping_cost: 15.45 },
   ];
 
   const listings = usingMock ? MOCK_LISTINGS : realListings;
+  const shippingData = usingMock ? MOCK_SHIPPING : sellerShipping;
+
   const rawOrders = usingMock ? MOCK_ORDERS : realOrders.map(o => ({
     id: String(o.id),
     listing_id: o.order_items?.[0]?.item?.id,
     date: o.date_created?.slice(0, 10),
     price: o.total_amount ?? o.order_items?.[0]?.unit_price ?? 0,
     qty: o.order_items?.[0]?.quantity ?? 1,
-    // Frete pago pelo vendedor (quando frete grátis ao comprador)
     seller_shipping_cost: o.shipping?.sender_cost ?? 0,
   }));
 
   const enriched = listings.map(l => {
     const cost = costs[l.id] ?? 0;
     const feeRate = getRealFeeRate(l);
-    const { salePrice, originalPrice, hasPromo } = getSalePrice(l);
-    // Frete que o VENDEDOR paga: só quando frete é grátis para o comprador
-    const freteSeller = l.shipping?.free_shipping ? (sellerShipping[l.id] ?? 0) : 0;
+    const { salePrice, originalPrice, hasPromo } = getPrices(l);
+    // Frete que o VENDEDOR sempre paga ao ML (independente de quem paga o frete ao comprador)
+    const freteSeller = shippingData[l.id] ?? 0;
     const margin = calcMargin(salePrice, cost, feeRate, freteSeller);
     const { score, checks } = calcQualityScore(l);
     const sku = getSku(l);
-    return { ...l, ...margin, cost, sku, salePrice, originalPrice, hasPromo, freteSeller, totalProfit: margin.profit * (l.sold_quantity ?? 0), score, checks };
+    // Valor que o vendedor recebe: preço venda - tarifa ML - frete vendedor
+    const youReceive = salePrice - margin.fee - freteSeller;
+    return { ...l, ...margin, cost, sku, salePrice, originalPrice, hasPromo, freteSeller, youReceive, totalProfit: margin.profit * (l.sold_quantity ?? 0), score, checks };
   });
 
   const filteredListings = useMemo(() => {
@@ -370,19 +388,29 @@ export default function App() {
   const totalRevenue = enrichedOrders.reduce((s, o) => s + o.revenue * o.qty, 0);
   const totalProfit = enrichedOrders.reduce((s, o) => s + o.profit * o.qty, 0);
   const totalFees = enrichedOrders.reduce((s, o) => s + o.fee * o.qty, 0);
-  const totalFreteVendedor = enrichedOrders.reduce((s, o) => s + (o.freteSeller ?? 0), 0);
+  const totalFreteSeller = enrichedOrders.reduce((s, o) => s + (o.freteSeller ?? 0), 0);
   const avgMargin = enrichedOrders.length > 0 ? enrichedOrders.reduce((s, o) => s + (o.margin ?? 0), 0) / enrichedOrders.length : 0;
   const avgScore = Math.round(enriched.reduce((s, l) => s + l.score, 0) / (enriched.length || 1));
 
-  function getShippingDisplay(l) {
-    if (l.shipping?.free_shipping) {
-      const type = l.shipping?.logistic_type;
-      const cost = l.freteSeller;
-      if (type === "fulfillment") return { label: "Full", sublabel: cost > 0 ? `Seu custo: ${fmt(cost)}` : "Seu custo: calculando...", color: "#15803d", bg: "#f0fdf4" };
-      if (type === "xd_drop_off") return { label: "Flex", sublabel: cost > 0 ? `Seu custo: ${fmt(cost)}` : "Seu custo: calculando...", color: "#15803d", bg: "#f0fdf4" };
-      return { label: "Grátis", sublabel: cost > 0 ? `Seu custo: ${fmt(cost)}` : "Seu custo: variável", color: "#15803d", bg: "#f0fdf4" };
+  function getFreteDisplay(l) {
+    const hasFreeShipping = l.shipping?.free_shipping;
+    const cost = l.freteSeller;
+    if (hasFreeShipping) {
+      return {
+        topLabel: "Grátis ao comprador",
+        topColor: "#15803d",
+        topBg: "#f0fdf4",
+        bottomLabel: cost > 0 ? `Seu custo: ${fmt(cost)}` : "Seu custo: calculando...",
+        bottomColor: "#7c3aed",
+      };
     }
-    return { label: "Comprador paga", sublabel: "Não desconta seu lucro", color: "#2563eb", bg: "#eff6ff" };
+    return {
+      topLabel: "Comprador paga",
+      topColor: "#2563eb",
+      topBg: "#eff6ff",
+      bottomLabel: cost > 0 ? `Seu custo: ${fmt(cost)}` : "Seu custo: calculando...",
+      bottomColor: "#7c3aed",
+    };
   }
 
   return (
@@ -436,7 +464,7 @@ export default function App() {
             { label: "Receita líquida", value: fmt(totalRevenue), color: "#0f172a" },
             { label: "Lucro estimado", value: fmt(totalProfit), color: totalProfit >= 0 ? "#15803d" : "#dc2626" },
             { label: "Tarifas ML", value: fmt(totalFees), color: "#d97706" },
-            { label: "Frete seu custo", value: fmt(totalFreteVendedor), color: "#7c3aed" },
+            { label: "Frete (seu custo)", value: fmt(totalFreteSeller), color: "#7c3aed" },
             { label: "Margem média", value: fmtPct(avgMargin), color: avgMargin >= .25 ? "#15803d" : avgMargin >= .15 ? "#d97706" : "#dc2626" },
             { label: "Score médio", value: `${avgScore}/100`, color: scoreColor(avgScore) },
             { label: "Total anúncios", value: enriched.length, color: "#0f172a" },
@@ -480,10 +508,12 @@ export default function App() {
                     <th>MLB / SKU</th>
                     <th>Score</th>
                     <th>Tipo</th>
+                    <th>Preço original</th>
                     <th>Preço venda</th>
-                    <th>Frete</th>
-                    <th>Custo produto</th>
                     <th>Taxa ML</th>
+                    <th>Frete (seu custo)</th>
+                    <th>Você recebe</th>
+                    <th>Custo produto</th>
                     <th>Lucro unit.</th>
                     <th>Margem</th>
                     <th>Lucro total</th>
@@ -492,13 +522,13 @@ export default function App() {
                 </thead>
                 <tbody>
                   {sorted.length === 0 ? (
-                    <tr><td colSpan={12} style={{ textAlign: "center", color: "#94a3b8", padding: 40 }}>Nenhum anúncio encontrado</td></tr>
+                    <tr><td colSpan={14} style={{ textAlign: "center", color: "#94a3b8", padding: 40 }}>Nenhum anúncio encontrado</td></tr>
                   ) : sorted.map(l => {
-                    const ship = getShippingDisplay(l);
+                    const frete = getFreteDisplay(l);
                     const typeInfo = getListingTypeLabel(l.listing_type_id);
                     return (
                       <tr key={l.id}>
-                        <td style={{ maxWidth: 240 }}>
+                        <td style={{ maxWidth: 220 }}>
                           <a href={l.permalink ?? `https://www.mercadolivre.com.br/p/${l.id}`} target="_blank" rel="noreferrer" className="title-link"
                             style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={l.title}>
                             {l.title}
@@ -534,26 +564,36 @@ export default function App() {
                         <td><span style={{ fontSize: 11, color: typeInfo.color, fontWeight: 600 }}>{typeInfo.label}</span></td>
                         <td>
                           {l.hasPromo ? (
+                            <span style={{ fontSize: 13, color: "#94a3b8", textDecoration: "line-through" }}>{fmt(l.originalPrice)}</span>
+                          ) : (
+                            <span style={{ fontWeight: 700, color: "#0f172a", fontSize: 13 }}>{fmt(l.originalPrice)}</span>
+                          )}
+                        </td>
+                        <td>
+                          {l.hasPromo ? (
                             <div>
-                              <div style={{ fontWeight: 700, color: "#dc2626", fontSize: 13 }}>{fmt(l.salePrice)}</div>
-                              <div style={{ fontSize: 10, color: "#94a3b8", textDecoration: "line-through" }}>{fmt(l.originalPrice)}</div>
-                              <span style={{ fontSize: 10, color: "#dc2626", background: "#fef2f2", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>Promoção</span>
+                              <span style={{ fontWeight: 700, color: "#dc2626", fontSize: 13 }}>{fmt(l.salePrice)}</span>
+                              <span style={{ fontSize: 10, color: "#dc2626", background: "#fef2f2", padding: "1px 6px", borderRadius: 4, fontWeight: 600, marginLeft: 4 }}>Promo</span>
                             </div>
                           ) : (
                             <span style={{ fontWeight: 700, color: "#0f172a" }}>{fmt(l.salePrice)}</span>
                           )}
                         </td>
                         <td>
-                          <div style={{ fontSize: 12, color: ship.color, background: ship.bg, padding: "3px 8px", borderRadius: 6, fontWeight: 600, display: "inline-block" }}>{ship.label}</div>
-                          <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>{ship.sublabel}</div>
+                          <span style={{ color: "#d97706", fontWeight: 700 }}>{fmt(l.fee)}</span>
+                          <div style={{ fontSize: 10, color: "#94a3b8" }}>{fmtPct(l.feeRate)}</div>
+                        </td>
+                        <td>
+                          <div style={{ fontSize: 11, color: frete.topColor, background: frete.topBg, padding: "2px 7px", borderRadius: 5, fontWeight: 600, display: "inline-block", marginBottom: 3 }}>{frete.topLabel}</div>
+                          <div style={{ fontSize: 11, color: frete.bottomColor, fontWeight: 700 }}>{frete.bottomLabel}</div>
+                        </td>
+                        <td>
+                          <span style={{ fontWeight: 700, color: "#15803d", fontSize: 13 }}>{fmt(l.youReceive)}</span>
+                          <div style={{ fontSize: 10, color: "#94a3b8" }}>após tarifa e frete</div>
                         </td>
                         <td>
                           <input type="number" value={l.cost || ""} onChange={e => setCosts(c => ({ ...c, [l.id]: Number(e.target.value) }))} placeholder="0,00"
                             style={{ background: "#f8fafc", border: "1px solid #e2e8f0", color: "#0f172a", padding: "5px 8px", borderRadius: 6, width: 80, fontSize: 12, textAlign: "right" }} />
-                        </td>
-                        <td>
-                          <span style={{ color: "#d97706", fontWeight: 600 }}>{fmt(l.fee)}</span>
-                          <div style={{ fontSize: 10, color: "#94a3b8" }}>{fmtPct(l.feeRate)}</div>
                         </td>
                         <td style={{ color: l.profit >= 0 ? "#15803d" : "#dc2626", fontWeight: 700 }}>{fmt(l.profit)}</td>
                         <td style={{ minWidth: 130 }}><MarginBar value={l.margin} /></td>
@@ -594,39 +634,40 @@ export default function App() {
                     <th>Pedido</th>
                     <th>Produto</th>
                     <th>Data</th>
-                    <th>Preço</th>
+                    <th>Preço venda</th>
                     <th>Qtd</th>
                     <th>Tarifa ML</th>
                     <th>Frete (seu custo)</th>
+                    <th>Você recebe</th>
                     <th>Lucro unit.</th>
                     <th>Margem</th>
                   </tr>
                 </thead>
                 <tbody>
                   {enrichedOrders.length === 0 ? (
-                    <tr><td colSpan={9} style={{ textAlign: "center", color: "#94a3b8", padding: 40 }}>Nenhum pedido encontrado</td></tr>
-                  ) : enrichedOrders.map(o => (
-                    <tr key={o.id}>
-                      <td style={{ color: "#64748b", fontSize: 12, fontFamily: "monospace", fontWeight: 600 }}>#{o.id}</td>
-                      <td>
-                        <div style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {o.listing?.permalink ? <a href={o.listing.permalink} target="_blank" rel="noreferrer" className="title-link">{o.listing.title}</a>
-                            : <span style={{ color: "#94a3b8" }}>{o.listing?.title ?? "—"}</span>}
-                        </div>
-                      </td>
-                      <td style={{ color: "#64748b", fontSize: 12 }}>{o.date}</td>
-                      <td style={{ fontWeight: 700, color: "#0f172a" }}>{fmt(o.price)}</td>
-                      <td style={{ color: "#64748b" }}>×{o.qty}</td>
-                      <td><span style={{ color: "#d97706", fontWeight: 600 }}>{fmt(o.fee)}</span></td>
-                      <td>
-                        {o.freteSeller > 0
-                          ? <span style={{ color: "#7c3aed", fontWeight: 600 }}>{fmt(o.freteSeller)}</span>
-                          : <span style={{ color: "#15803d", fontWeight: 600 }}>—</span>}
-                      </td>
-                      <td style={{ color: o.profit >= 0 ? "#15803d" : "#dc2626", fontWeight: 700 }}>{o.cost > 0 ? fmt(o.profit) : "—"}</td>
-                      <td style={{ minWidth: 130 }}><MarginBar value={o.margin} /></td>
-                    </tr>
-                  ))}
+                    <tr><td colSpan={10} style={{ textAlign: "center", color: "#94a3b8", padding: 40 }}>Nenhum pedido encontrado</td></tr>
+                  ) : enrichedOrders.map(o => {
+                    const youReceive = o.price - o.fee - o.freteSeller;
+                    return (
+                      <tr key={o.id}>
+                        <td style={{ color: "#64748b", fontSize: 12, fontFamily: "monospace", fontWeight: 600 }}>#{o.id}</td>
+                        <td>
+                          <div style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {o.listing?.permalink ? <a href={o.listing.permalink} target="_blank" rel="noreferrer" className="title-link">{o.listing.title}</a>
+                              : <span style={{ color: "#94a3b8" }}>{o.listing?.title ?? "—"}</span>}
+                          </div>
+                        </td>
+                        <td style={{ color: "#64748b", fontSize: 12 }}>{o.date}</td>
+                        <td style={{ fontWeight: 700, color: "#0f172a" }}>{fmt(o.price)}</td>
+                        <td style={{ color: "#64748b" }}>×{o.qty}</td>
+                        <td><span style={{ color: "#d97706", fontWeight: 600 }}>{fmt(o.fee)}</span></td>
+                        <td><span style={{ color: "#7c3aed", fontWeight: 600 }}>{o.freteSeller > 0 ? fmt(o.freteSeller) : "—"}</span></td>
+                        <td><span style={{ color: "#15803d", fontWeight: 700 }}>{fmt(youReceive)}</span></td>
+                        <td style={{ color: o.profit >= 0 ? "#15803d" : "#dc2626", fontWeight: 700 }}>{o.cost > 0 ? fmt(o.profit) : "—"}</td>
+                        <td style={{ minWidth: 130 }}><MarginBar value={o.margin} /></td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

@@ -72,18 +72,35 @@ function scoreBg(s) { return s >= 80 ? "#f0fdf4" : s >= 50 ? "#fffbeb" : "#fef2f
 function scoreLabel(s) { return s >= 80 ? "Ótimo" : s >= 50 ? "Regular" : "Fraco"; }
 
 async function analyzeWithAI(listing) {
-  const prompt = `Você é um especialista em otimização de anúncios do Mercado Livre Brasil. 
-Analise este anúncio e retorne SOMENTE um JSON válido (sem markdown, sem backticks) com esta estrutura:
-{"score_commentary":"comentário em 1 frase","strengths":["ponto1","ponto2"],"improvements":[{"field":"campo","suggestion":"sugestão"},{"field":"campo","suggestion":"sugestão"},{"field":"campo","suggestion":"sugestão"}],"title_suggestion":"título otimizado máx 60 chars","keywords":["palavra1","palavra2","palavra3","palavra4","palavra5"]}
-Anúncio: Título: ${listing.title}, Preço venda: R$${listing.salePrice}, Fotos: ${listing.pictures?.length ?? 0}, Frete grátis ao comprador: ${listing.shipping?.free_shipping ? "Sim" : "Não"}, Descrição: "${listing.description?.plain_text ?? "(vazia)"}", Atributos: ${listing.attributes?.map(a => `${a.name}: ${a.value_name}`).join(", ") || "nenhum"}, Condição: ${listing.condition ?? "não informada"}, Vendidos: ${listing.sold_quantity ?? 0}`;
+  const prompt = `Analise este anúncio do Mercado Livre Brasil e retorne APENAS um objeto JSON válido, sem texto extra, sem markdown.
+
+Estrutura obrigatória:
+{"score_commentary":"frase curta sobre qualidade geral","strengths":["ponto1","ponto2"],"improvements":[{"field":"campo","suggestion":"sugestão curta"},{"field":"campo","suggestion":"sugestão curta"},{"field":"campo","suggestion":"sugestão curta"}],"title_suggestion":"novo título em até 60 chars","keywords":["palavra1","palavra2","palavra3","palavra4","palavra5"]}
+
+Dados:
+- Título: ${listing.title}
+- Preço: R$${listing.salePrice}
+- Fotos: ${listing.pictures?.length ?? 0}
+- Frete grátis: ${listing.shipping?.free_shipping ? "Sim" : "Não"}
+- Descrição: ${(listing.description?.plain_text ?? "").slice(0, 200) || "vazia"}
+- Atributos: ${listing.attributes?.slice(0, 5).map(a => a.name + ": " + a.value_name).join(", ") || "nenhum"}
+- Vendidos: ${listing.sold_quantity ?? 0}
+
+Retorne SOMENTE o JSON, começando com { e terminando com }.`;
+
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "Content-Type": "application/json", "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-    body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 2000, messages: [{ role: "user", content: prompt }] }),
+    body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1500, messages: [{ role: "user", content: prompt }] }),
   });
   const data = await response.json();
+  if (data.error) throw new Error(data.error.message);
   const text = data.content?.map(b => b.text || "").join("") ?? "";
-  return JSON.parse(text.replace(/```json|```/g, "").trim());
+  const clean = text.replace(/```json|```/g, "").trim();
+  const jsonStart = clean.indexOf("{");
+  const jsonEnd = clean.lastIndexOf("}");
+  if (jsonStart === -1 || jsonEnd === -1) throw new Error("JSON inválido na resposta");
+  return JSON.parse(clean.slice(jsonStart, jsonEnd + 1));
 }
 
 async function fetchAllListings(userId, tk) {

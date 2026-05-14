@@ -431,6 +431,8 @@ export default function App() {
   const sorted = [...filteredListings].sort((a, b) =>
     sortBy === "score" ? a.score - b.score :
     sortBy === "margin" ? (b.margin ?? -1) - (a.margin ?? -1) :
+    sortBy === "sales_desc" ? (b.sold_quantity ?? 0) - (a.sold_quantity ?? 0) :
+    sortBy === "sales_asc" ? (a.sold_quantity ?? 0) - (b.sold_quantity ?? 0) :
     b.totalProfit - a.totalProfit
   );
 
@@ -579,6 +581,8 @@ export default function App() {
                   <option value="score">Pior score primeiro</option>
                   <option value="margin">Maior margem</option>
                   <option value="profit">Maior lucro total</option>
+                  <option value="sales_desc">Maior nº de vendas</option>
+                  <option value="sales_asc">Menor nº de vendas</option>
                 </select>
               </div>
               <span style={{ fontSize: 12, color: "#94a3b8" }}>{sorted.length} anúncio{sorted.length !== 1 ? "s" : ""}</span>
@@ -602,12 +606,13 @@ export default function App() {
                     <th>Lucro unit.</th>
                     <th>Margem</th>
                     <th>Lucro total</th>
+                    <th>Estoque</th>
                     <th>IA</th>
                   </tr>
                 </thead>
                 <tbody>
                   {sorted.length === 0 ? (
-                    <tr><td colSpan={14} style={{ textAlign: "center", color: "#94a3b8", padding: 40 }}>Nenhum anúncio encontrado</td></tr>
+                    <tr><td colSpan={15} style={{ textAlign: "center", color: "#94a3b8", padding: 40 }}>Nenhum anúncio encontrado</td></tr>
                   ) : sorted.map(l => {
                     const frete = getFreteDisplay(l);
                     const typeInfo = getListingTypeLabel(l.listing_type_id);
@@ -694,6 +699,18 @@ export default function App() {
                         <td>
                           <span style={{ color: l.totalProfit >= 0 ? "#15803d" : "#dc2626", fontWeight: 700 }}>{l.cost > 0 ? fmt(l.totalProfit) : "—"}</span>
                           <div style={{ fontSize: 10, color: "#94a3b8" }}>{l.sold_quantity} vendidos</div>
+                        </td>
+                        <td>
+                          {(() => {
+                            const qty = l.available_quantity ?? 0;
+                            const color = qty === 0 ? "#dc2626" : qty <= 5 ? "#d97706" : "#15803d";
+                            const bg = qty === 0 ? "#fef2f2" : qty <= 5 ? "#fffbeb" : "#f0fdf4";
+                            return (
+                              <span style={{ fontWeight: 700, fontSize: 13, color, background: bg, padding: "3px 10px", borderRadius: 6, display: "inline-block" }}>
+                                {qty} un.
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td>
                           <button onClick={() => setSelectedListing(l)} style={{ background: "#0f172a", border: "none", color: "#fff", fontSize: 11, padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>✦ Analisar</button>

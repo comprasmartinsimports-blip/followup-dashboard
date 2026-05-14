@@ -359,25 +359,32 @@ export default function App() {
       }
       setSellerShipping(shippingMap);
 
-      // Buscar custo real de frete via /shipments/{id}/costs — retorna o que o vendedor paga
+      // Buscar custo real de frete via /shipments/{id}/costs
       setLoadingMsg("Buscando frete dos pedidos...");
       const shipmentCostMap = {};
       const ordersWithShipping = orders.filter(o => o.shipping?.id);
-      for (let i = 0; i < ordersWithShipping.length; i += 10) {
-        const batch = ordersWithShipping.slice(i, i + 10);
+      // Batch de 3 para evitar rate limit do ML, com atualização incremental
+      for (let i = 0; i < ordersWithShipping.length; i += 3) {
+        const batch = ordersWithShipping.slice(i, i + 3);
         await Promise.all(batch.map(async o => {
           try {
-            // /shipments/{id}/costs → senders[0].charges[0].cost = custo do vendedor (confirmado R$28,35)
             const res = await fetch(ML(`/shipments/${o.shipping.id}/costs`), { headers: { Authorization: `Bearer ${tk}` } });
             const data = await res.json();
-            // senders[0].charges somam o custo total do vendedor
+            // senders[0].charges = custos do vendedor (confirmado: cost=28.35)
             const charges = data?.senders?.[0]?.charges ?? [];
             const cost = charges.reduce((sum, c) => sum + (parseFloat(c.cost) || 0), 0);
             shipmentCostMap[String(o.id)] = cost;
           } catch { shipmentCostMap[String(o.id)] = 0; }
         }));
+        // Atualiza state incrementalmente para mostrar valores conforme chegam
+        if (i % 15 === 0) {
+          setShipmentCosts({...shipmentCostMap});
+          setLoadingMsg(`Buscando frete... ${Math.min(i + 3, ordersWithShipping.length)}/${ordersWithShipping.length}`);
+        }
+        // Pequeno delay para não estourar rate limit
+        await new Promise(r => setTimeout(r, 100));
       }
-      setShipmentCosts(shipmentCostMap);
+      setShipmentCosts({...shipmentCostMap});
 
       setLoadingMsg("Buscando promoções...");
       const promoMap = {};

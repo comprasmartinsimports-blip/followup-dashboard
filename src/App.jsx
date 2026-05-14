@@ -140,15 +140,14 @@ async function fetchSellerShippingCost(itemId, userId, tk) {
 // Busca o preço promocional real do ML via endpoint de promoções
 async function fetchPromoPrice(itemId, tk) {
   try {
-    const res = await fetch(ML(`/seller-promotions/items/${itemId}?app_version=v2`), {
+    const res = await fetch(`/api/promo/items/${itemId}?app_version=v2`, {
       headers: { Authorization: `Bearer ${tk}` }
     });
     const data = await res.json();
     if (!Array.isArray(data) || data.length === 0) return null;
-    // Pega a promoção ativa com menor preço
-    const active = data.filter(p => p.status === "started" && p.price && p.price > 0);
+    const active = data.filter(p => p.status === "started" && p.price && parseFloat(p.price) > 0);
     if (active.length === 0) return null;
-    const best = active.reduce((min, p) => p.price < min.price ? p : min, active[0]);
+    const best = active.reduce((min, p) => parseFloat(p.price) < parseFloat(min.price) ? p : min, active[0]);
     return { salePrice: parseFloat(best.price), originalPrice: parseFloat(best.original_price) };
   } catch { return null; }
 }

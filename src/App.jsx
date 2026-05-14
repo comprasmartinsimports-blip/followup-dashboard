@@ -137,6 +137,22 @@ async function fetchSellerShippingCost(itemId, userId, tk) {
   } catch { return 0; }
 }
 
+// Busca o preço promocional real do ML via endpoint de promoções
+async function fetchPromoPrice(itemId, tk) {
+  try {
+    const res = await fetch(ML(`/seller-promotions/items/${itemId}?app_version=v2`), {
+      headers: { Authorization: `Bearer ${tk}` }
+    });
+    const data = await res.json();
+    if (!Array.isArray(data) || data.length === 0) return null;
+    // Pega a promoção ativa com menor preço
+    const active = data.filter(p => p.status === "started" && p.price && p.price > 0);
+    if (active.length === 0) return null;
+    const best = active.reduce((min, p) => p.price < min.price ? p : min, active[0]);
+    return { salePrice: parseFloat(best.price), originalPrice: parseFloat(best.original_price) };
+  } catch { return null; }
+}
+
 function MarginBar({ value }) {
   if (value === null) return <span style={{ fontSize: 12, color: "#94a3b8" }}>— insira custo</span>;
   const pct = Math.max(0, Math.min(1, value));
@@ -255,6 +271,7 @@ export default function App() {
   const [realListings, setRealListings] = useState([]);
   const [realOrders, setRealOrders] = useState([]);
   const [sellerShipping, setSellerShipping] = useState({});
+  const [promos, setPromos] = useState({});
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
   const [showTokenModal, setShowTokenModal] = useState(false);
@@ -294,6 +311,18 @@ export default function App() {
       }
       setSellerShipping(shippingMap);
 
+      // Busca preços promocionais reais via endpoint de promoções do ML
+      setLoadingMsg("Buscando promoções...");
+      const promoMap = {};
+      for (let i = 0; i < listings.length; i += 10) {
+        const batch = listings.slice(i, i + 10);
+        const results = await Promise.all(
+          batch.map(l => fetchPromoPrice(l.id, tk).then(promo => ({ id: l.id, promo })))
+        );
+        results.forEach(r => { if (r.promo) promoMap[r.id] = r.promo; });
+      }
+      setPromos(promoMap);
+
     } catch (e) { setLoadError(e.message); }
     setLoading(false); setLoadingMsg("");
   }
@@ -323,6 +352,11 @@ export default function App() {
   ];
 
   // Custos de frete mock baseados nos prints reais
+  const MOCK_PROMOS = {
+    "MLB6685879548": { salePrice: 61.69, originalPrice: 62.34 },
+    "MLB6581658690": { salePrice: 102.99, originalPrice: 121.16 },
+  };
+
   const MOCK_SHIPPING = {
     "MLB6685879548": 8.55,   // comprador paga frete mas ML cobra R$8,55 do vendedor
     "MLB6581658690": 15.45,  // frete grátis ao comprador, ML cobra R$15,45 do vendedor
@@ -335,6 +369,7 @@ export default function App() {
 
   const listings = usingMock ? MOCK_LISTINGS : realListings;
   const shippingData = usingMock ? MOCK_SHIPPING : sellerShipping;
+  const promosData = usingMock ? MOCK_PROMOS : promos;
 
   const rawOrders = usingMock ? MOCK_ORDERS : realOrders.map(o => ({
     id: String(o.id),
@@ -348,7 +383,12 @@ export default function App() {
   const enriched = listings.map(l => {
     const cost = costs[l.id] ?? 0;
     const feeRate = getRealFeeRate(l);
-    const { salePrice, originalPrice, hasPromo } = getPrices(l);
+    // Primeiro tenta o endpoint de promoções (mais preciso), depois o campo da API do item
+    const promoData = promosData[l.id];
+    const { salePrice: salePriceApi, originalPrice: originalPriceApi, hasPromo: hasPromoApi } = getPrices(l);
+    const salePrice = promoData ? promoData.salePrice : salePriceApi;
+    const originalPrice = promoData ? promoData.originalPrice : originalPriceApi;
+    const hasPromo = promoData ? true : hasPromoApi;
     // Frete que o VENDEDOR sempre paga ao ML (independente de quem paga o frete ao comprador)
     const freteSeller = shippingData[l.id] ?? 0;
     const margin = calcMargin(salePrice, cost, feeRate, freteSeller);

@@ -3,6 +3,10 @@
     {
       "source": "/api/ml/:path*",
       "destination": "https://api.mercadolibre.com/:path*"
+    },
+    {
+      "source": "/api/promo/:path*",
+      "destination": "https://api.mercadolibre.com/seller-promotions/:path*"
     }
   ]
 }

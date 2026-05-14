@@ -367,12 +367,12 @@ export default function App() {
         const batch = ordersWithShipping.slice(i, i + 10);
         await Promise.all(batch.map(async o => {
           try {
-            // /shipments/{id}/costs → senders[0].save = custo líquido do vendedor (confirmado)
+            // /shipments/{id}/costs → senders[0].charges[0].cost = custo do vendedor (confirmado R$28,35)
             const res = await fetch(ML(`/shipments/${o.shipping.id}/costs`), { headers: { Authorization: `Bearer ${tk}` } });
             const data = await res.json();
-            // senders[0].save = valor exato que o vendedor paga ao ML após descontos
-            const senderSave = parseFloat(data?.senders?.[0]?.save);
-            const cost = !isNaN(senderSave) && senderSave >= 0 ? senderSave : 0;
+            // senders[0].charges somam o custo total do vendedor
+            const charges = data?.senders?.[0]?.charges ?? [];
+            const cost = charges.reduce((sum, c) => sum + (parseFloat(c.cost) || 0), 0);
             shipmentCostMap[String(o.id)] = cost;
           } catch { shipmentCostMap[String(o.id)] = 0; }
         }));
@@ -495,12 +495,20 @@ export default function App() {
 
   const periodOrders = useMemo(() => {
     if (orderFilter === "all") return rawOrders;
-    const now = new Date(); const cutoff = new Date();
-    if (orderFilter === "today") cutoff.setHours(0, 0, 0, 0);
-    else if (orderFilter === "week") cutoff.setDate(now.getDate() - 7);
+    const now = new Date();
+    if (orderFilter === "today") {
+      const todayStr = now.toLocaleDateString("sv-SE");
+      return rawOrders.filter(o => o.date === todayStr);
+    }
+    const cutoff = new Date();
+    if (orderFilter === "week") cutoff.setDate(now.getDate() - 7);
     else if (orderFilter === "month") cutoff.setMonth(now.getMonth() - 1);
     else if (orderFilter === "3months") cutoff.setMonth(now.getMonth() - 3);
-    return rawOrders.filter(o => o.date && new Date(o.date) >= cutoff);
+    cutoff.setHours(0, 0, 0, 0);
+    return rawOrders.filter(o => {
+      if (!o.date) return false;
+      return new Date(o.date + "T00:00:00") >= cutoff;
+    });
   }, [rawOrders, orderFilter]);
 
   const filteredOrders = useMemo(() => {

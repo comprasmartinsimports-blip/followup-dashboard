@@ -265,6 +265,7 @@ export default function App() {
   const [orderFilter, setOrderFilter] = useState("all");
   const [searchListings, setSearchListings] = useState("");
   const [searchOrders, setSearchOrders] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [token, setToken] = useState(null);
   const [user, setUser] = useState(null);
   const [realListings, setRealListings] = useState([]);
@@ -400,13 +401,20 @@ export default function App() {
 
   const filteredListings = useMemo(() => {
     const q = searchListings.toLowerCase().trim();
-    if (!q) return enriched;
-    return enriched.filter(l =>
-      l.title?.toLowerCase().includes(q) ||
-      l.id?.toLowerCase().includes(q) ||
-      l.sku?.toLowerCase().includes(q)
-    );
-  }, [enriched, searchListings]);
+    let results = enriched;
+    if (q) {
+      results = results.filter(l =>
+        l.title?.toLowerCase().includes(q) ||
+        l.id?.toLowerCase().includes(q) ||
+        (l.sku && l.sku.toLowerCase().includes(q)) ||
+        (l.seller_sku && l.seller_sku.toLowerCase().includes(q)) ||
+        l.attributes?.some(a => a.value_name?.toLowerCase().includes(q))
+      );
+    }
+    if (statusFilter === "active") results = results.filter(l => l.status === "active");
+    if (statusFilter === "paused") results = results.filter(l => l.status === "paused");
+    return results;
+  }, [enriched, searchListings, statusFilter]);
 
   const sorted = [...filteredListings].sort((a, b) =>
     sortBy === "score" ? a.score - b.score :
@@ -542,6 +550,17 @@ export default function App() {
                 <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", fontSize: 14 }}>🔍</span>
                 <input className="search-input" value={searchListings} onChange={e => setSearchListings(e.target.value)} placeholder="Buscar por título, MLB ou SKU..." />
               </div>
+              <div style={{ display: "flex", gap: 4 }}>
+                {[{ key: "all", label: "Todos" }, { key: "active", label: "● Ativos" }, { key: "paused", label: "○ Pausados" }].map(f => (
+                  <button key={f.key} onClick={() => setStatusFilter(f.key)}
+                    style={{ padding: "6px 14px", borderRadius: 20, border: "1px solid #e2e8f0", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 500, transition: "all .15s",
+                      background: statusFilter === f.key ? "#0f172a" : "#fff",
+                      color: statusFilter === f.key ? "#fff" : f.key === "active" ? "#15803d" : f.key === "paused" ? "#94a3b8" : "#64748b",
+                      borderColor: statusFilter === f.key ? "#0f172a" : "#e2e8f0" }}>
+                    {f.label}
+                  </button>
+                ))}
+              </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 500 }}>Ordenar:</span>
                 <select value={sortBy} onChange={e => setSortBy(e.target.value)}>
@@ -550,13 +569,14 @@ export default function App() {
                   <option value="profit">Maior lucro total</option>
                 </select>
               </div>
-              {searchListings && <span style={{ fontSize: 12, color: "#94a3b8" }}>{sorted.length} resultado{sorted.length !== 1 ? "s" : ""}</span>}
+              <span style={{ fontSize: 12, color: "#94a3b8" }}>{sorted.length} anúncio{sorted.length !== 1 ? "s" : ""}</span>
             </div>
 
             <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "auto", boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
               <table>
                 <thead>
                   <tr>
+                    <th>Foto</th>
                     <th>Anúncio</th>
                     <th>MLB / SKU</th>
                     <th>Score</th>
@@ -581,6 +601,15 @@ export default function App() {
                     const typeInfo = getListingTypeLabel(l.listing_type_id);
                     return (
                       <tr key={l.id}>
+                        <td style={{ width: 56, padding: "8px 8px 8px 14px" }}>
+                          <a href={l.permalink ?? `https://www.mercadolivre.com.br/p/${l.id}`} target="_blank" rel="noreferrer">
+                            {l.pictures?.[0]?.url ? (
+                              <img src={l.pictures[0].url} alt="" style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 8, border: "1px solid #e2e8f0", display: "block" }} />
+                            ) : (
+                              <div style={{ width: 44, height: 44, borderRadius: 8, background: "#f1f5f9", border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>📦</div>
+                            )}
+                          </a>
+                        </td>
                         <td style={{ maxWidth: 220 }}>
                           <a href={l.permalink ?? `https://www.mercadolivre.com.br/p/${l.id}`} target="_blank" rel="noreferrer" className="title-link"
                             style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={l.title}>

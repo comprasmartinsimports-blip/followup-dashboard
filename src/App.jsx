@@ -319,6 +319,7 @@ export default function App() {
   const [realListings, setRealListings] = useState([]);
   const [realOrders, setRealOrders] = useState([]);
   const [sellerShipping, setSellerShipping] = useState({});
+  const [shipmentCosts, setShipmentCosts] = useState({});
   const [promos, setPromos] = useState({});
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
@@ -357,6 +358,24 @@ export default function App() {
         if (i % 50 === 0) setLoadingMsg(`Buscando frete... ${Math.min(i + 5, listings.length)}/${listings.length}`);
       }
       setSellerShipping(shippingMap);
+
+      // Buscar custo real de frete de cada pedido via /shipments/{id} → base_cost
+      setLoadingMsg("Buscando frete dos pedidos...");
+      const shipmentCostMap = {};
+      const ordersWithShipping = orders.filter(o => o.shipping?.id);
+      for (let i = 0; i < ordersWithShipping.length; i += 10) {
+        const batch = ordersWithShipping.slice(i, i + 10);
+        await Promise.all(batch.map(async o => {
+          try {
+            const res = await fetch(ML(`/shipments/${o.shipping.id}`), { headers: { Authorization: `Bearer ${tk}` } });
+            const data = await res.json();
+            // base_cost = custo líquido que o vendedor paga ao ML
+            const cost = parseFloat(data?.base_cost) || 0;
+            shipmentCostMap[String(o.id)] = cost;
+          } catch { shipmentCostMap[String(o.id)] = 0; }
+        }));
+      }
+      setShipmentCosts(shipmentCostMap);
 
       setLoadingMsg("Buscando promoções...");
       const promoMap = {};
@@ -418,13 +437,6 @@ export default function App() {
 
   const rawOrders = usingMock ? MOCK_ORDERS : realOrders.map(o => {
     const item = o.order_items?.[0];
-    // O ML retorna o custo de frete do vendedor em order.shipping.cost (não sender_cost)
-    // O shipping do pedido tem: { id, status, cost, sender_cost, ... }
-    const sh = o.shipping ?? {};
-    console.log("SHIPPING RAW", o.id, JSON.stringify(sh));
-    // Frete real está em payments[0].shipping_cost na API do ML
-    const paymentShipping = parseFloat(o.payments?.[0]?.shipping_cost) || 0;
-    const freteSeller = paymentShipping;
     return {
       id: String(o.id),
       listing_id: item?.item?.id,
@@ -432,9 +444,9 @@ export default function App() {
       date: o.date_created?.slice(0, 10),
       price: item?.unit_price ?? o.total_amount ?? 0,
       qty: item?.quantity ?? 1,
-      seller_shipping_cost: freteSeller,
+      // base_cost do /shipments/{id} = custo líquido que o vendedor paga ao ML
+      seller_shipping_cost: shipmentCosts[String(o.id)] ?? 0,
       permalink: item?.item?.id ? `https://www.mercadolivre.com.br/p/${item.item.id}` : null,
-      shipping_id: sh.id ?? null,
     };
   });
 

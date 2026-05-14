@@ -25,10 +25,23 @@ function getListingTypeLabel(type) {
 
 // Na API do ML: quando há promoção, price = preço promocional, original_price = preço original
 function getPrices(listing) {
-  if (listing.original_price && listing.original_price > listing.price) {
-    return { salePrice: listing.price, originalPrice: listing.original_price, hasPromo: true };
+  // Tenta original_price (campo padrão de promoção do ML)
+  if (listing.original_price && parseFloat(listing.original_price) > parseFloat(listing.price)) {
+    return {
+      salePrice: parseFloat(listing.price),
+      originalPrice: parseFloat(listing.original_price),
+      hasPromo: true
+    };
   }
-  return { salePrice: listing.price, originalPrice: listing.price, hasPromo: false };
+  // Tenta sale_price (outro campo usado pelo ML)
+  if (listing.sale_price && listing.sale_price.amount && parseFloat(listing.sale_price.amount) < parseFloat(listing.price)) {
+    return {
+      salePrice: parseFloat(listing.sale_price.amount),
+      originalPrice: parseFloat(listing.price),
+      hasPromo: true
+    };
+  }
+  return { salePrice: parseFloat(listing.price), originalPrice: parseFloat(listing.price), hasPromo: false };
 }
 
 // Calcula margem — freteSeller é o frete que o VENDEDOR paga ao ML (sempre desconta)
@@ -111,17 +124,19 @@ async function fetchAllOrders(userId, tk) {
 // O ML sempre cobra um custo de envio do vendedor, mesmo quando o comprador paga o frete
 async function fetchSellerShippingCost(itemId, tk) {
   try {
-    // Usa CEP de SP como referência para calcular o frete
     const res = await fetch(ML(`/items/${itemId}/shipping_options?zip_code=01310100`), {
       headers: { Authorization: `Bearer ${tk}` }
     });
     const data = await res.json();
     if (!data.options || data.options.length === 0) return 0;
-    // Pega o menor custo que o vendedor paga (cost = custo do vendedor após subsídios)
+    // Pega o MAIOR custo — o ML cobra o custo da modalidade mais cara disponível
+    // pois é o que aparece na tela do vendedor como custo de envio
     const costs = data.options
-      .map(o => parseFloat(o.cost ?? o.list_cost ?? 0))
+      .map(o => parseFloat(o.cost ?? 0))
       .filter(c => c > 0);
-    return costs.length > 0 ? Math.min(...costs) : 0;
+    if (costs.length === 0) return 0;
+    // Usa o maior valor (que corresponde ao que o ML mostra na tela do vendedor)
+    return Math.max(...costs);
   } catch { return 0; }
 }
 

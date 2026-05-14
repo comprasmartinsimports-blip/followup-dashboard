@@ -13,7 +13,6 @@ function getSku(listing) {
 }
 
 function getRealFeeRate(listing) {
-  // gold_pro = Premium 17%, gold_special = Clássico 12%
   if (listing.listing_type_id === "gold_premium" || listing.listing_type_id === "gold_pro") return 0.17;
   return 0.12;
 }
@@ -23,9 +22,7 @@ function getListingTypeLabel(type) {
   return { label: "Clássico · 12%", color: "#2563eb" };
 }
 
-// Na API do ML: quando há promoção, price = preço promocional, original_price = preço original
 function getPrices(listing) {
-  // Tenta original_price (campo padrão de promoção do ML)
   if (listing.original_price && parseFloat(listing.original_price) > parseFloat(listing.price)) {
     return {
       salePrice: parseFloat(listing.price),
@@ -33,7 +30,6 @@ function getPrices(listing) {
       hasPromo: true
     };
   }
-  // Tenta sale_price (outro campo usado pelo ML)
   if (listing.sale_price && listing.sale_price.amount && parseFloat(listing.sale_price.amount) < parseFloat(listing.price)) {
     return {
       salePrice: parseFloat(listing.sale_price.amount),
@@ -44,7 +40,6 @@ function getPrices(listing) {
   return { salePrice: parseFloat(listing.price), originalPrice: parseFloat(listing.price), hasPromo: false };
 }
 
-// Calcula margem — freteSeller é o frete que o VENDEDOR paga ao ML (sempre desconta)
 function calcMargin(salePrice, cost, feeRate = 0.12, freteSeller = 0) {
   const mlFee = salePrice * feeRate;
   const revenue = salePrice - mlFee - freteSeller;
@@ -72,6 +67,9 @@ function scoreBg(s) { return s >= 80 ? "#f0fdf4" : s >= 50 ? "#fffbeb" : "#fef2f
 function scoreLabel(s) { return s >= 80 ? "Ótimo" : s >= 50 ? "Regular" : "Fraco"; }
 
 async function analyzeWithAI(listing) {
+  const apiKey = import.meta.env.VITE_ANTHROPIC_KEY;
+  if (!apiKey) throw new Error("VITE_ANTHROPIC_KEY não configurada");
+
   const prompt = `Analise este anúncio do Mercado Livre Brasil e retorne APENAS um objeto JSON válido, sem texto extra, sem markdown.
 
 Estrutura obrigatória:
@@ -90,9 +88,19 @@ Retorne SOMENTE o JSON, começando com { e terminando com }.`;
 
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true", "x-api-key": "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" },
-    body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1500, messages: [{ role: "user", content: prompt }] }),
+    headers: {
+      "Content-Type": "application/json",
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+      "x-api-key": apiKey,
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1500,
+      messages: [{ role: "user", content: prompt }],
+    }),
   });
+
   const data = await response.json();
   if (data.error) throw new Error(data.error.message);
   const text = data.content?.map(b => b.text || "").join("") ?? "";
@@ -137,24 +145,18 @@ async function fetchAllOrders(userId, tk) {
   return allOrders;
 }
 
-// Busca o custo de frete que o VENDEDOR paga ao ML para cada anúncio
-// O ML sempre cobra um custo de envio do vendedor, mesmo quando o comprador paga o frete
 async function fetchSellerShippingCost(itemId, userId, tk) {
   try {
-    // Endpoint correto que retorna o custo real que o VENDEDOR paga ao ML
-    // Retorna o campo list_cost que corresponde exatamente ao valor mostrado na tela do vendedor
     const res = await fetch(ML(`/users/${userId}/shipping_options/free?item_id=${itemId}`), {
       headers: { Authorization: `Bearer ${tk}` }
     });
     const data = await res.json();
-    // O custo está em coverage.all_country.list_cost
     const cost = data?.coverage?.all_country?.list_cost;
     if (cost && parseFloat(cost) > 0) return parseFloat(cost);
     return 0;
   } catch { return 0; }
 }
 
-// Busca o preço promocional real do ML via endpoint de promoções
 async function fetchPromoPrice(itemId, tk) {
   try {
     const res = await fetch(`/api/promo/items/${itemId}?app_version=v2`, {
@@ -314,8 +316,6 @@ export default function App() {
       const orders = await fetchAllOrders(me.id, tk);
       setRealOrders(orders);
 
-      // Busca custo de frete do VENDEDOR para TODOS os anúncios
-      // Usa endpoint correto: /users/{userId}/shipping_options/free?item_id={itemId}
       setLoadingMsg("Buscando custo de frete por anúncio...");
       const shippingMap = {};
       for (let i = 0; i < listings.length; i += 5) {
@@ -328,7 +328,6 @@ export default function App() {
       }
       setSellerShipping(shippingMap);
 
-      // Busca preços promocionais reais via endpoint de promoções do ML
       setLoadingMsg("Buscando promoções...");
       const promoMap = {};
       for (let i = 0; i < listings.length; i += 10) {
@@ -368,15 +367,14 @@ export default function App() {
     },
   ];
 
-  // Custos de frete mock baseados nos prints reais
   const MOCK_PROMOS = {
     "MLB6685879548": { salePrice: 61.69, originalPrice: 62.34 },
     "MLB6581658690": { salePrice: 102.99, originalPrice: 121.16 },
   };
 
   const MOCK_SHIPPING = {
-    "MLB6685879548": 8.55,   // comprador paga frete mas ML cobra R$8,55 do vendedor
-    "MLB6581658690": 15.45,  // frete grátis ao comprador, ML cobra R$15,45 do vendedor
+    "MLB6685879548": 8.55,
+    "MLB6581658690": 15.45,
   };
 
   const MOCK_ORDERS = [
@@ -400,18 +398,15 @@ export default function App() {
   const enriched = listings.map(l => {
     const cost = costs[l.id] ?? 0;
     const feeRate = getRealFeeRate(l);
-    // Primeiro tenta o endpoint de promoções (mais preciso), depois o campo da API do item
     const promoData = promosData[l.id];
     const { salePrice: salePriceApi, originalPrice: originalPriceApi, hasPromo: hasPromoApi } = getPrices(l);
     const salePrice = promoData ? promoData.salePrice : salePriceApi;
     const originalPrice = promoData ? promoData.originalPrice : originalPriceApi;
     const hasPromo = promoData ? true : hasPromoApi;
-    // Frete que o VENDEDOR sempre paga ao ML (independente de quem paga o frete ao comprador)
     const freteSeller = shippingData[l.id] ?? 0;
     const margin = calcMargin(salePrice, cost, feeRate, freteSeller);
     const { score, checks } = calcQualityScore(l);
     const sku = getSku(l);
-    // Valor que o vendedor recebe: preço venda - tarifa ML - frete vendedor
     const youReceive = salePrice - margin.fee - freteSeller;
     return { ...l, ...margin, cost, sku, salePrice, originalPrice, hasPromo, freteSeller, youReceive, totalProfit: margin.profit * (l.sold_quantity ?? 0), score, checks };
   });

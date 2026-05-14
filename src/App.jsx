@@ -369,13 +369,12 @@ export default function App() {
           try {
             const res = await fetch(ML(`/shipments/${o.shipping.id}`), { headers: { Authorization: `Bearer ${tk}` } });
             const data = await res.json();
-            // base_cost = custo líquido que o vendedor paga ao ML
-            // base_cost = total cobrado pelo ML pelo envio
-            // receiver_cost / buyer_cost = parte que o comprador paga
-            // Custo do vendedor = base_cost - o que o comprador paga
+            // ratio = custo líquido real que o vendedor paga (confirmado via console)
+            // base_cost=83.69, gap_discount=43.5, ratio=28.35 (valor correto do extrato ML)
+            const ratio = parseFloat(data?.ratio);
             const baseCost = parseFloat(data?.base_cost) || 0;
-            const buyerCost = parseFloat(data?.receiver_cost ?? data?.buyer_cost ?? 0) || 0;
-            const cost = Math.max(0, baseCost - buyerCost);
+            const gapDiscount = parseFloat(data?.gap_discount) || 0;
+            const cost = !isNaN(ratio) && ratio >= 0 ? ratio : Math.max(0, baseCost - gapDiscount);
             shipmentCostMap[String(o.id)] = cost;
           } catch { shipmentCostMap[String(o.id)] = 0; }
         }));

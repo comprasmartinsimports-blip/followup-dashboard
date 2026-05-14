@@ -160,19 +160,28 @@ async function fetchSellerShippingCost(itemId, userId, tk) {
 async function fetchShipmentCost(shipmentId, tk) {
   if (!shipmentId) return 0;
   try {
-    const res = await fetch(ML(`/shipments/${shipmentId}`), {
-      headers: { Authorization: `Bearer ${tk}` }
-    });
-    const data = await res.json();
-    console.log("SHIPMENT DATA", shipmentId, JSON.stringify(data));
-    // O ML retorna o custo do vendedor em base_cost ou sender_cost
-    const cost =
-      data?.base_cost ??
-      data?.sender_cost ??
-      data?.shipping_option?.cost ??
-      data?.cost ??
-      0;
-    return parseFloat(cost) || 0;
+    // Tenta via proxy primeiro, depois direto na API do ML
+    const urls = [
+      `/api/ml/shipments/${shipmentId}`,
+      `https://api.mercadolibre.com/shipments/${shipmentId}`,
+    ];
+    for (const url of urls) {
+      try {
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${tk}` } });
+        const data = await res.json();
+        console.log("SHIPMENT DATA", shipmentId, JSON.stringify(data).slice(0, 300));
+        if (data.error) continue;
+        const cost =
+          data?.base_cost ??
+          data?.sender_cost ??
+          data?.shipping_option?.cost ??
+          data?.cost ??
+          0;
+        const val = parseFloat(cost);
+        if (val > 0) return val;
+      } catch { continue; }
+    }
+    return 0;
   } catch { return 0; }
 }
 
@@ -336,7 +345,6 @@ export default function App() {
       const orders = await fetchAllOrders(me.id, tk);
       setRealOrders(orders);
       // Guardar temporariamente para usar depois
-      window.__shipmentMap = {};
 
       setLoadingMsg("Buscando custo de frete por anúncio...");
       const shippingMap = {};
@@ -349,19 +357,6 @@ export default function App() {
         if (i % 50 === 0) setLoadingMsg(`Buscando frete... ${Math.min(i + 5, listings.length)}/${listings.length}`);
       }
       setSellerShipping(shippingMap);
-
-      // Buscar custo de frete real de cada pedido via /shipments/{id}
-      setLoadingMsg("Buscando frete dos pedidos...");
-      const shipmentMap = {};
-      const ordersWithShipping = orders.filter(o => o.shipping?.id);
-      for (let i = 0; i < ordersWithShipping.length; i += 10) {
-        const batch = ordersWithShipping.slice(i, i + 10);
-        const results = await Promise.all(
-          batch.map(o => fetchShipmentCost(o.shipping.id, tk).then(cost => ({ id: String(o.id), cost })))
-        );
-        results.forEach(r => { shipmentMap[r.id] = r.cost; });
-      }
-      window.__shipmentMap = shipmentMap;
 
       setLoadingMsg("Buscando promoções...");
       const promoMap = {};
@@ -427,12 +422,9 @@ export default function App() {
     // O shipping do pedido tem: { id, status, cost, sender_cost, ... }
     const sh = o.shipping ?? {};
     console.log("SHIPPING RAW", o.id, JSON.stringify(sh));
-    const fromShipmentMap = window.__shipmentMap?.[String(o.id)] ?? null;
-    const freteSeller = fromShipmentMap !== null ? fromShipmentMap :
-      (sh.cost !== undefined && sh.cost !== null) ? parseFloat(sh.cost) :
-      (sh.sender_cost !== undefined && sh.sender_cost !== null) ? parseFloat(sh.sender_cost) :
-      (sh.base_cost !== undefined && sh.base_cost !== null) ? parseFloat(sh.base_cost) :
-      0;
+    // Frete real está em payments[0].shipping_cost na API do ML
+    const paymentShipping = parseFloat(o.payments?.[0]?.shipping_cost) || 0;
+    const freteSeller = paymentShipping;
     return {
       id: String(o.id),
       listing_id: item?.item?.id,

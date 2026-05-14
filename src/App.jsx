@@ -279,6 +279,7 @@ function TokenModal({ onConnect }) {
 export default function App() {
   const [tab, setTab] = useState("listings");
   const [costs, setCosts] = useState({});
+  const [minStock, setMinStock] = useState({});
   const [selectedListing, setSelectedListing] = useState(null);
   const [sortBy, setSortBy] = useState("score");
   const [orderFilter, setOrderFilter] = useState("all");
@@ -595,6 +596,7 @@ export default function App() {
                     <th>Foto</th>
                     <th>Anúncio</th>
                     <th>MLB / SKU</th>
+                    <th>Estoque / Mín.</th>
                     <th>Score</th>
                     <th>Tipo</th>
                     <th>Preço original</th>
@@ -606,7 +608,6 @@ export default function App() {
                     <th>Lucro unit.</th>
                     <th>Margem</th>
                     <th>Lucro total</th>
-                    <th>Estoque</th>
                     <th>IA</th>
                   </tr>
                 </thead>
@@ -655,6 +656,27 @@ export default function App() {
                           ) : <div style={{ fontSize: 10, color: "#cbd5e1", marginTop: 3 }}>SKU: —</div>}
                         </td>
                         <td>
+                          {(() => {
+                            const qty = l.available_quantity ?? 0;
+                            const min = minStock[l.id] ?? 0;
+                            const abaixo = min > 0 && qty < min;
+                            const color = abaixo ? "#dc2626" : qty === 0 ? "#dc2626" : qty <= 5 ? "#d97706" : "#15803d";
+                            const bg = abaixo ? "#fef2f2" : qty === 0 ? "#fef2f2" : qty <= 5 ? "#fffbeb" : "#f0fdf4";
+                            return (
+                              <div>
+                                <span style={{ fontWeight: 700, fontSize: 13, color, background: bg, padding: "3px 10px", borderRadius: 6, display: "inline-block", marginBottom: 4 }}>
+                                  {qty} un. {abaixo ? "⚠" : ""}
+                                </span>
+                                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                  <span style={{ fontSize: 10, color: "#94a3b8" }}>Mín:</span>
+                                  <input type="number" value={minStock[l.id] ?? ""} onChange={e => setMinStock(m => ({ ...m, [l.id]: Number(e.target.value) }))} placeholder="0"
+                                    style={{ background: "#f8fafc", border: "1px solid #e2e8f0", color: "#0f172a", padding: "2px 6px", borderRadius: 4, width: 52, fontSize: 11, textAlign: "right" }} />
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </td>
+                        <td>
                           <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 8, background: scoreBg(l.score) }}>
                             <span style={{ fontSize: 13, fontWeight: 800, color: scoreColor(l.score) }}>{l.score}</span>
                             <span style={{ fontSize: 11, color: scoreColor(l.score), fontWeight: 600 }}>{scoreLabel(l.score)}</span>
@@ -699,18 +721,6 @@ export default function App() {
                         <td>
                           <span style={{ color: l.totalProfit >= 0 ? "#15803d" : "#dc2626", fontWeight: 700 }}>{l.cost > 0 ? fmt(l.totalProfit) : "—"}</span>
                           <div style={{ fontSize: 10, color: "#94a3b8" }}>{l.sold_quantity} vendidos</div>
-                        </td>
-                        <td>
-                          {(() => {
-                            const qty = l.available_quantity ?? 0;
-                            const color = qty === 0 ? "#dc2626" : qty <= 5 ? "#d97706" : "#15803d";
-                            const bg = qty === 0 ? "#fef2f2" : qty <= 5 ? "#fffbeb" : "#f0fdf4";
-                            return (
-                              <span style={{ fontWeight: 700, fontSize: 13, color, background: bg, padding: "3px 10px", borderRadius: 6, display: "inline-block" }}>
-                                {qty} un.
-                              </span>
-                            );
-                          })()}
                         </td>
                         <td>
                           <button onClick={() => setSelectedListing(l)} style={{ background: "#0f172a", border: "none", color: "#fff", fontSize: 11, padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>✦ Analisar</button>

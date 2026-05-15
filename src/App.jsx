@@ -360,25 +360,25 @@ export default function App() {
       setSellerShipping(shippingMap);
 
       // Buscar custo real de frete via /shipments/{id}/costs
+      // Estrutura confirmada: {receiver, gross_amount, senders, base_exchange}
+      // senders[0].save = custo líquido do vendedor (ex: 28.35)
       setLoadingMsg("Buscando frete dos pedidos...");
       const shipmentCostMap = {};
       const ordersWithShipping = orders.filter(o => o.shipping?.id);
-      // Batch de 3 para evitar rate limit do ML, com atualização incremental
       for (let i = 0; i < ordersWithShipping.length; i += 3) {
         const batch = ordersWithShipping.slice(i, i + 3);
         await Promise.all(batch.map(async o => {
           try {
             const res = await fetch(ML(`/shipments/${o.shipping.id}/costs`), { headers: { Authorization: `Bearer ${tk}` } });
             const data = await res.json();
-            // senders[0].charges = custos do vendedor (confirmado: cost=28.35)
-            const charges = data?.senders?.[0]?.charges ?? [];
-            const cost = charges.reduce((sum, c) => sum + (parseFloat(c.cost) || 0), 0);
-            shipmentCostMap[String(o.id)] = cost;
+            const save = parseFloat(data?.senders?.[0]?.save);
+            shipmentCostMap[String(o.id)] = isNaN(save) ? 0 : save;
           } catch { shipmentCostMap[String(o.id)] = 0; }
         }));
-        // Atualiza state incrementalmente para mostrar valores conforme chegam
-        if (i % 15 === 0) {
-          setShipmentCosts({...shipmentCostMap});
+        if (i % 15 === 0) setShipmentCosts({...shipmentCostMap});
+        await new Promise(r => setTimeout(r, 150));
+      }
+      setShipmentCosts({...shipmentCostMap});
           setLoadingMsg(`Buscando frete... ${Math.min(i + 3, ordersWithShipping.length)}/${ordersWithShipping.length}`);
         }
         // Pequeno delay para não estourar rate limit

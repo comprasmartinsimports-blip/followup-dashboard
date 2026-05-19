@@ -359,31 +359,28 @@ export default function App() {
       }
       setSellerShipping(shippingMap);
 
-      // Buscar list_cost via shipping_options para cada item dos pedidos
-      // list_cost = custo líquido exato que o vendedor paga (confirmado no extrato ML)
+      // Buscar frete real via /shipments/{id} para cada pedido
+      // Custo vendedor = base_cost - payments[0].shipping_cost (o que comprador pagou)
       setLoadingMsg("Buscando frete dos pedidos...");
       const orderShippingMap = {};
-      const orderItemIds = [...new Set(orders.map(o => o.order_items?.[0]?.item?.id).filter(Boolean))];
-      const itemShippingCache = {};
-      for (let i = 0; i < orderItemIds.length; i += 5) {
-        const batch = orderItemIds.slice(i, i + 5);
-        await Promise.all(batch.map(async itemId => {
+      const ordersWithShipping = orders.filter(o => o.shipping?.id);
+      for (let i = 0; i < ordersWithShipping.length; i += 5) {
+        const batch = ordersWithShipping.slice(i, i + 5);
+        await Promise.all(batch.map(async o => {
           try {
-            const res = await fetch(ML(`/users/${me.id}/shipping_options/free?item_id=${itemId}`), { headers: { Authorization: `Bearer ${tk}` } });
+            const res = await fetch(ML(`/shipments/${o.shipping.id}`), { headers: { Authorization: `Bearer ${tk}` } });
             const data = await res.json();
-            const cost = parseFloat(data?.coverage?.all_country?.list_cost);
-            if (!isNaN(cost) && cost > 0) itemShippingCache[itemId] = cost;
+            const baseCost = parseFloat(data?.base_cost) || 0;
+            // O que o comprador pagou de frete (pode ser 0 se frete grátis ao comprador)
+            const buyerPaid = parseFloat(o.payments?.[0]?.shipping_cost) || 0;
+            // Custo líquido do vendedor = base_cost - o que comprador pagou
+            const sellerCost = Math.max(0, baseCost - buyerPaid);
+            orderShippingMap[String(o.id)] = sellerCost;
           } catch {}
         }));
+        if (i % 20 === 0) setShipmentCosts({...orderShippingMap});
         await new Promise(r => setTimeout(r, 100));
       }
-      // Mapear custo por order_id usando o item_id do pedido
-      orders.forEach(o => {
-        const itemId = o.order_items?.[0]?.item?.id;
-        if (itemId && itemShippingCache[itemId]) {
-          orderShippingMap[String(o.id)] = itemShippingCache[itemId];
-        }
-      });
       setShipmentCosts({...orderShippingMap});
 
       setLoadingMsg("Buscando promoções...");

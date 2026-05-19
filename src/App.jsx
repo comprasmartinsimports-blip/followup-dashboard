@@ -359,30 +359,27 @@ export default function App() {
       }
       setSellerShipping(shippingMap);
 
-      // Buscar custo real de frete via /shipments/{id}/costs
-      // Estrutura confirmada: {receiver, gross_amount, senders, base_exchange}
-      // senders[0].save = custo líquido do vendedor (ex: 28.35)
+      // Buscar custo de frete via /shipments/{id}
+      // base_cost = custo bruto, gap_discount = desconto ML, custo vendedor = base_cost - gap_discount
       setLoadingMsg("Buscando frete dos pedidos...");
       const shipmentCostMap = {};
       const ordersWithShipping = orders.filter(o => o.shipping?.id);
-      for (let i = 0; i < ordersWithShipping.length; i += 3) {
-        const batch = ordersWithShipping.slice(i, i + 3);
+      for (let i = 0; i < ordersWithShipping.length; i += 5) {
+        const batch = ordersWithShipping.slice(i, i + 5);
         await Promise.all(batch.map(async o => {
           try {
-            const res = await fetch(ML(`/shipments/${o.shipping.id}/costs`), { headers: { Authorization: `Bearer ${tk}` } });
+            const res = await fetch(ML(`/shipments/${o.shipping.id}`), { headers: { Authorization: `Bearer ${tk}` } });
             const data = await res.json();
-            const save = parseFloat(data?.senders?.[0]?.save);
-            shipmentCostMap[String(o.id)] = isNaN(save) ? 0 : save;
+            const baseCost = parseFloat(data?.base_cost) || 0;
+            const gapDiscount = parseFloat(data?.gap_discount) || 0;
+            // Custo líquido do vendedor = base_cost - gap_discount
+            shipmentCostMap[String(o.id)] = Math.max(0, baseCost - gapDiscount);
           } catch { shipmentCostMap[String(o.id)] = 0; }
         }));
-        if (i % 15 === 0) setShipmentCosts({...shipmentCostMap});
-        await new Promise(r => setTimeout(r, 150));
+        if (i % 20 === 0) setShipmentCosts({...shipmentCostMap});
+        await new Promise(r => setTimeout(r, 100));
       }
       setShipmentCosts({...shipmentCostMap});
-          setLoadingMsg(`Buscando frete... ${Math.min(i + 3, ordersWithShipping.length)}/${ordersWithShipping.length}`);
-        }
-        // Pequeno delay para não estourar rate limit
-        await new Promise(r => setTimeout(r, 100));
       }
       setShipmentCosts({...shipmentCostMap});
 

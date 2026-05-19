@@ -359,8 +359,8 @@ export default function App() {
       }
       setSellerShipping(shippingMap);
 
-      // Buscar frete real via /shipments/{id} para cada pedido
-      // Custo vendedor = base_cost - payments[0].shipping_cost (o que comprador pagou)
+      // Buscar frete real via /shipments/{id}/costs → senders[0].save
+      // Confirmado: senders[0].save = 28.35 = valor exato debitado do vendedor
       setLoadingMsg("Buscando frete dos pedidos...");
       const orderShippingMap = {};
       const ordersWithShipping = orders.filter(o => o.shipping?.id);
@@ -368,14 +368,10 @@ export default function App() {
         const batch = ordersWithShipping.slice(i, i + 5);
         await Promise.all(batch.map(async o => {
           try {
-            const res = await fetch(ML(`/shipments/${o.shipping.id}`), { headers: { Authorization: `Bearer ${tk}` } });
+            const res = await fetch(ML(`/shipments/${o.shipping.id}/costs`), { headers: { Authorization: `Bearer ${tk}` } });
             const data = await res.json();
-            const baseCost = parseFloat(data?.base_cost) || 0;
-            const buyerPaid = parseFloat(o.payments?.[0]?.shipping_cost) || 0;
-            // Custo líquido = base_cost - o que o comprador pagou
-            // Ex: base_cost=35.04, buyer=13.99 → seller=21.05
-            const sellerCost = Math.max(0, baseCost - buyerPaid);
-            orderShippingMap[String(o.id)] = sellerCost;
+            const save = parseFloat(data?.senders?.[0]?.save);
+            orderShippingMap[String(o.id)] = isNaN(save) ? 0 : save;
           } catch { orderShippingMap[String(o.id)] = 0; }
         }));
         if (i % 20 === 0) setShipmentCosts({...orderShippingMap});

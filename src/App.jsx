@@ -312,6 +312,7 @@ export default function App() {
   const [sortBy, setSortBy] = useState("score");
   const [orderFilter, setOrderFilter] = useState("all");
   const [searchListings, setSearchListings] = useState("");
+  const [searchType, setSearchType] = useState("all");
   const [searchOrders, setSearchOrders] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [token, setToken] = useState(null);
@@ -474,18 +475,27 @@ export default function App() {
     const q = searchListings.toLowerCase().trim();
     let results = enriched;
     if (q) {
-      results = results.filter(l =>
-        l.title?.toLowerCase().includes(q) ||
-        l.id?.toLowerCase().includes(q) ||
-        (l.sku && l.sku.toLowerCase().includes(q)) ||
-        (l.seller_sku && l.seller_sku.toLowerCase().includes(q)) ||
-        l.attributes?.some(a => a.value_name?.toLowerCase().includes(q))
-      );
+      results = results.filter(l => {
+        if (searchType === "title") return l.title?.toLowerCase().includes(q);
+        if (searchType === "sku") {
+          const sku = (l.sku || l.seller_sku || "").toLowerCase();
+          return sku === q || sku.startsWith(q + " ") || sku.endsWith(" " + q);
+        }
+        if (searchType === "mlb") return l.id?.toLowerCase() === q || l.id?.toLowerCase().includes(q);
+        // "all" - busca em tudo
+        return (
+          l.title?.toLowerCase().includes(q) ||
+          l.id?.toLowerCase().includes(q) ||
+          (l.sku && l.sku.toLowerCase().includes(q)) ||
+          (l.seller_sku && l.seller_sku.toLowerCase().includes(q)) ||
+          l.attributes?.some(a => a.value_name?.toLowerCase().includes(q))
+        );
+      });
     }
     if (statusFilter === "active") results = results.filter(l => l.status === "active");
     if (statusFilter === "paused") results = results.filter(l => l.status === "paused");
     return results;
-  }, [enriched, searchListings, statusFilter]);
+  }, [enriched, searchListings, searchType, statusFilter]);
 
   const sorted = [...filteredListings].sort((a, b) =>
     sortBy === "score" ? a.score - b.score :
@@ -631,9 +641,18 @@ export default function App() {
         {tab === "listings" && (
           <>
             <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
-              <div style={{ position: "relative", flex: 1, minWidth: 260 }}>
-                <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", fontSize: 14 }}>🔍</span>
-                <input className="search-input" value={searchListings} onChange={e => setSearchListings(e.target.value)} placeholder="Buscar por título, MLB ou SKU..." />
+              <div style={{ display: "flex", gap: 6, flex: 1, minWidth: 260 }}>
+                <div style={{ position: "relative", flex: 1 }}>
+                  <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", fontSize: 14 }}>🔍</span>
+                  <input className="search-input" value={searchListings} onChange={e => setSearchListings(e.target.value)}
+                    placeholder={searchType === "title" ? "Buscar por título..." : searchType === "sku" ? "Buscar por SKU exato..." : searchType === "mlb" ? "Buscar por MLB..." : "Buscar por título, MLB ou SKU..."} />
+                </div>
+                <select value={searchType} onChange={e => setSearchType(e.target.value)} style={{ minWidth: 110 }}>
+                  <option value="all">Tudo</option>
+                  <option value="title">Título</option>
+                  <option value="sku">SKU exato</option>
+                  <option value="mlb">MLB</option>
+                </select>
               </div>
               <div style={{ display: "flex", gap: 4 }}>
                 {[{ key: "all", label: "Todos" }, { key: "active", label: "● Ativos" }, { key: "paused", label: "○ Pausados" }].map(f => (

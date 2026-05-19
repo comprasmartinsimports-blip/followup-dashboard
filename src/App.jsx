@@ -382,8 +382,6 @@ export default function App() {
         await new Promise(r => setTimeout(r, 100));
       }
       setShipmentCosts({...orderShippingMap});
-      }
-      setShipmentCosts({...shipmentCostMap});
 
       setLoadingMsg("Buscando promoções...");
       const promoMap = {};

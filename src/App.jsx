@@ -509,14 +509,9 @@ export default function App() {
     const listing = listings.find(l => l.id === o.listing_id);
     const cost = costs[listing?.id] ?? 0;
     const feeRate = listing ? getRealFeeRate(listing) : 0.12;
-    // Frete do vendedor: usa o shipmentCosts (por pedido) se disponível,
-    // senão usa o sellerShipping do anúncio (já calculado)
-    const freteByShipment = shipmentCosts[String(o.id)];
-    const freteByListing = listing ? (shippingData[listing.id] ?? 0) : 0;
-    const freteSeller = (freteByShipment !== undefined && freteByShipment > 0)
-      ? freteByShipment
-      : freteByListing;
-    return { ...o, listing, ...calcMargin(o.price, cost, feeRate, freteSeller / Math.max(o.qty, 1)), cost, freteSeller };
+    // Frete do vendedor: busca pelo listing_id do pedido no shippingData
+    const freteSeller = shippingData[o.listing_id] ?? shippingData[listing?.id] ?? o.seller_shipping_cost ?? 0;
+    return { ...o, listing, ...calcMargin(o.price, cost, feeRate, freteSeller), cost, freteSeller };
   });
 
   const totalRevenue = enrichedOrders.reduce((s, o) => s + o.revenue * o.qty, 0);

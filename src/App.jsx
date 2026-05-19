@@ -134,8 +134,10 @@ async function fetchAllListings(userId, tk) {
 
 async function fetchAllOrders(userId, tk) {
   const pageSize = 50; let offset = 0; let allOrders = [];
+  // Buscar pedidos a partir de 01/04/2026
+  const dateFrom = "2026-04-01T00:00:00.000-00:00";
   while (true) {
-    const res = await fetch(ML(`/orders/search?seller=${userId}&sort=date_desc&limit=${pageSize}&offset=${offset}`), { headers: { Authorization: `Bearer ${tk}` } });
+    const res = await fetch(ML(`/orders/search?seller=${userId}&sort=date_desc&limit=${pageSize}&offset=${offset}&order.date_created.from=${encodeURIComponent(dateFrom)}`), { headers: { Authorization: `Bearer ${tk}` } });
     const data = await res.json();
     const orders = data.results ?? [];
     allOrders = [...allOrders, ...orders];
@@ -201,11 +203,13 @@ async function fetchPromoPrice(itemId, tk) {
 
 
 function getOrderStatusInfo(status, tags) {
-  const isRefunded = tags?.some(t => t.includes("refund"));
+  const isRefunded = tags?.some(t => t.includes("refund") || t === "not_paid");
   const isMediation = tags?.some(t => t.includes("mediation")) || status === "in_mediation";
-  if (isRefunded) return { label: "Devolvido", color: "#dc2626", bg: "#fef2f2" };
+  const isDelivered = tags?.some(t => t === "delivered");
+  if (isRefunded && status === "cancelled") return { label: "Devolvido", color: "#7c3aed", bg: "#f5f3ff" };
   if (isMediation) return { label: "Em disputa", color: "#d97706", bg: "#fffbeb" };
   if (status === "cancelled") return { label: "Cancelado", color: "#6b7280", bg: "#f3f4f6" };
+  if (status === "paid" && isDelivered) return { label: "Entregue", color: "#0369a1", bg: "#eff6ff" };
   if (status === "paid") return { label: "Pago", color: "#15803d", bg: "#f0fdf4" };
   return { label: status ?? "—", color: "#64748b", bg: "#f8fafc" };
 }
@@ -326,6 +330,8 @@ export default function App() {
   const [searchType, setSearchType] = useState("all");
   const [searchOrders, setSearchOrders] = useState("");
   const [orderStatusFilter, setOrderStatusFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [token, setToken] = useState(null);
   const [user, setUser] = useState(null);
@@ -539,14 +545,21 @@ export default function App() {
 
   const filteredOrders = useMemo(() => {
     const q = searchOrders.toLowerCase().trim();
-    let results = periodOrders;
+    let results = rawOrders; // usar rawOrders para busca por data customizada
+    // Filtro de período padrão (só se não tiver data customizada)
+    if (!dateFrom && !dateTo) {
+      results = periodOrders;
+    } else {
+      if (dateFrom) results = results.filter(o => o.date && o.date >= dateFrom);
+      if (dateTo) results = results.filter(o => o.date && o.date <= dateTo);
+    }
     if (q) results = results.filter(o => String(o.id).toLowerCase().includes(q));
-    if (orderStatusFilter === "paid") results = results.filter(o => o.status === "paid");
+    if (orderStatusFilter === "paid") results = results.filter(o => o.status === "paid" && !o.tags?.some(t => t.includes("refund")));
     if (orderStatusFilter === "cancelled") results = results.filter(o => o.status === "cancelled");
-    if (orderStatusFilter === "refunded") results = results.filter(o => o.tags?.includes("refunded") || o.status === "cancelled");
+    if (orderStatusFilter === "refunded") results = results.filter(o => o.tags?.some(t => t.includes("refund")) || o.tags?.some(t => t === "not_paid"));
     if (orderStatusFilter === "mediation") results = results.filter(o => o.tags?.some(t => t.includes("mediation")) || o.status === "in_mediation");
     return results;
-  }, [periodOrders, searchOrders, orderStatusFilter]);
+  }, [rawOrders, periodOrders, searchOrders, orderStatusFilter, dateFrom, dateTo]);
 
   const enrichedOrders = filteredOrders.map(o => {
     const listing = listings.find(l => l.id === o.listing_id);
@@ -845,9 +858,19 @@ export default function App() {
         {tab === "orders" && (
           <>
             <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
-              <div style={{ position: "relative", width: 260 }}>
+              <div style={{ position: "relative", width: 220 }}>
                 <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", fontSize: 14 }}>🔍</span>
                 <input className="search-input" value={searchOrders} onChange={e => setSearchOrders(e.target.value)} placeholder="Buscar por nº do pedido..." />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 500 }}>De:</span>
+                <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+                  style={{ background: "#fff", border: "1px solid #e2e8f0", color: "#334155", padding: "6px 10px", borderRadius: 8, fontFamily: "inherit", fontSize: 12, cursor: "pointer" }} />
+                <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 500 }}>Até:</span>
+                <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+                  style={{ background: "#fff", border: "1px solid #e2e8f0", color: "#334155", padding: "6px 10px", borderRadius: 8, fontFamily: "inherit", fontSize: 12, cursor: "pointer" }} />
+                {(dateFrom || dateTo) && <button onClick={() => { setDateFrom(""); setDateTo(""); }}
+                  style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", color: "#64748b", padding: "5px 10px", borderRadius: 8, cursor: "pointer", fontSize: 12 }}>✕ Limpar</button>}
               </div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {[{ key: "today", label: "Hoje" }, { key: "week", label: "7 dias" }, { key: "month", label: "30 dias" }, { key: "3months", label: "3 meses" }, { key: "all", label: "Todos" }].map(f => (

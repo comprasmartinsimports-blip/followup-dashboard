@@ -199,6 +199,17 @@ async function fetchPromoPrice(itemId, tk) {
   } catch { return null; }
 }
 
+
+function getOrderStatusInfo(status, tags) {
+  const isRefunded = tags?.some(t => t.includes("refund"));
+  const isMediation = tags?.some(t => t.includes("mediation")) || status === "in_mediation";
+  if (isRefunded) return { label: "Devolvido", color: "#dc2626", bg: "#fef2f2" };
+  if (isMediation) return { label: "Em disputa", color: "#d97706", bg: "#fffbeb" };
+  if (status === "cancelled") return { label: "Cancelado", color: "#6b7280", bg: "#f3f4f6" };
+  if (status === "paid") return { label: "Pago", color: "#15803d", bg: "#f0fdf4" };
+  return { label: status ?? "—", color: "#64748b", bg: "#f8fafc" };
+}
+
 function MarginBar({ value }) {
   if (value === null) return <span style={{ fontSize: 12, color: "#94a3b8" }}>— insira custo</span>;
   const pct = Math.max(0, Math.min(1, value));
@@ -314,6 +325,7 @@ export default function App() {
   const [searchListings, setSearchListings] = useState("");
   const [searchType, setSearchType] = useState("all");
   const [searchOrders, setSearchOrders] = useState("");
+  const [orderStatusFilter, setOrderStatusFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [token, setToken] = useState(null);
   const [user, setUser] = useState(null);
@@ -525,9 +537,14 @@ export default function App() {
 
   const filteredOrders = useMemo(() => {
     const q = searchOrders.toLowerCase().trim();
-    if (!q) return periodOrders;
-    return periodOrders.filter(o => String(o.id).toLowerCase().includes(q));
-  }, [periodOrders, searchOrders]);
+    let results = periodOrders;
+    if (q) results = results.filter(o => String(o.id).toLowerCase().includes(q));
+    if (orderStatusFilter === "paid") results = results.filter(o => o.status === "paid");
+    if (orderStatusFilter === "cancelled") results = results.filter(o => o.status === "cancelled");
+    if (orderStatusFilter === "refunded") results = results.filter(o => o.tags?.includes("refunded") || o.status === "cancelled");
+    if (orderStatusFilter === "mediation") results = results.filter(o => o.tags?.some(t => t.includes("mediation")) || o.status === "in_mediation");
+    return results;
+  }, [periodOrders, searchOrders, orderStatusFilter]);
 
   const enrichedOrders = filteredOrders.map(o => {
     const listing = listings.find(l => l.id === o.listing_id);
@@ -835,6 +852,17 @@ export default function App() {
                   <button key={f.key} className={`filter-btn ${orderFilter === f.key ? "active" : ""}`} onClick={() => setOrderFilter(f.key)}>{f.label}</button>
                 ))}
               </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {[
+                  { key: "all", label: "Todos status" },
+                  { key: "paid", label: "✓ Pagos" },
+                  { key: "cancelled", label: "✗ Cancelados" },
+                  { key: "refunded", label: "↩ Devolvidos" },
+                  { key: "mediation", label: "⚠ Em disputa" },
+                ].map(f => (
+                  <button key={f.key} className={`filter-btn ${orderStatusFilter === f.key ? "active" : ""}`} onClick={() => setOrderStatusFilter(f.key)}>{f.label}</button>
+                ))}
+              </div>
               <span style={{ fontSize: 12, color: "#94a3b8" }}>{enrichedOrders.length} pedido{enrichedOrders.length !== 1 ? "s" : ""} · {fmt(enrichedOrders.reduce((s, o) => s + o.price * o.qty, 0))}</span>
             </div>
             <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "auto", boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
@@ -842,6 +870,7 @@ export default function App() {
                 <thead>
                   <tr>
                     <th>Pedido</th>
+                    <th>Status</th>
                     <th>Produto</th>
                     <th>Data</th>
                     <th>Preço venda</th>
@@ -861,6 +890,12 @@ export default function App() {
                     return (
                       <tr key={o.id}>
                         <td style={{ color: "#64748b", fontSize: 12, fontFamily: "monospace", fontWeight: 600 }}>#{o.id}</td>
+                        <td>
+                          {(() => {
+                            const s = getOrderStatusInfo(o.status, o.tags);
+                            return <span style={{ fontSize: 11, fontWeight: 600, color: s.color, background: s.bg, padding: "3px 8px", borderRadius: 6, whiteSpace: "nowrap" }}>{s.label}</span>;
+                          })()}
+                        </td>
                         <td>
                           <div style={{ maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             {(() => {

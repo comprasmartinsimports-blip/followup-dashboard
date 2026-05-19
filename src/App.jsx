@@ -464,6 +464,8 @@ export default function App() {
       seller_shipping_cost: shipmentCost,
       buyer_shipping_cost: buyerShippingCost,
       permalink: item?.item?.id ? `https://www.mercadolivre.com.br/p/${item.item.id}` : null,
+      status: o.status ?? "paid",
+      tags: o.tags ?? [],
     };
   });
 

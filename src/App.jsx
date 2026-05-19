@@ -371,12 +371,12 @@ export default function App() {
             const res = await fetch(ML(`/shipments/${o.shipping.id}`), { headers: { Authorization: `Bearer ${tk}` } });
             const data = await res.json();
             const baseCost = parseFloat(data?.base_cost) || 0;
-            // O que o comprador pagou de frete (pode ser 0 se frete grátis ao comprador)
             const buyerPaid = parseFloat(o.payments?.[0]?.shipping_cost) || 0;
-            // Custo líquido do vendedor = base_cost - o que comprador pagou
+            // Custo líquido = base_cost - o que o comprador pagou
+            // Ex: base_cost=35.04, buyer=13.99 → seller=21.05
             const sellerCost = Math.max(0, baseCost - buyerPaid);
             orderShippingMap[String(o.id)] = sellerCost;
-          } catch {}
+          } catch { orderShippingMap[String(o.id)] = 0; }
         }));
         if (i % 20 === 0) setShipmentCosts({...orderShippingMap});
         await new Promise(r => setTimeout(r, 100));
@@ -443,6 +443,8 @@ export default function App() {
 
   const rawOrders = usingMock ? MOCK_ORDERS : realOrders.map(o => {
     const item = o.order_items?.[0];
+    const buyerShippingCost = parseFloat(o.payments?.[0]?.shipping_cost) || 0;
+    const shipmentCost = shipmentCosts[String(o.id)] ?? 0;
     return {
       id: String(o.id),
       listing_id: item?.item?.id,
@@ -450,8 +452,8 @@ export default function App() {
       date: o.date_created?.slice(0, 10),
       price: item?.unit_price ?? o.total_amount ?? 0,
       qty: item?.quantity ?? 1,
-      // base_cost do /shipments/{id} = custo líquido que o vendedor paga ao ML
-      seller_shipping_cost: shipmentCosts[String(o.id)] ?? 0,
+      seller_shipping_cost: shipmentCost,
+      buyer_shipping_cost: buyerShippingCost,
       permalink: item?.item?.id ? `https://www.mercadolivre.com.br/p/${item.item.id}` : null,
     };
   });

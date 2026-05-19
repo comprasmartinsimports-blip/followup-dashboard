@@ -359,11 +359,23 @@ export default function App() {
       }
       setSellerShipping(shippingMap);
 
-      // Usar payments[0].shipping_cost que já vem nos dados do pedido
-      // Esse é o valor que o comprador paga de frete
-      // O custo do vendedor = sellerShipping do anúncio (já buscado acima)
-      // Não precisa de busca extra - usar shipmentCosts vazio e depender do sellerShipping
-      setShipmentCosts({});
+      // Buscar frete pelo listing_id de cada pedido (IDs podem ser variações)
+      setLoadingMsg("Buscando frete dos pedidos...");
+      const orderShippingMap = {};
+      const orderItemIds = [...new Set(orders.map(o => o.order_items?.[0]?.item?.id).filter(Boolean))];
+      for (let i = 0; i < orderItemIds.length; i += 5) {
+        const batch = orderItemIds.slice(i, i + 5);
+        await Promise.all(batch.map(async itemId => {
+          try {
+            const res = await fetch(ML(`/users/${me.id}/shipping_options/free?item_id=${itemId}`), { headers: { Authorization: `Bearer ${tk}` } });
+            const data = await res.json();
+            const cost = data?.coverage?.all_country?.list_cost;
+            if (cost && parseFloat(cost) > 0) orderShippingMap[itemId] = parseFloat(cost);
+          } catch {}
+        }));
+        await new Promise(r => setTimeout(r, 100));
+      }
+      setShipmentCosts(orderShippingMap);
       }
       setShipmentCosts({...shipmentCostMap});
 
@@ -509,8 +521,12 @@ export default function App() {
     const listing = listings.find(l => l.id === o.listing_id);
     const cost = costs[listing?.id] ?? 0;
     const feeRate = listing ? getRealFeeRate(listing) : 0.12;
-    // Frete do vendedor: busca pelo listing_id do pedido no shippingData
-    const freteSeller = shippingData[o.listing_id] ?? shippingData[listing?.id] ?? o.seller_shipping_cost ?? 0;
+    // Frete: tenta pelo listing_id do pedido (pode ser variação), depois pelo anúncio
+    const freteSeller = shipmentCosts[o.listing_id]
+      ?? shippingData[o.listing_id]
+      ?? shippingData[listing?.id]
+      ?? o.seller_shipping_cost
+      ?? 0;
     return { ...o, listing, ...calcMargin(o.price, cost, feeRate, freteSeller), cost, freteSeller };
   });
 

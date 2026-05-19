@@ -359,23 +359,29 @@ export default function App() {
       }
       setSellerShipping(shippingMap);
 
-      // Buscar frete pelo listing_id de cada pedido (IDs podem ser variações)
+      // Buscar base_cost de cada shipment dos pedidos
       setLoadingMsg("Buscando frete dos pedidos...");
       const orderShippingMap = {};
-      const orderItemIds = [...new Set(orders.map(o => o.order_items?.[0]?.item?.id).filter(Boolean))];
-      for (let i = 0; i < orderItemIds.length; i += 5) {
-        const batch = orderItemIds.slice(i, i + 5);
-        await Promise.all(batch.map(async itemId => {
+      const ordersWithShipping = orders.filter(o => o.shipping?.id);
+      for (let i = 0; i < ordersWithShipping.length; i += 5) {
+        const batch = ordersWithShipping.slice(i, i + 5);
+        await Promise.all(batch.map(async o => {
           try {
-            const res = await fetch(ML(`/users/${me.id}/shipping_options/free?item_id=${itemId}`), { headers: { Authorization: `Bearer ${tk}` } });
+            const res = await fetch(ML(`/shipments/${o.shipping.id}`), { headers: { Authorization: `Bearer ${tk}` } });
             const data = await res.json();
-            const cost = data?.coverage?.all_country?.list_cost;
-            if (cost && parseFloat(cost) > 0) orderShippingMap[itemId] = parseFloat(cost);
+            // base_cost = custo bruto do frete
+            // payments[0].shipping_cost = o que o comprador pagou
+            // custo líquido vendedor = base_cost - o que comprador pagou
+            const baseCost = parseFloat(data?.base_cost) || 0;
+            const buyerPaid = parseFloat(o.payments?.[0]?.shipping_cost) || 0;
+            const sellerCost = Math.max(0, baseCost - buyerPaid);
+            orderShippingMap[String(o.id)] = sellerCost;
           } catch {}
         }));
+        if (i % 20 === 0) setShipmentCosts({...orderShippingMap});
         await new Promise(r => setTimeout(r, 100));
       }
-      setShipmentCosts(orderShippingMap);
+      setShipmentCosts({...orderShippingMap});
       }
       setShipmentCosts({...shipmentCostMap});
 
@@ -521,11 +527,10 @@ export default function App() {
     const listing = listings.find(l => l.id === o.listing_id);
     const cost = costs[listing?.id] ?? 0;
     const feeRate = listing ? getRealFeeRate(listing) : 0.12;
-    // Frete: tenta pelo listing_id do pedido (pode ser variação), depois pelo anúncio
-    const freteSeller = shipmentCosts[o.listing_id]
+    // Frete: usa shipmentCosts[order_id] calculado como base_cost - buyer_paid
+    const freteSeller = shipmentCosts[String(o.id)]
       ?? shippingData[o.listing_id]
       ?? shippingData[listing?.id]
-      ?? o.seller_shipping_cost
       ?? 0;
     return { ...o, listing, ...calcMargin(o.price, cost, feeRate, freteSeller), cost, freteSeller };
   });

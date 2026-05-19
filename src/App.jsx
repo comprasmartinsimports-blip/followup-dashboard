@@ -359,27 +359,11 @@ export default function App() {
       }
       setSellerShipping(shippingMap);
 
-      // Buscar custo de frete via /shipments/{id}
-      // base_cost = custo bruto, gap_discount = desconto ML, custo vendedor = base_cost - gap_discount
-      setLoadingMsg("Buscando frete dos pedidos...");
-      const shipmentCostMap = {};
-      const ordersWithShipping = orders.filter(o => o.shipping?.id);
-      for (let i = 0; i < ordersWithShipping.length; i += 5) {
-        const batch = ordersWithShipping.slice(i, i + 5);
-        await Promise.all(batch.map(async o => {
-          try {
-            const res = await fetch(ML(`/shipments/${o.shipping.id}`), { headers: { Authorization: `Bearer ${tk}` } });
-            const data = await res.json();
-            const baseCost = parseFloat(data?.base_cost) || 0;
-            const gapDiscount = parseFloat(data?.gap_discount) || 0;
-            // Custo líquido do vendedor = base_cost - gap_discount
-            shipmentCostMap[String(o.id)] = Math.max(0, baseCost - gapDiscount);
-          } catch { shipmentCostMap[String(o.id)] = 0; }
-        }));
-        if (i % 20 === 0) setShipmentCosts({...shipmentCostMap});
-        await new Promise(r => setTimeout(r, 100));
-      }
-      setShipmentCosts({...shipmentCostMap});
+      // Usar payments[0].shipping_cost que já vem nos dados do pedido
+      // Esse é o valor que o comprador paga de frete
+      // O custo do vendedor = sellerShipping do anúncio (já buscado acima)
+      // Não precisa de busca extra - usar shipmentCosts vazio e depender do sellerShipping
+      setShipmentCosts({});
       }
       setShipmentCosts({...shipmentCostMap});
 
@@ -525,7 +509,13 @@ export default function App() {
     const listing = listings.find(l => l.id === o.listing_id);
     const cost = costs[listing?.id] ?? 0;
     const feeRate = listing ? getRealFeeRate(listing) : 0.12;
-    const freteSeller = o.seller_shipping_cost ?? 0;
+    // Frete do vendedor: usa o shipmentCosts (por pedido) se disponível,
+    // senão usa o sellerShipping do anúncio (já calculado)
+    const freteByShipment = shipmentCosts[String(o.id)];
+    const freteByListing = listing ? (shippingData[listing.id] ?? 0) : 0;
+    const freteSeller = (freteByShipment !== undefined && freteByShipment > 0)
+      ? freteByShipment
+      : freteByListing;
     return { ...o, listing, ...calcMargin(o.price, cost, feeRate, freteSeller / Math.max(o.qty, 1)), cost, freteSeller };
   });
 

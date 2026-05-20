@@ -418,7 +418,8 @@ function MLConnectModal({ onConnect, onClose }) {
   const [code, setCode]     = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
-  const authUrl = `https://auth.mercadolivre.com.br/authorization?response_type=code&client_id=${ML_CLIENT_ID}&redirect_uri=https://www.google.com`;
+  const REDIRECT_URI = window.location.origin;
+  const authUrl = `https://auth.mercadolivre.com.br/authorization?response_type=code&client_id=${ML_CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
 
   async function handleCode() {
     if (!code.trim()) return;
@@ -431,7 +432,7 @@ function MLConnectModal({ onConnect, onClose }) {
           grant_type:   "authorization_code",
           client_id:    ML_CLIENT_ID,
           code:         code.trim(),
-          redirect_uri: "https://www.google.com",
+          redirect_uri: window.location.origin,
         }),
       });
       const data = await res.json();
@@ -471,10 +472,9 @@ function MLConnectModal({ onConnect, onClose }) {
         {step === "waiting_code" && (
           <>
             <p style={{ color: "#64748b", fontSize: 13, lineHeight: 1.7, marginBottom: 6 }}>
-              Após autorizar, a URL vai ficar assim:<br/>
-              <code style={{ fontSize: 11, background: "#f1f5f9", padding: "2px 6px", borderRadius: 4 }}>https://www.google.com/?code=<b>TG-XXXXXXXX</b>&...</code>
+              Após autorizar, você será redirecionado de volta para este site. A URL vai ter um parâmetro <code style={{ fontSize: 11, background: "#f1f5f9", padding: "2px 6px", borderRadius: 4 }}>?code=TG-XXXXXXXX</code>
             </p>
-            <p style={{ color: "#64748b", fontSize: 13, marginBottom: 16 }}>Copie o valor após <code style={{ fontSize: 11 }}>code=</code> e cole abaixo:</p>
+            <p style={{ color: "#64748b", fontSize: 13, marginBottom: 16 }}>Copie o valor após <code style={{ fontSize: 11 }}>code=</code> da URL e cole abaixo:</p>
             <input value={code} onChange={e => setCode(e.target.value)}
               onKeyDown={e => e.key === "Enter" && handleCode()}
               placeholder="TG-XXXXXXXXXX-XXXXXXXXX"

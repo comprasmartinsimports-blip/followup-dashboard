@@ -1372,37 +1372,25 @@ export default function App() {
       setShipmentCosts({...orderShippingMap});
       setShipmentStatuses({...shipmentStatusMap});
 
-      // Buscar dados de pagamento (data de liberação + valor líquido) por pedido
-      setLoadingMsg("Buscando previsão de pagamento...");
+      // Extrair dados de pagamento dos pedidos já carregados
+      // Os dados vêm dentro de order.payments[] que já está no /orders/search
+      setLoadingMsg("Extraindo dados de pagamento...");
       const paymentMap = {};
-      const ordersForPayment = orders.filter(o => o.status === "paid").slice(0, 100);
-      for (let i = 0; i < ordersForPayment.length; i += 5) {
-        const batch = ordersForPayment.slice(i, i + 5);
-        await Promise.all(batch.map(async o => {
-          try {
-            // ML payments endpoint: /collections/orders/{id} traz money_release_date
-            const res = await fetch(ML(`/collections/orders/${o.id}`), { headers: { Authorization: `Bearer ${validTk}` } });
-            const data = await res.json();
-            const col = data?.collection ?? data;
-            if (col) {
-              // net_received_amount = valor líquido após tarifas e frete
-              // money_release_date = data exata de liberação pelo ML
-              const releaseDate = col.money_release_date?.slice(0, 10) ?? 
-                                  col.payments?.[0]?.money_release_date?.slice(0, 10) ?? null;
-              const netAmount = parseFloat(
-                col.net_received_amount ?? 
-                col.payments?.[0]?.net_received_amount ?? 
-                col.total_amount ?? 0
-              );
-              if (releaseDate || netAmount > 0) {
-                paymentMap[String(o.id)] = { releaseDate, netAmount };
-              }
-            }
-          } catch { /* ignora */ }
-        }));
-        if (i % 20 === 0) setPaymentData({...paymentMap});
-        await new Promise(r => setTimeout(r, 100));
-      }
+      orders.filter(o => o.status === "paid").forEach(o => {
+        const pmt = o.payments?.find(p => p.status === "approved") || o.payments?.[0];
+        if (!pmt) return;
+        // money_release_date = data exata de liberação do valor pelo ML
+        const releaseDate = pmt.money_release_date?.slice(0, 10) ?? null;
+        // net_received_amount = valor líquido já descontado tarifas e frete
+        // fallback: transaction_amount - marketplace_fee (quando disponível)
+        const net = parseFloat(pmt.net_received_amount ?? 0);
+        const gross = parseFloat(pmt.transaction_amount ?? 0);
+        const fee = parseFloat(pmt.marketplace_fee ?? 0);
+        const netAmount = net > 0 ? net : (gross > 0 && fee > 0 ? gross - fee : gross);
+        if (releaseDate || netAmount > 0) {
+          paymentMap[String(o.id)] = { releaseDate, netAmount };
+        }
+      });
       setPaymentData({...paymentMap});
 
       setLoadingMsg("Buscando promoções...");

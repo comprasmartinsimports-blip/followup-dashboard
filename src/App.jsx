@@ -412,102 +412,49 @@ function LoginScreen({ onLogin }) {
   );
 }
 
-// ── Modal OAuth ML ───────────────────────────────────────────
+// ── Modal de conexão ML — token manual com persistência ─────
 function MLConnectModal({ onConnect, onClose }) {
-  const [step, setStep]     = useState("init"); // init | waiting_code | loading | error
-  const [code, setCode]     = useState("");
-  const [errorMsg, setErrorMsg] = useState("");
+  const [tokenInput, setTokenInput] = useState("");
+  const [loading, setLoading]       = useState(false);
+  const [errorMsg, setErrorMsg]     = useState("");
 
-  const authUrl = `https://auth.mercadolivre.com.br/authorization?response_type=code&client_id=${ML_CLIENT_ID}&redirect_uri=https://www.google.com`;
-
-  async function handleCode() {
-    if (!code.trim()) return;
-    setStep("loading");
+  async function handleConnect() {
+    const tk = tokenInput.trim();
+    if (!tk) return;
+    setLoading(true); setErrorMsg("");
     try {
-      const res = await fetch("/api/oauth", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          grant_type:   "authorization_code",
-          client_id:    ML_CLIENT_ID,
-          code:         code.trim(),
-          redirect_uri: "https://www.google.com",
-        }),
-      });
-      const data = await res.json();
-      if (!data.access_token) throw new Error(data.message || "Erro ao obter token");
-      saveTokens(data.access_token, data.refresh_token, data.expires_in, data.user_id, "");
-      onConnect(data.access_token, data.user_id);
+      const res = await fetch(ML("/users/me"), { headers: { Authorization: `Bearer ${tk}` } });
+      const me = await res.json();
+      if (!me.id) throw new Error("Token inválido ou expirado");
+      // Salva token — expira em 6h, refresh token não disponível neste fluxo
+      saveTokens(tk, "", 21600, me.id, me.nickname ?? "");
+      onConnect(tk, me.id);
     } catch(e) {
       setErrorMsg(e.message);
-      setStep("error");
     }
+    setLoading(false);
   }
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 24 }}>
-      <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 500, padding: "32px 36px", boxShadow: "0 20px 60px rgba(0,0,0,.15)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+      <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 480, padding: "32px 36px", boxShadow: "0 20px 60px rgba(0,0,0,.15)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <div style={{ fontWeight: 800, fontSize: 18, color: "#0f172a" }}>Conectar Mercado Livre</div>
           <button onClick={onClose} style={{ background: "#f1f5f9", border: "none", color: "#64748b", width: 32, height: 32, borderRadius: 8, cursor: "pointer", fontSize: 16 }}>✕</button>
         </div>
-
-        {step === "init" && (
-          <>
-            <p style={{ color: "#64748b", fontSize: 13, lineHeight: 1.7, marginBottom: 20 }}>
-              Clique no botão abaixo para abrir a página de autorização do Mercado Livre. Após autorizar, copie o código da URL e cole aqui.
-            </p>
-            <a href={authUrl} target="_blank" rel="noreferrer"
-              style={{ display: "block", textAlign: "center", background: "#ffe000", color: "#0f172a", fontWeight: 700, padding: "12px", borderRadius: 10, textDecoration: "none", fontSize: 14, marginBottom: 16 }}>
-              🔗 Abrir autorização no Mercado Livre
-            </a>
-            <button onClick={() => setStep("waiting_code")}
-              style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", color: "#334155", fontWeight: 600, padding: "11px", borderRadius: 10, cursor: "pointer", fontSize: 13 }}>
-              Já autorizei → Colar código
-            </button>
-          </>
-        )}
-
-        {step === "waiting_code" && (
-          <>
-            <p style={{ color: "#64748b", fontSize: 13, lineHeight: 1.7, marginBottom: 6 }}>
-              Após autorizar, você será redirecionado de volta para este site. A URL vai ter um parâmetro <code style={{ fontSize: 11, background: "#f1f5f9", padding: "2px 6px", borderRadius: 4 }}>?code=TG-XXXXXXXX</code>
-            </p>
-            <p style={{ color: "#64748b", fontSize: 13, marginBottom: 16 }}>Copie o valor após <code style={{ fontSize: 11 }}>code=</code> da URL e cole abaixo:</p>
-            <input value={code} onChange={e => setCode(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleCode()}
-              placeholder="TG-XXXXXXXXXX-XXXXXXXXX"
-              style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", color: "#0f172a", padding: "11px 14px", borderRadius: 10, fontFamily: "monospace", fontSize: 13, outline: "none", marginBottom: 16 }} />
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => setStep("init")}
-                style={{ flex: 1, background: "#f8fafc", border: "1px solid #e2e8f0", color: "#64748b", fontWeight: 600, padding: "11px", borderRadius: 10, cursor: "pointer", fontSize: 13 }}>
-                Voltar
-              </button>
-              <button onClick={handleCode} disabled={!code.trim()}
-                style={{ flex: 2, background: !code.trim() ? "#f1f5f9" : "#0f172a", border: "none", color: !code.trim() ? "#94a3b8" : "#fff", fontWeight: 700, padding: "11px", borderRadius: 10, cursor: !code.trim() ? "not-allowed" : "pointer", fontSize: 14 }}>
-                Conectar
-              </button>
-            </div>
-          </>
-        )}
-
-        {step === "loading" && (
-          <div style={{ textAlign: "center", padding: "24px 0", color: "#94a3b8" }}>
-            <div style={{ fontSize: 28, marginBottom: 12, display: "inline-block", animation: "spin 1s linear infinite" }}>⟳</div>
-            <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-            <div style={{ fontSize: 13 }}>Conectando...</div>
-          </div>
-        )}
-
-        {step === "error" && (
-          <div>
-            <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", fontSize: 13, padding: "12px 16px", borderRadius: 8, marginBottom: 16 }}>⚠ {errorMsg}</div>
-            <button onClick={() => { setStep("waiting_code"); setCode(""); }}
-              style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", color: "#334155", fontWeight: 600, padding: "11px", borderRadius: 10, cursor: "pointer", fontSize: 13 }}>
-              Tentar novamente
-            </button>
-          </div>
-        )}
+        <p style={{ color: "#64748b", fontSize: 13, lineHeight: 1.7, marginBottom: 20 }}>
+          Cole o token de acesso do Mercado Livre. O token fica salvo no navegador e você só precisa reconectar quando ele expirar (a cada 6 horas).
+        </p>
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>Token de acesso</div>
+          <textarea value={tokenInput} onChange={e => setTokenInput(e.target.value)} placeholder="APP_USR-..." rows={3}
+            style={{ width: "100%", background: "#f8fafc", border: `1px solid ${errorMsg ? "#fca5a5" : "#e2e8f0"}`, color: "#0f172a", padding: "10px 14px", borderRadius: 10, fontFamily: "monospace", fontSize: 12, resize: "none", outline: "none" }} />
+        </div>
+        {errorMsg && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", fontSize: 13, padding: "10px 14px", borderRadius: 8, marginBottom: 16 }}>⚠ {errorMsg}</div>}
+        <button onClick={handleConnect} disabled={loading || !tokenInput.trim()}
+          style={{ width: "100%", background: loading || !tokenInput.trim() ? "#f1f5f9" : "#0f172a", border: "none", color: loading || !tokenInput.trim() ? "#94a3b8" : "#fff", fontWeight: 700, padding: "12px", borderRadius: 10, cursor: loading || !tokenInput.trim() ? "not-allowed" : "pointer", fontSize: 14 }}>
+          {loading ? "Verificando..." : "Conectar"}
+        </button>
       </div>
     </div>
   );

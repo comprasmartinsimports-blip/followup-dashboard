@@ -206,21 +206,18 @@ async function fetchPromoPrice(itemId, tk) {
 }
 
 
-function getOrderStatusInfo(status, tags, fulfilled) {
+function getOrderStatusInfo(status, tags, fulfilled, shipmentStatus) {
   const isMediation = tags?.some(t => t.includes("mediation")) || status === "in_mediation";
   const isRefunded = tags?.some(t => t.includes("refund"));
-  const isDelivered = tags?.some(t => t === "delivered");
-  const isNotDelivered = tags?.some(t => t === "not_delivered");
-  // Devolvido = cancelado após entrega ou com reembolso
+  const isDelivered = tags?.some(t => t === "delivered") || shipmentStatus === "delivered";
   const isDevolvido = isRefunded || (status === "cancelled" && isDelivered);
   if (isDevolvido) return { label: "Devolvido", color: "#7c3aed", bg: "#f5f3ff" };
   if (isMediation) return { label: "Em disputa", color: "#d97706", bg: "#fffbeb" };
   if (status === "cancelled") return { label: "Cancelado", color: "#dc2626", bg: "#fef2f2" };
-  if (status === "paid" && isDelivered) return { label: "Entregue", color: "#0369a1", bg: "#eff6ff" };
-  // Enviado = fulfilled=true ou tag one_shot com not_delivered (já postado, aguardando entrega)
-  const isEnviado = fulfilled === true || tags?.some(t => t === "one_shot");
-  if (status === "paid" && isEnviado && isNotDelivered) return { label: "Enviado", color: "#0891b2", bg: "#ecfeff" };
-  // Aguardando envio = pago mas não enviado ainda
+  if (isDelivered) return { label: "Entregue", color: "#0369a1", bg: "#eff6ff" };
+  // Enviado = shipment status shipped ou ready_to_ship
+  const isEnviado = ["shipped", "ready_to_ship", "in_transit", "ship_soon"].includes(shipmentStatus);
+  if (status === "paid" && isEnviado) return { label: "Enviado", color: "#0891b2", bg: "#ecfeff" };
   if (status === "paid") return { label: "Ag. Envio", color: "#d97706", bg: "#fffbeb" };
   return { label: status ?? "—", color: "#64748b", bg: "#f8fafc" };
 }
@@ -350,6 +347,7 @@ export default function App() {
   const [realOrders, setRealOrders] = useState([]);
   const [sellerShipping, setSellerShipping] = useState({});
   const [shipmentCosts, setShipmentCosts] = useState({});
+  const [shipmentStatuses, setShipmentStatuses] = useState({});
   const [promos, setPromos] = useState({});
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
@@ -393,21 +391,30 @@ export default function App() {
       // Confirmado: senders[0].save = 28.35 = valor exato debitado do vendedor
       setLoadingMsg("Buscando frete dos pedidos...");
       const orderShippingMap = {};
+      const shipmentStatusMap = {};
       const ordersWithShipping = orders.filter(o => o.shipping?.id);
       for (let i = 0; i < ordersWithShipping.length; i += 5) {
         const batch = ordersWithShipping.slice(i, i + 5);
         await Promise.all(batch.map(async o => {
           try {
-            const res = await fetch(ML(`/shipments/${o.shipping.id}/costs`), { headers: { Authorization: `Bearer ${tk}` } });
-            const data = await res.json();
-            const save = parseFloat(data?.senders?.[0]?.save);
+            // Buscar /costs para frete e /shipments para status
+            const [costsRes, shipRes] = await Promise.all([
+              fetch(ML(`/shipments/${o.shipping.id}/costs`), { headers: { Authorization: `Bearer ${tk}` } }),
+              fetch(ML(`/shipments/${o.shipping.id}`), { headers: { Authorization: `Bearer ${tk}` } })
+            ]);
+            const costsData = await costsRes.json();
+            const shipData = await shipRes.json();
+            const save = parseFloat(costsData?.senders?.[0]?.save);
             orderShippingMap[String(o.id)] = isNaN(save) ? 0 : save;
+            // status: "delivered", "shipped", "ready_to_ship", "pending", etc
+            shipmentStatusMap[String(o.id)] = shipData?.status ?? null;
           } catch { orderShippingMap[String(o.id)] = 0; }
         }));
         if (i % 20 === 0) setShipmentCosts({...orderShippingMap});
         await new Promise(r => setTimeout(r, 100));
       }
       setShipmentCosts({...orderShippingMap});
+      setShipmentStatuses({...shipmentStatusMap});
 
       setLoadingMsg("Buscando promoções...");
       const promoMap = {};
@@ -484,6 +491,7 @@ export default function App() {
       status: o.status ?? "paid",
       tags: o.tags ?? [],
       fulfilled: o.fulfilled,
+      shipment_status: shipmentStatuses[String(o.id)] ?? null,
     };
   });
 
@@ -565,24 +573,23 @@ export default function App() {
     // Status: cancelado = status cancelled SEM tag de devolução
     // Devolvido = tem tag "not_delivered" + "not_paid" OU mediação com cancelamento
     if (orderStatusFilter === "waiting") {
-      // Aguardando envio = pago, não entregue e não enviado ainda
       results = results.filter(o => {
         if (o.status !== "paid") return false;
-        if (o.tags?.some(t => t === "delivered")) return false;
         if (o.tags?.some(t => t.includes("refund"))) return false;
-        const isEnviado = o.fulfilled === true || o.tags?.some(t => t === "one_shot");
+        const isDelivered = o.tags?.some(t => t === "delivered") || o.shipment_status === "delivered";
+        if (isDelivered) return false;
+        const isEnviado = ["shipped","ready_to_ship","in_transit","ship_soon"].includes(o.shipment_status);
         return !isEnviado;
       });
     } else if (orderStatusFilter === "done") {
-      // Concluído = pago e entregue
-      results = results.filter(o => o.status === "paid" && o.tags?.some(t => t === "delivered"));
+      results = results.filter(o => o.status === "paid" && (o.tags?.some(t => t === "delivered") || o.shipment_status === "delivered"));
     } else if (orderStatusFilter === "shipped") {
-      // Enviado = pago, não entregue ainda, mas já postado
       results = results.filter(o => {
         if (o.status !== "paid") return false;
-        if (o.tags?.some(t => t === "delivered")) return false;
         if (o.tags?.some(t => t.includes("refund"))) return false;
-        return o.fulfilled === true || o.tags?.some(t => t === "one_shot");
+        const isDelivered = o.tags?.some(t => t === "delivered") || o.shipment_status === "delivered";
+        if (isDelivered) return false;
+        return ["shipped","ready_to_ship","in_transit","ship_soon"].includes(o.shipment_status);
       });
     } else if (orderStatusFilter === "cancelled") {
       results = results.filter(o => o.status === "cancelled" && !o.tags?.some(t => t === "delivered") && !o.tags?.some(t => t.includes("refund")));
@@ -955,7 +962,7 @@ export default function App() {
                         <td style={{ color: "#64748b", fontSize: 12, fontFamily: "monospace", fontWeight: 600 }}>#{o.id}</td>
                         <td>
                           {(() => {
-                            const s = getOrderStatusInfo(o.status, o.tags, o.fulfilled);
+                            const s = getOrderStatusInfo(o.status, o.tags, o.fulfilled, o.shipment_status);
                             return <span style={{ fontSize: 11, fontWeight: 600, color: s.color, background: s.bg, padding: "3px 8px", borderRadius: 6, whiteSpace: "nowrap" }}>{s.label}</span>;
                           })()}
                         </td>

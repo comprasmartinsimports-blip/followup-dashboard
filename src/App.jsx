@@ -206,21 +206,22 @@ async function fetchPromoPrice(itemId, tk) {
 }
 
 
-function getOrderStatusInfo(status, tags) {
+function getOrderStatusInfo(status, tags, fulfilled) {
   const isMediation = tags?.some(t => t.includes("mediation")) || status === "in_mediation";
   const isRefunded = tags?.some(t => t.includes("refund"));
   const isDelivered = tags?.some(t => t === "delivered");
   const isNotDelivered = tags?.some(t => t === "not_delivered");
-  // Devolvido = cancelado após ter sido pago/entregue, ou com tag de reembolso
+  // Devolvido = cancelado após entrega ou com reembolso
   const isDevolvido = isRefunded || (status === "cancelled" && isDelivered);
   if (isDevolvido) return { label: "Devolvido", color: "#7c3aed", bg: "#f5f3ff" };
   if (isMediation) return { label: "Em disputa", color: "#d97706", bg: "#fffbeb" };
-  // Cancelado = status cancelled sem entrega prévia
   if (status === "cancelled") return { label: "Cancelado", color: "#dc2626", bg: "#fef2f2" };
-  // Atendido = pago e entregue
   if (status === "paid" && isDelivered) return { label: "Entregue", color: "#0369a1", bg: "#eff6ff" };
-  // Atendido = pago aguardando envio ou em trânsito
-  if (status === "paid") return { label: "Ag. Envio", color: "#15803d", bg: "#f0fdf4" };
+  // Enviado = fulfilled=true ou tag one_shot com not_delivered (já postado, aguardando entrega)
+  const isEnviado = fulfilled === true || tags?.some(t => t === "one_shot");
+  if (status === "paid" && isEnviado && isNotDelivered) return { label: "Enviado", color: "#0891b2", bg: "#ecfeff" };
+  // Aguardando envio = pago mas não enviado ainda
+  if (status === "paid") return { label: "Ag. Envio", color: "#d97706", bg: "#fffbeb" };
   return { label: status ?? "—", color: "#64748b", bg: "#f8fafc" };
 }
 
@@ -482,6 +483,7 @@ export default function App() {
       permalink: item?.item?.id ? `https://www.mercadolivre.com.br/p/${item.item.id}` : null,
       status: o.status ?? "paid",
       tags: o.tags ?? [],
+      fulfilled: o.fulfilled,
     };
   });
 
@@ -563,11 +565,25 @@ export default function App() {
     // Status: cancelado = status cancelled SEM tag de devolução
     // Devolvido = tem tag "not_delivered" + "not_paid" OU mediação com cancelamento
     if (orderStatusFilter === "waiting") {
-      // Aguardando envio = pago mas não entregue
-      results = results.filter(o => o.status === "paid" && !o.tags?.some(t => t === "delivered") && !o.tags?.some(t => t.includes("refund")));
+      // Aguardando envio = pago, não entregue e não enviado ainda
+      results = results.filter(o => {
+        if (o.status !== "paid") return false;
+        if (o.tags?.some(t => t === "delivered")) return false;
+        if (o.tags?.some(t => t.includes("refund"))) return false;
+        const isEnviado = o.fulfilled === true || o.tags?.some(t => t === "one_shot");
+        return !isEnviado;
+      });
     } else if (orderStatusFilter === "done") {
       // Concluído = pago e entregue
       results = results.filter(o => o.status === "paid" && o.tags?.some(t => t === "delivered"));
+    } else if (orderStatusFilter === "shipped") {
+      // Enviado = pago, não entregue ainda, mas já postado
+      results = results.filter(o => {
+        if (o.status !== "paid") return false;
+        if (o.tags?.some(t => t === "delivered")) return false;
+        if (o.tags?.some(t => t.includes("refund"))) return false;
+        return o.fulfilled === true || o.tags?.some(t => t === "one_shot");
+      });
     } else if (orderStatusFilter === "cancelled") {
       results = results.filter(o => o.status === "cancelled" && !o.tags?.some(t => t === "delivered") && !o.tags?.some(t => t.includes("refund")));
     } else if (orderStatusFilter === "refunded") {
@@ -901,6 +917,7 @@ export default function App() {
                 {[
                   { key: "all", label: "Todos" },
                   { key: "waiting", label: "⏳ Ag. envio" },
+                  { key: "shipped", label: "🚚 Enviados" },
                   { key: "done", label: "✓ Concluídos" },
                   { key: "cancelled", label: "✗ Cancelados" },
                   { key: "refunded", label: "↩ Devolvidos" },
@@ -938,7 +955,7 @@ export default function App() {
                         <td style={{ color: "#64748b", fontSize: 12, fontFamily: "monospace", fontWeight: 600 }}>#{o.id}</td>
                         <td>
                           {(() => {
-                            const s = getOrderStatusInfo(o.status, o.tags);
+                            const s = getOrderStatusInfo(o.status, o.tags, o.fulfilled);
                             return <span style={{ fontSize: 11, fontWeight: 600, color: s.color, background: s.bg, padding: "3px 8px", borderRadius: 6, whiteSpace: "nowrap" }}>{s.label}</span>;
                           })()}
                         </td>

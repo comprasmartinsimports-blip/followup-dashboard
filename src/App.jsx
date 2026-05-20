@@ -206,49 +206,19 @@ async function fetchPromoPrice(itemId, tk) {
 }
 
 
-// Mapeamento de status do ML Shipments para labels do dashboard
-// Referência: https://developers.mercadolivre.com.br/pt_br/gestao-de-envios
-// pending        → pedido pago, aguardando impressão da etiqueta
-// handling       → etiqueta impressa, aguardando postagem
-// ready_to_ship  → pronto para envio (etiqueta gerada, aguardando coleta/postagem)
-// shipped        → postado, em trânsito para o comprador
-// delivered      → entregue ao comprador
-// not_delivered  → tentativa de entrega falhou
-// cancelled      → envio cancelado
 function getOrderStatusInfo(status, tags, fulfilled, shipmentStatus) {
   const isMediation = tags?.some(t => t.includes("mediation")) || status === "in_mediation";
-  const isRefunded  = tags?.some(t => t.includes("refund"));
-  const isDelivered = shipmentStatus === "delivered" || tags?.some(t => t === "delivered");
-
-  // Devolvido
-  if (isRefunded || (status === "cancelled" && isDelivered))
-    return { label: "Devolvido", color: "#7c3aed", bg: "#f5f3ff" };
-
-  // Em disputa
-  if (isMediation)
-    return { label: "Em disputa", color: "#d97706", bg: "#fffbeb" };
-
-  // Cancelado
-  if (status === "cancelled")
-    return { label: "Cancelado", color: "#dc2626", bg: "#fef2f2" };
-
-  // Entregue
-  if (isDelivered)
-    return { label: "Entregue", color: "#0369a1", bg: "#eff6ff" };
-
-  // Em trânsito / enviado ao comprador
-  // "shipped" = postado na transportadora. "in_transit" = variação do mesmo estado.
-  if (["shipped", "in_transit"].includes(shipmentStatus))
-    return { label: "Enviado", color: "#0891b2", bg: "#ecfeff" };
-
-  // Aguardando envio:
-  // "pending"       = aguardando etiqueta
-  // "handling"      = etiqueta impressa, aguardando postagem
-  // "ready_to_ship" = pronto para envio (NÃO foi postado ainda)
-  // null/undefined  = shipment ainda não carregado, tratar como ag. envio
-  if (status === "paid")
-    return { label: "Ag. Envio", color: "#d97706", bg: "#fffbeb" };
-
+  const isRefunded = tags?.some(t => t.includes("refund"));
+  const isDelivered = tags?.some(t => t === "delivered") || shipmentStatus === "delivered";
+  const isDevolvido = isRefunded || (status === "cancelled" && isDelivered);
+  if (isDevolvido) return { label: "Devolvido", color: "#7c3aed", bg: "#f5f3ff" };
+  if (isMediation) return { label: "Em disputa", color: "#d97706", bg: "#fffbeb" };
+  if (status === "cancelled") return { label: "Cancelado", color: "#dc2626", bg: "#fef2f2" };
+  if (isDelivered) return { label: "Entregue", color: "#0369a1", bg: "#eff6ff" };
+  // Enviado = shipment status shipped ou ready_to_ship
+  const isEnviado = ["shipped", "ready_to_ship", "in_transit", "ship_soon"].includes(shipmentStatus);
+  if (status === "paid" && isEnviado) return { label: "Enviado", color: "#0891b2", bg: "#ecfeff" };
+  if (status === "paid") return { label: "Ag. Envio", color: "#d97706", bg: "#fffbeb" };
   return { label: status ?? "—", color: "#64748b", bg: "#f8fafc" };
 }
 
@@ -328,36 +298,226 @@ function AIPanel({ listing, onClose }) {
   );
 }
 
-function TokenModal({ onConnect }) {
-  const [tokenInput, setTokenInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  async function handleSubmit() {
-    const tk = tokenInput.trim();
-    if (!tk) return;
-    setLoading(true);
-    onConnect(tk, { nickname: "Minha Conta ML", id: null });
-    setLoading(false);
+// ── Credenciais do dashboard (login de acesso) ──────────────
+// Defina aqui o usuário e senha para proteger o dashboard
+const DASHBOARD_USER = "admin";
+const DASHBOARD_PASS = "martins2026";
+
+// ── Client ID do app ML (para OAuth com refresh token) ──────
+const ML_CLIENT_ID = "6544342798807693";
+
+// ── Salva/lê tokens no localStorage para persistir entre sessões ──
+function saveTokens(accessToken, refreshToken, expiresIn, userId, nickname) {
+  const expiry = Date.now() + (expiresIn * 1000);
+  localStorage.setItem("ml_access_token",  accessToken);
+  localStorage.setItem("ml_refresh_token", refreshToken);
+  localStorage.setItem("ml_token_expiry",  String(expiry));
+  localStorage.setItem("ml_user_id",       String(userId));
+  localStorage.setItem("ml_nickname",      nickname || "");
+}
+
+function loadSavedTokens() {
+  const tk      = localStorage.getItem("ml_access_token");
+  const refresh = localStorage.getItem("ml_refresh_token");
+  const expiry  = parseInt(localStorage.getItem("ml_token_expiry") || "0");
+  const userId  = localStorage.getItem("ml_user_id");
+  const nick    = localStorage.getItem("ml_nickname");
+  if (!tk || !refresh) return null;
+  return { accessToken: tk, refreshToken: refresh, expiry, userId, nickname: nick };
+}
+
+function clearSavedTokens() {
+  ["ml_access_token","ml_refresh_token","ml_token_expiry","ml_user_id","ml_nickname"]
+    .forEach(k => localStorage.removeItem(k));
+}
+
+// Renova o access token via refresh token (chamado automaticamente)
+async function refreshAccessToken(refreshToken) {
+  const res = await fetch("/api/ml/oauth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      grant_type:    "refresh_token",
+      client_id:     ML_CLIENT_ID,
+      refresh_token: refreshToken,
+    }),
+  });
+  const data = await res.json();
+  if (!data.access_token) throw new Error("Falha ao renovar token");
+  return data;
+}
+
+// ── Tela de Login do Dashboard ───────────────────────────────
+function LoginScreen({ onLogin }) {
+  const [user, setUser]   = useState("");
+  const [pass, setPass]   = useState("");
+  const [error, setError] = useState("");
+  const [show, setShow]   = useState(false);
+
+  function handleLogin() {
+    if (user === DASHBOARD_USER && pass === DASHBOARD_PASS) {
+      sessionStorage.setItem("dash_auth", "1");
+      onLogin();
+    } else {
+      setError("Usuário ou senha incorretos");
+      setPass("");
+    }
   }
+
+  if (!isLoggedIn) return <LoginScreen onLogin={() => setIsLoggedIn(true)} />;
+
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 24 }}>
-      <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 480, padding: "32px 36px", boxShadow: "0 20px 60px rgba(0,0,0,.15)" }}>
-        <div style={{ fontWeight: 800, fontSize: 20, color: "#0f172a", marginBottom: 6 }}>Conectar Mercado Livre</div>
-        <p style={{ color: "#64748b", fontSize: 13, lineHeight: 1.7, marginBottom: 24 }}>Cole o token gerado via Terminal para conectar sua conta.</p>
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>Token de acesso</div>
-          <textarea value={tokenInput} onChange={e => setTokenInput(e.target.value)} placeholder="APP_USR-..." rows={3}
-            style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", color: "#0f172a", padding: "10px 14px", borderRadius: 10, fontFamily: "monospace", fontSize: 12, resize: "none", outline: "none" }} />
+    <div style={{ minHeight: "100vh", background: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter','Segoe UI',sans-serif" }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');*{box-sizing:border-box;margin:0;padding:0}`}</style>
+      <div style={{ background: "#fff", borderRadius: 20, width: "100%", maxWidth: 420, padding: "40px 40px 36px", boxShadow: "0 20px 60px rgba(0,0,0,.10)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 32 }}>
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: "#0f172a", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 20, color: "#ffe000" }}>M</div>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 18, color: "#0f172a" }}>ML Margem</div>
+            <div style={{ fontSize: 11, color: "#94a3b8", letterSpacing: 0.5 }}>DASHBOARD DE LUCRATIVIDADE</div>
+          </div>
         </div>
-        <button onClick={handleSubmit} disabled={loading || !tokenInput.trim()}
-          style={{ width: "100%", background: loading ? "#f1f5f9" : "#0f172a", border: "none", color: loading ? "#94a3b8" : "#fff", fontWeight: 700, padding: "12px", borderRadius: 10, cursor: loading ? "not-allowed" : "pointer", fontSize: 14 }}>
-          {loading ? "Conectando..." : "Conectar"}
+
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 6, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>Usuário</div>
+          <input value={user} onChange={e => { setUser(e.target.value); setError(""); }}
+            onKeyDown={e => e.key === "Enter" && handleLogin()}
+            placeholder="Digite seu usuário"
+            style={{ width: "100%", background: "#f8fafc", border: `1px solid ${error ? "#fca5a5" : "#e2e8f0"}`, color: "#0f172a", padding: "11px 14px", borderRadius: 10, fontSize: 14, outline: "none", fontFamily: "inherit" }} />
+        </div>
+
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 6, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>Senha</div>
+          <div style={{ position: "relative" }}>
+            <input type={show ? "text" : "password"} value={pass}
+              onChange={e => { setPass(e.target.value); setError(""); }}
+              onKeyDown={e => e.key === "Enter" && handleLogin()}
+              placeholder="Digite sua senha"
+              style={{ width: "100%", background: "#f8fafc", border: `1px solid ${error ? "#fca5a5" : "#e2e8f0"}`, color: "#0f172a", padding: "11px 42px 11px 14px", borderRadius: 10, fontSize: 14, outline: "none", fontFamily: "inherit" }} />
+            <button onClick={() => setShow(s => !s)}
+              style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 16 }}>
+              {show ? "🙈" : "👁"}
+            </button>
+          </div>
+        </div>
+
+        {error && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", fontSize: 13, padding: "10px 14px", borderRadius: 8, marginBottom: 16, fontWeight: 500 }}>⚠ {error}</div>}
+
+        <button onClick={handleLogin} disabled={!user || !pass}
+          style={{ width: "100%", background: !user || !pass ? "#f1f5f9" : "#0f172a", border: "none", color: !user || !pass ? "#94a3b8" : "#fff", fontWeight: 700, padding: "13px", borderRadius: 10, cursor: !user || !pass ? "not-allowed" : "pointer", fontSize: 15 }}>
+          Entrar
         </button>
       </div>
     </div>
   );
 }
 
+// ── Modal OAuth ML ───────────────────────────────────────────
+function MLConnectModal({ onConnect, onClose }) {
+  const [step, setStep]     = useState("init"); // init | waiting_code | loading | error
+  const [code, setCode]     = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const authUrl = `https://auth.mercadolivre.com.br/authorization?response_type=code&client_id=${ML_CLIENT_ID}&redirect_uri=https://www.google.com`;
+
+  async function handleCode() {
+    if (!code.trim()) return;
+    setStep("loading");
+    try {
+      const res = await fetch("/api/ml/oauth/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          grant_type:   "authorization_code",
+          client_id:    ML_CLIENT_ID,
+          code:         code.trim(),
+          redirect_uri: "https://www.google.com",
+        }),
+      });
+      const data = await res.json();
+      if (!data.access_token) throw new Error(data.message || "Erro ao obter token");
+      saveTokens(data.access_token, data.refresh_token, data.expires_in, data.user_id, "");
+      onConnect(data.access_token, data.user_id);
+    } catch(e) {
+      setErrorMsg(e.message);
+      setStep("error");
+    }
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 24 }}>
+      <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 500, padding: "32px 36px", boxShadow: "0 20px 60px rgba(0,0,0,.15)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+          <div style={{ fontWeight: 800, fontSize: 18, color: "#0f172a" }}>Conectar Mercado Livre</div>
+          <button onClick={onClose} style={{ background: "#f1f5f9", border: "none", color: "#64748b", width: 32, height: 32, borderRadius: 8, cursor: "pointer", fontSize: 16 }}>✕</button>
+        </div>
+
+        {step === "init" && (
+          <>
+            <p style={{ color: "#64748b", fontSize: 13, lineHeight: 1.7, marginBottom: 20 }}>
+              Clique no botão abaixo para abrir a página de autorização do Mercado Livre. Após autorizar, copie o código da URL e cole aqui.
+            </p>
+            <a href={authUrl} target="_blank" rel="noreferrer"
+              style={{ display: "block", textAlign: "center", background: "#ffe000", color: "#0f172a", fontWeight: 700, padding: "12px", borderRadius: 10, textDecoration: "none", fontSize: 14, marginBottom: 16 }}>
+              🔗 Abrir autorização no Mercado Livre
+            </a>
+            <button onClick={() => setStep("waiting_code")}
+              style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", color: "#334155", fontWeight: 600, padding: "11px", borderRadius: 10, cursor: "pointer", fontSize: 13 }}>
+              Já autorizei → Colar código
+            </button>
+          </>
+        )}
+
+        {step === "waiting_code" && (
+          <>
+            <p style={{ color: "#64748b", fontSize: 13, lineHeight: 1.7, marginBottom: 6 }}>
+              Após autorizar, a URL vai ficar assim:<br/>
+              <code style={{ fontSize: 11, background: "#f1f5f9", padding: "2px 6px", borderRadius: 4 }}>https://www.google.com/?code=<b>TG-XXXXXXXX</b>&...</code>
+            </p>
+            <p style={{ color: "#64748b", fontSize: 13, marginBottom: 16 }}>Copie o valor após <code style={{ fontSize: 11 }}>code=</code> e cole abaixo:</p>
+            <input value={code} onChange={e => setCode(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleCode()}
+              placeholder="TG-XXXXXXXXXX-XXXXXXXXX"
+              style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", color: "#0f172a", padding: "11px 14px", borderRadius: 10, fontFamily: "monospace", fontSize: 13, outline: "none", marginBottom: 16 }} />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setStep("init")}
+                style={{ flex: 1, background: "#f8fafc", border: "1px solid #e2e8f0", color: "#64748b", fontWeight: 600, padding: "11px", borderRadius: 10, cursor: "pointer", fontSize: 13 }}>
+                Voltar
+              </button>
+              <button onClick={handleCode} disabled={!code.trim()}
+                style={{ flex: 2, background: !code.trim() ? "#f1f5f9" : "#0f172a", border: "none", color: !code.trim() ? "#94a3b8" : "#fff", fontWeight: 700, padding: "11px", borderRadius: 10, cursor: !code.trim() ? "not-allowed" : "pointer", fontSize: 14 }}>
+                Conectar
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === "loading" && (
+          <div style={{ textAlign: "center", padding: "24px 0", color: "#94a3b8" }}>
+            <div style={{ fontSize: 28, marginBottom: 12, display: "inline-block", animation: "spin 1s linear infinite" }}>⟳</div>
+            <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+            <div style={{ fontSize: 13 }}>Conectando...</div>
+          </div>
+        )}
+
+        {step === "error" && (
+          <div>
+            <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", fontSize: 13, padding: "12px 16px", borderRadius: 8, marginBottom: 16 }}>⚠ {errorMsg}</div>
+            <button onClick={() => { setStep("waiting_code"); setCode(""); }}
+              style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", color: "#334155", fontWeight: 600, padding: "11px", borderRadius: 10, cursor: "pointer", fontSize: 13 }}>
+              Tentar novamente
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
+  // ── Auth do dashboard ─────────────────────────────────────
+  const [isLoggedIn, setIsLoggedIn] = useState(() => sessionStorage.getItem("dash_auth") === "1");
+
   const [tab, setTab] = useState("listings");
   const [costs, setCosts] = useState({});
   const [minStock, setMinStock] = useState({});
@@ -371,8 +531,11 @@ export default function App() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [token, setToken] = useState(null);
-  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(() => loadSavedTokens()?.accessToken ?? null);
+  const [user, setUser] = useState(() => {
+    const s = loadSavedTokens();
+    return s ? { nickname: s.nickname, id: s.userId } : null;
+  });
   const [realListings, setRealListings] = useState([]);
   const [realOrders, setRealOrders] = useState([]);
   const [sellerShipping, setSellerShipping] = useState({});
@@ -381,27 +544,47 @@ export default function App() {
   const [promos, setPromos] = useState({});
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
-  const [showTokenModal, setShowTokenModal] = useState(false);
+  const [showMLModal, setShowMLModal] = useState(false);
   const [loadError, setLoadError] = useState(null);
 
   const usingMock = !token || realListings.length === 0;
 
-  async function handleConnect(tk, userData) {
-    setToken(tk); setUser(userData); setShowTokenModal(false);
+  // Renova token automaticamente se estiver próximo de vencer
+  async function getValidToken() {
+    const saved = loadSavedTokens();
+    if (!saved) return token;
+    // Renova se vence em menos de 10 minutos
+    if (saved.expiry - Date.now() < 600000 && saved.refreshToken) {
+      try {
+        const data = await refreshAccessToken(saved.refreshToken);
+        saveTokens(data.access_token, data.refresh_token, data.expires_in, saved.userId, user?.nickname || "");
+        setToken(data.access_token);
+        return data.access_token;
+      } catch(e) { console.warn("Falha ao renovar token:", e); }
+    }
+    return saved.accessToken;
+  }
+
+  async function handleConnect(tk, userId) {
+    const validTk = tk;
+    setToken(validTk); setShowMLModal(false);
     setLoading(true); setLoadError(null);
     try {
       setLoadingMsg("Identificando conta...");
-      const meRes = await fetch(ML("/users/me"), { headers: { Authorization: `Bearer ${tk}` } });
+      const meRes = await fetch(ML("/users/me"), { headers: { Authorization: `Bearer ${validTk}` } });
       const me = await meRes.json();
       if (!me.id) throw new Error("Token inválido");
       setUser({ nickname: me.nickname ?? "Minha Conta ML", id: me.id });
+      // Atualiza nickname salvo
+      const saved = loadSavedTokens();
+      if (saved) saveTokens(saved.accessToken, saved.refreshToken, (saved.expiry - Date.now()) / 1000, me.id, me.nickname);
 
       setLoadingMsg("Buscando anúncios...");
-      const listings = await fetchAllListings(me.id, tk);
+      const listings = await fetchAllListings(me.id, validTk);
       setRealListings(listings);
 
       setLoadingMsg("Buscando pedidos...");
-      const orders = await fetchAllOrders(me.id, tk);
+      const orders = await fetchAllOrders(me.id, validTk);
       setRealOrders(orders);
       // Guardar temporariamente para usar depois
 
@@ -410,7 +593,7 @@ export default function App() {
       for (let i = 0; i < listings.length; i += 5) {
         const batch = listings.slice(i, i + 5);
         const results = await Promise.all(
-          batch.map(l => fetchSellerShippingCost(l.id, me.id, tk).then(cost => ({ id: l.id, cost })))
+          batch.map(l => fetchSellerShippingCost(l.id, me.id, validTk).then(cost => ({ id: l.id, cost })))
         );
         results.forEach(r => { shippingMap[r.id] = r.cost; });
         if (i % 50 === 0) setLoadingMsg(`Buscando frete... ${Math.min(i + 5, listings.length)}/${listings.length}`);
@@ -418,34 +601,31 @@ export default function App() {
       setSellerShipping(shippingMap);
 
       // Buscar frete real via /shipments/{id}/costs → senders[0].save
-      // E status real via /shipments/{id} → status (fonte mais confiável e atualizada)
-      setLoadingMsg("Buscando frete e status dos pedidos...");
+      // Confirmado: senders[0].save = 28.35 = valor exato debitado do vendedor
+      setLoadingMsg("Buscando frete dos pedidos...");
       const orderShippingMap = {};
       const shipmentStatusMap = {};
       const ordersWithShipping = orders.filter(o => o.shipping?.id);
       for (let i = 0; i < ordersWithShipping.length; i += 5) {
         const batch = ordersWithShipping.slice(i, i + 5);
         await Promise.all(batch.map(async o => {
-          const oid = String(o.id);
           try {
+            // Buscar /costs para frete e /shipments para status
             const [costsRes, shipRes] = await Promise.all([
-              fetch(ML(`/shipments/${o.shipping.id}/costs`), { headers: { Authorization: `Bearer ${tk}` } }),
-              fetch(ML(`/shipments/${o.shipping.id}`),       { headers: { Authorization: `Bearer ${tk}` } }),
+              fetch(ML(`/shipments/${o.shipping.id}/costs`), { headers: { Authorization: `Bearer ${validTk}` } }),
+              fetch(ML(`/shipments/${o.shipping.id}`), { headers: { Authorization: `Bearer ${tk}` } })
             ]);
             const costsData = await costsRes.json();
-            const shipData  = await shipRes.json();
+            const shipData = await shipRes.json();
             const save = parseFloat(costsData?.senders?.[0]?.save);
-            orderShippingMap[oid] = isNaN(save) ? 0 : save;
-            // Salva o status real do envio (shipped, delivered, ready_to_ship, etc.)
-            if (shipData?.status) shipmentStatusMap[oid] = shipData.status;
-          } catch { orderShippingMap[oid] = 0; }
+            orderShippingMap[String(o.id)] = isNaN(save) ? 0 : save;
+            // status: "delivered", "shipped", "ready_to_ship", "pending", etc
+            shipmentStatusMap[String(o.id)] = shipData?.status ?? null;
+          } catch { orderShippingMap[String(o.id)] = 0; }
         }));
-        // Atualiza estado a cada batch para a UI reagir progressivamente
-        setShipmentCosts({...orderShippingMap});
-        setShipmentStatuses({...shipmentStatusMap});
+        if (i % 20 === 0) setShipmentCosts({...orderShippingMap});
         await new Promise(r => setTimeout(r, 100));
       }
-      // Garante estado final completo
       setShipmentCosts({...orderShippingMap});
       setShipmentStatuses({...shipmentStatusMap});
 
@@ -454,7 +634,7 @@ export default function App() {
       for (let i = 0; i < listings.length; i += 10) {
         const batch = listings.slice(i, i + 10);
         const results = await Promise.all(
-          batch.map(l => fetchPromoPrice(l.id, tk).then(promo => ({ id: l.id, promo })))
+          batch.map(l => fetchPromoPrice(l.id, validTk).then(promo => ({ id: l.id, promo })))
         );
         results.forEach(r => { if (r.promo) promoMap[r.id] = r.promo; });
       }
@@ -509,14 +689,10 @@ export default function App() {
 
   const rawOrders = usingMock ? MOCK_ORDERS : realOrders.map(o => {
     const item = o.order_items?.[0];
-    const oid = String(o.id);
     const buyerShippingCost = parseFloat(o.payments?.[0]?.shipping_cost) || 0;
-    const shipmentCost = shipmentCosts[oid] ?? 0;
-    // shipment_status: usa o mapa buscado de /shipments/{id} (fonte real e atualizada).
-    // NÃO usa o.shipping?.status — esse campo na listagem de pedidos é desatualizado.
-    const shipment_status = shipmentStatuses[oid] ?? null;
+    const shipmentCost = shipmentCosts[String(o.id)] ?? 0;
     return {
-      id: oid,
+      id: String(o.id),
       listing_id: item?.item?.id,
       title: item?.item?.title ?? null,
       date: o.date_created?.slice(0, 10),
@@ -528,7 +704,7 @@ export default function App() {
       status: o.status ?? "paid",
       tags: o.tags ?? [],
       fulfilled: o.fulfilled,
-      shipment_status,
+      shipment_status: shipmentStatuses[String(o.id)] ?? null,
     };
   });
 
@@ -610,26 +786,23 @@ export default function App() {
     // Status: cancelado = status cancelled SEM tag de devolução
     // Devolvido = tem tag "not_delivered" + "not_paid" OU mediação com cancelamento
     if (orderStatusFilter === "waiting") {
-      // Ag. Envio = paid, não entregue, e NÃO postado (não é shipped nem in_transit)
       results = results.filter(o => {
         if (o.status !== "paid") return false;
         if (o.tags?.some(t => t.includes("refund"))) return false;
-        const isDelivered = o.shipment_status === "delivered" || o.tags?.some(t => t === "delivered");
+        const isDelivered = o.tags?.some(t => t === "delivered") || o.shipment_status === "delivered";
         if (isDelivered) return false;
-        // Se já foi postado = não é "ag. envio"
-        return !["shipped", "in_transit"].includes(o.shipment_status);
+        const isEnviado = ["shipped","ready_to_ship","in_transit","ship_soon"].includes(o.shipment_status);
+        return !isEnviado;
       });
     } else if (orderStatusFilter === "done") {
       results = results.filter(o => o.status === "paid" && (o.tags?.some(t => t === "delivered") || o.shipment_status === "delivered"));
     } else if (orderStatusFilter === "shipped") {
-      // Apenas pedidos com postagem confirmada (shipped/in_transit)
-      // ready_to_ship = pronto p/ envio mas NÃO postado → fica em "Ag. Envio"
       results = results.filter(o => {
         if (o.status !== "paid") return false;
         if (o.tags?.some(t => t.includes("refund"))) return false;
-        const isDelivered = o.shipment_status === "delivered" || o.tags?.some(t => t === "delivered");
+        const isDelivered = o.tags?.some(t => t === "delivered") || o.shipment_status === "delivered";
         if (isDelivered) return false;
-        return ["shipped", "in_transit"].includes(o.shipment_status);
+        return ["shipped","ready_to_ship","in_transit","ship_soon"].includes(o.shipment_status);
       });
     } else if (orderStatusFilter === "cancelled") {
       results = results.filter(o => o.status === "cancelled" && !o.tags?.some(t => t === "delivered") && !o.tags?.some(t => t.includes("refund")));
@@ -723,7 +896,7 @@ export default function App() {
           {token && <span style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#15803d", fontSize: 11, padding: "3px 12px", borderRadius: 20, fontWeight: 600 }}>● {user?.nickname}</span>}
           {loading && <span style={{ color: "#94a3b8", fontSize: 12 }}>⏳ {loadingMsg}</span>}
           {loadError && <span style={{ color: "#dc2626", fontSize: 12 }}>⚠ {loadError}</span>}
-          <button onClick={() => setShowTokenModal(true)} style={{ background: "#0f172a", border: "none", color: "#fff", fontWeight: 700, padding: "8px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>
+          <button onClick={() => setShowMLModal(true)} style={{ background: "#0f172a", border: "none", color: "#fff", fontWeight: 700, padding: "8px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>
             {token ? "Reconectar" : "Conectar ML"}
           </button>
         </div>
@@ -1037,7 +1210,7 @@ export default function App() {
         )}
       </main>
 
-      {showTokenModal && <TokenModal onConnect={handleConnect} />}
+      {showMLModal && <MLConnectModal onConnect={handleConnect} onClose={() => setShowMLModal(false)} />}
       {selectedListing && <AIPanel listing={selectedListing} onClose={() => setSelectedListing(null)} />}
     </div>
   );

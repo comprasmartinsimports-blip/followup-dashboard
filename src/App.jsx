@@ -461,6 +461,460 @@ function MLConnectModal({ onConnect, onClose }) {
   );
 }
 
+
+// ════════════════════════════════════════════════════════════
+//  FINANCEIRO — Contas a Pagar + Contas a Receber + Relatórios
+// ════════════════════════════════════════════════════════════
+
+const CATEGORIAS_PAGAR = ["Fornecedor", "Aluguel", "Funcionário", "Marketing", "Frete", "Impostos", "Outros"];
+const STATUS_PAGAR = ["Pendente", "Pago", "Vencido"];
+
+function saveContasPagar(contas) {
+  try { localStorage.setItem("contas_pagar", JSON.stringify(contas)); } catch {}
+}
+
+function fmtDate(dateStr) {
+  if (!dateStr) return "—";
+  const [y, m, d] = dateStr.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+function getDaysUntil(dateStr) {
+  if (!dateStr) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const due = new Date(dateStr + "T00:00:00");
+  return Math.round((due - today) / 86400000);
+}
+
+function ModalConta({ conta, onSave, onClose }) {
+  const [form, setForm] = useState(conta || {
+    id: Date.now(),
+    descricao: "", categoria: "Fornecedor", valor: "",
+    vencimento: "", status: "Pendente", observacao: ""
+  });
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:400, padding:24 }}>
+      <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:500, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+          <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>{conta ? "Editar Conta" : "Nova Conta a Pagar"}</div>
+          <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
+          <div style={{ gridColumn:"1/-1" }}>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Descrição *</div>
+            <input value={form.descricao} onChange={e => set("descricao", e.target.value)} placeholder="Ex: Nota fiscal fornecedor X"
+              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+          </div>
+          <div>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Categoria</div>
+            <select value={form.categoria} onChange={e => set("categoria", e.target.value)}
+              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", padding:"9px 12px", borderRadius:8, fontSize:13 }}>
+              {CATEGORIAS_PAGAR.map(c => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Valor (R$) *</div>
+            <input type="number" value={form.valor} onChange={e => set("valor", e.target.value)} placeholder="0,00"
+              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+          </div>
+          <div>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Vencimento</div>
+            <input type="date" value={form.vencimento} onChange={e => set("vencimento", e.target.value)}
+              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", padding:"9px 12px", borderRadius:8, fontSize:13 }} />
+          </div>
+          <div>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Status</div>
+            <select value={form.status} onChange={e => set("status", e.target.value)}
+              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", padding:"9px 12px", borderRadius:8, fontSize:13 }}>
+              {STATUS_PAGAR.map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+          <div style={{ gridColumn:"1/-1" }}>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Observação</div>
+            <input value={form.observacao} onChange={e => set("observacao", e.target.value)} placeholder="Opcional"
+              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+          </div>
+        </div>
+        <div style={{ display:"flex", gap:8 }}>
+          <button onClick={onClose} style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer", fontSize:13 }}>Cancelar</button>
+          <button onClick={() => { if (!form.descricao || !form.valor) return; onSave(form); onClose(); }}
+            disabled={!form.descricao || !form.valor}
+            style={{ flex:2, background:!form.descricao||!form.valor?"#f1f5f9":"#0f172a", border:"none", color:!form.descricao||!form.valor?"#94a3b8":"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:!form.descricao||!form.valor?"not-allowed":"pointer", fontSize:14 }}>
+            Salvar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FinanceiroTab({ contasPagar, setContasPagar, enrichedOrders, rawOrders, shipmentStatuses, finTab, setFinTab }) {
+  const [showModal, setShowModal] = useState(false);
+  const [editingConta, setEditingConta] = useState(null);
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterCat, setFilterCat] = useState("all");
+  const [searchPagar, setSearchPagar] = useState("");
+
+  // ── Contas a Pagar ───────────────────────────────────────
+  const contasFiltradas = useMemo(() => {
+    let r = contasPagar;
+    if (filterStatus !== "all") r = r.filter(c => c.status === filterStatus);
+    if (filterCat !== "all") r = r.filter(c => c.categoria === filterCat);
+    if (searchPagar) r = r.filter(c => c.descricao.toLowerCase().includes(searchPagar.toLowerCase()));
+    // Auto-marcar vencidas
+    r = r.map(c => {
+      if (c.status === "Pendente" && c.vencimento) {
+        const days = getDaysUntil(c.vencimento);
+        if (days !== null && days < 0) return { ...c, status: "Vencido" };
+      }
+      return c;
+    });
+    return r.sort((a, b) => (a.vencimento || "9999") > (b.vencimento || "9999") ? 1 : -1);
+  }, [contasPagar, filterStatus, filterCat, searchPagar]);
+
+  const totalPagar = contasPagar.filter(c => c.status !== "Pago").reduce((s, c) => s + parseFloat(c.valor || 0), 0);
+  const totalPago = contasPagar.filter(c => c.status === "Pago").reduce((s, c) => s + parseFloat(c.valor || 0), 0);
+  const totalVencido = contasPagar.filter(c => c.status === "Vencido").reduce((s, c) => s + parseFloat(c.valor || 0), 0);
+  const vencendo7 = contasPagar.filter(c => c.status === "Pendente" && c.vencimento && getDaysUntil(c.vencimento) !== null && getDaysUntil(c.vencimento) >= 0 && getDaysUntil(c.vencimento) <= 7);
+
+  function saveConta(form) {
+    const updated = editingConta
+      ? contasPagar.map(c => c.id === form.id ? form : c)
+      : [...contasPagar, { ...form, id: Date.now() }];
+    setContasPagar(updated);
+    saveContasPagar(updated);
+    setEditingConta(null);
+  }
+
+  function deleteConta(id) {
+    if (!confirm("Excluir esta conta?")) return;
+    const updated = contasPagar.filter(c => c.id !== id);
+    setContasPagar(updated);
+    saveContasPagar(updated);
+  }
+
+  function togglePago(conta) {
+    const updated = contasPagar.map(c => c.id === conta.id ? { ...c, status: c.status === "Pago" ? "Pendente" : "Pago" } : c);
+    setContasPagar(updated);
+    saveContasPagar(updated);
+  }
+
+  // ── Contas a Receber (ML) ────────────────────────────────
+  const allOrders = rawOrders || [];
+  const hoje = new Date().toLocaleDateString("sv-SE");
+  const mesAtual = hoje.slice(0, 7);
+
+  const aReceber = allOrders.filter(o => {
+    if (o.status !== "paid") return false;
+    const ss = shipmentStatuses[o.id] ?? o.shipment_status;
+    return !["delivered"].includes(ss) && !o.tags?.some(t => t === "delivered");
+  });
+
+  const recebidoMes = allOrders.filter(o => {
+    const ss = shipmentStatuses[o.id] ?? o.shipment_status;
+    const isDelivered = ss === "delivered" || o.tags?.some(t => t === "delivered");
+    return isDelivered && o.date?.startsWith(mesAtual);
+  });
+
+  const totalAReceber = aReceber.reduce((s, o) => s + (o.price * o.qty), 0);
+  const totalRecebidoMes = recebidoMes.reduce((s, o) => s + (o.price * o.qty), 0);
+
+  // ── Resumo / Relatório ────────────────────────────────────
+  const saldoMes = totalRecebidoMes - totalPago;
+  const saldoPrevisto = totalAReceber - totalPagar;
+
+  // Agrupar recebimentos por mês
+  const recebPorMes = {};
+  allOrders.forEach(o => {
+    const ss = shipmentStatuses[o.id] ?? o.shipment_status;
+    const isDelivered = ss === "delivered" || o.tags?.some(t => t === "delivered");
+    if (!isDelivered || !o.date) return;
+    const mes = o.date.slice(0, 7);
+    recebPorMes[mes] = (recebPorMes[mes] || 0) + o.price * o.qty;
+  });
+
+  const pagosPorMes = {};
+  contasPagar.filter(c => c.status === "Pago" && c.vencimento).forEach(c => {
+    const mes = c.vencimento.slice(0, 7);
+    pagosPorMes[mes] = (pagosPorMes[mes] || 0) + parseFloat(c.valor || 0);
+  });
+
+  const meses = [...new Set([...Object.keys(recebPorMes), ...Object.keys(pagosPorMes)])].sort().slice(-6);
+
+  const statusColor = (s) => s === "Pago" ? "#15803d" : s === "Vencido" ? "#dc2626" : "#d97706";
+  const statusBg = (s) => s === "Pago" ? "#f0fdf4" : s === "Vencido" ? "#fef2f2" : "#fffbeb";
+
+  return (
+    <div>
+      {/* Sub-tabs */}
+      <div style={{ display:"flex", gap:2, marginBottom:20, background:"#f1f5f9", padding:4, borderRadius:10, width:"fit-content" }}>
+        {[
+          { key:"resumo", label:"📊 Resumo" },
+          { key:"pagar", label:"📤 Contas a Pagar" },
+          { key:"receber", label:"📥 Contas a Receber" },
+        ].map(t => (
+          <button key={t.key} onClick={() => setFinTab(t.key)}
+            style={{ background:finTab===t.key?"#fff":"transparent", border:"none", color:finTab===t.key?"#0f172a":"#94a3b8", padding:"8px 18px", cursor:"pointer", fontFamily:"inherit", fontSize:13, borderRadius:8, fontWeight:finTab===t.key?700:500, boxShadow:finTab===t.key?"0 1px 3px rgba(0,0,0,.08)":"none" }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── RESUMO ── */}
+      {finTab === "resumo" && (
+        <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+          {/* Cards principais */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))", gap:12 }}>
+            {[
+              { label:"Saldo do Mês", value:fmt(saldoMes), color:saldoMes>=0?"#15803d":"#dc2626", desc:"Recebido ML - Pago" },
+              { label:"Saldo Previsto", value:fmt(saldoPrevisto), color:saldoPrevisto>=0?"#15803d":"#dc2626", desc:"A receber - A pagar" },
+              { label:"A Receber (ML)", value:fmt(totalAReceber), color:"#0891b2", desc:`${aReceber.length} pedidos` },
+              { label:"Recebido no Mês", value:fmt(totalRecebidoMes), color:"#15803d", desc:"Pedidos entregues" },
+              { label:"A Pagar", value:fmt(totalPagar), color:"#d97706", desc:"Contas pendentes" },
+              { label:"Pago no Mês", value:fmt(totalPago), color:"#64748b", desc:"Contas pagas" },
+            ].map(k => (
+              <div key={k.label} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"16px 18px", boxShadow:"0 1px 2px rgba(0,0,0,.04)" }}>
+                <div style={{ fontSize:11, color:"#94a3b8", marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:0.8 }}>{k.label}</div>
+                <div style={{ fontSize:20, fontWeight:800, color:k.color, letterSpacing:-0.5 }}>{k.value}</div>
+                <div style={{ fontSize:11, color:"#94a3b8", marginTop:4 }}>{k.desc}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Alertas */}
+          {(vencendo7.length > 0 || totalVencido > 0) && (
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              {totalVencido > 0 && (
+                <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"12px 16px", display:"flex", alignItems:"center", gap:10 }}>
+                  <span style={{ fontSize:18 }}>⚠️</span>
+                  <div>
+                    <div style={{ fontWeight:700, color:"#dc2626", fontSize:13 }}>Contas Vencidas</div>
+                    <div style={{ fontSize:12, color:"#b91c1c" }}>{contasPagar.filter(c=>c.status==="Vencido").length} conta(s) vencida(s) — Total: {fmt(totalVencido)}</div>
+                  </div>
+                </div>
+              )}
+              {vencendo7.length > 0 && (
+                <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:10, padding:"12px 16px", display:"flex", alignItems:"center", gap:10 }}>
+                  <span style={{ fontSize:18 }}>🔔</span>
+                  <div>
+                    <div style={{ fontWeight:700, color:"#d97706", fontSize:13 }}>Vencendo em 7 dias</div>
+                    <div style={{ fontSize:12, color:"#92400e" }}>{vencendo7.map(c => `${c.descricao} (${fmtDate(c.vencimento)})`).join(", ")}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Gráfico de barras por mês */}
+          {meses.length > 0 && (
+            <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"20px 24px", boxShadow:"0 1px 3px rgba(0,0,0,.04)" }}>
+              <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", marginBottom:16 }}>Entradas vs Saídas por Mês</div>
+              <div style={{ display:"flex", gap:8, alignItems:"flex-end", height:140 }}>
+                {meses.map(mes => {
+                  const rec = recebPorMes[mes] || 0;
+                  const pag = pagosPorMes[mes] || 0;
+                  const max = Math.max(...meses.map(m => Math.max(recebPorMes[m]||0, pagosPorMes[m]||0)), 1);
+                  const [y, m] = mes.split("-");
+                  const label = `${m}/${y.slice(2)}`;
+                  return (
+                    <div key={mes} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
+                      <div style={{ width:"100%", display:"flex", gap:2, alignItems:"flex-end", height:100 }}>
+                        <div style={{ flex:1, background:"#15803d", borderRadius:"4px 4px 0 0", height:`${(rec/max)*100}%`, minHeight:2, position:"relative" }}
+                          title={`Recebido: ${fmt(rec)}`} />
+                        <div style={{ flex:1, background:"#dc2626", borderRadius:"4px 4px 0 0", height:`${(pag/max)*100}%`, minHeight:2, opacity:0.7 }}
+                          title={`Pago: ${fmt(pag)}`} />
+                      </div>
+                      <div style={{ fontSize:10, color:"#94a3b8", fontWeight:500 }}>{label}</div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ display:"flex", gap:16, marginTop:12 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}><div style={{ width:12, height:12, background:"#15803d", borderRadius:2 }} /><span style={{ fontSize:12, color:"#64748b" }}>Recebido ML</span></div>
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}><div style={{ width:12, height:12, background:"#dc2626", borderRadius:2, opacity:0.7 }} /><span style={{ fontSize:12, color:"#64748b" }}>Pago</span></div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── CONTAS A PAGAR ── */}
+      {finTab === "pagar" && (
+        <div>
+          <div style={{ display:"flex", gap:12, alignItems:"center", marginBottom:16, flexWrap:"wrap" }}>
+            <button onClick={() => { setEditingConta(null); setShowModal(true); }}
+              style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>
+              + Nova Conta
+            </button>
+            <div style={{ position:"relative", flex:1, minWidth:180 }}>
+              <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
+              <input value={searchPagar} onChange={e => setSearchPagar(e.target.value)} placeholder="Buscar descrição..."
+                style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px 8px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
+            </div>
+            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+              style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 12px", borderRadius:8, fontSize:12 }}>
+              <option value="all">Todos status</option>
+              {STATUS_PAGAR.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
+              style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 12px", borderRadius:8, fontSize:12 }}>
+              <option value="all">Todas categorias</option>
+              {CATEGORIAS_PAGAR.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <span style={{ fontSize:12, color:"#94a3b8" }}>{contasFiltradas.length} conta(s)</span>
+          </div>
+
+          {/* Cards de resumo */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, marginBottom:16 }}>
+            {[
+              { label:"Pendente", value:fmt(contasPagar.filter(c=>c.status==="Pendente").reduce((s,c)=>s+parseFloat(c.valor||0),0)), color:"#d97706", bg:"#fffbeb" },
+              { label:"Vencido", value:fmt(totalVencido), color:"#dc2626", bg:"#fef2f2" },
+              { label:"Pago", value:fmt(totalPago), color:"#15803d", bg:"#f0fdf4" },
+            ].map(k => (
+              <div key={k.label} style={{ background:k.bg, border:`1px solid ${k.bg}`, borderRadius:10, padding:"12px 16px" }}>
+                <div style={{ fontSize:11, color:k.color, fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>{k.label}</div>
+                <div style={{ fontSize:18, fontWeight:800, color:k.color }}>{k.value}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto", boxShadow:"0 1px 3px rgba(0,0,0,.04)" }}>
+            <table style={{ borderCollapse:"collapse", width:"100%" }}>
+              <thead>
+                <tr>
+                  {["Descrição","Categoria","Valor","Vencimento","Status","Obs.","Ações"].map(h => (
+                    <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {contasFiltradas.length === 0 ? (
+                  <tr><td colSpan={7} style={{ textAlign:"center", color:"#94a3b8", padding:40 }}>Nenhuma conta encontrada</td></tr>
+                ) : contasFiltradas.map((c, i) => {
+                  const days = getDaysUntil(c.vencimento);
+                  const isVencendo = c.status === "Pendente" && days !== null && days >= 0 && days <= 7;
+                  return (
+                    <tr key={c.id} style={{ background: i%2===0 ? "#f8fafc" : "#fff" }}>
+                      <td style={{ padding:"10px 14px", fontSize:13, color:"#0f172a", fontWeight:500 }}>
+                        {c.descricao}
+                        {isVencendo && <span style={{ fontSize:10, background:"#fde68a", color:"#92400e", padding:"1px 6px", borderRadius:4, marginLeft:6, fontWeight:600 }}>Vence em {days}d</span>}
+                      </td>
+                      <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{c.categoria}</td>
+                      <td style={{ padding:"10px 14px", fontSize:13, fontWeight:700, color:"#0f172a" }}>{fmt(parseFloat(c.valor||0))}</td>
+                      <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{fmtDate(c.vencimento)}</td>
+                      <td style={{ padding:"10px 14px" }}>
+                        <span style={{ fontSize:11, fontWeight:600, color:statusColor(c.status), background:statusBg(c.status), padding:"3px 8px", borderRadius:6 }}>{c.status}</span>
+                      </td>
+                      <td style={{ padding:"10px 14px", fontSize:12, color:"#94a3b8", maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.observacao||"—"}</td>
+                      <td style={{ padding:"10px 14px" }}>
+                        <div style={{ display:"flex", gap:4 }}>
+                          <button onClick={() => togglePago(c)}
+                            style={{ background:c.status==="Pago"?"#f0fdf4":"#0f172a", border:`1px solid ${c.status==="Pago"?"#bbf7d0":"#0f172a"}`, color:c.status==="Pago"?"#15803d":"#fff", padding:"4px 10px", borderRadius:6, cursor:"pointer", fontSize:11, fontWeight:600 }}>
+                            {c.status==="Pago"?"✓ Pago":"Marcar Pago"}
+                          </button>
+                          <button onClick={() => { setEditingConta(c); setShowModal(true); }}
+                            style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"4px 8px", borderRadius:6, cursor:"pointer", fontSize:11 }}>✏️</button>
+                          <button onClick={() => deleteConta(c.id)}
+                            style={{ background:"#fef2f2", border:"1px solid #fecaca", color:"#dc2626", padding:"4px 8px", borderRadius:6, cursor:"pointer", fontSize:11 }}>🗑</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── CONTAS A RECEBER ── */}
+      {finTab === "receber" && (
+        <div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px,1fr))", gap:10, marginBottom:16 }}>
+            {[
+              { label:"A Receber", value:fmt(totalAReceber), color:"#0891b2", bg:"#ecfeff", desc:`${aReceber.length} pedidos` },
+              { label:"Recebido no Mês", value:fmt(totalRecebidoMes), color:"#15803d", bg:"#f0fdf4", desc:`${recebidoMes.length} pedidos` },
+            ].map(k => (
+              <div key={k.label} style={{ background:k.bg, borderRadius:10, padding:"14px 18px" }}>
+                <div style={{ fontSize:11, color:k.color, fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>{k.label}</div>
+                <div style={{ fontSize:20, fontWeight:800, color:k.color }}>{k.value}</div>
+                <div style={{ fontSize:11, color:k.color, opacity:0.7, marginTop:2 }}>{k.desc}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", marginBottom:10 }}>Pedidos a Receber</div>
+          <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto", boxShadow:"0 1px 3px rgba(0,0,0,.04)", marginBottom:20 }}>
+            <table style={{ borderCollapse:"collapse", width:"100%" }}>
+              <thead>
+                <tr>
+                  {["Pedido","Produto","Data","Valor","Status"].map(h => (
+                    <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {aReceber.length === 0 ? (
+                  <tr><td colSpan={5} style={{ textAlign:"center", color:"#94a3b8", padding:32 }}>Nenhum pedido a receber</td></tr>
+                ) : aReceber.slice(0,50).map((o, i) => {
+                  const ss = shipmentStatuses[o.id] ?? o.shipment_status;
+                  const label = ["shipped","in_transit"].includes(ss) ? "Enviado" : "Ag. Envio";
+                  const color = ["shipped","in_transit"].includes(ss) ? "#0891b2" : "#d97706";
+                  const bg = ["shipped","in_transit"].includes(ss) ? "#ecfeff" : "#fffbeb";
+                  return (
+                    <tr key={o.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
+                      <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", fontFamily:"monospace", fontWeight:600 }}>#{o.id}</td>
+                      <td style={{ padding:"10px 14px", fontSize:13, color:"#0f172a", maxWidth:240, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{o.title||"—"}</td>
+                      <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{o.date}</td>
+                      <td style={{ padding:"10px 14px", fontSize:13, fontWeight:700, color:"#0f172a" }}>{fmt(o.price*o.qty)}</td>
+                      <td style={{ padding:"10px 14px" }}><span style={{ fontSize:11, fontWeight:600, color, background:bg, padding:"3px 8px", borderRadius:6 }}>{label}</span></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", marginBottom:10 }}>Recebidos no Mês Atual</div>
+          <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto", boxShadow:"0 1px 3px rgba(0,0,0,.04)" }}>
+            <table style={{ borderCollapse:"collapse", width:"100%" }}>
+              <thead>
+                <tr>
+                  {["Pedido","Produto","Data","Valor"].map(h => (
+                    <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {recebidoMes.length === 0 ? (
+                  <tr><td colSpan={4} style={{ textAlign:"center", color:"#94a3b8", padding:32 }}>Nenhum pedido recebido este mês</td></tr>
+                ) : recebidoMes.slice(0,50).map((o, i) => (
+                  <tr key={o.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
+                    <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", fontFamily:"monospace", fontWeight:600 }}>#{o.id}</td>
+                    <td style={{ padding:"10px 14px", fontSize:13, color:"#0f172a", maxWidth:240, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{o.title||"—"}</td>
+                    <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{o.date}</td>
+                    <td style={{ padding:"10px 14px", fontSize:13, fontWeight:700, color:"#15803d" }}>{fmt(o.price*o.qty)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {showModal && (
+        <ModalConta
+          conta={editingConta}
+          onSave={saveConta}
+          onClose={() => { setShowModal(false); setEditingConta(null); }}
+        />
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   // ── Auth do dashboard ─────────────────────────────────────
   const [isLoggedIn, setIsLoggedIn] = useState(() => sessionStorage.getItem("dash_auth") === "1");
@@ -492,6 +946,11 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
   const [showMLModal, setShowMLModal] = useState(false);
+  // ── Financeiro ────────────────────────────────────────────
+  const [contasPagar, setContasPagar] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("contas_pagar") || "[]"); } catch { return []; }
+  });
+  const [finTab, setFinTab] = useState("resumo"); // resumo | pagar | receber
   const [loadError, setLoadError] = useState(null);
 
   const usingMock = !token || realListings.length === 0;
@@ -872,6 +1331,7 @@ export default function App() {
         <div style={{ display: "flex", gap: 2, marginBottom: 20, background: "#f1f5f9", padding: 4, borderRadius: 10, width: "fit-content" }}>
           <button className={`tab-btn ${tab === "listings" ? "active" : ""}`} onClick={() => setTab("listings")}>Anúncios ({enriched.length})</button>
           <button className={`tab-btn ${tab === "orders" ? "active" : ""}`} onClick={() => setTab("orders")}>Pedidos ({enrichedOrders.length})</button>
+          <button className={`tab-btn ${tab === "financeiro" ? "active" : ""}`} onClick={() => setTab("financeiro")}>💰 Financeiro</button>
         </div>
 
         {tab === "listings" && (
@@ -1157,6 +1617,19 @@ export default function App() {
           </>
         )}
       </main>
+
+
+        {tab === "financeiro" && (
+          <FinanceiroTab
+            contasPagar={contasPagar}
+            setContasPagar={setContasPagar}
+            enrichedOrders={enrichedOrders}
+            rawOrders={rawOrders}
+            shipmentStatuses={shipmentStatuses}
+            finTab={finTab}
+            setFinTab={setFinTab}
+          />
+        )}
 
       {showMLModal && <MLConnectModal onConnect={handleConnect} onClose={() => setShowMLModal(false)} />}
       {selectedListing && <AIPanel listing={selectedListing} onClose={() => setSelectedListing(null)} />}

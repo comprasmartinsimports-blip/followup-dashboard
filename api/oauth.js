@@ -25,7 +25,7 @@ export default async function handler(req, res) {
       client_id:     CLIENT_ID,
       client_secret: CLIENT_SECRET,
       code,
-      redirect_uri:  redirect_uri || "https://www.google.com",
+      redirect_uri:  redirect_uri || "https://followup-dashboard.vercel.app",
     });
   } else if (grant_type === "refresh_token") {
     payload = new URLSearchParams({

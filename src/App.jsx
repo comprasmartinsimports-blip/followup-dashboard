@@ -220,7 +220,7 @@ function getOrderStatusInfo(status, tags) {
   // Atendido = pago e entregue
   if (status === "paid" && isDelivered) return { label: "Entregue", color: "#0369a1", bg: "#eff6ff" };
   // Atendido = pago aguardando envio ou em trânsito
-  if (status === "paid") return { label: "Atendido", color: "#15803d", bg: "#f0fdf4" };
+  if (status === "paid") return { label: "Ag. Envio", color: "#15803d", bg: "#f0fdf4" };
   return { label: status ?? "—", color: "#64748b", bg: "#f8fafc" };
 }
 
@@ -562,14 +562,15 @@ export default function App() {
     if (q) results = results.filter(o => String(o.id).toLowerCase().includes(q));
     // Status: cancelado = status cancelled SEM tag de devolução
     // Devolvido = tem tag "not_delivered" + "not_paid" OU mediação com cancelamento
-    if (orderStatusFilter === "paid") {
-      // Atendido = pago (inclui entregue e aguardando)
-      results = results.filter(o => o.status === "paid" && !o.tags?.some(t => t.includes("refund")));
+    if (orderStatusFilter === "waiting") {
+      // Aguardando envio = pago mas não entregue
+      results = results.filter(o => o.status === "paid" && !o.tags?.some(t => t === "delivered") && !o.tags?.some(t => t.includes("refund")));
+    } else if (orderStatusFilter === "done") {
+      // Concluído = pago e entregue
+      results = results.filter(o => o.status === "paid" && o.tags?.some(t => t === "delivered"));
     } else if (orderStatusFilter === "cancelled") {
-      // Cancelado = cancelled sem entrega prévia
       results = results.filter(o => o.status === "cancelled" && !o.tags?.some(t => t === "delivered") && !o.tags?.some(t => t.includes("refund")));
     } else if (orderStatusFilter === "refunded") {
-      // Devolvido = com tag refund ou cancelado após entrega
       results = results.filter(o => 
         o.tags?.some(t => t.includes("refund")) ||
         (o.status === "cancelled" && o.tags?.some(t => t === "delivered"))
@@ -898,8 +899,9 @@ export default function App() {
               </div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {[
-                  { key: "all", label: "Todos status" },
-                  { key: "paid", label: "✓ Pagos" },
+                  { key: "all", label: "Todos" },
+                  { key: "waiting", label: "⏳ Ag. envio" },
+                  { key: "done", label: "✓ Concluídos" },
                   { key: "cancelled", label: "✗ Cancelados" },
                   { key: "refunded", label: "↩ Devolvidos" },
                   { key: "mediation", label: "⚠ Em disputa" },

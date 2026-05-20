@@ -418,8 +418,7 @@ function MLConnectModal({ onConnect, onClose }) {
   const [code, setCode]     = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
-  const REDIRECT_URI = window.location.origin;
-  const authUrl = `https://auth.mercadolivre.com.br/authorization?response_type=code&client_id=${ML_CLIENT_ID}&redirect_uri=${REDIRECT_URI}`;
+  const authUrl = `https://auth.mercadolivre.com.br/authorization?response_type=code&client_id=${ML_CLIENT_ID}&redirect_uri=https://followup-dashboard.vercel.app`;
 
   async function handleCode() {
     if (!code.trim()) return;
@@ -432,7 +431,7 @@ function MLConnectModal({ onConnect, onClose }) {
           grant_type:   "authorization_code",
           client_id:    ML_CLIENT_ID,
           code:         code.trim(),
-          redirect_uri: window.location.origin,
+          redirect_uri: "https://followup-dashboard.vercel.app",
         }),
       });
       const data = await res.json();

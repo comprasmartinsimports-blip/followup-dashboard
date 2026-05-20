@@ -210,12 +210,17 @@ function getOrderStatusInfo(status, tags) {
   const isMediation = tags?.some(t => t.includes("mediation")) || status === "in_mediation";
   const isRefunded = tags?.some(t => t.includes("refund"));
   const isDelivered = tags?.some(t => t === "delivered");
-  const isCancelledAfterDelivery = status === "cancelled" && (isDelivered || isRefunded);
-  if (isCancelledAfterDelivery) return { label: "Devolvido", color: "#7c3aed", bg: "#f5f3ff" };
+  const isNotDelivered = tags?.some(t => t === "not_delivered");
+  // Devolvido = cancelado após ter sido pago/entregue, ou com tag de reembolso
+  const isDevolvido = isRefunded || (status === "cancelled" && isDelivered);
+  if (isDevolvido) return { label: "Devolvido", color: "#7c3aed", bg: "#f5f3ff" };
   if (isMediation) return { label: "Em disputa", color: "#d97706", bg: "#fffbeb" };
-  if (status === "cancelled") return { label: "Cancelado", color: "#6b7280", bg: "#f3f4f6" };
+  // Cancelado = status cancelled sem entrega prévia
+  if (status === "cancelled") return { label: "Cancelado", color: "#dc2626", bg: "#fef2f2" };
+  // Atendido = pago e entregue
   if (status === "paid" && isDelivered) return { label: "Entregue", color: "#0369a1", bg: "#eff6ff" };
-  if (status === "paid") return { label: "Pago", color: "#15803d", bg: "#f0fdf4" };
+  // Atendido = pago aguardando envio ou em trânsito
+  if (status === "paid") return { label: "Atendido", color: "#15803d", bg: "#f0fdf4" };
   return { label: status ?? "—", color: "#64748b", bg: "#f8fafc" };
 }
 
@@ -558,14 +563,16 @@ export default function App() {
     // Status: cancelado = status cancelled SEM tag de devolução
     // Devolvido = tem tag "not_delivered" + "not_paid" OU mediação com cancelamento
     if (orderStatusFilter === "paid") {
-      results = results.filter(o => o.status === "paid");
+      // Atendido = pago (inclui entregue e aguardando)
+      results = results.filter(o => o.status === "paid" && !o.tags?.some(t => t.includes("refund")));
     } else if (orderStatusFilter === "cancelled") {
-      results = results.filter(o => o.status === "cancelled" && !o.tags?.some(t => t.includes("refund")));
+      // Cancelado = cancelled sem entrega prévia
+      results = results.filter(o => o.status === "cancelled" && !o.tags?.some(t => t === "delivered") && !o.tags?.some(t => t.includes("refund")));
     } else if (orderStatusFilter === "refunded") {
-      // Devolvido = cancelado após entrega ou com reembolso
+      // Devolvido = com tag refund ou cancelado após entrega
       results = results.filter(o => 
         o.tags?.some(t => t.includes("refund")) ||
-        (o.status === "cancelled" && o.tags?.some(t => t === "delivered" || t === "not_delivered"))
+        (o.status === "cancelled" && o.tags?.some(t => t === "delivered"))
       );
     } else if (orderStatusFilter === "mediation") {
       results = results.filter(o => o.tags?.some(t => t.includes("mediation")) || o.status === "in_mediation");

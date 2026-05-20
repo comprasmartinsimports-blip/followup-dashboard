@@ -333,7 +333,7 @@ function clearSavedTokens() {
 
 // Renova o access token via refresh token (chamado automaticamente)
 async function refreshAccessToken(refreshToken) {
-  const res = await fetch("/api/ml/oauth/token", {
+  const res = await fetch("/api/oauth", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -424,7 +424,7 @@ function MLConnectModal({ onConnect, onClose }) {
     if (!code.trim()) return;
     setStep("loading");
     try {
-      const res = await fetch("/api/ml/oauth/token", {
+      const res = await fetch("/api/oauth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

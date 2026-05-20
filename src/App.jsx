@@ -419,7 +419,7 @@ function MLConnectModal({ onConnect, onClose }) {
   const [errorMsg, setErrorMsg] = useState("");
 
   const REDIRECT_URI = window.location.origin;
-  const authUrl = `https://auth.mercadolivre.com.br/authorization?response_type=code&client_id=${ML_CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
+  const authUrl = `https://auth.mercadolivre.com.br/authorization?response_type=code&client_id=${ML_CLIENT_ID}&redirect_uri=${REDIRECT_URI}`;
 
   async function handleCode() {
     if (!code.trim()) return;

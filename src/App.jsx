@@ -1372,25 +1372,31 @@ export default function App() {
       setShipmentCosts({...orderShippingMap});
       setShipmentStatuses({...shipmentStatusMap});
 
-      // Extrair dados de pagamento dos pedidos já carregados
-      // Os dados vêm dentro de order.payments[] que já está no /orders/search
-      setLoadingMsg("Extraindo dados de pagamento...");
+      // Buscar dados de pagamento via /payments/{payment_id}
+      // Este endpoint retorna money_release_date e net_received_amount reais
+      setLoadingMsg("Buscando previsão de pagamento...");
       const paymentMap = {};
-      orders.filter(o => o.status === "paid").forEach(o => {
-        const pmt = o.payments?.find(p => p.status === "approved") || o.payments?.[0];
-        if (!pmt) return;
-        // money_release_date = data exata de liberação do valor pelo ML
-        const releaseDate = pmt.money_release_date?.slice(0, 10) ?? null;
-        // net_received_amount = valor líquido já descontado tarifas e frete
-        // fallback: transaction_amount - marketplace_fee (quando disponível)
-        const net = parseFloat(pmt.net_received_amount ?? 0);
-        const gross = parseFloat(pmt.transaction_amount ?? 0);
-        const fee = parseFloat(pmt.marketplace_fee ?? 0);
-        const netAmount = net > 0 ? net : (gross > 0 && fee > 0 ? gross - fee : gross);
-        if (releaseDate || netAmount > 0) {
-          paymentMap[String(o.id)] = { releaseDate, netAmount };
-        }
-      });
+      const paidOrders = orders.filter(o => o.status === "paid" && o.payments?.[0]?.id);
+      for (let i = 0; i < paidOrders.length; i += 5) {
+        const batch = paidOrders.slice(i, i + 5);
+        await Promise.all(batch.map(async o => {
+          const oid = String(o.id);
+          const pmtId = o.payments?.find(p => p.status === "approved")?.id || o.payments?.[0]?.id;
+          if (!pmtId) return;
+          try {
+            const res = await fetch(ML(`/payments/${pmtId}`), { headers: { Authorization: `Bearer ${validTk}` } });
+            const data = await res.json();
+            if (data.error) return;
+            const releaseDate = data.money_release_date?.slice(0, 10) ?? null;
+            const netAmount = parseFloat(data.net_received_amount ?? data.transaction_amount ?? 0);
+            if (releaseDate || netAmount > 0) {
+              paymentMap[oid] = { releaseDate, netAmount };
+            }
+          } catch { /* ignora */ }
+        }));
+        if (i % 20 === 0) setPaymentData({...paymentMap});
+        await new Promise(r => setTimeout(r, 150));
+      }
       setPaymentData({...paymentMap});
 
       setLoadingMsg("Buscando promoções...");

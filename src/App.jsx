@@ -215,9 +215,10 @@ function getOrderStatusInfo(status, tags, fulfilled, shipmentStatus) {
   if (isMediation) return { label: "Em disputa", color: "#d97706", bg: "#fffbeb" };
   if (status === "cancelled") return { label: "Cancelado", color: "#dc2626", bg: "#fef2f2" };
   if (isDelivered) return { label: "Entregue", color: "#0369a1", bg: "#eff6ff" };
-  // Enviado = shipment status shipped ou ready_to_ship
-  const isEnviado = ["shipped", "ready_to_ship", "in_transit", "ship_soon"].includes(shipmentStatus);
-  if (status === "paid" && isEnviado) return { label: "Enviado", color: "#0891b2", bg: "#ecfeff" };
+  // Enviado = apenas postado na transportadora
+  // ready_to_ship = etiqueta gerada mas NÃO postado → Ag. Envio
+  if (["shipped", "in_transit"].includes(shipmentStatus))
+    return { label: "Enviado", color: "#0891b2", bg: "#ecfeff" };
   if (status === "paid") return { label: "Ag. Envio", color: "#d97706", bg: "#fffbeb" };
   return { label: status ?? "—", color: "#64748b", bg: "#f8fafc" };
 }

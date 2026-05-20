@@ -738,8 +738,8 @@ export default function App() {
         if (o.tags?.some(t => t.includes("refund"))) return false;
         const isDelivered = o.tags?.some(t => t === "delivered") || o.shipment_status === "delivered";
         if (isDelivered) return false;
-        const isEnviado = ["shipped","ready_to_ship","in_transit","ship_soon"].includes(o.shipment_status);
-        return !isEnviado;
+        // ready_to_ship/handling/pending = ainda não postado → ag. envio
+        return !["shipped", "in_transit"].includes(o.shipment_status);
       });
     } else if (orderStatusFilter === "done") {
       results = results.filter(o => o.status === "paid" && (o.tags?.some(t => t === "delivered") || o.shipment_status === "delivered"));
@@ -749,7 +749,8 @@ export default function App() {
         if (o.tags?.some(t => t.includes("refund"))) return false;
         const isDelivered = o.tags?.some(t => t === "delivered") || o.shipment_status === "delivered";
         if (isDelivered) return false;
-        return ["shipped","ready_to_ship","in_transit","ship_soon"].includes(o.shipment_status);
+        // Apenas shipped/in_transit = realmente postado
+        return ["shipped", "in_transit"].includes(o.shipment_status);
       });
     } else if (orderStatusFilter === "cancelled") {
       results = results.filter(o => o.status === "cancelled" && !o.tags?.some(t => t === "delivered") && !o.tags?.some(t => t.includes("refund")));

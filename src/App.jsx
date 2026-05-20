@@ -838,6 +838,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
       <div style={{ display:"flex", gap:2, marginBottom:20, background:"#f1f5f9", padding:4, borderRadius:10, width:"fit-content", flexWrap:"wrap" }}>
         {[
           { key:"resumo",   label:"📊 Resumo" },
+          { key:"fluxo",    label:"📈 Fluxo de Caixa" },
           { key:"pagar",    label:"📤 Contas a Pagar" },
           { key:"receber",  label:"📥 Contas a Receber" },
           { key:"contas",   label:"🏦 Caixas e Bancos" },
@@ -938,7 +939,169 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
         </div>
       )}
 
-      {/* ── CONTAS A PAGAR ── */}
+      {/* ── FLUXO DE CAIXA ── */}
+      {finTab === "fluxo" && (() => {
+        // Agrupa entradas (ML entregues) e saídas (contas pagas) por dia
+        const hoje = new Date().toLocaleDateString("sv-SE");
+        const dias = {};
+
+        // Entradas: pedidos entregues (recebimentos ML)
+        allOrders.forEach(o => {
+          const ss = shipmentStatuses?.[o.id] ?? o.shipment_status;
+          const isDelivered = ss === "delivered" || o.tags?.some(t => t === "delivered");
+          if (!isDelivered || !o.date) return;
+          if (!dias[o.date]) dias[o.date] = { entradas:[], saidas:[] };
+          dias[o.date].entradas.push({
+            desc: o.title?.slice(0,40) || `Pedido #${o.id}`,
+            valor: paymentData?.[o.id]?.netAmount || o.price * o.qty,
+            tipo: "ML",
+            id: o.id,
+          });
+        });
+
+        // Saídas: contas pagas com data de pagamento
+        contasPagar.filter(c => c.status === "Pago" && c.dataPagamento).forEach(c => {
+          const d = c.dataPagamento;
+          if (!dias[d]) dias[d] = { entradas:[], saidas:[] };
+          dias[d].saidas.push({
+            desc: c.descricao,
+            valor: parseFloat(c.valor || 0),
+            tipo: c.categoria,
+            id: c.id,
+          });
+        });
+
+        // Lançamentos manuais de recebimento
+        lancamentos.filter(l => l.tipo === "recebimento" && l.data).forEach(l => {
+          const d = l.data;
+          if (!dias[d]) dias[d] = { entradas:[], saidas:[] };
+          const jaExiste = dias[d].entradas.some(e => e.id === l.pedidoId);
+          if (!jaExiste) {
+            dias[d].entradas.push({ desc: l.descricao, valor: l.valor, tipo: "Registro manual", id: l.id });
+          }
+        });
+
+        // Futuros: contas a pagar pendentes
+        contasPagar.filter(c => c.status !== "Pago" && c.vencimento).forEach(c => {
+          const d = c.vencimento;
+          if (!dias[d]) dias[d] = { entradas:[], saidas:[] };
+          dias[d].saidas.push({
+            desc: `[PREVISTO] ${c.descricao}`,
+            valor: parseFloat(c.valor || 0),
+            tipo: c.categoria,
+            id: c.id,
+            previsto: true,
+          });
+        });
+
+        // Futuros: recebimentos ML previstos
+        aReceber.forEach(o => {
+          const pd = paymentData?.[o.id];
+          if (!pd?.releaseDate) return;
+          if (!dias[pd.releaseDate]) dias[pd.releaseDate] = { entradas:[], saidas:[] };
+          dias[pd.releaseDate].entradas.push({
+            desc: `[PREVISTO] ${o.title?.slice(0,35) || `Pedido #${o.id}`}`,
+            valor: pd.netAmount || o.price * o.qty,
+            tipo: "ML Previsto",
+            id: `prev_${o.id}`,
+            previsto: true,
+          });
+        });
+
+        const sortedDias = Object.keys(dias).sort().reverse().slice(0, 60);
+        let saldoAcumulado = contasBancarias.reduce((s, c) => s + parseFloat(c.saldoInicial || 0), 0);
+        
+        // Calcula saldo acumulado na ordem cronológica
+        const saldosPorDia = {};
+        [...sortedDias].reverse().forEach(d => {
+          const entrada = dias[d].entradas.filter(e => !e.previsto).reduce((s,e) => s+e.valor, 0);
+          const saida   = dias[d].saidas.filter(s => !s.previsto).reduce((s,e) => s+e.valor, 0);
+          saldoAcumulado += entrada - saida;
+          saldosPorDia[d] = saldoAcumulado;
+        });
+
+        const totalEntradas = sortedDias.reduce((s,d) => s + dias[d].entradas.filter(e=>!e.previsto).reduce((a,e)=>a+e.valor,0), 0);
+        const totalSaidas   = sortedDias.reduce((s,d) => s + dias[d].saidas.filter(e=>!e.previsto).reduce((a,e)=>a+e.valor,0), 0);
+
+        return (
+          <div>
+            {/* Cards resumo */}
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:16 }}>
+              {[
+                { label:"Total Entradas", value:fmt(totalEntradas), color:"#15803d", bg:"#f0fdf4" },
+                { label:"Total Saídas",   value:fmt(totalSaidas),   color:"#dc2626", bg:"#fef2f2" },
+                { label:"Saldo Período",  value:fmt(totalEntradas-totalSaidas), color:totalEntradas-totalSaidas>=0?"#15803d":"#dc2626", bg:"#f8fafc" },
+              ].map(k => (
+                <div key={k.label} style={{ background:k.bg, borderRadius:12, padding:"16px 18px", border:`1px solid ${k.bg}` }}>
+                  <div style={{ fontSize:11, color:k.color, fontWeight:700, textTransform:"uppercase", marginBottom:6 }}>{k.label}</div>
+                  <div style={{ fontSize:20, fontWeight:800, color:k.color }}>{k.value}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:10, padding:"10px 14px", marginBottom:14, fontSize:12, color:"#92400e" }}>
+              💡 Itens marcados como <b>[PREVISTO]</b> são futuros — contas a vencer e recebimentos ML com data prevista.
+            </div>
+
+            {/* Tabela por dia */}
+            {sortedDias.length === 0 ? (
+              <div style={{ background:"#f8fafc", border:"2px dashed #e2e8f0", borderRadius:12, padding:40, textAlign:"center", color:"#94a3b8" }}>
+                <div style={{ fontSize:32, marginBottom:8 }}>📈</div>
+                <div style={{ fontWeight:600 }}>Nenhum lançamento ainda</div>
+                <div style={{ fontSize:13 }}>Dê baixa em contas a pagar e registre recebimentos para ver o fluxo</div>
+              </div>
+            ) : sortedDias.map(dia => {
+              const { entradas, saidas } = dias[dia];
+              const totalE = entradas.reduce((s,e)=>s+e.valor,0);
+              const totalS = saidas.reduce((s,e)=>s+e.valor,0);
+              const saldo  = totalE - totalS;
+              const isFuturo = dia > hoje;
+              return (
+                <div key={dia} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, marginBottom:10, overflow:"hidden", opacity:isFuturo?0.85:1 }}>
+                  {/* Header do dia */}
+                  <div style={{ background:isFuturo?"#f8fafc":"#fafafa", padding:"10px 16px", display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:"1px solid #f1f5f9" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      {isFuturo && <span style={{ fontSize:10, background:"#dbeafe", color:"#1d4ed8", padding:"2px 7px", borderRadius:4, fontWeight:600 }}>PREVISTO</span>}
+                      {dia === hoje && <span style={{ fontSize:10, background:"#fde68a", color:"#92400e", padding:"2px 7px", borderRadius:4, fontWeight:600 }}>HOJE</span>}
+                      <span style={{ fontWeight:700, fontSize:14, color:"#0f172a" }}>{fmtDate(dia)}</span>
+                    </div>
+                    <div style={{ display:"flex", gap:16, alignItems:"center" }}>
+                      {totalE > 0 && <span style={{ fontSize:12, color:"#15803d", fontWeight:600 }}>↑ {fmt(totalE)}</span>}
+                      {totalS > 0 && <span style={{ fontSize:12, color:"#dc2626", fontWeight:600 }}>↓ {fmt(totalS)}</span>}
+                      <span style={{ fontSize:13, fontWeight:800, color:saldo>=0?"#15803d":"#dc2626" }}>{saldo>=0?"+":""}{fmt(saldo)}</span>
+                    </div>
+                  </div>
+                  {/* Linhas */}
+                  <div style={{ padding:"6px 0" }}>
+                    {entradas.map((e,i) => (
+                      <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"6px 16px" }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                          <div style={{ width:6, height:6, borderRadius:"50%", background:"#15803d", flexShrink:0 }} />
+                          <span style={{ fontSize:12, color:e.previsto?"#64748b":"#0f172a", fontStyle:e.previsto?"italic":"normal" }}>{e.desc}</span>
+                          <span style={{ fontSize:10, background:"#f0fdf4", color:"#15803d", padding:"1px 6px", borderRadius:4 }}>{e.tipo}</span>
+                        </div>
+                        <span style={{ fontSize:13, fontWeight:700, color:"#15803d" }}>+{fmt(e.valor)}</span>
+                      </div>
+                    ))}
+                    {saidas.map((e,i) => (
+                      <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"6px 16px" }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                          <div style={{ width:6, height:6, borderRadius:"50%", background:"#dc2626", flexShrink:0 }} />
+                          <span style={{ fontSize:12, color:e.previsto?"#64748b":"#0f172a", fontStyle:e.previsto?"italic":"normal" }}>{e.desc}</span>
+                          <span style={{ fontSize:10, background:"#fef2f2", color:"#dc2626", padding:"1px 6px", borderRadius:4 }}>{e.tipo}</span>
+                        </div>
+                        <span style={{ fontSize:13, fontWeight:700, color:"#dc2626" }}>-{fmt(e.valor)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
+
+            {/* ── CONTAS A PAGAR ── */}
       {finTab === "pagar" && (
         <div>
           <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>

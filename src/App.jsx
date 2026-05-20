@@ -550,7 +550,7 @@ function ModalConta({ conta, onSave, onClose }) {
   );
 }
 
-function FinanceiroTab({ contasPagar, setContasPagar, enrichedOrders, rawOrders, shipmentStatuses, finTab, setFinTab }) {
+function FinanceiroTab({ contasPagar, setContasPagar, enrichedOrders, rawOrders, shipmentStatuses, paymentData, finTab, setFinTab }) {
   const [showModal, setShowModal] = useState(false);
   const [editingConta, setEditingConta] = useState(null);
   const [filterStatus, setFilterStatus] = useState("all");
@@ -620,10 +620,19 @@ function FinanceiroTab({ contasPagar, setContasPagar, enrichedOrders, rawOrders,
 
   const totalAReceber = aReceber.reduce((s, o) => s + (o.price * o.qty), 0);
   const totalRecebidoMes = recebidoMes.reduce((s, o) => s + (o.price * o.qty), 0);
+  // Valores líquidos (usando net_received_amount do ML quando disponível)
+  const totalAReceberLiq = aReceber.reduce((s, o) => {
+    const pd = paymentData?.[o.id];
+    return s + (pd?.netAmount || (o.price * o.qty));
+  }, 0);
+  const totalRecebidoMesLiq = recebidoMes.reduce((s, o) => {
+    const pd = paymentData?.[o.id];
+    return s + (pd?.netAmount || (o.price * o.qty));
+  }, 0);
 
   // ── Resumo / Relatório ────────────────────────────────────
-  const saldoMes = totalRecebidoMes - totalPago;
-  const saldoPrevisto = totalAReceber - totalPagar;
+  const saldoMes = totalRecebidoMesLiq - totalPago;
+  const saldoPrevisto = totalAReceberLiq - totalPagar;
 
   // Agrupar recebimentos por mês
   const recebPorMes = {};
@@ -670,8 +679,8 @@ function FinanceiroTab({ contasPagar, setContasPagar, enrichedOrders, rawOrders,
             {[
               { label:"Saldo do Mês", value:fmt(saldoMes), color:saldoMes>=0?"#15803d":"#dc2626", desc:"Recebido ML - Pago" },
               { label:"Saldo Previsto", value:fmt(saldoPrevisto), color:saldoPrevisto>=0?"#15803d":"#dc2626", desc:"A receber - A pagar" },
-              { label:"A Receber (ML)", value:fmt(totalAReceber), color:"#0891b2", desc:`${aReceber.length} pedidos` },
-              { label:"Recebido no Mês", value:fmt(totalRecebidoMes), color:"#15803d", desc:"Pedidos entregues" },
+              { label:"A Receber (líquido)", value:fmt(totalAReceberLiq), color:"#0891b2", desc:`${aReceber.length} pedidos` },
+              { label:"Recebido no Mês (líquido)", value:fmt(totalRecebidoMesLiq), color:"#15803d", desc:"Pedidos entregues" },
               { label:"A Pagar", value:fmt(totalPagar), color:"#d97706", desc:"Contas pendentes" },
               { label:"Pago no Mês", value:fmt(totalPago), color:"#64748b", desc:"Contas pagas" },
             ].map(k => (
@@ -834,8 +843,8 @@ function FinanceiroTab({ contasPagar, setContasPagar, enrichedOrders, rawOrders,
         <div>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px,1fr))", gap:10, marginBottom:16 }}>
             {[
-              { label:"A Receber", value:fmt(totalAReceber), color:"#0891b2", bg:"#ecfeff", desc:`${aReceber.length} pedidos` },
-              { label:"Recebido no Mês", value:fmt(totalRecebidoMes), color:"#15803d", bg:"#f0fdf4", desc:`${recebidoMes.length} pedidos` },
+              { label:"A Receber (líquido)", value:fmt(totalAReceberLiq), color:"#0891b2", bg:"#ecfeff", desc:`${aReceber.length} pedidos` },
+              { label:"Recebido no Mês (líquido)", value:fmt(totalRecebidoMesLiq), color:"#15803d", bg:"#f0fdf4", desc:`${recebidoMes.length} pedidos` },
             ].map(k => (
               <div key={k.label} style={{ background:k.bg, borderRadius:10, padding:"14px 18px" }}>
                 <div style={{ fontSize:11, color:k.color, fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>{k.label}</div>
@@ -850,7 +859,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, enrichedOrders, rawOrders,
             <table style={{ borderCollapse:"collapse", width:"100%" }}>
               <thead>
                 <tr>
-                  {["Pedido","Produto","Data","Valor","Status"].map(h => (
+                  {["Pedido","Produto","Data","Valor","Previsão ML","Status"].map(h => (
                     <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa" }}>{h}</th>
                   ))}
                 </tr>
@@ -863,12 +872,30 @@ function FinanceiroTab({ contasPagar, setContasPagar, enrichedOrders, rawOrders,
                   const label = ["shipped","in_transit"].includes(ss) ? "Enviado" : "Ag. Envio";
                   const color = ["shipped","in_transit"].includes(ss) ? "#0891b2" : "#d97706";
                   const bg = ["shipped","in_transit"].includes(ss) ? "#ecfeff" : "#fffbeb";
+                  const pd = paymentData?.[o.id];
+                  const netAmt = pd?.netAmount || null;
+                  const releaseDate = pd?.releaseDate || null;
+                  const today = new Date(); today.setHours(0,0,0,0);
+                  const relDays = releaseDate ? Math.round((new Date(releaseDate+"T00:00:00") - today) / 86400000) : null;
                   return (
                     <tr key={o.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
                       <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", fontFamily:"monospace", fontWeight:600 }}>#{o.id}</td>
-                      <td style={{ padding:"10px 14px", fontSize:13, color:"#0f172a", maxWidth:240, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{o.title||"—"}</td>
+                      <td style={{ padding:"10px 14px", fontSize:13, color:"#0f172a", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{o.title||"—"}</td>
                       <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{o.date}</td>
-                      <td style={{ padding:"10px 14px", fontSize:13, fontWeight:700, color:"#0f172a" }}>{fmt(o.price*o.qty)}</td>
+                      <td style={{ padding:"10px 14px" }}>
+                        <div style={{ fontSize:13, fontWeight:700, color:"#0f172a" }}>{fmt(o.price*o.qty)}</div>
+                        {netAmt && <div style={{ fontSize:11, color:"#15803d", fontWeight:600 }}>Líq: {fmt(netAmt)}</div>}
+                      </td>
+                      <td style={{ padding:"10px 14px" }}>
+                        {releaseDate ? (
+                          <div>
+                            <div style={{ fontSize:12, fontWeight:700, color: relDays <= 0 ? "#15803d" : relDays <= 7 ? "#d97706" : "#0891b2" }}>
+                              {relDays <= 0 ? "✓ Liberado" : `${fmtDate(releaseDate)}`}
+                            </div>
+                            {relDays > 0 && <div style={{ fontSize:10, color:"#94a3b8" }}>em {relDays} dia{relDays!==1?"s":""}</div>}
+                          </div>
+                        ) : <span style={{ fontSize:11, color:"#94a3b8" }}>Carregando...</span>}
+                      </td>
                       <td style={{ padding:"10px 14px" }}><span style={{ fontSize:11, fontWeight:600, color, background:bg, padding:"3px 8px", borderRadius:6 }}>{label}</span></td>
                     </tr>
                   );
@@ -951,6 +978,7 @@ export default function App() {
     try { return JSON.parse(localStorage.getItem("contas_pagar") || "[]"); } catch { return []; }
   });
   const [finTab, setFinTab] = useState("resumo"); // resumo | pagar | receber
+  const [paymentData, setPaymentData] = useState({}); // orderId → { releaseDate, netAmount }
   const [loadError, setLoadError] = useState(null);
 
   const usingMock = !token || realListings.length === 0;
@@ -1034,6 +1062,31 @@ export default function App() {
       }
       setShipmentCosts({...orderShippingMap});
       setShipmentStatuses({...shipmentStatusMap});
+
+      // Buscar dados de pagamento (data de liberação + valor líquido) por pedido
+      setLoadingMsg("Buscando previsão de pagamento...");
+      const paymentMap = {};
+      const ordersForPayment = orders.filter(o => o.status === "paid").slice(0, 100);
+      for (let i = 0; i < ordersForPayment.length; i += 5) {
+        const batch = ordersForPayment.slice(i, i + 5);
+        await Promise.all(batch.map(async o => {
+          try {
+            const res = await fetch(ML(`/orders/${o.id}/payments`), { headers: { Authorization: `Bearer ${validTk}` } });
+            const data = await res.json();
+            const payments = Array.isArray(data) ? data : (data.payments || []);
+            const pmt = payments.find(p => p.status === "approved") || payments[0];
+            if (pmt) {
+              paymentMap[String(o.id)] = {
+                releaseDate: pmt.money_release_date?.slice(0, 10) ?? null,
+                netAmount: parseFloat(pmt.net_received_amount ?? pmt.transaction_amount ?? 0),
+              };
+            }
+          } catch { /* ignora */ }
+        }));
+        if (i % 20 === 0) setPaymentData({...paymentMap});
+        await new Promise(r => setTimeout(r, 100));
+      }
+      setPaymentData({...paymentMap});
 
       setLoadingMsg("Buscando promoções...");
       const promoMap = {};
@@ -1626,6 +1679,7 @@ export default function App() {
             enrichedOrders={enrichedOrders}
             rawOrders={rawOrders}
             shipmentStatuses={shipmentStatuses}
+            paymentData={paymentData}
             finTab={finTab}
             setFinTab={setFinTab}
           />

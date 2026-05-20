@@ -418,7 +418,7 @@ function MLConnectModal({ onConnect, onClose }) {
   const [code, setCode]     = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
-  const authUrl = `https://auth.mercadolivre.com.br/authorization?response_type=code&client_id=${ML_CLIENT_ID}&redirect_uri=https://followup-dashboard.vercel.app`;
+  const authUrl = `https://auth.mercadolivre.com.br/authorization?response_type=code&client_id=${ML_CLIENT_ID}&redirect_uri=https://www.google.com`;
 
   async function handleCode() {
     if (!code.trim()) return;
@@ -431,7 +431,7 @@ function MLConnectModal({ onConnect, onClose }) {
           grant_type:   "authorization_code",
           client_id:    ML_CLIENT_ID,
           code:         code.trim(),
-          redirect_uri: "https://followup-dashboard.vercel.app",
+          redirect_uri: "https://www.google.com",
         }),
       });
       const data = await res.json();

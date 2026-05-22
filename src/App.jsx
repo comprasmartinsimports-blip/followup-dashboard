@@ -1434,6 +1434,295 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
 
 
 // ════════════════════════════════════════════════════════════
+//  IA — Analisador de Prioridade de Pagamentos
+// ════════════════════════════════════════════════════════════
+
+async function analisarPrioridadePagamentos(contas, saldoDisponivel) {
+  const hoje = new Date().toLocaleDateString("sv-SE");
+  
+  // Calcula custo acumulado de cada conta
+  const contasComCusto = contas.filter(c => c.status !== "Pago").map(c => {
+    const valor = parseFloat(c.valor || 0);
+    const multa = parseFloat(c.multaPct || 0) / 100;
+    const jurosDia = parseFloat(c.jurosDia || 0) / 100;
+    const venc = c.vencimento;
+    const hoje = new Date(); hoje.setHours(0,0,0,0);
+    const dueDate = venc ? new Date(venc + "T00:00:00") : null;
+    const diasAtraso = dueDate ? Math.max(0, Math.round((hoje - dueDate) / 86400000)) : 0;
+    const diasParaVencer = dueDate ? Math.round((dueDate - hoje) / 86400000) : 999;
+    
+    const multaValor = diasAtraso > 0 ? valor * multa : 0;
+    const jurosValor = diasAtraso > 0 ? valor * jurosDia * diasAtraso : 0;
+    const custoHoje = valor + multaValor + jurosValor;
+    const custoAmanha = valor + (diasAtraso === 0 && dueDate ? valor * multa : multaValor) + valor * jurosDia * (diasAtraso + 1);
+    const custoPorDia = valor * jurosDia + (diasAtraso === 0 && dueDate ? valor * multa : 0);
+    
+    return {
+      ...c, valor, multa, jurosDia, diasAtraso, diasParaVencer,
+      multaValor, jurosValor, custoHoje, custoAmanha, custoPorDia,
+    };
+  });
+
+  const prompt = `Você é um consultor financeiro especialista em gestão de fluxo de caixa para pequenas empresas brasileiras.
+
+Analise as seguintes contas a pagar e forneça uma recomendação de prioridade de pagamento considerando:
+1. Custo total atual (valor + multa + juros acumulados)
+2. Custo por dia de atraso adicional
+3. Dias até o vencimento (ou de atraso)
+4. Valor total de cada conta
+
+Saldo disponível para pagamento hoje: R$ ${saldoDisponivel.toFixed(2)}
+
+Contas a pagar:
+${contasComCusto.map((c, i) => `
+${i+1}. ${c.descricao}
+   - Valor original: R$ ${c.valor.toFixed(2)}
+   - Vencimento: ${c.vencimento || "não informado"}
+   - Situação: ${c.diasAtraso > 0 ? `VENCIDA há ${c.diasAtraso} dias` : c.diasParaVencer === 0 ? "VENCE HOJE" : `vence em ${c.diasParaVencer} dias`}
+   - Multa acumulada: R$ ${c.multaValor.toFixed(2)} (${c.multaPct || 0}%)
+   - Juros acumulados: R$ ${c.jurosValor.toFixed(2)} (${c.jurosDia || 0}% ao dia)
+   - Custo total hoje: R$ ${c.custoHoje.toFixed(2)}
+   - Custo adicional por dia: R$ ${c.custoPorDia.toFixed(2)}
+   - Categoria: ${c.categoria}
+`).join("")}
+
+Retorne APENAS um JSON válido neste formato exato:
+{
+  "resumo": "frase curta explicando a situação geral",
+  "alerta_critico": "alerta se houver situação urgente ou null",
+  "prioridade": [
+    {
+      "posicao": 1,
+      "id": "id_da_conta",
+      "razao": "explicação curta do motivo da prioridade",
+      "urgencia": "critica|alta|media|baixa",
+      "pagar_hoje": true|false,
+      "economia_se_pagar_hoje": 0.00
+    }
+  ],
+  "contas_no_saldo": ["id1", "id2"],
+  "total_se_pagar_prioritarias": 0.00,
+  "recomendacao_final": "texto com recomendação final considerando o saldo disponível"
+}`;
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+      "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY,
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1000,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+
+  const data = await response.json();
+  if (data.error) throw new Error(data.error.message);
+  const text = data.content?.map(b => b.text || "").join("") ?? "";
+  const clean = text.replace(/```json|```/g, "").trim();
+  const jsonStart = clean.indexOf("{");
+  const jsonEnd = clean.lastIndexOf("}");
+  return JSON.parse(clean.slice(jsonStart, jsonEnd + 1));
+}
+
+function PainelIAPagamentos({ contasPagar, contasBancarias }) {
+  const [state, setState] = useState("idle"); // idle | loading | done | error
+  const [result, setResult] = useState(null);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [saldo, setSaldo] = useState("");
+  const [contaSelecionada, setContaSelecionada] = useState("");
+
+  const contasPendentes = contasPagar.filter(c => c.status !== "Pago");
+
+  async function analisar() {
+    if (!import.meta.env.VITE_ANTHROPIC_KEY) {
+      setErrorMsg("Chave da API Anthropic não configurada (VITE_ANTHROPIC_KEY)");
+      setState("error"); return;
+    }
+    if (contasPendentes.length === 0) {
+      setErrorMsg("Nenhuma conta pendente para analisar");
+      setState("error"); return;
+    }
+    setState("loading"); setErrorMsg("");
+    try {
+      const r = await analisarPrioridadePagamentos(contasPendentes, parseFloat(saldo) || 0);
+      setResult(r); setState("done");
+    } catch(e) { setErrorMsg(e.message); setState("error"); }
+  }
+
+  const urgenciaCor = u => u==="critica"?"#dc2626":u==="alta"?"#d97706":u==="media"?"#0891b2":"#15803d";
+  const urgenciaBg  = u => u==="critica"?"#fef2f2":u==="alta"?"#fffbeb":u==="media"?"#ecfeff":"#f0fdf4";
+  const urgenciaLabel = u => u==="critica"?"🚨 CRÍTICA":u==="alta"?"⚠️ Alta":u==="media"?"📋 Média":"✓ Baixa";
+
+  return (
+    <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"24px 28px", marginBottom:20, boxShadow:"0 1px 3px rgba(0,0,0,.06)" }}>
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:20 }}>
+        <div style={{ width:40, height:40, borderRadius:12, background:"linear-gradient(135deg,#667eea,#764ba2)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>✦</div>
+        <div>
+          <div style={{ fontWeight:800, fontSize:16, color:"#0f172a" }}>Análise IA de Prioridade de Pagamentos</div>
+          <div style={{ fontSize:12, color:"#94a3b8" }}>Descubra quais contas custam mais por dia de atraso</div>
+        </div>
+      </div>
+
+      {state === "idle" && (
+        <div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
+            <div>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:6, fontWeight:600, textTransform:"uppercase" }}>Saldo disponível hoje (R$)</div>
+              <input type="number" value={saldo} onChange={e => setSaldo(e.target.value)}
+                placeholder="Ex: 5000,00 — deixe 0 para análise geral"
+                style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"10px 14px", borderRadius:10, fontSize:13, outline:"none" }} />
+            </div>
+            <div>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:6, fontWeight:600, textTransform:"uppercase" }}>Conta para pagamento</div>
+              <select value={contaSelecionada} onChange={e => setContaSelecionada(e.target.value)}
+                style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", padding:"10px 14px", borderRadius:10, fontSize:13 }}>
+                <option value="">— Selecione (opcional) —</option>
+                {contasBancarias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ background:"#f8fafc", borderRadius:10, padding:"12px 14px", marginBottom:16 }}>
+            <div style={{ fontSize:12, color:"#64748b", marginBottom:8 }}>
+              <strong>{contasPendentes.length}</strong> contas pendentes para análise
+              {contasPendentes.filter(c=>c.multaPct||c.jurosDia).length < contasPendentes.length && (
+                <span style={{ color:"#d97706", marginLeft:8 }}>
+                  ⚠ {contasPendentes.filter(c=>!c.multaPct&&!c.jurosDia).length} sem juros/multa cadastrados — a IA ainda analisa por vencimento e valor
+                </span>
+              )}
+            </div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+              {contasPendentes.slice(0,5).map(c => (
+                <span key={c.id} style={{ fontSize:11, background:"#e2e8f0", color:"#475569", padding:"3px 8px", borderRadius:20 }}>
+                  {c.descricao?.slice(0,25)} — R$ {parseFloat(c.valor||0).toFixed(2).replace(".",",")}
+                </span>
+              ))}
+              {contasPendentes.length > 5 && <span style={{ fontSize:11, color:"#94a3b8" }}>+{contasPendentes.length-5} mais</span>}
+            </div>
+          </div>
+          <button onClick={analisar}
+            style={{ width:"100%", background:"linear-gradient(135deg,#667eea,#764ba2)", border:"none", color:"#fff", fontWeight:700, padding:"13px", borderRadius:12, cursor:"pointer", fontSize:15 }}>
+            ✦ Analisar com Inteligência Artificial
+          </button>
+        </div>
+      )}
+
+      {state === "loading" && (
+        <div style={{ textAlign:"center", padding:"32px 0" }}>
+          <div style={{ fontSize:32, marginBottom:12, display:"inline-block", animation:"spin 1s linear infinite" }}>✦</div>
+          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+          <div style={{ fontSize:14, color:"#94a3b8" }}>Analisando suas contas com IA...</div>
+          <div style={{ fontSize:12, color:"#cbd5e1", marginTop:4 }}>Calculando custo de cada dia de atraso</div>
+        </div>
+      )}
+
+      {state === "error" && (
+        <div>
+          <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"12px 16px", marginBottom:16, color:"#dc2626", fontSize:13 }}>⚠ {errorMsg}</div>
+          <button onClick={() => setState("idle")} style={{ background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", fontWeight:600, padding:"10px 20px", borderRadius:10, cursor:"pointer" }}>Tentar novamente</button>
+        </div>
+      )}
+
+      {state === "done" && result && (
+        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+          {/* Resumo */}
+          <div style={{ background:"linear-gradient(135deg,#667eea22,#764ba222)", border:"1px solid #667eea44", borderRadius:12, padding:"14px 18px" }}>
+            <div style={{ fontSize:13, color:"#0f172a", lineHeight:1.6 }}>{result.resumo}</div>
+          </div>
+
+          {/* Alerta crítico */}
+          {result.alerta_critico && (
+            <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"12px 16px", display:"flex", gap:10, alignItems:"flex-start" }}>
+              <span style={{ fontSize:18 }}>🚨</span>
+              <div style={{ fontSize:13, color:"#dc2626", fontWeight:600 }}>{result.alerta_critico}</div>
+            </div>
+          )}
+
+          {/* Ranking de prioridade */}
+          <div>
+            <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", marginBottom:12 }}>Ordem de Prioridade</div>
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              {result.prioridade?.map((item, i) => {
+                const conta = contasPagar.find(c => c.id === item.id || String(c.id) === String(item.id));
+                const noCabeSaldo = result.contas_no_saldo?.includes(item.id) || result.contas_no_saldo?.includes(String(item.id));
+                return (
+                  <div key={i} style={{ background:urgenciaBg(item.urgencia), border:`1px solid ${urgenciaCor(item.urgencia)}33`, borderRadius:12, padding:"14px 16px" }}>
+                    <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
+                      <div style={{ width:36, height:36, borderRadius:10, background:urgenciaCor(item.urgencia), color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, fontSize:16, flexShrink:0 }}>
+                        {item.posicao}
+                      </div>
+                      <div style={{ flex:1 }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6 }}>
+                          <div>
+                            <div style={{ fontWeight:700, fontSize:14, color:"#0f172a" }}>{conta?.descricao || `Conta #${item.id}`}</div>
+                            <span style={{ fontSize:11, fontWeight:600, color:urgenciaCor(item.urgencia), background:urgenciaBg(item.urgencia), padding:"2px 8px", borderRadius:20, border:`1px solid ${urgenciaCor(item.urgencia)}44` }}>
+                              {urgenciaLabel(item.urgencia)}
+                            </span>
+                          </div>
+                          <div style={{ textAlign:"right" }}>
+                            {conta?.valor && <div style={{ fontSize:15, fontWeight:800, color:"#0f172a" }}>R$ {parseFloat(conta.valor).toFixed(2).replace(".",",")}</div>}
+                            {item.economia_se_pagar_hoje > 0 && (
+                              <div style={{ fontSize:11, color:"#15803d", fontWeight:600 }}>Economiza R$ {item.economia_se_pagar_hoje.toFixed(2).replace(".",",")} pagando hoje</div>
+                            )}
+                          </div>
+                        </div>
+                        <div style={{ fontSize:13, color:"#475569", lineHeight:1.5, marginBottom:8 }}>{item.razao}</div>
+                        <div style={{ display:"flex", gap:8 }}>
+                          {item.pagar_hoje && (
+                            <span style={{ fontSize:11, background:"#dc2626", color:"#fff", padding:"3px 10px", borderRadius:20, fontWeight:700 }}>⚡ Pagar hoje</span>
+                          )}
+                          {noCabeSaldo && parseFloat(saldo) > 0 && (
+                            <span style={{ fontSize:11, background:"#15803d", color:"#fff", padding:"3px 10px", borderRadius:20, fontWeight:600 }}>✓ Cabe no saldo</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Resumo financeiro */}
+          {result.total_se_pagar_prioritarias > 0 && (
+            <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:12, padding:"14px 18px" }}>
+              <div style={{ display:"flex", justifyContent:"space-between" }}>
+                <span style={{ fontSize:13, color:"#64748b" }}>Total das prioritárias:</span>
+                <span style={{ fontSize:14, fontWeight:700, color:"#0f172a" }}>R$ {result.total_se_pagar_prioritarias.toFixed(2).replace(".",",")}</span>
+              </div>
+              {parseFloat(saldo) > 0 && (
+                <div style={{ display:"flex", justifyContent:"space-between", marginTop:6 }}>
+                  <span style={{ fontSize:13, color:"#64748b" }}>Saldo após pagamento:</span>
+                  <span style={{ fontSize:14, fontWeight:700, color:parseFloat(saldo)-result.total_se_pagar_prioritarias>=0?"#15803d":"#dc2626" }}>
+                    R$ {(parseFloat(saldo)-result.total_se_pagar_prioritarias).toFixed(2).replace(".",",")}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Recomendação final */}
+          <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:12, padding:"14px 18px" }}>
+            <div style={{ fontSize:11, color:"#92400e", fontWeight:700, textTransform:"uppercase", marginBottom:6 }}>✦ Recomendação Final</div>
+            <div style={{ fontSize:13, color:"#1c1917", lineHeight:1.6 }}>{result.recomendacao_final}</div>
+          </div>
+
+          <button onClick={() => { setState("idle"); setResult(null); }}
+            style={{ background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"10px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
+            Nova Análise
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ════════════════════════════════════════════════════════════
 //  FINANCEIRO COMPLETO
 // ════════════════════════════════════════════════════════════
 
@@ -1655,6 +1944,21 @@ function ModalConta({ conta, categoriasPagar, onSave, onClose }) {
             <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Observação</div>
             <input value={form.observacao} onChange={e => set("observacao", e.target.value)} placeholder="Opcional"
               style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+          </div>
+          <div style={{ gridColumn:"1/-1", background:"#f8fafc", borderRadius:10, padding:"12px 14px" }}>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:10, fontWeight:700, textTransform:"uppercase" }}>💰 Juros e Multa (para análise IA)</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+              <div>
+                <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Multa por atraso (%)</div>
+                <input type="number" value={form.multaPct||""} onChange={e => set("multaPct", e.target.value)} placeholder="Ex: 2"
+                  style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Juros ao dia (%)</div>
+                <input type="number" value={form.jurosDia||""} onChange={e => set("jurosDia", e.target.value)} placeholder="Ex: 0.033"
+                  style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+              </div>
+            </div>
           </div>
         </div>
         <div style={{ display:"flex", gap:8 }}>
@@ -2075,6 +2379,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
             {/* ── CONTAS A PAGAR ── */}
       {finTab === "pagar" && (
         <div>
+          <PainelIAPagamentos contasPagar={contasPagar} contasBancarias={contasBancarias} />
           <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
             <button onClick={() => { setEditingConta(null); setShowModalConta(true); }}
               style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Nova Conta</button>

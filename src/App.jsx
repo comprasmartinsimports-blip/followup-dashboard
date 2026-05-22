@@ -463,6 +463,618 @@ function MLConnectModal({ onConnect, onClose }) {
 
 
 // ════════════════════════════════════════════════════════════
+//  PRODUTOS — Cadastro completo com sync ML
+// ════════════════════════════════════════════════════════════
+
+const ORIGENS_PRODUTO = [
+  "0 - Nacional", "1 - Estrangeira (importação direta)",
+  "2 - Estrangeira (adquirida no mercado interno)",
+  "3 - Nacional c/ + 40% de conteúdo estrangeiro",
+  "4 - Nacional (processos básicos)",
+  "5 - Nacional c/ até 40% de conteúdo estrangeiro",
+];
+
+const CATEGORIAS_PRODUTO = [
+  "Lanternas", "Faróis", "Break Lights", "Retrovisores",
+  "Para-choques", "Capôs", "Portas", "Vidros",
+  "Suspensão", "Motor", "Freios", "Elétrica", "Outros"
+];
+
+function saveProdutos(p) { try { localStorage.setItem("produtos_cadastro", JSON.stringify(p)); } catch {} }
+function saveFornecedores(f) { try { localStorage.setItem("fornecedores_cadastro", JSON.stringify(f)); } catch {} }
+
+// ── Converte imagem para base64 ──────────────────────────────
+function fileToBase64(file) {
+  return new Promise((res, rej) => {
+    const reader = new FileReader();
+    reader.onload = () => res(reader.result);
+    reader.onerror = rej;
+    reader.readAsDataURL(file);
+  });
+}
+
+// ── Modal de Fornecedor ──────────────────────────────────────
+function ModalFornecedor({ fornecedor, onSave, onClose }) {
+  const [form, setForm] = useState(fornecedor || {
+    id: Date.now(), nome: "", cnpj: "", telefone: "", email: "", contato: "", obs: ""
+  });
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:24 }}>
+      <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:480, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)", maxHeight:"90vh", overflowY:"auto" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+          <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>{fornecedor ? "Editar Fornecedor" : "Novo Fornecedor"}</div>
+          <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
+        </div>
+        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+          {[
+            { k:"nome", label:"Nome *", placeholder:"Nome do fornecedor" },
+            { k:"cnpj", label:"CNPJ", placeholder:"00.000.000/0000-00" },
+            { k:"contato", label:"Contato", placeholder:"Nome do contato" },
+            { k:"telefone", label:"Telefone", placeholder:"(11) 99999-9999" },
+            { k:"email", label:"E-mail", placeholder:"email@fornecedor.com" },
+            { k:"obs", label:"Observação", placeholder:"Opcional" },
+          ].map(f => (
+            <div key={f.k}>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>{f.label}</div>
+              <input value={form[f.k]} onChange={e => set(f.k, e.target.value)} placeholder={f.placeholder}
+                style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+            </div>
+          ))}
+        </div>
+        <div style={{ display:"flex", gap:8, marginTop:20 }}>
+          <button onClick={onClose} style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
+          <button onClick={() => { if (!form.nome) return; onSave(form); onClose(); }} disabled={!form.nome}
+            style={{ flex:2, background:!form.nome?"#f1f5f9":"#0f172a", border:"none", color:!form.nome?"#94a3b8":"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:!form.nome?"not-allowed":"pointer" }}>
+            Salvar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Modal de Produto ─────────────────────────────────────────
+function ModalProduto({ produto, fornecedores, listings, onSave, onClose }) {
+  const emptyForm = {
+    id: Date.now(), titulo: "", sku: "", ean: "", codigoFornecedor: "",
+    fornecedorId: "", precoCusto: "", precoVenda: "",
+    estoqueAtual: "", estoqueMinimo: "", estoqueMaximo: "", localizacao: "",
+    ncm: "", cest: "", origem: "0 - Nacional", cfop: "5102",
+    aliqICMS: "", aliqIPI: "", aliqPIS: "0.65", aliqCOFINS: "3.00",
+    categoria: "Outros", descricao: "", peso: "", comprimento: "", largura: "", altura: "",
+    status: "Ativo", imagens: [], mlbVinculado: "",
+  };
+  const [form, setForm] = useState(produto || emptyForm);
+  const [tab, setTab] = useState("geral");
+  const [uploading, setUploading] = useState(false);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  async function handleImages(files) {
+    if (form.imagens.length >= 10) return;
+    setUploading(true);
+    const remaining = 10 - form.imagens.length;
+    const toProcess = Array.from(files).slice(0, remaining);
+    const base64s = await Promise.all(toProcess.map(f => fileToBase64(f)));
+    set("imagens", [...form.imagens, ...base64s]);
+    setUploading(false);
+  }
+
+  function removeImage(idx) {
+    set("imagens", form.imagens.filter((_, i) => i !== idx));
+  }
+
+  const TABS = [
+    { key:"geral", label:"📋 Geral" },
+    { key:"estoque", label:"📦 Estoque" },
+    { key:"fiscal", label:"🧾 Fiscal" },
+    { key:"fotos", label:"🖼️ Fotos" },
+    { key:"ml", label:"🟡 ML" },
+  ];
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:16 }}>
+      <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:720, maxHeight:"92vh", display:"flex", flexDirection:"column", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
+        {/* Header */}
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"20px 28px", borderBottom:"1px solid #f1f5f9" }}>
+          <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>{produto ? "Editar Produto" : "Novo Produto"}</div>
+          <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
+        </div>
+        {/* Sub-tabs */}
+        <div style={{ display:"flex", gap:2, padding:"10px 28px 0", borderBottom:"1px solid #f1f5f9", background:"#fafafa" }}>
+          {TABS.map(t => (
+            <button key={t.key} onClick={() => setTab(t.key)}
+              style={{ background:tab===t.key?"#fff":"transparent", border:"none", borderBottom:tab===t.key?"2px solid #0f172a":"2px solid transparent", color:tab===t.key?"#0f172a":"#94a3b8", padding:"8px 14px", cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:tab===t.key?700:500 }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        {/* Content */}
+        <div style={{ flex:1, overflowY:"auto", padding:"20px 28px" }}>
+
+          {/* ── GERAL ── */}
+          {tab === "geral" && (
+            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+              <div>
+                <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Título *</div>
+                <input value={form.titulo} onChange={e => set("titulo", e.target.value)} placeholder="Nome completo do produto"
+                  style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
+                <div>
+                  <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>SKU *</div>
+                  <input value={form.sku} onChange={e => set("sku", e.target.value)} placeholder="Ex: 097"
+                    style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Cód. de Barras (EAN)</div>
+                  <input value={form.ean} onChange={e => set("ean", e.target.value)} placeholder="7891234567890"
+                    style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Categoria</div>
+                  <select value={form.categoria} onChange={e => set("categoria", e.target.value)}
+                    style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", padding:"9px 12px", borderRadius:8, fontSize:13 }}>
+                    {CATEGORIAS_PRODUTO.map(c => <option key={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <div>
+                  <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Fornecedor</div>
+                  <select value={form.fornecedorId} onChange={e => set("fornecedorId", e.target.value)}
+                    style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", padding:"9px 12px", borderRadius:8, fontSize:13 }}>
+                    <option value="">— Selecione —</option>
+                    {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Cód. do Fornecedor</div>
+                  <input value={form.codigoFornecedor} onChange={e => set("codigoFornecedor", e.target.value)} placeholder="Referência do fornecedor"
+                    style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                </div>
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <div>
+                  <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Preço de Custo (R$)</div>
+                  <input type="number" value={form.precoCusto} onChange={e => set("precoCusto", e.target.value)} placeholder="0,00"
+                    style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Preço de Venda (R$)</div>
+                  <input type="number" value={form.precoVenda} onChange={e => set("precoVenda", e.target.value)} placeholder="0,00"
+                    style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                </div>
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:10 }}>
+                <div>
+                  <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Peso (kg)</div>
+                  <input type="number" value={form.peso} onChange={e => set("peso", e.target.value)} placeholder="0.000"
+                    style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Compr. (cm)</div>
+                  <input type="number" value={form.comprimento} onChange={e => set("comprimento", e.target.value)} placeholder="0"
+                    style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Larg. (cm)</div>
+                  <input type="number" value={form.largura} onChange={e => set("largura", e.target.value)} placeholder="0"
+                    style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Alt. (cm)</div>
+                  <input type="number" value={form.altura} onChange={e => set("altura", e.target.value)} placeholder="0"
+                    style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Descrição</div>
+                <textarea value={form.descricao} onChange={e => set("descricao", e.target.value)} placeholder="Descrição detalhada do produto..." rows={3}
+                  style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none", resize:"vertical" }} />
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Status</div>
+                <div style={{ display:"flex", gap:8 }}>
+                  {["Ativo","Inativo"].map(s => (
+                    <button key={s} onClick={() => set("status", s)}
+                      style={{ padding:"7px 20px", borderRadius:8, border:`1px solid ${form.status===s?"#0f172a":"#e2e8f0"}`, background:form.status===s?"#0f172a":"#fff", color:form.status===s?"#fff":"#64748b", fontWeight:600, cursor:"pointer", fontSize:13 }}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── ESTOQUE ── */}
+          {tab === "estoque" && (
+            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
+                {[
+                  { k:"estoqueAtual", label:"Estoque Atual", placeholder:"0" },
+                  { k:"estoqueMinimo", label:"Estoque Mínimo", placeholder:"0" },
+                  { k:"estoqueMaximo", label:"Estoque Máximo", placeholder:"0" },
+                ].map(f => (
+                  <div key={f.k}>
+                    <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>{f.label}</div>
+                    <input type="number" value={form[f.k]} onChange={e => set(f.k, e.target.value)} placeholder={f.placeholder}
+                      style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                  </div>
+                ))}
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Localização no Estoque</div>
+                <input value={form.localizacao} onChange={e => set("localizacao", e.target.value)} placeholder="Ex: Galpão A, Prateleira 3, Box 2"
+                  style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+              </div>
+              {form.estoqueAtual && form.estoqueMinimo && parseFloat(form.estoqueAtual) <= parseFloat(form.estoqueMinimo) && (
+                <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"12px 16px", display:"flex", alignItems:"center", gap:8 }}>
+                  <span style={{ fontSize:18 }}>⚠️</span>
+                  <div style={{ color:"#dc2626", fontWeight:600, fontSize:13 }}>Estoque abaixo do mínimo!</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── FISCAL ── */}
+          {tab === "fiscal" && (
+            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <div>
+                  <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>NCM</div>
+                  <input value={form.ncm} onChange={e => set("ncm", e.target.value)} placeholder="0000.00.00"
+                    style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>CEST</div>
+                  <input value={form.cest} onChange={e => set("cest", e.target.value)} placeholder="00.000.00"
+                    style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Origem</div>
+                <select value={form.origem} onChange={e => set("origem", e.target.value)}
+                  style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", padding:"9px 12px", borderRadius:8, fontSize:13 }}>
+                  {ORIGENS_PRODUTO.map(o => <option key={o}>{o}</option>)}
+                </select>
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>CFOP</div>
+                <input value={form.cfop} onChange={e => set("cfop", e.target.value)} placeholder="5102"
+                  style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+              </div>
+              <div style={{ background:"#f8fafc", borderRadius:10, padding:"14px 16px" }}>
+                <div style={{ fontWeight:600, fontSize:13, color:"#0f172a", marginBottom:12 }}>Alíquotas (%)</div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:10 }}>
+                  {[
+                    { k:"aliqICMS", label:"ICMS" },
+                    { k:"aliqIPI",  label:"IPI" },
+                    { k:"aliqPIS",  label:"PIS" },
+                    { k:"aliqCOFINS", label:"COFINS" },
+                  ].map(f => (
+                    <div key={f.k}>
+                      <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>{f.label}</div>
+                      <input type="number" value={form[f.k]} onChange={e => set(f.k, e.target.value)} placeholder="0,00"
+                        style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── FOTOS ── */}
+          {tab === "fotos" && (
+            <div>
+              <div style={{ fontSize:13, color:"#64748b", marginBottom:14 }}>
+                {form.imagens.length}/10 fotos adicionadas
+              </div>
+              {form.imagens.length < 10 && (
+                <label style={{ display:"block", border:"2px dashed #e2e8f0", borderRadius:12, padding:"24px", textAlign:"center", cursor:"pointer", marginBottom:16, background:"#f8fafc" }}>
+                  <input type="file" accept="image/*" multiple style={{ display:"none" }} onChange={e => handleImages(e.target.files)} />
+                  <div style={{ fontSize:32, marginBottom:8 }}>📷</div>
+                  <div style={{ fontSize:14, fontWeight:600, color:"#0f172a" }}>{uploading ? "Carregando..." : "Clique para adicionar fotos"}</div>
+                  <div style={{ fontSize:12, color:"#94a3b8", marginTop:4 }}>JPG, PNG, WEBP — máx. {10 - form.imagens.length} foto(s)</div>
+                </label>
+              )}
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(120px, 1fr))", gap:10 }}>
+                {form.imagens.map((img, idx) => (
+                  <div key={idx} style={{ position:"relative", aspectRatio:"1", borderRadius:10, overflow:"hidden", border:"1px solid #e2e8f0" }}>
+                    <img src={img} alt={`Foto ${idx+1}`} style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+                    {idx === 0 && <div style={{ position:"absolute", top:6, left:6, background:"#0f172a", color:"#fff", fontSize:9, padding:"2px 6px", borderRadius:4, fontWeight:700 }}>CAPA</div>}
+                    <button onClick={() => removeImage(idx)}
+                      style={{ position:"absolute", top:6, right:6, background:"#dc2626", border:"none", color:"#fff", width:22, height:22, borderRadius:6, cursor:"pointer", fontSize:12, display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── ML ── */}
+          {tab === "ml" && (
+            <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+              <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:10, padding:"12px 16px", fontSize:13, color:"#92400e" }}>
+                💡 Vincule este produto a um anúncio do ML pelo SKU. O estoque e custo serão sincronizados automaticamente.
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Anúncio ML Vinculado (por SKU)</div>
+                <select value={form.mlbVinculado} onChange={e => set("mlbVinculado", e.target.value)}
+                  style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", padding:"9px 12px", borderRadius:8, fontSize:13 }}>
+                  <option value="">— Nenhum —</option>
+                  {listings.filter(l => l.seller_sku || l.sku).map(l => (
+                    <option key={l.id} value={l.id}>
+                      {l.seller_sku || l.sku} — {l.title?.slice(0,50)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {form.mlbVinculado && (() => {
+                const listing = listings.find(l => l.id === form.mlbVinculado);
+                if (!listing) return null;
+                return (
+                  <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:10, padding:"14px 16px" }}>
+                    <div style={{ fontWeight:700, fontSize:13, color:"#15803d", marginBottom:8 }}>✓ Anúncio vinculado</div>
+                    <div style={{ fontSize:13, color:"#0f172a", marginBottom:4 }}>{listing.title}</div>
+                    <div style={{ display:"flex", gap:16, fontSize:12, color:"#64748b" }}>
+                      <span>MLB: {listing.id}</span>
+                      <span>Preço: R$ {listing.price}</span>
+                      <span>Estoque ML: {listing.available_quantity}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{ display:"flex", gap:8, padding:"16px 28px", borderTop:"1px solid #f1f5f9" }}>
+          <button onClick={onClose} style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
+          <button onClick={() => { if (!form.titulo || !form.sku) return; onSave(form); onClose(); }}
+            disabled={!form.titulo || !form.sku}
+            style={{ flex:3, background:!form.titulo||!form.sku?"#f1f5f9":"#0f172a", border:"none", color:!form.titulo||!form.sku?"#94a3b8":"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:!form.titulo||!form.sku?"not-allowed":"pointer" }}>
+            Salvar Produto
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── ProdutosTab Principal ────────────────────────────────────
+function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, listings, costs, setCosts }) {
+  const [prodTab, setProdTab] = useState("lista"); // lista | fornecedores
+  const [showModalProd, setShowModalProd] = useState(false);
+  const [showModalForn, setShowModalForn] = useState(false);
+  const [editingProd, setEditingProd] = useState(null);
+  const [editingForn, setEditingForn] = useState(null);
+  const [search, setSearch] = useState("");
+  const [filterCat, setFilterCat] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+
+  function saveProd(form) {
+    const updated = editingProd ? produtos.map(p => p.id===form.id?form:p) : [...produtos, {...form, id:Date.now()}];
+    setProdutos(updated); saveProdutos(updated);
+    // Sync custo com dashboard de anúncios
+    if (form.mlbVinculado && form.precoCusto) {
+      setCosts(c => ({ ...c, [form.mlbVinculado]: parseFloat(form.precoCusto) }));
+    }
+    setEditingProd(null);
+  }
+
+  function deleteProd(id) {
+    if (!confirm("Excluir este produto?")) return;
+    const updated = produtos.filter(p => p.id !== id);
+    setProdutos(updated); saveProdutos(updated);
+  }
+
+  function saveForn(form) {
+    const updated = editingForn ? fornecedores.map(f => f.id===form.id?form:f) : [...fornecedores, {...form, id:Date.now()}];
+    setFornecedores(updated); saveFornecedores(updated);
+    setEditingForn(null);
+  }
+
+  function deleteForn(id) {
+    if (!confirm("Excluir este fornecedor?")) return;
+    const updated = fornecedores.filter(f => f.id !== id);
+    setFornecedores(updated); saveFornecedores(updated);
+  }
+
+  const produtosFiltrados = useMemo(() => {
+    let r = produtos;
+    if (search) r = r.filter(p =>
+      p.titulo?.toLowerCase().includes(search.toLowerCase()) ||
+      p.sku?.toLowerCase().includes(search.toLowerCase()) ||
+      p.ean?.includes(search) ||
+      p.codigoFornecedor?.toLowerCase().includes(search.toLowerCase())
+    );
+    if (filterCat !== "all") r = r.filter(p => p.categoria === filterCat);
+    if (filterStatus !== "all") r = r.filter(p => p.status === filterStatus);
+    return r;
+  }, [produtos, search, filterCat, filterStatus]);
+
+  const estoqueBaixo = produtos.filter(p => p.estoqueMinimo && p.estoqueAtual && parseFloat(p.estoqueAtual) <= parseFloat(p.estoqueMinimo));
+
+  return (
+    <div>
+      {/* Sub-tabs */}
+      <div style={{ display:"flex", gap:2, marginBottom:16, background:"#f1f5f9", padding:4, borderRadius:10, width:"fit-content" }}>
+        {[
+          { key:"lista", label:"📦 Produtos" },
+          { key:"fornecedores", label:"🏭 Fornecedores" },
+        ].map(t => (
+          <button key={t.key} onClick={() => setProdTab(t.key)}
+            style={{ background:prodTab===t.key?"#fff":"transparent", border:"none", color:prodTab===t.key?"#0f172a":"#94a3b8", padding:"8px 18px", cursor:"pointer", fontFamily:"inherit", fontSize:13, borderRadius:8, fontWeight:prodTab===t.key?700:500, boxShadow:prodTab===t.key?"0 1px 3px rgba(0,0,0,.08)":"none" }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── LISTA DE PRODUTOS ── */}
+      {prodTab === "lista" && (
+        <div>
+          {estoqueBaixo.length > 0 && (
+            <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"12px 16px", marginBottom:14, display:"flex", alignItems:"center", gap:10 }}>
+              <span style={{ fontSize:18 }}>⚠️</span>
+              <div>
+                <div style={{ fontWeight:700, color:"#dc2626", fontSize:13 }}>Estoque crítico em {estoqueBaixo.length} produto(s)</div>
+                <div style={{ fontSize:12, color:"#b91c1c" }}>{estoqueBaixo.map(p => p.titulo?.slice(0,30)).join(", ")}</div>
+              </div>
+            </div>
+          )}
+
+          <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
+            <button onClick={() => { setEditingProd(null); setShowModalProd(true); }}
+              style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Novo Produto</button>
+            <div style={{ position:"relative", flex:1, minWidth:200 }}>
+              <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por título, SKU, EAN..."
+                style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px 8px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
+            </div>
+            <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
+              style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 12px", borderRadius:8, fontSize:12 }}>
+              <option value="all">Todas categorias</option>
+              {CATEGORIAS_PRODUTO.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+              style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 12px", borderRadius:8, fontSize:12 }}>
+              <option value="all">Todos status</option>
+              <option value="Ativo">Ativo</option>
+              <option value="Inativo">Inativo</option>
+            </select>
+            <span style={{ fontSize:12, color:"#94a3b8" }}>{produtosFiltrados.length} produto(s)</span>
+          </div>
+
+          {produtosFiltrados.length === 0 ? (
+            <div style={{ background:"#f8fafc", border:"2px dashed #e2e8f0", borderRadius:12, padding:60, textAlign:"center", color:"#94a3b8" }}>
+              <div style={{ fontSize:40, marginBottom:12 }}>📦</div>
+              <div style={{ fontWeight:700, fontSize:16, marginBottom:6 }}>Nenhum produto cadastrado</div>
+              <div style={{ fontSize:13 }}>Clique em "+ Novo Produto" para começar</div>
+            </div>
+          ) : (
+            <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
+              <table style={{ borderCollapse:"collapse", width:"100%" }}>
+                <thead>
+                  <tr>{["Foto","Produto","SKU / EAN","Fornecedor","Custo","Venda","Estoque","Status","ML","Ações"].map(h=>(
+                    <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>
+                  ))}</tr>
+                </thead>
+                <tbody>
+                  {produtosFiltrados.map((p, i) => {
+                    const forn = fornecedores.find(f => f.id === p.fornecedorId);
+                    const mlListing = listings.find(l => l.id === p.mlbVinculado);
+                    const estBaixo = p.estoqueMinimo && p.estoqueAtual && parseFloat(p.estoqueAtual) <= parseFloat(p.estoqueMinimo);
+                    return (
+                      <tr key={p.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
+                        <td style={{ padding:"8px 8px 8px 14px", width:52 }}>
+                          {p.imagens?.[0] ? (
+                            <img src={p.imagens[0]} alt="" style={{ width:44, height:44, objectFit:"cover", borderRadius:8, border:"1px solid #e2e8f0" }} />
+                          ) : (
+                            <div style={{ width:44, height:44, borderRadius:8, background:"#f1f5f9", border:"1px solid #e2e8f0", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>📦</div>
+                          )}
+                        </td>
+                        <td style={{ padding:"10px 14px", maxWidth:200 }}>
+                          <div style={{ fontSize:13, fontWeight:600, color:"#0f172a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.titulo}</div>
+                          <div style={{ fontSize:11, color:"#94a3b8" }}>{p.categoria}</div>
+                        </td>
+                        <td style={{ padding:"10px 14px" }}>
+                          <div style={{ fontSize:12, fontFamily:"monospace", fontWeight:600, color:"#334155" }}>{p.sku || "—"}</div>
+                          {p.ean && <div style={{ fontSize:10, color:"#94a3b8" }}>{p.ean}</div>}
+                        </td>
+                        <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>
+                          <div>{forn?.nome || "—"}</div>
+                          {p.codigoFornecedor && <div style={{ fontSize:10, color:"#94a3b8" }}>{p.codigoFornecedor}</div>}
+                        </td>
+                        <td style={{ padding:"10px 14px", fontSize:13, fontWeight:600, color:"#0f172a" }}>
+                          {p.precoCusto ? `R$ ${parseFloat(p.precoCusto).toFixed(2).replace(".",",")}` : "—"}
+                        </td>
+                        <td style={{ padding:"10px 14px", fontSize:13, fontWeight:600, color:"#15803d" }}>
+                          {p.precoVenda ? `R$ ${parseFloat(p.precoVenda).toFixed(2).replace(".",",")}` : "—"}
+                        </td>
+                        <td style={{ padding:"10px 14px" }}>
+                          <div style={{ fontWeight:700, fontSize:13, color:estBaixo?"#dc2626":"#0f172a" }}>
+                            {p.estoqueAtual || "0"} un {estBaixo?"⚠️":""}
+                          </div>
+                          {p.estoqueMinimo && <div style={{ fontSize:10, color:"#94a3b8" }}>mín: {p.estoqueMinimo}</div>}
+                        </td>
+                        <td style={{ padding:"10px 14px" }}>
+                          <span style={{ fontSize:11, fontWeight:600, color:p.status==="Ativo"?"#15803d":"#94a3b8", background:p.status==="Ativo"?"#f0fdf4":"#f8fafc", padding:"3px 8px", borderRadius:6 }}>{p.status}</span>
+                        </td>
+                        <td style={{ padding:"10px 14px" }}>
+                          {mlListing ? (
+                            <div style={{ fontSize:11, color:"#15803d" }}>✓ {mlListing.id}</div>
+                          ) : <span style={{ fontSize:11, color:"#94a3b8" }}>—</span>}
+                        </td>
+                        <td style={{ padding:"10px 14px" }}>
+                          <div style={{ display:"flex", gap:4 }}>
+                            <button onClick={() => { setEditingProd(p); setShowModalProd(true); }}
+                              style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"4px 8px", borderRadius:6, cursor:"pointer", fontSize:11 }}>✏️</button>
+                            <button onClick={() => deleteProd(p.id)}
+                              style={{ background:"#fef2f2", border:"1px solid #fecaca", color:"#dc2626", padding:"4px 8px", borderRadius:6, cursor:"pointer", fontSize:11 }}>🗑</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── FORNECEDORES ── */}
+      {prodTab === "fornecedores" && (
+        <div>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+            <div style={{ fontWeight:700, fontSize:15, color:"#0f172a" }}>Fornecedores Cadastrados</div>
+            <button onClick={() => { setEditingForn(null); setShowModalForn(true); }}
+              style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Novo Fornecedor</button>
+          </div>
+          {fornecedores.length === 0 ? (
+            <div style={{ background:"#f8fafc", border:"2px dashed #e2e8f0", borderRadius:12, padding:40, textAlign:"center", color:"#94a3b8" }}>
+              <div style={{ fontSize:32, marginBottom:8 }}>🏭</div>
+              <div style={{ fontWeight:600 }}>Nenhum fornecedor cadastrado</div>
+            </div>
+          ) : (
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:12 }}>
+              {fornecedores.map(f => {
+                const qtdProdutos = produtos.filter(p => p.fornecedorId === f.id).length;
+                return (
+                  <div key={f.id} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"18px 20px", position:"relative" }}>
+                    <div style={{ position:"absolute", top:12, right:12, display:"flex", gap:4 }}>
+                      <button onClick={() => { setEditingForn(f); setShowModalForn(true); }}
+                        style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:12 }}>✏️</button>
+                      <button onClick={() => deleteForn(f.id)}
+                        style={{ background:"#fef2f2", border:"none", color:"#dc2626", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:12 }}>🗑</button>
+                    </div>
+                    <div style={{ fontWeight:700, fontSize:15, color:"#0f172a", marginBottom:4, paddingRight:70 }}>{f.nome}</div>
+                    <div style={{ fontSize:11, color:"#94a3b8", marginBottom:10 }}>{f.cnpj || "CNPJ não informado"}</div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:4, fontSize:12, color:"#64748b" }}>
+                      {f.contato && <span>👤 {f.contato}</span>}
+                      {f.telefone && <span>📞 {f.telefone}</span>}
+                      {f.email && <span>✉️ {f.email}</span>}
+                    </div>
+                    <div style={{ marginTop:10, paddingTop:10, borderTop:"1px solid #f1f5f9", fontSize:12, color:"#94a3b8" }}>
+                      {qtdProdutos} produto(s) vinculado(s)
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {showModalProd && <ModalProduto produto={editingProd} fornecedores={fornecedores} listings={listings} onSave={saveProd} onClose={() => { setShowModalProd(false); setEditingProd(null); }} />}
+      {showModalForn && <ModalFornecedor fornecedor={editingForn} onSave={saveForn} onClose={() => { setShowModalForn(false); setEditingForn(null); }} />}
+    </div>
+  );
+}
+
+
+// ════════════════════════════════════════════════════════════
 //  FINANCEIRO COMPLETO
 // ════════════════════════════════════════════════════════════
 
@@ -1449,7 +2061,13 @@ export default function App() {
   const [lancamentos, setLancamentos] = useState(() => {
     try { return JSON.parse(localStorage.getItem("lancamentos") || "[]"); } catch { return []; }
   });
-  const [finTab, setFinTab] = useState("resumo"); // resumo | pagar | receber | contas | config
+  const [finTab, setFinTab] = useState("resumo"); // resumo | pagar | receber
+  const [produtos, setProdutos] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("produtos_cadastro") || "[]"); } catch { return []; }
+  });
+  const [fornecedores, setFornecedores] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("fornecedores_cadastro") || "[]"); } catch { return []; }
+  }); | contas | config
   const [paymentData, setPaymentData] = useState({}); // orderId → { releaseDate, netAmount }
   const [loadError, setLoadError] = useState(null);
 
@@ -1859,6 +2477,7 @@ export default function App() {
           <button className={`tab-btn ${tab === "listings" ? "active" : ""}`} onClick={() => setTab("listings")}>Anúncios ({enriched.length})</button>
           <button className={`tab-btn ${tab === "orders" ? "active" : ""}`} onClick={() => setTab("orders")}>Pedidos ({enrichedOrders.length})</button>
           <button className={`tab-btn ${tab === "financeiro" ? "active" : ""}`} onClick={() => setTab("financeiro")}>💰 Financeiro</button>
+          <button className={`tab-btn ${tab === "produtos" ? "active" : ""}`} onClick={() => setTab("produtos")}>📦 Produtos</button>
         </div>
 
         {tab === "listings" && (
@@ -2162,6 +2781,18 @@ export default function App() {
             paymentData={paymentData}
             finTab={finTab}
             setFinTab={setFinTab}
+          />
+        )}
+
+        {tab === "produtos" && (
+          <ProdutosTab
+            produtos={produtos}
+            setProdutos={setProdutos}
+            fornecedores={fornecedores}
+            setFornecedores={setFornecedores}
+            listings={listings}
+            costs={costs}
+            setCosts={setCosts}
           />
         )}
 

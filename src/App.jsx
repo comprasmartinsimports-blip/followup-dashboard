@@ -463,6 +463,365 @@ function MLConnectModal({ onConnect, onClose }) {
 
 
 // ════════════════════════════════════════════════════════════
+//  OVERVIEW — Visão Geral Unificada
+// ════════════════════════════════════════════════════════════
+
+function MiniBar({ value, max, color }) {
+  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
+  return (
+    <div style={{ height:6, background:"#e2e8f0", borderRadius:99, overflow:"hidden", marginTop:6 }}>
+      <div style={{ width:`${pct}%`, height:"100%", background:color, borderRadius:99, transition:"width .5s" }} />
+    </div>
+  );
+}
+
+function SparkLine({ data, color }) {
+  if (!data || data.length < 2) return null;
+  const max = Math.max(...data);
+  const min = Math.min(...data);
+  const range = max - min || 1;
+  const w = 120, h = 40;
+  const points = data.map((v, i) => `${(i/(data.length-1))*w},${h - ((v-min)/range)*h}`).join(" ");
+  return (
+    <svg width={w} height={h} style={{ overflow:"visible" }}>
+      <polyline points={points} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={(data.length-1)/(data.length-1)*w} cy={h-((data[data.length-1]-min)/range)*h} r={3} fill={color} />
+    </svg>
+  );
+}
+
+function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasBancarias, lancamentos, paymentData, shipmentStatuses, metaMensal, setMetaMensal, darkMode, costs }) {
+  const [editMeta, setEditMeta] = useState(false);
+  const [metaInput, setMetaInput] = useState(String(metaMensal || ""));
+
+  const hoje = new Date().toLocaleDateString("sv-SE");
+  const mesAtual = hoje.slice(0,7);
+  const mesAnterior = new Date(new Date().setMonth(new Date().getMonth()-1)).toLocaleDateString("sv-SE").slice(0,7);
+
+  // ── Pedidos deste mês ────────────────────────────────────
+  const pedidosMes = rawOrders.filter(o => o.date?.startsWith(mesAtual) && o.status === "paid");
+  const pedidosMesAnt = rawOrders.filter(o => o.date?.startsWith(mesAnterior) && o.status === "paid");
+  const faturamentoMes = pedidosMes.reduce((s,o) => s+o.price*o.qty, 0);
+  const faturamentoMesAnt = pedidosMesAnt.reduce((s,o) => s+o.price*o.qty, 0);
+  const crescimento = faturamentoMesAnt > 0 ? ((faturamentoMes - faturamentoMesAnt) / faturamentoMesAnt) * 100 : 0;
+  const ticketMedio = pedidosMes.length > 0 ? faturamentoMes / pedidosMes.length : 0;
+
+  // ── Pedidos hoje ─────────────────────────────────────────
+  const pedidosHoje = rawOrders.filter(o => o.date === hoje && o.status === "paid");
+  const faturamentoHoje = pedidosHoje.reduce((s,o) => s+o.price*o.qty, 0);
+
+  // ── Alertas ──────────────────────────────────────────────
+  const agEnvio = rawOrders.filter(o => {
+    if (o.status !== "paid") return false;
+    const ss = shipmentStatuses?.[o.id] ?? o.shipment_status;
+    return !["shipped","in_transit","delivered"].includes(ss) && !o.tags?.some(t=>t==="delivered");
+  });
+  const vencidos = contasPagar.filter(c => c.status === "Pendente" && c.vencimento && getDaysUntil(c.vencimento) < 0);
+  const vencendo7 = contasPagar.filter(c => c.status === "Pendente" && c.vencimento && getDaysUntil(c.vencimento) >= 0 && getDaysUntil(c.vencimento) <= 7);
+  const estoqueCritico = enriched.filter(l => {
+    if (!l.available_quantity) return false;
+    const prod = null; // será implementado com sync de produtos
+    return l.available_quantity <= 3;
+  });
+
+  // ── Ranking produtos mais vendidos ───────────────────────
+  const vendasPorProduto = {};
+  rawOrders.filter(o => o.status === "paid" && o.date?.startsWith(mesAtual)).forEach(o => {
+    const id = o.listing_id;
+    if (!id) return;
+    if (!vendasPorProduto[id]) vendasPorProduto[id] = { id, title: o.title, qty: 0, revenue: 0 };
+    vendasPorProduto[id].qty += o.qty || 1;
+    vendasPorProduto[id].revenue += o.price * (o.qty || 1);
+  });
+  const rankingVendas = Object.values(vendasPorProduto).sort((a,b) => b.qty - a.qty).slice(0,5);
+  const maxQty = rankingVendas[0]?.qty || 1;
+
+  // ── Ranking mais lucrativos ──────────────────────────────
+  const rankingLucro = enriched
+    .filter(l => costs[l.id] > 0 && l.sold_quantity > 0)
+    .sort((a,b) => b.totalProfit - a.totalProfit)
+    .slice(0, 5);
+
+  // ── Faturamento por dia (últimos 14 dias) ────────────────
+  const ultimos14 = Array.from({length:14}, (_,i) => {
+    const d = new Date(); d.setDate(d.getDate()-13+i);
+    return d.toLocaleDateString("sv-SE");
+  });
+  const fatPorDia = ultimos14.map(d => rawOrders.filter(o=>o.date===d&&o.status==="paid").reduce((s,o)=>s+o.price*o.qty,0));
+
+  // ── Distribuição por status ──────────────────────────────
+  const statusCount = { agEnvio: 0, enviado: 0, entregue: 0, cancelado: 0, devolvido: 0 };
+  rawOrders.filter(o=>o.date?.startsWith(mesAtual)).forEach(o => {
+    const ss = shipmentStatuses?.[o.id];
+    if (o.status === "cancelled") { statusCount.cancelado++; return; }
+    if (ss === "delivered" || o.tags?.some(t=>t==="delivered")) { statusCount.entregue++; return; }
+    if (["shipped","in_transit"].includes(ss)) { statusCount.enviado++; return; }
+    if (o.status === "paid") statusCount.agEnvio++;
+  });
+
+  // ── Previsão do mês ──────────────────────────────────────
+  const diaDoMes = new Date().getDate();
+  const diasNoMes = new Date(new Date().getFullYear(), new Date().getMonth()+1, 0).getDate();
+  const previsaoMes = diaDoMes > 0 ? (faturamentoMes / diaDoMes) * diasNoMes : 0;
+  const progressoMeta = metaMensal > 0 ? Math.min(100, (faturamentoMes / metaMensal) * 100) : 0;
+
+  // ── Taxa de cancelamento ──────────────────────────────────
+  const totalMes = rawOrders.filter(o=>o.date?.startsWith(mesAtual)).length;
+  const canceladosMes = rawOrders.filter(o=>o.date?.startsWith(mesAtual)&&o.status==="cancelled").length;
+  const taxaCancel = totalMes > 0 ? (canceladosMes/totalMes)*100 : 0;
+
+  const card = (bg) => ({
+    background: darkMode ? "#1e293b" : bg || "#fff",
+    border: `1px solid ${darkMode?"#334155":"#e2e8f0"}`,
+    borderRadius: 12,
+    padding: "16px 18px",
+    boxShadow: "0 1px 3px rgba(0,0,0,.06)",
+  });
+
+  const txt = { color: darkMode?"#e2e8f0":"#0f172a" };
+  const txtMuted = { color: darkMode?"#94a3b8":"#64748b" };
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+
+      {/* ── ALERTAS ── */}
+      {(vencidos.length > 0 || vencendo7.length > 0 || agEnvio.length > 5) && (
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          {vencidos.length > 0 && (
+            <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"10px 16px", display:"flex", alignItems:"center", gap:10 }}>
+              <span>🚨</span>
+              <span style={{ fontSize:13, color:"#dc2626", fontWeight:600 }}>{vencidos.length} conta(s) vencida(s) — {fmt(vencidos.reduce((s,c)=>s+parseFloat(c.valor||0),0))}</span>
+            </div>
+          )}
+          {vencendo7.length > 0 && (
+            <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:10, padding:"10px 16px", display:"flex", alignItems:"center", gap:10 }}>
+              <span>⏰</span>
+              <span style={{ fontSize:13, color:"#d97706", fontWeight:600 }}>{vencendo7.length} conta(s) vencendo em 7 dias</span>
+            </div>
+          )}
+          {agEnvio.length > 5 && (
+            <div style={{ background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:10, padding:"10px 16px", display:"flex", alignItems:"center", gap:10 }}>
+              <span>📦</span>
+              <span style={{ fontSize:13, color:"#2563eb", fontWeight:600 }}>{agEnvio.length} pedidos aguardando envio</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── CARDS PRINCIPAIS ── */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12 }}>
+        {/* Hoje */}
+        <div style={card()}>
+          <div style={{ fontSize:11, ...txtMuted, fontWeight:600, textTransform:"uppercase", letterSpacing:0.8, marginBottom:6 }}>Hoje</div>
+          <div style={{ fontSize:22, fontWeight:800, color:"#0891b2" }}>{fmt(faturamentoHoje)}</div>
+          <div style={{ fontSize:12, ...txtMuted, marginTop:4 }}>{pedidosHoje.length} pedido(s)</div>
+        </div>
+
+        {/* Mês atual */}
+        <div style={card()}>
+          <div style={{ fontSize:11, ...txtMuted, fontWeight:600, textTransform:"uppercase", letterSpacing:0.8, marginBottom:6 }}>Este Mês</div>
+          <div style={{ fontSize:22, fontWeight:800, ...txt }}>{fmt(faturamentoMes)}</div>
+          <div style={{ fontSize:12, color:crescimento>=0?"#15803d":"#dc2626", marginTop:4, fontWeight:600 }}>
+            {crescimento>=0?"▲":"▼"} {Math.abs(crescimento).toFixed(1)}% vs mês anterior
+          </div>
+          <SparkLine data={fatPorDia} color={crescimento>=0?"#15803d":"#dc2626"} />
+        </div>
+
+        {/* Previsão */}
+        <div style={card()}>
+          <div style={{ fontSize:11, ...txtMuted, fontWeight:600, textTransform:"uppercase", letterSpacing:0.8, marginBottom:6 }}>Previsão do Mês</div>
+          <div style={{ fontSize:22, fontWeight:800, color:"#7c3aed" }}>{fmt(previsaoMes)}</div>
+          <div style={{ fontSize:12, ...txtMuted, marginTop:4 }}>baseado no ritmo atual</div>
+        </div>
+
+        {/* Ticket médio */}
+        <div style={card()}>
+          <div style={{ fontSize:11, ...txtMuted, fontWeight:600, textTransform:"uppercase", letterSpacing:0.8, marginBottom:6 }}>Ticket Médio</div>
+          <div style={{ fontSize:22, fontWeight:800, ...txt }}>{fmt(ticketMedio)}</div>
+          <div style={{ fontSize:12, ...txtMuted, marginTop:4 }}>{pedidosMes.length} pedidos no mês</div>
+        </div>
+
+        {/* Taxa cancelamento */}
+        <div style={card()}>
+          <div style={{ fontSize:11, ...txtMuted, fontWeight:600, textTransform:"uppercase", letterSpacing:0.8, marginBottom:6 }}>Cancelamentos</div>
+          <div style={{ fontSize:22, fontWeight:800, color:taxaCancel>5?"#dc2626":taxaCancel>2?"#d97706":"#15803d" }}>{taxaCancel.toFixed(1)}%</div>
+          <div style={{ fontSize:12, ...txtMuted, marginTop:4 }}>{canceladosMes} de {totalMes} pedidos</div>
+        </div>
+
+        {/* Score médio */}
+        <div style={card()}>
+          <div style={{ fontSize:11, ...txtMuted, fontWeight:600, textTransform:"uppercase", letterSpacing:0.8, marginBottom:6 }}>Score Médio</div>
+          <div style={{ fontSize:22, fontWeight:800, color:scoreColor(Math.round(enriched.reduce((s,l)=>s+l.score,0)/(enriched.length||1))) }}>
+            {Math.round(enriched.reduce((s,l)=>s+l.score,0)/(enriched.length||1))}/100
+          </div>
+          <div style={{ fontSize:12, ...txtMuted, marginTop:4 }}>{enriched.length} anúncios</div>
+        </div>
+      </div>
+
+      {/* ── META MENSAL ── */}
+      {(metaMensal > 0 || editMeta) && (
+        <div style={{ ...card(), padding:"20px 24px" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+            <div style={{ fontWeight:700, fontSize:15, ...txt }}>🎯 Meta do Mês</div>
+            <button onClick={() => setEditMeta(e=>!e)}
+              style={{ background:"#f1f5f9", border:"none", color:"#64748b", padding:"5px 12px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+              {editMeta ? "Fechar" : "Editar"}
+            </button>
+          </div>
+          {editMeta && (
+            <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+              <input type="number" value={metaInput} onChange={e=>setMetaInput(e.target.value)} placeholder="Ex: 50000"
+                style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+              <button onClick={() => { const v = parseFloat(metaInput)||0; setMetaMensal(v); localStorage.setItem("metaMensal", v); setEditMeta(false); }}
+                style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"8px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>Salvar</button>
+            </div>
+          )}
+          {metaMensal > 0 && (
+            <>
+              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+                <span style={{ fontSize:13, ...txtMuted }}>{fmt(faturamentoMes)} de {fmt(metaMensal)}</span>
+                <span style={{ fontSize:13, fontWeight:700, color:progressoMeta>=100?"#15803d":progressoMeta>=70?"#d97706":"#dc2626" }}>{progressoMeta.toFixed(1)}%</span>
+              </div>
+              <div style={{ height:12, background:darkMode?"#334155":"#e2e8f0", borderRadius:99, overflow:"hidden" }}>
+                <div style={{ width:`${progressoMeta}%`, height:"100%", background:progressoMeta>=100?"#15803d":progressoMeta>=70?"#d97706":"#dc2626", borderRadius:99, transition:"width .5s" }} />
+              </div>
+              {progressoMeta < 100 && (
+                <div style={{ fontSize:12, ...txtMuted, marginTop:8 }}>
+                  Faltam {fmt(metaMensal-faturamentoMes)} para atingir a meta • {diasNoMes-diaDoMes} dias restantes
+                </div>
+              )}
+              {progressoMeta >= 100 && <div style={{ fontSize:13, color:"#15803d", fontWeight:700, marginTop:8 }}>🎉 Meta atingida!</div>}
+            </>
+          )}
+        </div>
+      )}
+      {metaMensal === 0 && !editMeta && (
+        <button onClick={() => setEditMeta(true)}
+          style={{ background:"transparent", border:`2px dashed ${darkMode?"#334155":"#e2e8f0"}`, color:darkMode?"#64748b":"#94a3b8", padding:"14px", borderRadius:12, cursor:"pointer", fontSize:13, width:"100%", fontFamily:"inherit" }}>
+          + Definir Meta Mensal de Faturamento
+        </button>
+      )}
+
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+        {/* ── DISTRIBUIÇÃO DE STATUS ── */}
+        <div style={{ ...card(), padding:"20px 24px" }}>
+          <div style={{ fontWeight:700, fontSize:14, ...txt, marginBottom:16 }}>Status dos Pedidos (mês)</div>
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            {[
+              { label:"Ag. Envio", value:statusCount.agEnvio, color:"#d97706", total:totalMes },
+              { label:"Enviados",  value:statusCount.enviado,  color:"#0891b2", total:totalMes },
+              { label:"Entregues", value:statusCount.entregue, color:"#15803d", total:totalMes },
+              { label:"Cancelados",value:statusCount.cancelado,color:"#dc2626", total:totalMes },
+            ].map(s => (
+              <div key={s.label}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                  <span style={{ fontSize:12, ...txtMuted }}>{s.label}</span>
+                  <span style={{ fontSize:12, fontWeight:700, color:s.color }}>{s.value}</span>
+                </div>
+                <MiniBar value={s.value} max={s.total} color={s.color} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── FATURAMENTO 14 DIAS ── */}
+        <div style={{ ...card(), padding:"20px 24px" }}>
+          <div style={{ fontWeight:700, fontSize:14, ...txt, marginBottom:16 }}>Faturamento — Últimos 14 dias</div>
+          <div style={{ display:"flex", gap:3, alignItems:"flex-end", height:80 }}>
+            {fatPorDia.map((v,i) => {
+              const max = Math.max(...fatPorDia, 1);
+              const isHoje = i === 13;
+              return (
+                <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:2 }}>
+                  <div style={{ width:"100%", background:isHoje?"#0f172a":darkMode?"#334155":"#e2e8f0", borderRadius:"3px 3px 0 0", height:`${Math.max(4,(v/max)*70)}px`, transition:"height .3s", cursor:"pointer", position:"relative" }}
+                    title={`${ultimos14[i]}: ${fmt(v)}`}>
+                    {v > 0 && <div style={{ position:"absolute", bottom:"100%", left:"50%", transform:"translateX(-50%)", background:"#0f172a", color:"#fff", fontSize:9, padding:"2px 4px", borderRadius:3, whiteSpace:"nowrap", display:"none" }}>{fmt(v)}</div>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ display:"flex", justifyContent:"space-between", marginTop:6 }}>
+            <span style={{ fontSize:10, ...txtMuted }}>{ultimos14[0]?.slice(5)}</span>
+            <span style={{ fontSize:10, ...txtMuted }}>hoje</span>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+        {/* ── RANKING MAIS VENDIDOS ── */}
+        <div style={{ ...card(), padding:"20px 24px" }}>
+          <div style={{ fontWeight:700, fontSize:14, ...txt, marginBottom:16 }}>🏆 Mais Vendidos (mês)</div>
+          {rankingVendas.length === 0 ? (
+            <div style={{ fontSize:13, ...txtMuted, textAlign:"center", padding:"20px 0" }}>Sem dados do mês atual</div>
+          ) : rankingVendas.map((p,i) => (
+            <div key={p.id} style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12, paddingBottom:12, borderBottom:i<rankingVendas.length-1?`1px solid ${darkMode?"#334155":"#f1f5f9"}`:"none" }}>
+              <div style={{ width:28, height:28, borderRadius:8, background:i===0?"#fde68a":i===1?"#e2e8f0":i===2?"#fed7aa":"#f8fafc", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, fontSize:13, color:"#0f172a", flexShrink:0 }}>
+                {i+1}
+              </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:12, fontWeight:600, ...txt, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.title||p.id}</div>
+                <div style={{ display:"flex", gap:10, marginTop:3 }}>
+                  <span style={{ fontSize:11, color:"#0891b2", fontWeight:600 }}>{p.qty} vendas</span>
+                  <span style={{ fontSize:11, ...txtMuted }}>{fmt(p.revenue)}</span>
+                </div>
+                <MiniBar value={p.qty} max={maxQty} color="#0891b2" />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── RANKING MAIS LUCRATIVOS ── */}
+        <div style={{ ...card(), padding:"20px 24px" }}>
+          <div style={{ fontWeight:700, fontSize:14, ...txt, marginBottom:16 }}>💰 Mais Lucrativos (total)</div>
+          {rankingLucro.length === 0 ? (
+            <div style={{ fontSize:13, ...txtMuted, textAlign:"center", padding:"20px 0" }}>Insira custos nos anúncios para ver ranking</div>
+          ) : rankingLucro.map((l,i) => (
+            <div key={l.id} style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12, paddingBottom:12, borderBottom:i<rankingLucro.length-1?`1px solid ${darkMode?"#334155":"#f1f5f9"}`:"none" }}>
+              <div style={{ width:28, height:28, borderRadius:8, background:i===0?"#fde68a":i===1?"#e2e8f0":i===2?"#fed7aa":"#f8fafc", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, fontSize:13, color:"#0f172a", flexShrink:0 }}>
+                {i+1}
+              </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:12, fontWeight:600, ...txt, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{l.title}</div>
+                <div style={{ display:"flex", gap:10, marginTop:3 }}>
+                  <span style={{ fontSize:11, color:"#15803d", fontWeight:600 }}>{fmt(l.totalProfit)}</span>
+                  <span style={{ fontSize:11, ...txtMuted }}>{l.sold_quantity} vendas</span>
+                  {l.margin && <span style={{ fontSize:11, color:l.margin>=0.25?"#15803d":l.margin>=0.15?"#d97706":"#dc2626" }}>{fmtPct(l.margin)}</span>}
+                </div>
+                <MiniBar value={l.totalProfit} max={rankingLucro[0]?.totalProfit||1} color="#15803d" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── ANÚNCIOS COM PROBLEMA ── */}
+      {enriched.filter(l=>l.score<50).length > 0 && (
+        <div style={{ ...card(), padding:"20px 24px" }}>
+          <div style={{ fontWeight:700, fontSize:14, ...txt, marginBottom:14 }}>⚠️ Anúncios com Score Baixo ({enriched.filter(l=>l.score<50).length})</div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:10 }}>
+            {enriched.filter(l=>l.score<50).slice(0,6).map(l => (
+              <div key={l.id} style={{ background:darkMode?"#1e293b":"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"12px 14px" }}>
+                <div style={{ fontSize:12, fontWeight:600, color:"#dc2626", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:4 }}>{l.title}</div>
+                <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                  <span style={{ fontSize:18, fontWeight:800, color:scoreColor(l.score) }}>{l.score}</span>
+                  <div style={{ flex:1 }}>
+                    {l.checks.filter(c=>!c.pass).slice(0,2).map(c => (
+                      <div key={c.key} style={{ fontSize:10, color:"#b91c1c" }}>✗ {c.label}</div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ════════════════════════════════════════════════════════════
 //  PRODUTOS — Cadastro completo com sync ML
 // ════════════════════════════════════════════════════════════
 
@@ -2048,6 +2407,9 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
   const [showMLModal, setShowMLModal] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "1");
+  const [metaMensal, setMetaMensal] = useState(() => parseFloat(localStorage.getItem("metaMensal") || "0"));
+  const [showNotif, setShowNotif] = useState(false);
   // ── Financeiro ────────────────────────────────────────────
   const [contasPagar, setContasPagar] = useState(() => {
     try { return JSON.parse(localStorage.getItem("contas_pagar") || "[]"); } catch { return []; }
@@ -2410,7 +2772,7 @@ export default function App() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f8fafc", color: "#0f172a", fontFamily: "'Inter','Segoe UI',sans-serif" }}>
+    <div className={darkMode?"dark":""} style={{ minHeight: "100vh", background: darkMode?"#0f172a":"#f8fafc", color: darkMode?"#e2e8f0":"#0f172a", fontFamily: "'Inter','Segoe UI',sans-serif", transition:"background .2s,color .2s" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         *{box-sizing:border-box;margin:0;padding:0}
@@ -2420,6 +2782,15 @@ export default function App() {
         th{font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.8px;padding:10px 14px;border-bottom:1px solid #f1f5f9;text-align:left;font-weight:600;background:#fafafa;white-space:nowrap}
         td{padding:10px 14px;font-size:13px;border-bottom:1px solid #f8fafc;vertical-align:middle;color:#334155}
         tr:last-child td{border-bottom:none}tr:hover td{background:#f8fafc}
+        .dark th{background:#1e293b!important;border-bottom-color:#334155!important;color:#64748b!important}
+        .dark td{border-bottom-color:#1e293b!important;color:#cbd5e1!important}
+        .dark tr:hover td{background:#1e293b!important}
+        .dark .tab-btn{color:#64748b}
+        .dark .tab-btn.active{background:#334155;color:#e2e8f0}
+        .dark .filter-btn{background:#1e293b;border-color:#334155;color:#94a3b8}
+        .dark .filter-btn.active{background:#e2e8f0;color:#0f172a}
+        .dark select{background:#1e293b;border-color:#334155;color:#e2e8f0}
+        .dark input{background:#1e293b!important;border-color:#334155!important;color:#e2e8f0!important}
         .tab-btn{background:transparent;border:none;color:#94a3b8;padding:8px 18px;cursor:pointer;font-family:inherit;font-size:13px;border-radius:8px;transition:all .15s;font-weight:500}
         .tab-btn.active{background:#fff;color:#0f172a;font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,.08)}
         .filter-btn{background:#fff;border:1px solid #e2e8f0;color:#64748b;padding:5px 14px;cursor:pointer;font-family:inherit;font-size:12px;border-radius:20px;transition:all .15s;font-weight:500}
@@ -2435,7 +2806,7 @@ export default function App() {
         @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}.fade-up{animation:fadeUp .3s ease forwards}
       `}</style>
 
-      <header style={{ background: "#fff", borderBottom: "1px solid #e2e8f0", padding: "14px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
+      <header style={{ background: darkMode?"#1e293b":"#fff", borderBottom: `1px solid ${darkMode?"#334155":"#e2e8f0"}`, padding: "14px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ width: 36, height: 36, borderRadius: 10, background: "#0f172a", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 16, color: "#ffe000" }}>M</div>
           <div>
@@ -2450,6 +2821,10 @@ export default function App() {
           {loadError && <span style={{ color: "#dc2626", fontSize: 12 }}>⚠ {loadError}</span>}
           <button onClick={() => setShowMLModal(true)} style={{ background: "#0f172a", border: "none", color: "#fff", fontWeight: 700, padding: "8px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>
             {token ? "Reconectar" : "Conectar ML"}
+          </button>
+          <button onClick={() => { const n = !darkMode; setDarkMode(n); localStorage.setItem("darkMode", n?"1":"0"); }}
+            style={{ background: darkMode?"#334155":"#f1f5f9", border:"none", color: darkMode?"#fff":"#475569", width:36, height:36, borderRadius:8, cursor:"pointer", fontSize:18 }}>
+            {darkMode ? "☀️" : "🌙"}
           </button>
         </div>
       </header>
@@ -2466,21 +2841,39 @@ export default function App() {
             { label: "Total anúncios", value: enriched.length, color: "#0f172a" },
             { label: "Pedidos período", value: enrichedOrders.length, color: "#0f172a" },
           ].map(k => (
-            <div key={k.label} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "16px 18px", boxShadow: "0 1px 2px rgba(0,0,0,.04)" }}>
+            <div key={k.label} style={{ background: darkMode?"#1e293b":"#fff", border: `1px solid ${darkMode?"#334155":"#e2e8f0"}`, borderRadius: 12, padding: "16px 18px", boxShadow: "0 1px 2px rgba(0,0,0,.04)" }}>
               <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 8, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8 }}>{k.label}</div>
               <div style={{ fontSize: 20, fontWeight: 800, color: k.color, letterSpacing: -0.5 }}>{k.value}</div>
             </div>
           ))}
         </div>
 
-        <div style={{ display: "flex", gap: 2, marginBottom: 20, background: "#f1f5f9", padding: 4, borderRadius: 10, width: "fit-content" }}>
+        <div style={{ display: "flex", gap: 2, marginBottom: 20, background: darkMode?"#1e293b":"#f1f5f9", padding: 4, borderRadius: 10, width: "fit-content" }}>
+          <button className={`tab-btn ${tab === "overview" ? "active" : ""}`} onClick={() => setTab("overview")}>🏠 Visão Geral</button>
           <button className={`tab-btn ${tab === "listings" ? "active" : ""}`} onClick={() => setTab("listings")}>Anúncios ({enriched.length})</button>
           <button className={`tab-btn ${tab === "orders" ? "active" : ""}`} onClick={() => setTab("orders")}>Pedidos ({enrichedOrders.length})</button>
           <button className={`tab-btn ${tab === "financeiro" ? "active" : ""}`} onClick={() => setTab("financeiro")}>💰 Financeiro</button>
           <button className={`tab-btn ${tab === "produtos" ? "active" : ""}`} onClick={() => setTab("produtos")}>📦 Produtos</button>
         </div>
 
-        {tab === "listings" && (
+        {tab === "overview" && (
+          <OverviewTab
+            enriched={enriched}
+            enrichedOrders={enrichedOrders}
+            rawOrders={rawOrders}
+            contasPagar={contasPagar}
+            contasBancarias={contasBancarias}
+            lancamentos={lancamentos}
+            paymentData={paymentData}
+            shipmentStatuses={shipmentStatuses}
+            metaMensal={metaMensal}
+            setMetaMensal={setMetaMensal}
+            darkMode={darkMode}
+            costs={costs}
+          />
+        )}
+
+                {tab === "listings" && (
           <>
             <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
               <div style={{ display: "flex", gap: 6, flex: 1, minWidth: 260 }}>

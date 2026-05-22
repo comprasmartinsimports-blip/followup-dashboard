@@ -2061,13 +2061,13 @@ export default function App() {
   const [lancamentos, setLancamentos] = useState(() => {
     try { return JSON.parse(localStorage.getItem("lancamentos") || "[]"); } catch { return []; }
   });
-  const [finTab, setFinTab] = useState("resumo"); // resumo | pagar | receber
+  const [finTab, setFinTab] = useState("resumo");
   const [produtos, setProdutos] = useState(() => {
     try { return JSON.parse(localStorage.getItem("produtos_cadastro") || "[]"); } catch { return []; }
   });
   const [fornecedores, setFornecedores] = useState(() => {
     try { return JSON.parse(localStorage.getItem("fornecedores_cadastro") || "[]"); } catch { return []; }
-  }); | contas | config
+  });
   const [paymentData, setPaymentData] = useState({}); // orderId → { releaseDate, netAmount }
   const [loadError, setLoadError] = useState(null);
 

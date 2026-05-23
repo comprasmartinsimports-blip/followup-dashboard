@@ -2377,6 +2377,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
   const [editingBancaria, setEditingBancaria] = useState(null);
   const [modalBaixa, setModalBaixa] = useState(null); // conta a pagar para dar baixa
   const [modalBaixaML, setModalBaixaML] = useState(null); // pedido ML para registrar
+  const [searchReceber, setSearchReceber] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCat, setFilterCat] = useState("all");
   const [searchPagar, setSearchPagar] = useState("");
@@ -2925,18 +2926,42 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
               </div>
             ))}
           </div>
-          <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", marginBottom:10 }}>Pedidos a Receber</div>
+          <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
+            <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", whiteSpace:"nowrap" }}>Pedidos a Receber</div>
+            <div style={{ position:"relative", flex:1, minWidth:240 }}>
+              <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
+              <input value={searchReceber} onChange={e => setSearchReceber(e.target.value)}
+                placeholder="Buscar por nº pedido, cliente ou produto..."
+                style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px 8px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
+            </div>
+            {searchReceber && (
+              <button onClick={() => setSearchReceber("")}
+                style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"7px 12px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+                ✕ Limpar
+              </button>
+            )}
+          </div>
           <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto", marginBottom:20 }}>
             <table style={{ borderCollapse:"collapse", width:"100%" }}>
               <thead>
-                <tr>{["Pedido","Produto","Data","Valor Bruto","Valor Líquido","Previsão ML","Status","Ação"].map(h=>(
+                <tr>{["Pedido","Cliente","Produto","Data","Valor Bruto","Valor Líquido","Previsão ML","Status","Ação"].map(h=>(
                   <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>
                 ))}</tr>
               </thead>
               <tbody>
-                {aReceber.length===0 ? (
-                  <tr><td colSpan={8} style={{ textAlign:"center", color:"#94a3b8", padding:32 }}>Nenhum pedido a receber</td></tr>
-                ) : aReceber.slice(0,100).map((o,i) => {
+                {(() => {
+                  const q = searchReceber.toLowerCase().trim();
+                  const filtered = q ? aReceber.filter(o =>
+                    String(o.id).includes(q) ||
+                    o.title?.toLowerCase().includes(q) ||
+                    o.buyerName?.toLowerCase().includes(q)
+                  ) : aReceber;
+                  if (filtered.length === 0) return (
+                    <tr><td colSpan={9} style={{ textAlign:"center", color:"#94a3b8", padding:32 }}>
+                      {searchReceber ? "Nenhum pedido encontrado para essa busca" : "Nenhum pedido a receber"}
+                    </td></tr>
+                  );
+                  return filtered.slice(0,100).map((o,i) => {
                   const ss = shipmentStatuses?.[o.id] ?? o.shipment_status;
                   const isEnviado = ["shipped","in_transit"].includes(ss);
                   const label = isEnviado ? "Enviado" : "Ag. Envio";
@@ -2950,6 +2975,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                   return (
                     <tr key={o.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
                       <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", fontFamily:"monospace", fontWeight:600 }}>#{o.id}</td>
+                      <td style={{ padding:"10px 14px", fontSize:12, color:"#334155", maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{o.buyerName||"—"}</td>
                       <td style={{ padding:"10px 14px", fontSize:13, color:"#0f172a", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{o.title||"—"}</td>
                       <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{o.date}</td>
                       <td style={{ padding:"10px 14px", fontSize:13, color:"#64748b" }}>{fmt(o.price*o.qty)}</td>
@@ -2977,7 +3003,8 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                       </td>
                     </tr>
                   );
-                })}
+                });
+                })()}
               </tbody>
             </table>
           </div>

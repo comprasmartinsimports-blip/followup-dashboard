@@ -3622,6 +3622,8 @@ export default function App() {
   const [loadingMsg, setLoadingMsg] = useState("");
   // ── Auth ──────────────────────────────────────────────────
   const [currentUser, setCurrentUser] = useState(() => getSession());
+  const [lastUpdate, setLastUpdate] = useState(() => localStorage.getItem("ml_last_update"));
+  const [minutesTick, setMinutesTick] = useState(0);
   const [showMLModal, setShowMLModal] = useState(false);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "1");
   const [metaMensal, setMetaMensal] = useState(() => parseFloat(localStorage.getItem("metaMensal") || "0"));
@@ -3788,6 +3790,9 @@ export default function App() {
 
     } catch (e) { setLoadError(e.message); }
     setLoading(false); setLoadingMsg("");
+    const now = Date.now().toString();
+    localStorage.setItem("ml_last_update", now);
+    setLastUpdate(now);
   }
 
   const MOCK_LISTINGS = [
@@ -4008,10 +4013,18 @@ export default function App() {
   const fatLiquido = fatBruto - totalCancelDevolv;
 
   const totalRevenue = fatLiquido;
-  const totalProfit = ordersFiltered.reduce((s, o) => s + o.profit * o.qty, 0);
-  const totalFees = ordersFiltered.reduce((s, o) => s + o.fee * o.qty, 0);
-  const totalFreteSeller = ordersFiltered.reduce((s, o) => s + (o.freteSeller ?? 0), 0);
-  const avgMargin = ordersFiltered.length > 0 ? ordersFiltered.reduce((s, o) => s + (o.margin ?? 0), 0) / enrichedOrders.length : 0;
+  // Apenas pedidos CONCLUÍDOS (pagos, não cancelados, não devolvidos)
+  // Usado para tarifas, frete e margem — valores que só se aplicam a vendas reais
+  const ordersValidos = ordersFiltered.filter(o => {
+    if (o.status === "cancelled") return false;
+    if (o.tags?.some(t => t.includes("refund") || t === "refunded")) return false;
+    return true;
+  });
+
+  const totalProfit = ordersValidos.reduce((s, o) => s + o.profit * o.qty, 0);
+  const totalFees = ordersValidos.reduce((s, o) => s + o.fee * o.qty, 0);
+  const totalFreteSeller = ordersValidos.reduce((s, o) => s + (o.freteSeller ?? 0), 0);
+  const avgMargin = ordersValidos.length > 0 ? ordersValidos.reduce((s, o) => s + (o.margin ?? 0), 0) / ordersValidos.length : 0;
   const avgScore = Math.round(enriched.reduce((s, l) => s + l.score, 0) / (enriched.length || 1));
 
   function getFreteDisplay(l) {
@@ -4034,6 +4047,18 @@ export default function App() {
       bottomColor: "#7c3aed",
     };
   }
+
+  // Ticker para atualizar "última atualização" a cada minuto
+  React.useEffect(() => {
+    const interval = setInterval(() => setMinutesTick(t => t + 1), 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Atualiza lastUpdate quando conectar
+  React.useEffect(() => {
+    const stored = localStorage.getItem("ml_last_update");
+    if (stored) setLastUpdate(stored);
+  }, [token]);
 
   if (!currentUser) return <LoginScreen onLogin={(user) => { setCurrentUser(user); }} />;
 
@@ -4085,6 +4110,22 @@ export default function App() {
           {token && <span style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#15803d", fontSize: 11, padding: "3px 12px", borderRadius: 20, fontWeight: 600 }}>● {user?.nickname}</span>}
           {loading && <span style={{ color: "#94a3b8", fontSize: 12 }}>⏳ {loadingMsg}</span>}
           {loadError && <span style={{ color: "#dc2626", fontSize: 12 }}>⚠ {loadError}</span>}
+          {token && lastUpdate && (() => {
+            const mins = Math.round((Date.now() - parseInt(lastUpdate)) / 60000);
+            const horas = Math.floor(mins / 60);
+            const isStale = mins >= 300; // avisa após 5h (token expira em 6h)
+            return (
+              <div style={{ fontSize:11, textAlign:"right", lineHeight:1.4 }}>
+                <div style={{ color: isStale ? "#dc2626" : "#94a3b8" }}>
+                  {isStale ? "⚠️ " : "✓ "}
+                  {horas > 0 ? `${horas}h ${mins%60}min` : `${mins}min`} atrás
+                </div>
+                <div style={{ color:"#cbd5e1", fontSize:10 }}>
+                  {isStale ? "Token próximo de expirar" : "dados atualizados"}
+                </div>
+              </div>
+            );
+          })()}
           <button onClick={() => setShowMLModal(true)} style={{ background: "#0f172a", border: "none", color: "#fff", fontWeight: 700, padding: "8px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>
             {token ? "Reconectar" : "Conectar ML"}
           </button>

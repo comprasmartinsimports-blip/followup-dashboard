@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 
 const ML = (path) => `/api/ml${path}`;
 const fmt = (n) => `R$ ${Number(n).toFixed(2).replace(".", ",")}`;
@@ -4226,13 +4226,13 @@ export default function App() {
   }
 
   // Ticker para atualizar "última atualização" a cada minuto
-  React.useEffect(() => {
+  useEffect(() => {
     const interval = setInterval(() => setMinutesTick(t => t + 1), 60000);
     return () => clearInterval(interval);
   }, []);
 
   // Atualiza lastUpdate quando conectar
-  React.useEffect(() => {
+  useEffect(() => {
     const stored = localStorage.getItem("ml_last_update");
     if (stored) setLastUpdate(stored);
   }, [token]);

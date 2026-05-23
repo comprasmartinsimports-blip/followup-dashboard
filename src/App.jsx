@@ -132,6 +132,65 @@ async function fetchAllListings(userId, tk) {
   return details.filter(d => d.id);
 }
 
+// Importa/sincroniza anúncios ML para o cadastro de produtos
+function syncListingsToProdutos(listings, produtosExistentes) {
+  const produtosMap = {};
+  produtosExistentes.forEach(p => {
+    if (p.mlbVinculado) produtosMap[p.mlbVinculado] = p;
+    if (p.sku) produtosMap[`sku_${p.sku}`] = p;
+  });
+
+  const novos = [];
+  const atualizados = [];
+
+  listings.forEach(l => {
+    const sku = l.seller_sku || l.attributes?.find(a => a.id==="SELLER_SKU")?.value_name || "";
+    const existente = produtosMap[l.id] || (sku ? produtosMap[`sku_${sku}`] : null);
+
+    const dadosML = {
+      mlbVinculado: l.id,
+      titulo: l.title || "",
+      sku: sku,
+      precoVenda: String(l.price || ""),
+      estoqueAtual: String(l.available_quantity || 0),
+      status: l.status === "active" ? "Ativo" : "Inativo",
+      imagens: l.pictures?.slice(0,10).map(p => p.url).filter(Boolean) || [],
+      peso: l.shipping?.dimensions?.weight ? String(l.shipping.dimensions.weight/1000) : "",
+      comprimento: l.shipping?.dimensions?.length ? String(l.shipping.dimensions.length) : "",
+      largura: l.shipping?.dimensions?.width ? String(l.shipping.dimensions.width) : "",
+      altura: l.shipping?.dimensions?.height ? String(l.shipping.dimensions.height) : "",
+      descricao: l.description?.plain_text?.slice(0, 500) || "",
+      categoria: "Outros",
+      syncML: true,
+      ultimoSyncML: new Date().toLocaleDateString("sv-SE"),
+    };
+
+    if (existente) {
+      // Atualiza apenas campos do ML, preserva custo e dados manuais
+      const atualizado = {
+        ...existente,
+        titulo: dadosML.titulo,
+        precoVenda: dadosML.precoVenda,
+        estoqueAtual: dadosML.estoqueAtual,
+        status: dadosML.status,
+        mlbVinculado: l.id,
+        sku: dadosML.sku || existente.sku,
+        imagens: dadosML.imagens.length > 0 ? dadosML.imagens : existente.imagens,
+        syncML: true,
+        ultimoSyncML: dadosML.ultimoSyncML,
+      };
+      atualizados.push(atualizado);
+    } else {
+      novos.push({ ...dadosML, id: `ml_${l.id}`, criadoViaML: true });
+    }
+  });
+
+  // Monta lista final: atualizados + não-sincronizados + novos
+  const idsAtualizados = new Set(atualizados.map(p => p.id));
+  const naoSincronizados = produtosExistentes.filter(p => !idsAtualizados.has(p.id));
+  return [...atualizados, ...naoSincronizados, ...novos];
+}
+
 async function fetchAllOrders(userId, tk) {
   const pageSize = 50; let offset = 0; let allOrders = [];
   const cutoffDate = "2026-04-01";
@@ -1508,9 +1567,19 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
   function saveProd(form) {
     const updated = editingProd ? produtos.map(p => p.id===form.id?form:p) : [...produtos, {...form, id:Date.now()}];
     setProdutos(updated); saveProdutos(updated);
-    // Sync custo com dashboard de anúncios
+    // Sync custo com dashboard de anúncios (aba Anúncios)
     if (form.mlbVinculado && form.precoCusto) {
       setCosts(c => ({ ...c, [form.mlbVinculado]: parseFloat(form.precoCusto) }));
+    }
+    // Sync todos os produtos vinculados ao ML de uma vez
+    const newCosts = {};
+    updated.forEach(p => {
+      if (p.mlbVinculado && p.precoCusto) {
+        newCosts[p.mlbVinculado] = parseFloat(p.precoCusto);
+      }
+    });
+    if (Object.keys(newCosts).length > 0) {
+      setCosts(c => ({ ...c, ...newCosts }));
     }
     setEditingProd(null);
   }
@@ -1579,6 +1648,20 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
           <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
             <button onClick={() => { setEditingProd(null); setShowModalProd(true); }}
               style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Novo Produto</button>
+            {listings.length > 0 && (
+              <button onClick={() => {
+                const sincronizados = syncListingsToProdutos(listings, produtos);
+                setProdutos(sincronizados); saveProdutos(sincronizados);
+                // Sync custos
+                const newCosts = {};
+                sincronizados.forEach(p => { if (p.mlbVinculado && p.precoCusto) newCosts[p.mlbVinculado] = parseFloat(p.precoCusto); });
+                if (Object.keys(newCosts).length > 0) setCosts(c => ({...c, ...newCosts}));
+                alert(`✅ ${sincronizados.length} produtos sincronizados com o ML!`);
+              }}
+                style={{ background:"#ffe000", border:"none", color:"#0f172a", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>
+                🔄 Sincronizar com ML
+              </button>
+            )}
             <div style={{ position:"relative", flex:1, minWidth:200 }}>
               <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por título, SKU, EAN..."
@@ -1596,6 +1679,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
               <option value="Inativo">Inativo</option>
             </select>
             <span style={{ fontSize:12, color:"#94a3b8" }}>{produtosFiltrados.length} produto(s)</span>
+            <span style={{ fontSize:12, color:"#854d0e", background:"#fef9c3", padding:"3px 10px", borderRadius:20, fontWeight:600 }}>🟡 {produtos.filter(p=>p.syncML).length} sincronizados com ML</span>
           </div>
 
           {produtosFiltrados.length === 0 ? (
@@ -1628,7 +1712,11 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                         </td>
                         <td style={{ padding:"10px 14px", maxWidth:200 }}>
                           <div style={{ fontSize:13, fontWeight:600, color:"#0f172a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.titulo}</div>
+                          <div style={{ display:"flex", gap:4, alignItems:"center", marginTop:2 }}>
                           <div style={{ fontSize:11, color:"#94a3b8" }}>{p.categoria}</div>
+                          {p.syncML && <span style={{ fontSize:9, background:"#fef9c3", color:"#854d0e", padding:"1px 5px", borderRadius:3, fontWeight:700 }}>ML</span>}
+                          {p.ultimoSyncML && <span style={{ fontSize:9, color:"#cbd5e1" }}>sync {p.ultimoSyncML}</span>}
+                        </div>
                         </td>
                         <td style={{ padding:"10px 14px" }}>
                           <div style={{ fontSize:12, fontFamily:"monospace", fontWeight:600, color:"#334155" }}>{p.sku || "—"}</div>
@@ -1638,8 +1726,15 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                           <div>{forn?.nome || "—"}</div>
                           {p.codigoFornecedor && <div style={{ fontSize:10, color:"#94a3b8" }}>{p.codigoFornecedor}</div>}
                         </td>
-                        <td style={{ padding:"10px 14px", fontSize:13, fontWeight:600, color:"#0f172a" }}>
-                          {p.precoCusto ? `R$ ${parseFloat(p.precoCusto).toFixed(2).replace(".",",")}` : "—"}
+                        <td style={{ padding:"10px 14px" }}>
+                          {p.precoCusto ? (
+                            <div>
+                              <div style={{ fontSize:13, fontWeight:700, color:"#0f172a" }}>R$ {parseFloat(p.precoCusto).toFixed(2).replace(".",",")}</div>
+                              {p.mlbVinculado && <div style={{ fontSize:10, color:"#15803d" }}>✓ sync anúncios</div>}
+                            </div>
+                          ) : (
+                            <span style={{ fontSize:12, color:"#94a3b8" }}>— insira custo</span>
+                          )}
                         </td>
                         <td style={{ padding:"10px 14px", fontSize:13, fontWeight:600, color:"#15803d" }}>
                           {p.precoVenda ? `R$ ${parseFloat(p.precoVenda).toFixed(2).replace(".",",")}` : "—"}
@@ -2378,6 +2473,10 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
   const [modalBaixa, setModalBaixa] = useState(null); // conta a pagar para dar baixa
   const [modalBaixaML, setModalBaixaML] = useState(null); // pedido ML para registrar
   const [searchReceber, setSearchReceber] = useState("");
+  const [receberDe, setReceberDe] = useState("");
+  const [receberAte, setReceberAte] = useState("");
+  const [pagarDe, setPagarDe] = useState("");
+  const [pagarAte, setPagarAte] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCat, setFilterCat] = useState("all");
   const [searchPagar, setSearchPagar] = useState("");
@@ -2396,8 +2495,10 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
     if (filterStatus !== "all") r = r.filter(c => c.status === filterStatus);
     if (filterCat !== "all") r = r.filter(c => c.categoria === filterCat);
     if (searchPagar) r = r.filter(c => c.descricao.toLowerCase().includes(searchPagar.toLowerCase()));
+    if (pagarDe) r = r.filter(c => c.vencimento && c.vencimento >= pagarDe);
+    if (pagarAte) r = r.filter(c => c.vencimento && c.vencimento <= pagarAte);
     return r.sort((a,b) => (a.vencimento||"9999") > (b.vencimento||"9999") ? 1 : -1);
-  }, [contasPagar, filterStatus, filterCat, searchPagar]);
+  }, [contasPagar, filterStatus, filterCat, searchPagar, pagarDe, pagarAte]);
 
   // ── Totais ───────────────────────────────────────────────
   const totalPagar   = contasPagar.filter(c=>c.status!=="Pago").reduce((s,c)=>s+parseFloat(c.valor||0),0);
@@ -2776,12 +2877,12 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
       {finTab === "pagar" && (
         <div>
           <PainelIAPagamentos contasPagar={contasPagar} contasBancarias={contasBancarias} />
-          <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
+          <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:10, flexWrap:"wrap" }}>
             <button onClick={() => { setEditingConta(null); setShowModalConta(true); }}
               style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Nova Conta</button>
             <div style={{ position:"relative", flex:1, minWidth:160 }}>
               <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
-              <input value={searchPagar} onChange={e=>setSearchPagar(e.target.value)} placeholder="Buscar..."
+              <input value={searchPagar} onChange={e=>setSearchPagar(e.target.value)} placeholder="Buscar descrição..."
                 style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px 8px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
             </div>
             <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}
@@ -2794,6 +2895,19 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
               <option value="all">Todas categorias</option>
               {categoriasPagar.map(c=><option key={c} value={c}>{c}</option>)}
             </select>
+          </div>
+          <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
+            <span style={{ fontSize:12, color:"#94a3b8", fontWeight:500 }}>Vencimento:</span>
+            <input type="date" value={pagarDe} onChange={e=>setPagarDe(e.target.value)}
+              style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"6px 10px", borderRadius:8, fontSize:12, cursor:"pointer" }} />
+            <span style={{ fontSize:12, color:"#94a3b8" }}>até</span>
+            <input type="date" value={pagarAte} onChange={e=>setPagarAte(e.target.value)}
+              style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"6px 10px", borderRadius:8, fontSize:12, cursor:"pointer" }} />
+            {(pagarDe||pagarAte) && (
+              <button onClick={()=>{setPagarDe("");setPagarAte("");}}
+                style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"5px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕ Limpar</button>
+            )}
+            <span style={{ fontSize:12, color:"#94a3b8", marginLeft:4 }}>{contasFiltradas.length} conta(s)</span>
           </div>
           {(() => {
             const hoje = new Date(); hoje.setHours(0,0,0,0);
@@ -2926,7 +3040,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
               </div>
             ))}
           </div>
-          <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
+          <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:10, flexWrap:"wrap" }}>
             <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", whiteSpace:"nowrap" }}>Pedidos a Receber</div>
             <div style={{ position:"relative", flex:1, minWidth:240 }}>
               <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
@@ -2941,6 +3055,18 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
               </button>
             )}
           </div>
+          <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
+            <span style={{ fontSize:12, color:"#94a3b8", fontWeight:500 }}>Data da venda:</span>
+            <input type="date" value={receberDe} onChange={e=>setReceberDe(e.target.value)}
+              style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"6px 10px", borderRadius:8, fontSize:12, cursor:"pointer" }} />
+            <span style={{ fontSize:12, color:"#94a3b8" }}>até</span>
+            <input type="date" value={receberAte} onChange={e=>setReceberAte(e.target.value)}
+              style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"6px 10px", borderRadius:8, fontSize:12, cursor:"pointer" }} />
+            {(receberDe||receberAte) && (
+              <button onClick={()=>{setReceberDe("");setReceberAte("");}}
+                style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"5px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕ Limpar</button>
+            )}
+          </div>
           <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto", marginBottom:20 }}>
             <table style={{ borderCollapse:"collapse", width:"100%" }}>
               <thead>
@@ -2951,11 +3077,14 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
               <tbody>
                 {(() => {
                   const q = searchReceber.toLowerCase().trim();
-                  const filtered = q ? aReceber.filter(o =>
+                  let filtered = aReceber;
+                  if (q) filtered = filtered.filter(o =>
                     String(o.id).includes(q) ||
                     o.title?.toLowerCase().includes(q) ||
                     o.buyerName?.toLowerCase().includes(q)
-                  ) : aReceber;
+                  );
+                  if (receberDe) filtered = filtered.filter(o => o.date && o.date >= receberDe);
+                  if (receberAte) filtered = filtered.filter(o => o.date && o.date <= receberAte);
                   if (filtered.length === 0) return (
                     <tr><td colSpan={9} style={{ textAlign:"center", color:"#94a3b8", padding:32 }}>
                       {searchReceber ? "Nenhum pedido encontrado para essa busca" : "Nenhum pedido a receber"}
@@ -3249,6 +3378,14 @@ export default function App() {
       setLoadingMsg("Buscando anúncios...");
       const listings = await fetchAllListings(me.id, validTk);
       setRealListings(listings);
+
+      // Auto-importar anúncios para cadastro de produtos
+      setLoadingMsg("Sincronizando produtos com ML...");
+      const produtosAtuais = JSON.parse(localStorage.getItem("produtos_cadastro") || "[]");
+      const produtosSincronizados = syncListingsToProdutos(listings, produtosAtuais);
+      localStorage.setItem("produtos_cadastro", JSON.stringify(produtosSincronizados));
+      // Atualizar state de produtos se existir
+      setProdutos(produtosSincronizados);
 
       setLoadingMsg("Buscando pedidos...");
       const orders = await fetchAllOrders(me.id, validTk);

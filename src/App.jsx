@@ -1736,19 +1736,27 @@ async function analisarPrioridadePagamentos(contas, saldoDisponivel) {
   // Calcula custo acumulado de cada conta
   const contasComCusto = contas.filter(c => c.status !== "Pago").map(c => {
     const valor = parseFloat(c.valor || 0);
-    const multa = parseFloat(c.multaPct || 0) / 100;
-    const jurosDia = parseFloat(c.jurosDia || 0) / 100;
+    // Converte multa para valor R$
+    const multaR = c.multaTipo === "R$"
+      ? parseFloat(c.multaPct || 0)
+      : valor * (parseFloat(c.multaPct || 0) / 100);
+    // Converte juros para valor R$ por dia
+    const jurosDiaR = c.jurosTipo === "R$"
+      ? parseFloat(c.jurosDia || 0)
+      : valor * (parseFloat(c.jurosDia || 0) / 100);
+    const multa = valor > 0 ? multaR / valor : 0;
+    const jurosDia = valor > 0 ? jurosDiaR / valor : 0;
     const venc = c.vencimento;
     const hoje = new Date(); hoje.setHours(0,0,0,0);
     const dueDate = venc ? new Date(venc + "T00:00:00") : null;
     const diasAtraso = dueDate ? Math.max(0, Math.round((hoje - dueDate) / 86400000)) : 0;
     const diasParaVencer = dueDate ? Math.round((dueDate - hoje) / 86400000) : 999;
     
-    const multaValor = diasAtraso > 0 ? valor * multa : 0;
-    const jurosValor = diasAtraso > 0 ? valor * jurosDia * diasAtraso : 0;
+    const multaValor = diasAtraso > 0 ? multaR : 0;
+    const jurosValor = diasAtraso > 0 ? jurosDiaR * diasAtraso : 0;
     const custoHoje = valor + multaValor + jurosValor;
-    const custoAmanha = valor + (diasAtraso === 0 && dueDate ? valor * multa : multaValor) + valor * jurosDia * (diasAtraso + 1);
-    const custoPorDia = valor * jurosDia + (diasAtraso === 0 && dueDate ? valor * multa : 0);
+    const custoAmanha = valor + (diasAtraso === 0 && dueDate ? multaR : multaValor) + jurosDiaR * (diasAtraso + 1);
+    const custoPorDia = jurosDiaR + (diasAtraso === 0 && dueDate ? multaR : 0);
     
     return {
       ...c, valor, multa, jurosDia, diasAtraso, diasParaVencer,
@@ -1772,11 +1780,12 @@ ${i+1}. ${c.descricao}
    - Valor original: R$ ${c.valor.toFixed(2)}
    - Vencimento: ${c.vencimento || "não informado"}
    - Situação: ${c.diasAtraso > 0 ? `VENCIDA há ${c.diasAtraso} dias` : c.diasParaVencer === 0 ? "VENCE HOJE" : `vence em ${c.diasParaVencer} dias`}
-   - Multa acumulada: R$ ${c.multaValor.toFixed(2)} (${c.multaPct || 0}%)
-   - Juros acumulados: R$ ${c.jurosValor.toFixed(2)} (${c.jurosDia || 0}% ao dia)
+   - Multa acumulada: R$ ${c.multaValor.toFixed(2)} (${c.multaTipo||"%"} ${c.multaPct || 0}${c.multaTipo==="R$"?" R$/ocorrência":" %"})
+   - Juros acumulados: R$ ${c.jurosValor.toFixed(2)} (${c.jurosTipo||"%"} ${c.jurosDia || 0}${c.jurosTipo==="R$"?" R$/dia":" % ao dia"})
    - Custo total hoje: R$ ${c.custoHoje.toFixed(2)}
    - Custo adicional por dia: R$ ${c.custoPorDia.toFixed(2)}
    - Categoria: ${c.categoria}
+   - Protesto: ${c.temProtesto ? `SIM — será protestada ${c.diasProtesto} dias após vencimento${c.cartorio ? ` (${c.cartorio})` : ""}` : "Não"}
 `).join("")}
 
 Retorne APENAS um JSON válido neste formato exato:
@@ -2241,17 +2250,110 @@ function ModalConta({ conta, categoriasPagar, onSave, onClose }) {
           <div style={{ gridColumn:"1/-1", background:"#f8fafc", borderRadius:10, padding:"12px 14px" }}>
             <div style={{ fontSize:11, color:"#94a3b8", marginBottom:10, fontWeight:700, textTransform:"uppercase" }}>💰 Juros e Multa (para análise IA)</div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+              {/* Multa */}
               <div>
-                <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Multa por atraso (%)</div>
-                <input type="number" value={form.multaPct||""} onChange={e => set("multaPct", e.target.value)} placeholder="Ex: 2"
-                  style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:5 }}>
+                  <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, textTransform:"uppercase" }}>Multa por atraso</div>
+                  <div style={{ display:"flex", gap:2 }}>
+                    {["%","R$"].map(t => (
+                      <button key={t} onClick={() => set("multaTipo", t)}
+                        style={{ padding:"2px 8px", borderRadius:5, border:"none", cursor:"pointer", fontSize:11, fontWeight:700,
+                          background:(form.multaTipo||"%")===t?"#0f172a":"#e2e8f0",
+                          color:(form.multaTipo||"%")===t?"#fff":"#64748b" }}>
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ position:"relative" }}>
+                  <input type="number" value={form.multaPct||""} onChange={e => set("multaPct", e.target.value)}
+                    placeholder={(form.multaTipo||"%")==="%" ? "Ex: 2" : "Ex: 50,00"}
+                    style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px 9px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
+                  <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", fontSize:12, color:"#94a3b8", fontWeight:700 }}>
+                    {(form.multaTipo||"%")==="%" ? "%" : "R$"}
+                  </span>
+                </div>
+                {form.multaPct && form.valor && (
+                  <div style={{ fontSize:10, color:"#64748b", marginTop:4 }}>
+                    {(form.multaTipo||"%")==="%" 
+                      ? `= R$ ${(parseFloat(form.valor||0)*parseFloat(form.multaPct||0)/100).toFixed(2).replace(".",",")} de multa`
+                      : `= ${(parseFloat(form.multaPct||0)/parseFloat(form.valor||1)*100).toFixed(2)}% do valor`}
+                  </div>
+                )}
               </div>
+              {/* Juros */}
               <div>
-                <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Juros ao dia (%)</div>
-                <input type="number" value={form.jurosDia||""} onChange={e => set("jurosDia", e.target.value)} placeholder="Ex: 0.033"
-                  style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:5 }}>
+                  <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, textTransform:"uppercase" }}>Juros ao dia</div>
+                  <div style={{ display:"flex", gap:2 }}>
+                    {["%","R$"].map(t => (
+                      <button key={t} onClick={() => set("jurosTipo", t)}
+                        style={{ padding:"2px 8px", borderRadius:5, border:"none", cursor:"pointer", fontSize:11, fontWeight:700,
+                          background:(form.jurosTipo||"%")===t?"#0f172a":"#e2e8f0",
+                          color:(form.jurosTipo||"%")===t?"#fff":"#64748b" }}>
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ position:"relative" }}>
+                  <input type="number" value={form.jurosDia||""} onChange={e => set("jurosDia", e.target.value)}
+                    placeholder={(form.jurosTipo||"%")==="%" ? "Ex: 0.033" : "Ex: 5,00"}
+                    style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px 9px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
+                  <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", fontSize:12, color:"#94a3b8", fontWeight:700 }}>
+                    {(form.jurosTipo||"%")==="%" ? "%" : "R$"}
+                  </span>
+                </div>
+                {form.jurosDia && form.valor && (
+                  <div style={{ fontSize:10, color:"#64748b", marginTop:4 }}>
+                    {(form.jurosTipo||"%")==="%" 
+                      ? `= R$ ${(parseFloat(form.valor||0)*parseFloat(form.jurosDia||0)/100).toFixed(2).replace(".",",")} por dia`
+                      : `= ${(parseFloat(form.jurosDia||0)/parseFloat(form.valor||1)*100).toFixed(4)}% ao dia`}
+                  </div>
+                )}
               </div>
             </div>
+          </div>
+          <div style={{ gridColumn:"1/-1", background: form.temProtesto ? "#fef2f2" : "#f8fafc", border: `1px solid ${form.temProtesto ? "#fecaca" : "#e2e8f0"}`, borderRadius:10, padding:"12px 14px", transition:"all .2s" }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom: form.temProtesto ? 12 : 0 }}>
+              <div>
+                <div style={{ fontSize:11, color: form.temProtesto ? "#dc2626" : "#94a3b8", marginBottom:2, fontWeight:700, textTransform:"uppercase" }}>⚖️ Protesto</div>
+                <div style={{ fontSize:11, color:"#94a3b8" }}>Será protestada caso não paga no vencimento</div>
+              </div>
+              <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer" }}>
+                <div style={{ position:"relative", width:44, height:24 }}>
+                  <input type="checkbox" checked={form.temProtesto||false} onChange={e => set("temProtesto", e.target.checked)}
+                    style={{ opacity:0, width:0, height:0, position:"absolute" }} />
+                  <div style={{ position:"absolute", inset:0, background:form.temProtesto?"#dc2626":"#cbd5e1", borderRadius:99, transition:"all .2s", cursor:"pointer" }}
+                    onClick={() => set("temProtesto", !form.temProtesto)} />
+                  <div style={{ position:"absolute", top:2, left: form.temProtesto ? 22 : 2, width:20, height:20, background:"#fff", borderRadius:"50%", transition:"all .2s", boxShadow:"0 1px 3px rgba(0,0,0,.2)" }} />
+                </div>
+                <span style={{ fontSize:13, fontWeight:600, color: form.temProtesto ? "#dc2626" : "#94a3b8" }}>
+                  {form.temProtesto ? "Sim, será protestada" : "Não"}
+                </span>
+              </label>
+            </div>
+            {form.temProtesto && (
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginTop:4 }}>
+                <div>
+                  <div style={{ fontSize:11, color:"#dc2626", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Dias após vencimento para protesto</div>
+                  <input type="number" value={form.diasProtesto||""} onChange={e => set("diasProtesto", e.target.value)} placeholder="Ex: 5"
+                    style={{ width:"100%", background:"#fff", border:"1px solid #fecaca", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                  <div style={{ fontSize:10, color:"#94a3b8", marginTop:4 }}>
+                    {form.vencimento && form.diasProtesto ? (() => {
+                      const d = new Date(form.vencimento + "T00:00:00");
+                      d.setDate(d.getDate() + parseInt(form.diasProtesto || 0));
+                      return `Protesto em: ${d.toLocaleDateString("pt-BR")}`;
+                    })() : "Informe o vencimento e os dias"}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:"#dc2626", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Cartório / Observação</div>
+                  <input value={form.cartorio||""} onChange={e => set("cartorio", e.target.value)} placeholder="Ex: 1º Cartório de Protesto SP"
+                    style={{ width:"100%", background:"#fff", border:"1px solid #fecaca", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                </div>
+              </div>
+            )}
           </div>
         </div>
         <div style={{ display:"flex", gap:8 }}>
@@ -2692,6 +2794,44 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
               {categoriasPagar.map(c=><option key={c} value={c}>{c}</option>)}
             </select>
           </div>
+          {(() => {
+            const hoje = new Date(); hoje.setHours(0,0,0,0);
+            const protestoIminente = contasPagar.filter(c => {
+              if (c.status === "Pago" || !c.temProtesto || !c.vencimento || !c.diasProtesto) return false;
+              const venc = new Date(c.vencimento + "T00:00:00");
+              const dataProtesto = new Date(venc); dataProtesto.setDate(dataProtesto.getDate() + parseInt(c.diasProtesto));
+              const diasRestantes = Math.round((dataProtesto - hoje) / 86400000);
+              return diasRestantes >= 0 && diasRestantes <= 5;
+            });
+            const protestados = contasPagar.filter(c => {
+              if (c.status === "Pago" || !c.temProtesto || !c.vencimento || !c.diasProtesto) return false;
+              const venc = new Date(c.vencimento + "T00:00:00");
+              const dataProtesto = new Date(venc); dataProtesto.setDate(dataProtesto.getDate() + parseInt(c.diasProtesto));
+              return dataProtesto < hoje;
+            });
+            return (
+              <>
+                {protestados.length > 0 && (
+                  <div style={{ background:"#f5f3ff", border:"1px solid #c4b5fd", borderRadius:10, padding:"10px 16px", marginBottom:10, display:"flex", alignItems:"center", gap:10 }}>
+                    <span style={{ fontSize:18 }}>⚖️</span>
+                    <div>
+                      <div style={{ fontWeight:700, color:"#7c3aed", fontSize:13 }}>{protestados.length} conta(s) com protesto vencido!</div>
+                      <div style={{ fontSize:12, color:"#6d28d9" }}>{protestados.map(c=>c.descricao?.slice(0,30)).join(", ")}</div>
+                    </div>
+                  </div>
+                )}
+                {protestoIminente.length > 0 && (
+                  <div style={{ background:"#fef2f2", border:"1px solid #fca5a5", borderRadius:10, padding:"10px 16px", marginBottom:10, display:"flex", alignItems:"center", gap:10 }}>
+                    <span style={{ fontSize:18 }}>⚠️</span>
+                    <div>
+                      <div style={{ fontWeight:700, color:"#dc2626", fontSize:13 }}>Protesto em até 5 dias!</div>
+                      <div style={{ fontSize:12, color:"#b91c1c" }}>{protestoIminente.map(c=>`${c.descricao?.slice(0,25)} (${c.diasProtesto}d após venc.)`).join(", ")}</div>
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
           <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, marginBottom:14 }}>
             {[
               { label:"Pendente", value:fmt(contasPagar.filter(c=>c.status==="Pendente").reduce((s,c)=>s+parseFloat(c.valor||0),0)), color:"#d97706", bg:"#fffbeb" },
@@ -2727,7 +2867,23 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                       <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{c.categoria}</td>
                       <td style={{ padding:"10px 14px", fontSize:13, fontWeight:700, color:"#0f172a" }}>{fmt(parseFloat(c.valor||0))}</td>
                       <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{fmtDate(c.vencimento)}</td>
-                      <td style={{ padding:"10px 14px" }}><span style={{ fontSize:11, fontWeight:600, color:statusColor(c.status), background:statusBg(c.status), padding:"3px 8px", borderRadius:6 }}>{c.status}</span></td>
+                      <td style={{ padding:"10px 14px" }}>
+                        <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                          <span style={{ fontSize:11, fontWeight:600, color:statusColor(c.status), background:statusBg(c.status), padding:"3px 8px", borderRadius:6, display:"inline-block" }}>{c.status}</span>
+                          {c.temProtesto && (() => {
+                            const dias = getDaysUntil(c.vencimento);
+                            const diasProt = parseInt(c.diasProtesto || 0);
+                            const diasParaProtesto = dias !== null ? dias + diasProt : null;
+                            const jaProtestado = diasParaProtesto !== null && diasParaProtesto <= 0 && c.status !== "Pago";
+                            const alertaProtesto = diasParaProtesto !== null && diasParaProtesto > 0 && diasParaProtesto <= 5;
+                            return (
+                              <span style={{ fontSize:10, fontWeight:700, color: jaProtestado?"#7c3aed": alertaProtesto?"#dc2626":"#94a3b8", background: jaProtestado?"#f5f3ff": alertaProtesto?"#fef2f2":"#f8fafc", padding:"2px 7px", borderRadius:5, display:"inline-block", whiteSpace:"nowrap" }}>
+                                {jaProtestado ? "⚖️ Protestado" : alertaProtesto ? `⚠️ Protesto em ${diasParaProtesto}d` : `⚖️ Protesto em ${diasParaProtesto}d`}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      </td>
                       <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>
                         {contaBanc ? <span style={{ display:"flex", alignItems:"center", gap:4 }}><div style={{ width:8, height:8, borderRadius:"50%", background:contaBanc.cor }} />{contaBanc.nome}</span> : "—"}
                       </td>

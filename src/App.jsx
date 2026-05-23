@@ -3552,6 +3552,9 @@ export default function App() {
     try { return JSON.parse(localStorage.getItem("custos_fixos_config") || "[]"); } catch { return []; }
   });
   const [showNotif, setShowNotif] = useState(false);
+  const [periodoFiltro, setPeriodoFiltro] = useState("mes"); // hoje | semana | mes | ano | custom
+  const [periodoCustomDe, setPeriodoCustomDe] = useState("");
+  const [periodoCustomAte, setPeriodoCustomAte] = useState("");
   // ── Financeiro ────────────────────────────────────────────
   const [contasPagar, setContasPagar] = useState(() => {
     try { return JSON.parse(localStorage.getItem("contas_pagar") || "[]"); } catch { return []; }
@@ -3893,11 +3896,28 @@ export default function App() {
     return { ...o, listing, ...calcMargin(o.price, cost, feeRate, freteSeller), cost, freteSeller };
   });
 
-  const totalRevenue = enrichedOrders.reduce((s, o) => s + o.revenue * o.qty, 0);
-  const totalProfit = enrichedOrders.reduce((s, o) => s + o.profit * o.qty, 0);
-  const totalFees = enrichedOrders.reduce((s, o) => s + o.fee * o.qty, 0);
-  const totalFreteSeller = enrichedOrders.reduce((s, o) => s + (o.freteSeller ?? 0), 0);
-  const avgMargin = enrichedOrders.length > 0 ? enrichedOrders.reduce((s, o) => s + (o.margin ?? 0), 0) / enrichedOrders.length : 0;
+  // ── Filtro de período ────────────────────────────────────
+  const hoje = new Date().toLocaleDateString("sv-SE");
+  const getRange = () => {
+    const now = new Date();
+    if (periodoFiltro === "hoje") return [hoje, hoje];
+    if (periodoFiltro === "semana") {
+      const d = new Date(); d.setDate(d.getDate() - 6);
+      return [d.toLocaleDateString("sv-SE"), hoje];
+    }
+    if (periodoFiltro === "mes") return [hoje.slice(0,7) + "-01", hoje];
+    if (periodoFiltro === "ano") return [hoje.slice(0,4) + "-01-01", hoje];
+    if (periodoFiltro === "custom") return [periodoCustomDe || "2000-01-01", periodoCustomAte || hoje];
+    return ["2000-01-01", hoje];
+  };
+  const [rangeStart, rangeEnd] = getRange();
+  const ordersFiltered = enrichedOrders.filter(o => o.date >= rangeStart && o.date <= rangeEnd);
+
+  const totalRevenue = ordersFiltered.reduce((s, o) => s + o.revenue * o.qty, 0);
+  const totalProfit = ordersFiltered.reduce((s, o) => s + o.profit * o.qty, 0);
+  const totalFees = ordersFiltered.reduce((s, o) => s + o.fee * o.qty, 0);
+  const totalFreteSeller = ordersFiltered.reduce((s, o) => s + (o.freteSeller ?? 0), 0);
+  const avgMargin = ordersFiltered.length > 0 ? ordersFiltered.reduce((s, o) => s + (o.margin ?? 0), 0) / enrichedOrders.length : 0;
   const avgScore = Math.round(enriched.reduce((s, l) => s + l.score, 0) / (enriched.length || 1));
 
   function getFreteDisplay(l) {
@@ -3995,6 +4015,36 @@ export default function App() {
       </header>
 
       <main style={{ maxWidth: 1440, margin: "0 auto", padding: "24px 32px" }}>
+        {/* ── FILTRO DE PERÍODO ── */}
+        <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:12, flexWrap:"wrap" }}>
+          <span style={{ fontSize:12, color:"#94a3b8", fontWeight:500 }}>Período:</span>
+          {[
+            { key:"hoje", label:"Hoje" },
+            { key:"semana", label:"7 dias" },
+            { key:"mes", label:"Este mês" },
+            { key:"ano", label:"Este ano" },
+            { key:"tudo", label:"Tudo" },
+            { key:"custom", label:"Personalizado" },
+          ].map(p => (
+            <button key={p.key} onClick={() => setPeriodoFiltro(p.key)}
+              style={{ padding:"5px 14px", borderRadius:20, border:"none", cursor:"pointer", fontSize:12, fontWeight:periodoFiltro===p.key?700:500,
+                background:periodoFiltro===p.key?"#0f172a":"#f1f5f9",
+                color:periodoFiltro===p.key?"#fff":"#64748b" }}>
+              {p.label}
+            </button>
+          ))}
+          {periodoFiltro === "custom" && (
+            <>
+              <input type="date" value={periodoCustomDe} onChange={e=>setPeriodoCustomDe(e.target.value)}
+                style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"4px 10px", borderRadius:8, fontSize:12 }} />
+              <span style={{ fontSize:12, color:"#94a3b8" }}>até</span>
+              <input type="date" value={periodoCustomAte} onChange={e=>setPeriodoCustomAte(e.target.value)}
+                style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"4px 10px", borderRadius:8, fontSize:12 }} />
+            </>
+          )}
+          <span style={{ fontSize:11, color:"#94a3b8", marginLeft:4 }}>{ordersFiltered.length} pedido(s)</span>
+        </div>
+
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 24 }} className="fade-up">
           {[
             { label: "Receita líquida", value: fmt(totalRevenue), color: "#0f172a" },
@@ -4004,7 +4054,7 @@ export default function App() {
             { label: "Margem média", value: fmtPct(avgMargin), color: avgMargin >= .25 ? "#15803d" : avgMargin >= .15 ? "#d97706" : "#dc2626" },
             { label: "Impostos (mês)", value: (() => { const v = impostos.reduce((s,i)=>s+(i.tipo==="%"?(totalRevenue*(parseFloat(i.valor||0)/100)):(parseFloat(i.valor||0))),0); return `R$ ${v.toFixed(2).replace(".",",")}` })(), color: "#dc2626" },
             { label: "Custos Fixos (mês)", value: (() => { const v = custosFixos.reduce((s,c)=>s+(c.tipo==="%"?(totalRevenue*(parseFloat(c.valor||0)/100)):(parseFloat(c.valor||0))),0); return `R$ ${v.toFixed(2).replace(".",",")}` })(), color: "#d97706" },
-            { label: "Lucro Real", value: (() => { const imp = impostos.reduce((s,i)=>s+(i.tipo==="%"?(totalRevenue*(parseFloat(i.valor||0)/100)):(parseFloat(i.valor||0))),0); const fix = custosFixos.reduce((s,c)=>s+(c.tipo==="%"?(totalRevenue*(parseFloat(c.valor||0)/100)):(parseFloat(c.valor||0))),0); return `R$ ${(totalRevenue-imp-fix).toFixed(2).replace(".",",")}` })(), color: (() => { const imp = impostos.reduce((s,i)=>s+(i.tipo==="%"?(totalRevenue*(parseFloat(i.valor||0)/100)):(parseFloat(i.valor||0))),0); const fix = custosFixos.reduce((s,c)=>s+(c.tipo==="%"?(totalRevenue*(parseFloat(c.valor||0)/100)):(parseFloat(c.valor||0))),0); return (totalRevenue-imp-fix)>=0?"#15803d":"#dc2626" })() },
+            { label: "Lucro Real", value: (() => { const imp = impostos.reduce((s,i)=>s+(i.tipo==="%"?(totalRevenue*(parseFloat(i.valor||0)/100)):(parseFloat(i.valor||0))),0); const fix = custosFixos.reduce((s,c)=>s+(c.tipo==="%"?(totalRevenue*(parseFloat(c.valor||0)/100)):(parseFloat(c.valor||0))),0); const lucro = totalRevenue - totalFees - totalFreteSeller - imp - fix; return `R$ ${lucro.toFixed(2).replace(".",",")}` })(), color: (() => { const imp = impostos.reduce((s,i)=>s+(i.tipo==="%"?(totalRevenue*(parseFloat(i.valor||0)/100)):(parseFloat(i.valor||0))),0); const fix = custosFixos.reduce((s,c)=>s+(c.tipo==="%"?(totalRevenue*(parseFloat(c.valor||0)/100)):(parseFloat(c.valor||0))),0); const lucro = totalRevenue - totalFees - totalFreteSeller - imp - fix; return lucro>=0?"#15803d":"#dc2626" })() },
             { label: "Score médio", value: `${avgScore}/100`, color: scoreColor(avgScore) },
             { label: "Total anúncios", value: enriched.length, color: "#0f172a" },
             { label: "Pedidos período", value: enrichedOrders.length, color: "#0f172a" },

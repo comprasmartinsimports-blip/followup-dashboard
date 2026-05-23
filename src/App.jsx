@@ -1173,19 +1173,6 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
         </div>
       )}
 
-      {/* ── IMPOSTOS E CUSTOS FIXOS ── */}
-      <ImpostosPanel
-        impostos={impostos}
-        setImpostos={setImpostos}
-        custosFixos={custosFixos}
-        setCustosFixos={setCustosFixos}
-        faturamentoMes={faturamentoMes}
-        darkMode={darkMode}
-        card={card}
-        txt={txt}
-        txtMuted={txtMuted}
-      />
-
       {/* ── CARDS PRINCIPAIS ── */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12 }}>
         {/* Hoje */}
@@ -1279,6 +1266,19 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
           + Definir Meta Mensal de Faturamento
         </button>
       )}
+
+      {/* ── EDIÇÃO DE IMPOSTOS E CUSTOS FIXOS ── */}
+      <ImpostosPanel
+        impostos={impostos}
+        setImpostos={setImpostos}
+        custosFixos={custosFixos}
+        setCustosFixos={setCustosFixos}
+        faturamentoMes={faturamentoMes}
+        darkMode={darkMode}
+        card={card}
+        txt={txt}
+        txtMuted={txtMuted}
+      />
 
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
         {/* ── DISTRIBUIÇÃO DE STATUS ── */}
@@ -4002,6 +4002,9 @@ export default function App() {
             { label: "Tarifas ML", value: fmt(totalFees), color: "#d97706" },
             { label: "Frete (seu custo)", value: fmt(totalFreteSeller), color: "#7c3aed" },
             { label: "Margem média", value: fmtPct(avgMargin), color: avgMargin >= .25 ? "#15803d" : avgMargin >= .15 ? "#d97706" : "#dc2626" },
+            { label: "Impostos (mês)", value: (() => { const v = impostos.reduce((s,i)=>s+(i.tipo==="%"?(totalRevenue*(parseFloat(i.valor||0)/100)):(parseFloat(i.valor||0))),0); return `R$ ${v.toFixed(2).replace(".",",")}` })(), color: "#dc2626" },
+            { label: "Custos Fixos (mês)", value: (() => { const v = custosFixos.reduce((s,c)=>s+(c.tipo==="%"?(totalRevenue*(parseFloat(c.valor||0)/100)):(parseFloat(c.valor||0))),0); return `R$ ${v.toFixed(2).replace(".",",")}` })(), color: "#d97706" },
+            { label: "Lucro Real", value: (() => { const imp = impostos.reduce((s,i)=>s+(i.tipo==="%"?(totalRevenue*(parseFloat(i.valor||0)/100)):(parseFloat(i.valor||0))),0); const fix = custosFixos.reduce((s,c)=>s+(c.tipo==="%"?(totalRevenue*(parseFloat(c.valor||0)/100)):(parseFloat(c.valor||0))),0); return `R$ ${(totalRevenue-imp-fix).toFixed(2).replace(".",",")}` })(), color: (() => { const imp = impostos.reduce((s,i)=>s+(i.tipo==="%"?(totalRevenue*(parseFloat(i.valor||0)/100)):(parseFloat(i.valor||0))),0); const fix = custosFixos.reduce((s,c)=>s+(c.tipo==="%"?(totalRevenue*(parseFloat(c.valor||0)/100)):(parseFloat(c.valor||0))),0); return (totalRevenue-imp-fix)>=0?"#15803d":"#dc2626" })() },
             { label: "Score médio", value: `${avgScore}/100`, color: scoreColor(avgScore) },
             { label: "Total anúncios", value: enriched.length, color: "#0f172a" },
             { label: "Pedidos período", value: enrichedOrders.length, color: "#0f172a" },

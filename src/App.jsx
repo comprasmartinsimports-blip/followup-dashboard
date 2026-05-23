@@ -814,6 +814,83 @@ function AdminTab({ currentUser }) {
 }
 
 
+// ── Versão compacta do painel de Impostos/Custos Fixos ───────
+function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, faturamentoMes }) {
+  const [novoImposto, setNovoImposto] = useState({ nome:"", valor:"", tipo:"%" });
+  const [novoCusto, setNovoCusto]     = useState({ nome:"", valor:"", tipo:"%" });
+
+  function addI() {
+    if (!novoImposto.nome || !novoImposto.valor) return;
+    const u = [...impostos, { ...novoImposto, id: Date.now() }];
+    setImpostos(u); saveImpostos(u); setNovoImposto({ nome:"", valor:"", tipo:"%" });
+  }
+  function addC() {
+    if (!novoCusto.nome || !novoCusto.valor) return;
+    const u = [...custosFixos, { ...novoCusto, id: Date.now() }];
+    setCustosFixos(u); saveCustosFixos(u); setNovoCusto({ nome:"", valor:"", tipo:"%" });
+  }
+  function removeI(id) { const u = impostos.filter(i=>i.id!==id); setImpostos(u); saveImpostos(u); }
+  function removeC(id) { const u = custosFixos.filter(c=>c.id!==id); setCustosFixos(u); saveCustosFixos(u); }
+  function updateI(id, f, v) { const u = impostos.map(i=>i.id===id?{...i,[f]:v}:i); setImpostos(u); saveImpostos(u); }
+  function updateC(id, f, v) { const u = custosFixos.map(c=>c.id===id?{...c,[f]:v}:c); setCustosFixos(u); saveCustosFixos(u); }
+
+  const inp = { background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"6px 10px", borderRadius:7, fontSize:12, outline:"none", fontFamily:"inherit" };
+  const tBtn = (item, t, fn) => (
+    <button onClick={()=>fn("tipo",t)} style={{ padding:"3px 8px", borderRadius:5, border:"none", cursor:"pointer", fontSize:11, fontWeight:700, background:item.tipo===t?"#0f172a":"#e2e8f0", color:item.tipo===t?"#fff":"#64748b" }}>{t}</button>
+  );
+
+  const Row = ({ item, onUpdate, onRemove, color }) => (
+    <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:6 }}>
+      <input value={item.nome} onChange={e=>onUpdate(item.id,"nome",e.target.value)} style={{ ...inp, flex:2 }} placeholder="Nome" />
+      <div style={{ display:"flex", gap:2 }}>
+        {tBtn(item,"%",onUpdate.bind(null,item.id))}
+        {tBtn(item,"R$",onUpdate.bind(null,item.id))}
+      </div>
+      <input type="number" value={item.valor} onChange={e=>onUpdate(item.id,"valor",e.target.value)} style={{ ...inp, width:70 }} placeholder="0" />
+      <span style={{ fontSize:11, color:"#94a3b8", minWidth:70, textAlign:"right" }}>
+        = R$ {calcValor(item, faturamentoMes).toFixed(2).replace(".",",")}
+      </span>
+      <button onClick={()=>onRemove(item.id)} style={{ background:"#fef2f2", border:"none", color:"#dc2626", width:24, height:24, borderRadius:5, cursor:"pointer", fontSize:11, flexShrink:0 }}>✕</button>
+    </div>
+  );
+
+  const AddRow = ({ novo, setNovo, onAdd, placeholder }) => (
+    <div style={{ display:"flex", gap:6, alignItems:"center", marginTop:6 }}>
+      <input value={novo.nome} onChange={e=>setNovo(n=>({...n,nome:e.target.value}))}
+        onKeyDown={e=>e.key==="Enter"&&onAdd()}
+        style={{ ...inp, flex:2 }} placeholder={placeholder} />
+      <div style={{ display:"flex", gap:2 }}>
+        {tBtn(novo,"%",(f,v)=>setNovo(n=>({...n,[f]:v})))}
+        {tBtn(novo,"R$",(f,v)=>setNovo(n=>({...n,[f]:v})))}
+      </div>
+      <input type="number" value={novo.valor} onChange={e=>setNovo(n=>({...n,valor:e.target.value}))}
+        onKeyDown={e=>e.key==="Enter"&&onAdd()}
+        style={{ ...inp, width:70 }} placeholder="0" />
+      <span style={{ fontSize:11, color:"#94a3b8", minWidth:70 }} />
+      <button onClick={onAdd} disabled={!novo.nome||!novo.valor}
+        style={{ background:novo.nome&&novo.valor?"#0f172a":"#e2e8f0", border:"none", color:novo.nome&&novo.valor?"#fff":"#94a3b8", width:24, height:24, borderRadius:5, cursor:"pointer", fontSize:14, flexShrink:0 }}>+</button>
+    </div>
+  );
+
+  return (
+    <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:12, padding:"16px 18px" }}>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
+        <div>
+          <div style={{ fontSize:12, fontWeight:700, color:"#dc2626", marginBottom:10, textTransform:"uppercase", letterSpacing:0.5 }}>🧾 Impostos</div>
+          {impostos.map(i => <Row key={i.id} item={i} onUpdate={updateI} onRemove={removeI} color="#dc2626" />)}
+          <AddRow novo={novoImposto} setNovo={setNovoImposto} onAdd={addI} placeholder="Ex: ICMS, Simples..." />
+        </div>
+        <div>
+          <div style={{ fontSize:12, fontWeight:700, color:"#d97706", marginBottom:10, textTransform:"uppercase", letterSpacing:0.5 }}>🏢 Custos Fixos</div>
+          {custosFixos.map(c => <Row key={c.id} item={c} onUpdate={updateC} onRemove={removeC} color="#d97706" />)}
+          <AddRow novo={novoCusto} setNovo={setNovoCusto} onAdd={addC} placeholder="Ex: Aluguel, Salário..." />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 // ════════════════════════════════════════════════════════════
 //  IMPOSTOS E CUSTOS FIXOS — Painel da Visão Geral
 // ════════════════════════════════════════════════════════════
@@ -1066,6 +1143,7 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
   // ── Pedidos deste mês ────────────────────────────────────
   const pedidosMes = rawOrders.filter(o => o.date?.startsWith(mesAtual) && o.status === "paid");
   const pedidosMesAnt = rawOrders.filter(o => o.date?.startsWith(mesAnterior) && o.status === "paid");
+  // Usa todos os pedidos pagos do mês (mesma base dos KPI cards no topo quando filtro = "Este mês")
   const faturamentoMes = pedidosMes.reduce((s,o) => s+o.price*o.qty, 0);
   const faturamentoMesAnt = pedidosMesAnt.reduce((s,o) => s+o.price*o.qty, 0);
   const crescimento = faturamentoMesAnt > 0 ? ((faturamentoMes - faturamentoMesAnt) / faturamentoMesAnt) * 100 : 0;
@@ -1266,19 +1344,6 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
           + Definir Meta Mensal de Faturamento
         </button>
       )}
-
-      {/* ── EDIÇÃO DE IMPOSTOS E CUSTOS FIXOS ── */}
-      <ImpostosPanel
-        impostos={impostos}
-        setImpostos={setImpostos}
-        custosFixos={custosFixos}
-        setCustosFixos={setCustosFixos}
-        faturamentoMes={faturamentoMes}
-        darkMode={darkMode}
-        card={card}
-        txt={txt}
-        txtMuted={txtMuted}
-      />
 
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
         {/* ── DISTRIBUIÇÃO DE STATUS ── */}
@@ -2691,7 +2756,7 @@ function ModalConta({ conta, categoriasPagar, onSave, onClose }) {
 }
 
 // ── FinanceiroTab Principal ──────────────────────────────────
-function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContasBancarias, categoriasPagar, setCategoriasPagar, lancamentos, setLancamentos, enrichedOrders, rawOrders, shipmentStatuses, paymentData, finTab, setFinTab }) {
+function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContasBancarias, categoriasPagar, setCategoriasPagar, lancamentos, setLancamentos, enrichedOrders, rawOrders, shipmentStatuses, paymentData, finTab, setFinTab, impostos, setImpostos, custosFixos, setCustosFixos }) {
   const [showModalConta, setShowModalConta] = useState(false);
   const [showModalBancaria, setShowModalBancaria] = useState(false);
   const [editingConta, setEditingConta] = useState(null);
@@ -3476,7 +3541,21 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
 
       {/* ── CONFIGURAÇÕES ── */}
       {finTab === "config" && (
-        <div style={{ maxWidth:500 }}>
+        <div style={{ maxWidth:700 }}>
+          {/* Painel compacto de Impostos e Custos Fixos */}
+          <div style={{ marginBottom:24 }}>
+            <div style={{ fontWeight:700, fontSize:15, color:"#0f172a", marginBottom:4 }}>Impostos e Custos Fixos</div>
+            <div style={{ fontSize:12, color:"#94a3b8", marginBottom:12 }}>Usados para calcular o Lucro Real no painel principal</div>
+            <ImpostosCompacto
+              impostos={impostos}
+              setImpostos={setImpostos}
+              custosFixos={custosFixos}
+              setCustosFixos={setCustosFixos}
+              faturamentoMes={enrichedOrders.filter(o=>o.date?.startsWith(new Date().toLocaleDateString("sv-SE").slice(0,7))).reduce((s,o)=>s+o.revenue*o.qty,0)}
+            />
+          </div>
+
+          <div style={{ borderTop:"1px solid #f1f5f9", paddingTop:20 }}>
           <div style={{ fontWeight:700, fontSize:15, color:"#0f172a", marginBottom:14 }}>Categorias de Contas a Pagar</div>
           <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"16px 20px", marginBottom:16 }}>
             <div style={{ display:"flex", gap:8, marginBottom:14 }}>
@@ -3498,6 +3577,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                 </div>
               ))}
             </div>
+          </div>
           </div>
         </div>
       )}
@@ -3912,8 +3992,22 @@ export default function App() {
   };
   const [rangeStart, rangeEnd] = getRange();
   const ordersFiltered = enrichedOrders.filter(o => o.date >= rangeStart && o.date <= rangeEnd);
+  // rawOrdersFiltered usa TODOS os pedidos pagos (incluindo sem anúncio vinculado)
+  // garante que a Receita Líquida bata com o faturamento real
+  // Todos os pedidos no período (qualquer status)
+  const rawOrdersFiltered = rawOrders.filter(o => o.status === "paid" && o.date >= rangeStart && o.date <= rangeEnd);
+  // Faturamento BRUTO = todos os pedidos pagos (inclui cancelados e devolvidos)
+  const allOrdersPeriodo = rawOrders.filter(o => o.date >= rangeStart && o.date <= rangeEnd);
+  const canceladosDevolvidos = allOrdersPeriodo.filter(o =>
+    o.status === "cancelled" ||
+    o.tags?.some(t => t.includes("refund")) ||
+    o.tags?.some(t => t === "refunded")
+  );
+  const fatBruto = allOrdersPeriodo.filter(o => o.status === "paid").reduce((s, o) => s + o.price * o.qty, 0);
+  const totalCancelDevolv = canceladosDevolvidos.reduce((s, o) => s + o.price * (o.qty || 1), 0);
+  const fatLiquido = fatBruto - totalCancelDevolv;
 
-  const totalRevenue = ordersFiltered.reduce((s, o) => s + o.revenue * o.qty, 0);
+  const totalRevenue = fatLiquido;
   const totalProfit = ordersFiltered.reduce((s, o) => s + o.profit * o.qty, 0);
   const totalFees = ordersFiltered.reduce((s, o) => s + o.fee * o.qty, 0);
   const totalFreteSeller = ordersFiltered.reduce((s, o) => s + (o.freteSeller ?? 0), 0);
@@ -4042,19 +4136,19 @@ export default function App() {
                 style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"4px 10px", borderRadius:8, fontSize:12 }} />
             </>
           )}
-          <span style={{ fontSize:11, color:"#94a3b8", marginLeft:4 }}>{ordersFiltered.length} pedido(s)</span>
+          <span style={{ fontSize:11, color:"#94a3b8", marginLeft:4 }}>{rawOrdersFiltered.length} pedido(s)</span>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 24 }} className="fade-up">
           {[
-            { label: "Receita líquida", value: fmt(totalRevenue), color: "#0f172a" },
-            { label: "Lucro estimado", value: fmt(totalProfit), color: totalProfit >= 0 ? "#15803d" : "#dc2626" },
+            { label: "Fat. Bruto", value: fmt(fatBruto), color: "#0f172a", desc: `${allOrdersPeriodo.filter(o=>o.status==="paid").length} pedidos` },
+            { label: "Fat. Líquido", value: fmt(fatLiquido), color: fatLiquido >= fatBruto ? "#0f172a" : "#dc2626", desc: canceladosDevolvidos.length > 0 ? `-${canceladosDevolvidos.length} cancel./devolv.` : "sem cancelamentos" },
             { label: "Tarifas ML", value: fmt(totalFees), color: "#d97706" },
             { label: "Frete (seu custo)", value: fmt(totalFreteSeller), color: "#7c3aed" },
             { label: "Margem média", value: fmtPct(avgMargin), color: avgMargin >= .25 ? "#15803d" : avgMargin >= .15 ? "#d97706" : "#dc2626" },
             { label: "Impostos (mês)", value: (() => { const v = impostos.reduce((s,i)=>s+(i.tipo==="%"?(totalRevenue*(parseFloat(i.valor||0)/100)):(parseFloat(i.valor||0))),0); return `R$ ${v.toFixed(2).replace(".",",")}` })(), color: "#dc2626" },
             { label: "Custos Fixos (mês)", value: (() => { const v = custosFixos.reduce((s,c)=>s+(c.tipo==="%"?(totalRevenue*(parseFloat(c.valor||0)/100)):(parseFloat(c.valor||0))),0); return `R$ ${v.toFixed(2).replace(".",",")}` })(), color: "#d97706" },
-            { label: "Lucro Real", value: (() => { const imp = impostos.reduce((s,i)=>s+(i.tipo==="%"?(totalRevenue*(parseFloat(i.valor||0)/100)):(parseFloat(i.valor||0))),0); const fix = custosFixos.reduce((s,c)=>s+(c.tipo==="%"?(totalRevenue*(parseFloat(c.valor||0)/100)):(parseFloat(c.valor||0))),0); const lucro = totalRevenue - totalFees - totalFreteSeller - imp - fix; return `R$ ${lucro.toFixed(2).replace(".",",")}` })(), color: (() => { const imp = impostos.reduce((s,i)=>s+(i.tipo==="%"?(totalRevenue*(parseFloat(i.valor||0)/100)):(parseFloat(i.valor||0))),0); const fix = custosFixos.reduce((s,c)=>s+(c.tipo==="%"?(totalRevenue*(parseFloat(c.valor||0)/100)):(parseFloat(c.valor||0))),0); const lucro = totalRevenue - totalFees - totalFreteSeller - imp - fix; return lucro>=0?"#15803d":"#dc2626" })() },
+            { label: "Lucro Real", value: (() => { const imp = impostos.reduce((s,i)=>s+(i.tipo==="%"?(totalRevenue*(parseFloat(i.valor||0)/100)):(parseFloat(i.valor||0))),0); const fix = custosFixos.reduce((s,c)=>s+(c.tipo==="%"?(totalRevenue*(parseFloat(c.valor||0)/100)):(parseFloat(c.valor||0))),0); const lucro = fatLiquido - totalFees - totalFreteSeller - imp - fix; return `R$ ${lucro.toFixed(2).replace(".",",")}` })(), color: (() => { const imp = impostos.reduce((s,i)=>s+(i.tipo==="%"?(totalRevenue*(parseFloat(i.valor||0)/100)):(parseFloat(i.valor||0))),0); const fix = custosFixos.reduce((s,c)=>s+(c.tipo==="%"?(totalRevenue*(parseFloat(c.valor||0)/100)):(parseFloat(c.valor||0))),0); const lucro = fatLiquido - totalFees - totalFreteSeller - imp - fix; return lucro>=0?"#15803d":"#dc2626" })() },
             { label: "Score médio", value: `${avgScore}/100`, color: scoreColor(avgScore) },
             { label: "Total anúncios", value: enriched.length, color: "#0f172a" },
             { label: "Pedidos período", value: enrichedOrders.length, color: "#0f172a" },
@@ -4062,6 +4156,7 @@ export default function App() {
             <div key={k.label} style={{ background: darkMode?"#1e293b":"#fff", border: `1px solid ${darkMode?"#334155":"#e2e8f0"}`, borderRadius: 12, padding: "16px 18px", boxShadow: "0 1px 2px rgba(0,0,0,.04)" }}>
               <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 8, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8 }}>{k.label}</div>
               <div style={{ fontSize: 20, fontWeight: 800, color: k.color, letterSpacing: -0.5 }}>{k.value}</div>
+              {k.desc && <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>{k.desc}</div>}
             </div>
           ))}
         </div>
@@ -4397,6 +4492,10 @@ export default function App() {
             paymentData={paymentData}
             finTab={finTab}
             setFinTab={setFinTab}
+            impostos={impostos}
+            setImpostos={setImpostos}
+            custosFixos={custosFixos}
+            setCustosFixos={setCustosFixos}
           />
         )}
 

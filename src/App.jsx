@@ -365,8 +365,6 @@ function LoginScreen({ onLogin }) {
     }
   }
 
-  if (!isLoggedIn) return <LoginScreen onLogin={() => setIsLoggedIn(true)} />;
-
   return (
     <div style={{ minHeight: "100vh", background: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter','Segoe UI',sans-serif" }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');*{box-sizing:border-box;margin:0;padding:0}`}</style>
@@ -457,6 +455,365 @@ function MLConnectModal({ onConnect, onClose }) {
           {loading ? "Verificando..." : "Conectar"}
         </button>
       </div>
+    </div>
+  );
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  SISTEMA DE AUTENTICAÇÃO E CONTROLE DE ACESSO
+// ════════════════════════════════════════════════════════════
+
+const AUTH_KEY = "ml_auth_users";
+const SESSION_KEY = "ml_auth_session";
+
+// Permissões disponíveis por aba
+const PERMISSOES_DISPONIVEIS = [
+  { key: "overview",   label: "🏠 Visão Geral" },
+  { key: "listings",   label: "📢 Anúncios" },
+  { key: "orders",     label: "📦 Pedidos" },
+  { key: "financeiro", label: "💰 Financeiro" },
+  { key: "produtos",   label: "🛍️ Produtos" },
+  { key: "admin",      label: "⚙️ Administração" },
+];
+
+function hashSenha(senha) {
+  // Hash simples para armazenamento local
+  let hash = 0;
+  for (let i = 0; i < senha.length; i++) {
+    const char = senha.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return String(Math.abs(hash)) + senha.length;
+}
+
+function getUsuarios() {
+  try {
+    const data = localStorage.getItem(AUTH_KEY);
+    if (!data) {
+      // Cria admin padrão na primeira vez
+      const adminPadrao = [{
+        id: "admin",
+        nome: "Administrador",
+        usuario: "admin",
+        senhaHash: hashSenha("admin123"),
+        ativo: true,
+        admin: true,
+        permissoes: PERMISSOES_DISPONIVEIS.map(p => p.key),
+        criadoEm: new Date().toLocaleDateString("sv-SE"),
+      }];
+      localStorage.setItem(AUTH_KEY, JSON.stringify(adminPadrao));
+      return adminPadrao;
+    }
+    return JSON.parse(data);
+  } catch { return []; }
+}
+
+function saveUsuarios(usuarios) {
+  localStorage.setItem(AUTH_KEY, JSON.stringify(usuarios));
+}
+
+function getSession() {
+  try {
+    const s = sessionStorage.getItem(SESSION_KEY);
+    return s ? JSON.parse(s) : null;
+  } catch { return null; }
+}
+
+function setSession(usuario) {
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify({ ...usuario, loginEm: Date.now() }));
+}
+
+function clearSession() {
+  sessionStorage.removeItem(SESSION_KEY);
+}
+
+// ── Tela de Login ────────────────────────────────────────────
+function LoginScreen({ onLogin }) {
+  const [usuario, setUsuario] = useState("");
+  const [senha, setSenha] = useState("");
+  const [showSenha, setShowSenha] = useState(false);
+  const [erro, setErro] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  function handleLogin() {
+    if (!usuario || !senha) return;
+    setLoading(true); setErro("");
+    setTimeout(() => {
+      const usuarios = getUsuarios();
+      const user = usuarios.find(u =>
+        u.usuario.toLowerCase() === usuario.toLowerCase() &&
+        u.senhaHash === hashSenha(senha) &&
+        u.ativo
+      );
+      if (user) {
+        setSession(user);
+        onLogin(user);
+      } else {
+        setErro("Usuário ou senha incorretos, ou usuário inativo.");
+      }
+      setLoading(false);
+    }, 400);
+  }
+
+  return (
+    <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f172a 100%)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Inter','Segoe UI',sans-serif", padding:24 }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');*{box-sizing:border-box;margin:0;padding:0}`}</style>
+      <div style={{ width:"100%", maxWidth:420 }}>
+        {/* Logo */}
+        <div style={{ textAlign:"center", marginBottom:32 }}>
+          <div style={{ width:64, height:64, borderRadius:18, background:"#ffe000", display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:32, fontWeight:800, color:"#0f172a", marginBottom:16, boxShadow:"0 8px 32px rgba(255,224,0,.3)" }}>M</div>
+          <div style={{ fontWeight:800, fontSize:24, color:"#fff", letterSpacing:-0.5 }}>ML Margem</div>
+          <div style={{ fontSize:13, color:"#64748b", marginTop:4 }}>Dashboard de Lucratividade</div>
+        </div>
+
+        {/* Card */}
+        <div style={{ background:"#1e293b", borderRadius:20, padding:"32px 36px", boxShadow:"0 20px 60px rgba(0,0,0,.4)", border:"1px solid #334155" }}>
+          <div style={{ fontWeight:700, fontSize:18, color:"#f1f5f9", marginBottom:24 }}>Entrar no sistema</div>
+
+          <div style={{ marginBottom:16 }}>
+            <div style={{ fontSize:11, color:"#64748b", marginBottom:8, fontWeight:600, letterSpacing:1, textTransform:"uppercase" }}>Usuário</div>
+            <input value={usuario} onChange={e => { setUsuario(e.target.value); setErro(""); }}
+              onKeyDown={e => e.key==="Enter" && handleLogin()}
+              placeholder="Digite seu usuário"
+              style={{ width:"100%", background:"#0f172a", border:`1px solid ${erro?"#dc2626":"#334155"}`, color:"#f1f5f9", padding:"12px 16px", borderRadius:10, fontSize:14, outline:"none", fontFamily:"inherit" }} />
+          </div>
+
+          <div style={{ marginBottom:24 }}>
+            <div style={{ fontSize:11, color:"#64748b", marginBottom:8, fontWeight:600, letterSpacing:1, textTransform:"uppercase" }}>Senha</div>
+            <div style={{ position:"relative" }}>
+              <input type={showSenha?"text":"password"} value={senha}
+                onChange={e => { setSenha(e.target.value); setErro(""); }}
+                onKeyDown={e => e.key==="Enter" && handleLogin()}
+                placeholder="Digite sua senha"
+                style={{ width:"100%", background:"#0f172a", border:`1px solid ${erro?"#dc2626":"#334155"}`, color:"#f1f5f9", padding:"12px 48px 12px 16px", borderRadius:10, fontSize:14, outline:"none", fontFamily:"inherit" }} />
+              <button onClick={() => setShowSenha(s=>!s)}
+                style={{ position:"absolute", right:14, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color:"#64748b", fontSize:16 }}>
+                {showSenha?"🙈":"👁"}
+              </button>
+            </div>
+          </div>
+
+          {erro && (
+            <div style={{ background:"#450a0a", border:"1px solid #dc2626", color:"#fca5a5", fontSize:13, padding:"10px 14px", borderRadius:8, marginBottom:16 }}>
+              ⚠ {erro}
+            </div>
+          )}
+
+          <button onClick={handleLogin} disabled={loading||!usuario||!senha}
+            style={{ width:"100%", background:loading||!usuario||!senha?"#334155":"#ffe000", border:"none", color:loading||!usuario||!senha?"#64748b":"#0f172a", fontWeight:800, padding:"14px", borderRadius:12, cursor:loading||!usuario||!senha?"not-allowed":"pointer", fontSize:15, transition:"all .15s" }}>
+            {loading ? "Verificando..." : "Entrar"}
+          </button>
+
+          <div style={{ textAlign:"center", marginTop:16, fontSize:12, color:"#475569" }}>
+            Acesso restrito — somente usuários autorizados
+          </div>
+        </div>
+
+        <div style={{ textAlign:"center", marginTop:20, fontSize:11, color:"#334155" }}>
+          Primeiro acesso: usuário <strong style={{ color:"#64748b" }}>admin</strong> / senha <strong style={{ color:"#64748b" }}>admin123</strong>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Painel de Administração de Usuários ──────────────────────
+function ModalUsuario({ usuario, onSave, onClose }) {
+  const [form, setForm] = useState(usuario || {
+    id: Date.now().toString(),
+    nome: "", usuario: "", senha: "", ativo: true, admin: false,
+    permissoes: ["overview","listings","orders"],
+  });
+  const [showSenha, setShowSenha] = useState(false);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  function togglePerm(key) {
+    const perms = form.permissoes || [];
+    set("permissoes", perms.includes(key) ? perms.filter(p=>p!==key) : [...perms, key]);
+  }
+
+  function handleSave() {
+    if (!form.nome || !form.usuario) return;
+    const toSave = { ...form };
+    if (form.senha) {
+      toSave.senhaHash = hashSenha(form.senha);
+      delete toSave.senha;
+    } else if (!usuario) {
+      alert("Informe uma senha para o novo usuário");
+      return;
+    } else {
+      delete toSave.senha;
+    }
+    if (!toSave.criadoEm) toSave.criadoEm = new Date().toLocaleDateString("sv-SE");
+    onSave(toSave);
+    onClose();
+  }
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.7)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:24 }}>
+      <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:520, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.3)", maxHeight:"90vh", overflowY:"auto" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+          <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>{usuario ? "Editar Usuário" : "Novo Usuário"}</div>
+          <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
+        </div>
+
+        <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:20 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+            <div>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Nome completo *</div>
+              <input value={form.nome} onChange={e=>set("nome",e.target.value)} placeholder="Ex: João Silva"
+                style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+            </div>
+            <div>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Usuário (login) *</div>
+              <input value={form.usuario} onChange={e=>set("usuario",e.target.value.toLowerCase().replace(/\s/g,""))} placeholder="Ex: joao"
+                style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none", fontFamily:"monospace" }} />
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>
+              {usuario ? "Nova senha (deixe vazio para manter)" : "Senha *"}
+            </div>
+            <div style={{ position:"relative" }}>
+              <input type={showSenha?"text":"password"} value={form.senha||""} onChange={e=>set("senha",e.target.value)}
+                placeholder={usuario?"••••••••":"Mínimo 6 caracteres"}
+                style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 44px 9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+              <button onClick={()=>setShowSenha(s=>!s)}
+                style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color:"#94a3b8", fontSize:14 }}>
+                {showSenha?"🙈":"👁"}
+              </button>
+            </div>
+          </div>
+
+          {/* Permissões */}
+          <div style={{ background:"#f8fafc", borderRadius:12, padding:"14px 16px" }}>
+            <div style={{ fontWeight:700, fontSize:13, color:"#0f172a", marginBottom:12 }}>Permissões de Acesso</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+              {PERMISSOES_DISPONIVEIS.map(p => (
+                <label key={p.key} style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", padding:"8px 10px", borderRadius:8, background:form.permissoes?.includes(p.key)?"#eff6ff":"#fff", border:`1px solid ${form.permissoes?.includes(p.key)?"#2563eb":"#e2e8f0"}`, transition:"all .15s" }}>
+                  <input type="checkbox" checked={form.permissoes?.includes(p.key)||false} onChange={()=>togglePerm(p.key)}
+                    style={{ width:14, height:14, cursor:"pointer" }} />
+                  <span style={{ fontSize:13, color:form.permissoes?.includes(p.key)?"#1d4ed8":"#334155", fontWeight:form.permissoes?.includes(p.key)?600:400 }}>{p.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Status e Admin */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+            <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", padding:"10px 14px", borderRadius:8, background:"#f8fafc", border:"1px solid #e2e8f0" }}>
+              <input type="checkbox" checked={form.ativo} onChange={e=>set("ativo",e.target.checked)} style={{ width:14, height:14 }} />
+              <span style={{ fontSize:13, color:"#334155", fontWeight:500 }}>Usuário ativo</span>
+            </label>
+            <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", padding:"10px 14px", borderRadius:8, background:"#f8fafc", border:"1px solid #e2e8f0" }}>
+              <input type="checkbox" checked={form.admin||false} onChange={e=>set("admin",e.target.checked)} style={{ width:14, height:14 }} />
+              <span style={{ fontSize:13, color:"#334155", fontWeight:500 }}>Administrador</span>
+            </label>
+          </div>
+        </div>
+
+        <div style={{ display:"flex", gap:8 }}>
+          <button onClick={onClose} style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
+          <button onClick={handleSave} disabled={!form.nome||!form.usuario}
+            style={{ flex:2, background:!form.nome||!form.usuario?"#f1f5f9":"#0f172a", border:"none", color:!form.nome||!form.usuario?"#94a3b8":"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:!form.nome||!form.usuario?"not-allowed":"pointer" }}>
+            Salvar Usuário
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Aba de Administração ─────────────────────────────────────
+function AdminTab({ currentUser }) {
+  const [usuarios, setUsuarios] = useState(getUsuarios);
+  const [showModal, setShowModal] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
+
+  function saveUser(user) {
+    const lista = getUsuarios();
+    const updated = lista.find(u=>u.id===user.id)
+      ? lista.map(u=>u.id===user.id?user:u)
+      : [...lista, user];
+    saveUsuarios(updated);
+    setUsuarios(updated);
+  }
+
+  function deleteUser(id) {
+    if (id === currentUser.id) { alert("Você não pode excluir seu próprio usuário!"); return; }
+    if (!confirm("Excluir este usuário?")) return;
+    const updated = getUsuarios().filter(u=>u.id!==id);
+    saveUsuarios(updated);
+    setUsuarios(updated);
+  }
+
+  function toggleAtivo(id) {
+    if (id === currentUser.id) { alert("Você não pode desativar seu próprio usuário!"); return; }
+    const updated = getUsuarios().map(u=>u.id===id?{...u,ativo:!u.ativo}:u);
+    saveUsuarios(updated);
+    setUsuarios(updated);
+  }
+
+  return (
+    <div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+        <div>
+          <div style={{ fontWeight:800, fontSize:18, color:"#0f172a" }}>⚙️ Administração de Usuários</div>
+          <div style={{ fontSize:13, color:"#94a3b8", marginTop:2 }}>Gerencie quem pode acessar o dashboard e o que cada um pode ver</div>
+        </div>
+        <button onClick={()=>{ setEditingUser(null); setShowModal(true); }}
+          style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"10px 22px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
+          + Novo Usuário
+        </button>
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))", gap:12 }}>
+        {usuarios.map(u => (
+          <div key={u.id} style={{ background:"#fff", border:`2px solid ${u.id===currentUser.id?"#0f172a":u.ativo?"#e2e8f0":"#f1f5f9"}`, borderRadius:14, padding:"18px 20px", position:"relative", opacity:u.ativo?1:0.6 }}>
+            {u.id===currentUser.id && (
+              <div style={{ position:"absolute", top:12, left:12, background:"#0f172a", color:"#fff", fontSize:10, padding:"2px 8px", borderRadius:20, fontWeight:700 }}>VOCÊ</div>
+            )}
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:6, marginBottom:8 }}>
+              <button onClick={()=>toggleAtivo(u.id)}
+                style={{ background:u.ativo?"#f0fdf4":"#f8fafc", border:`1px solid ${u.ativo?"#bbf7d0":"#e2e8f0"}`, color:u.ativo?"#15803d":"#94a3b8", padding:"3px 10px", borderRadius:6, cursor:"pointer", fontSize:11, fontWeight:600 }}>
+                {u.ativo?"● Ativo":"○ Inativo"}
+              </button>
+              <button onClick={()=>{ setEditingUser(u); setShowModal(true); }}
+                style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:12 }}>✏️</button>
+              {u.id!==currentUser.id && (
+                <button onClick={()=>deleteUser(u.id)}
+                  style={{ background:"#fef2f2", border:"none", color:"#dc2626", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:12 }}>🗑</button>
+              )}
+            </div>
+
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
+              <div style={{ width:42, height:42, borderRadius:12, background:u.admin?"#0f172a":"#f1f5f9", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, fontWeight:800, color:u.admin?"#ffe000":"#64748b" }}>
+                {u.nome?.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <div style={{ fontWeight:700, fontSize:15, color:"#0f172a" }}>{u.nome}</div>
+                <div style={{ fontSize:12, color:"#94a3b8", fontFamily:"monospace" }}>@{u.usuario}</div>
+                {u.admin && <div style={{ fontSize:10, color:"#7c3aed", fontWeight:700 }}>ADMINISTRADOR</div>}
+              </div>
+            </div>
+
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:6, fontWeight:600, textTransform:"uppercase" }}>Permissões</div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
+              {PERMISSOES_DISPONIVEIS.map(p => (
+                <span key={p.key} style={{ fontSize:11, padding:"2px 8px", borderRadius:20, background:u.permissoes?.includes(p.key)?"#eff6ff":"#f8fafc", color:u.permissoes?.includes(p.key)?"#2563eb":"#cbd5e1", border:`1px solid ${u.permissoes?.includes(p.key)?"#bfdbfe":"#f1f5f9"}`, fontWeight:u.permissoes?.includes(p.key)?600:400 }}>
+                  {p.label}
+                </span>
+              ))}
+            </div>
+            <div style={{ fontSize:11, color:"#cbd5e1", marginTop:10 }}>Criado em {u.criadoEm||"—"}</div>
+          </div>
+        ))}
+      </div>
+
+      {showModal && <ModalUsuario usuario={editingUser} onSave={saveUser} onClose={()=>{ setShowModal(false); setEditingUser(null); }} />}
     </div>
   );
 }
@@ -2683,8 +3040,6 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
 
 export default function App() {
   // ── Auth do dashboard ─────────────────────────────────────
-  const [isLoggedIn, setIsLoggedIn] = useState(() => sessionStorage.getItem("dash_auth") === "1");
-
   const [tab, setTab] = useState("listings");
   const [costs, setCosts] = useState({});
   const [minStock, setMinStock] = useState({});
@@ -2711,6 +3066,8 @@ export default function App() {
   const [promos, setPromos] = useState({});
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
+  // ── Auth ──────────────────────────────────────────────────
+  const [currentUser, setCurrentUser] = useState(() => getSession());
   const [showMLModal, setShowMLModal] = useState(false);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "1");
   const [metaMensal, setMetaMensal] = useState(() => parseFloat(localStorage.getItem("metaMensal") || "0"));
@@ -3076,6 +3433,8 @@ export default function App() {
     };
   }
 
+  if (!currentUser) return <LoginScreen onLogin={(user) => { setCurrentUser(user); }} />;
+
   return (
     <div className={darkMode?"dark":""} style={{ minHeight: "100vh", background: darkMode?"#0f172a":"#f8fafc", color: darkMode?"#e2e8f0":"#0f172a", fontFamily: "'Inter','Segoe UI',sans-serif", transition:"background .2s,color .2s" }}>
       <style>{`
@@ -3131,6 +3490,19 @@ export default function App() {
             style={{ background: darkMode?"#334155":"#f1f5f9", border:"none", color: darkMode?"#fff":"#475569", width:36, height:36, borderRadius:8, cursor:"pointer", fontSize:18 }}>
             {darkMode ? "☀️" : "🌙"}
           </button>
+          <div style={{ display:"flex", alignItems:"center", gap:8, background: darkMode?"#1e293b":"#f8fafc", border:`1px solid ${darkMode?"#334155":"#e2e8f0"}`, borderRadius:8, padding:"5px 10px" }}>
+            <div style={{ width:26, height:26, borderRadius:8, background:"#0f172a", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:800, color:"#ffe000" }}>
+              {currentUser?.nome?.charAt(0).toUpperCase()}
+            </div>
+            <div style={{ fontSize:12, lineHeight:1.3 }}>
+              <div style={{ fontWeight:600, color: darkMode?"#e2e8f0":"#0f172a" }}>{currentUser?.nome}</div>
+              <div style={{ color:"#94a3b8", fontSize:10 }}>{currentUser?.admin?"Admin":"Usuário"}</div>
+            </div>
+          </div>
+          <button onClick={() => { clearSession(); clearSavedTokens(); setCurrentUser(null); setToken(null); setUser(null); }}
+            style={{ background:"#fef2f2", border:"1px solid #fecaca", color:"#dc2626", fontWeight:600, padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+            Sair
+          </button>
         </div>
       </header>
 
@@ -3154,14 +3526,15 @@ export default function App() {
         </div>
 
         <div style={{ display: "flex", gap: 2, marginBottom: 20, background: darkMode?"#1e293b":"#f1f5f9", padding: 4, borderRadius: 10, width: "fit-content" }}>
-          <button className={`tab-btn ${tab === "overview" ? "active" : ""}`} onClick={() => setTab("overview")}>🏠 Visão Geral</button>
-          <button className={`tab-btn ${tab === "listings" ? "active" : ""}`} onClick={() => setTab("listings")}>Anúncios ({enriched.length})</button>
-          <button className={`tab-btn ${tab === "orders" ? "active" : ""}`} onClick={() => setTab("orders")}>Pedidos ({enrichedOrders.length})</button>
-          <button className={`tab-btn ${tab === "financeiro" ? "active" : ""}`} onClick={() => setTab("financeiro")}>💰 Financeiro</button>
-          <button className={`tab-btn ${tab === "produtos" ? "active" : ""}`} onClick={() => setTab("produtos")}>📦 Produtos</button>
+          {currentUser?.permissoes?.includes("overview") && <button className={`tab-btn ${tab === "overview" ? "active" : ""}`} onClick={() => setTab("overview")}>🏠 Visão Geral</button>}
+          {currentUser?.permissoes?.includes("listings") && <button className={`tab-btn ${tab === "listings" ? "active" : ""}`} onClick={() => setTab("listings")}>Anúncios ({enriched.length})</button>}
+          {currentUser?.permissoes?.includes("orders") && <button className={`tab-btn ${tab === "orders" ? "active" : ""}`} onClick={() => setTab("orders")}>Pedidos ({enrichedOrders.length})</button>}
+          {currentUser?.permissoes?.includes("financeiro") && <button className={`tab-btn ${tab === "financeiro" ? "active" : ""}`} onClick={() => setTab("financeiro")}>💰 Financeiro</button>}
+          {currentUser?.admin && <button className={`tab-btn ${tab === "admin" ? "active" : ""}`} onClick={() => setTab("admin")}>⚙️ Usuários</button>}
+          {currentUser?.permissoes?.includes("produtos") && <button className={`tab-btn ${tab === "produtos" ? "active" : ""}`} onClick={() => setTab("produtos")}>📦 Produtos</button>}
         </div>
 
-        {tab === "overview" && (
+        {tab === "overview" && currentUser?.permissoes?.includes("overview") && (
           <OverviewTab
             enriched={enriched}
             enrichedOrders={enrichedOrders}
@@ -3178,7 +3551,7 @@ export default function App() {
           />
         )}
 
-                {tab === "listings" && (
+                {tab === "listings" && currentUser?.permissoes?.includes("listings") && (
           <>
             <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
               <div style={{ display: "flex", gap: 6, flex: 1, minWidth: 260 }}>
@@ -3363,7 +3736,7 @@ export default function App() {
           </>
         )}
 
-        {tab === "orders" && (
+        {tab === "orders" && currentUser?.permissoes?.includes("orders") && (
           <>
             <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
               <div style={{ position: "relative", width: 220 }}>
@@ -3463,7 +3836,7 @@ export default function App() {
       </main>
 
 
-        {tab === "financeiro" && (
+        {tab === "financeiro" && currentUser?.permissoes?.includes("financeiro") && (
           <FinanceiroTab
             contasPagar={contasPagar}
             setContasPagar={setContasPagar}
@@ -3482,7 +3855,7 @@ export default function App() {
           />
         )}
 
-        {tab === "produtos" && (
+        {tab === "produtos" && currentUser?.permissoes?.includes("produtos") && (
           <ProdutosTab
             produtos={produtos}
             setProdutos={setProdutos}
@@ -3492,6 +3865,10 @@ export default function App() {
             costs={costs}
             setCosts={setCosts}
           />
+        )}
+
+        {tab === "admin" && currentUser?.admin && (
+          <AdminTab currentUser={currentUser} />
         )}
 
       {showMLModal && <MLConnectModal onConnect={handleConnect} onClose={() => setShowMLModal(false)} />}

@@ -456,6 +456,121 @@ function MLConnectModal({ onConnect, onClose }) {
 
 
 // ════════════════════════════════════════════════════════════
+//  SISTEMA DE NOTIFICAÇÕES
+// ════════════════════════════════════════════════════════════
+
+function SinoNotificacoes({ notificacoes, setNotificacoes, darkMode }) {
+  const [aberto, setAberto] = useState(false);
+  const naoLidas = notificacoes.filter(n => !n.lido).length;
+
+  function marcarTodasLidas() {
+    const updated = notificacoes.map(n => ({ ...n, lido: true }));
+    setNotificacoes(updated);
+    localStorage.setItem("ml_notificacoes", JSON.stringify(updated));
+  }
+
+  function marcarLida(id) {
+    const updated = notificacoes.map(n => n.id === id ? { ...n, lido: true } : n);
+    setNotificacoes(updated);
+    localStorage.setItem("ml_notificacoes", JSON.stringify(updated));
+  }
+
+  function limparTodas() {
+    setNotificacoes([]);
+    localStorage.setItem("ml_notificacoes", "[]");
+    localStorage.setItem("ml_notif_estoque", "[]");
+  }
+
+  async function pedirPermissao() {
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      await Notification.requestPermission();
+    }
+  }
+
+  const bg = darkMode ? "#1e293b" : "#fff";
+  const border = darkMode ? "#334155" : "#e2e8f0";
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button onClick={() => { setAberto(a => !a); pedirPermissao(); }}
+        style={{ position: "relative", background: naoLidas > 0 ? "#fef3c7" : darkMode ? "#1e293b" : "#f1f5f9", border: `1px solid ${naoLidas > 0 ? "#fde68a" : border}`, color: naoLidas > 0 ? "#d97706" : darkMode ? "#94a3b8" : "#64748b", width: 38, height: 38, borderRadius: 10, cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        🔔
+        {naoLidas > 0 && (
+          <div style={{ position: "absolute", top: -4, right: -4, background: "#dc2626", color: "#fff", width: 18, height: 18, borderRadius: "50%", fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
+            {naoLidas > 9 ? "9+" : naoLidas}
+          </div>
+        )}
+      </button>
+
+      {aberto && (
+        <>
+          <div onClick={() => setAberto(false)} style={{ position: "fixed", inset: 0, zIndex: 200 }} />
+          <div style={{ position: "absolute", top: 46, right: 0, width: 380, background: bg, border: `1px solid ${border}`, borderRadius: 14, boxShadow: "0 8px 32px rgba(0,0,0,.15)", zIndex: 201, overflow: "hidden" }}>
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", borderBottom: `1px solid ${border}` }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: darkMode ? "#e2e8f0" : "#0f172a" }}>
+                🔔 Notificações {naoLidas > 0 && <span style={{ fontSize: 11, background: "#dc2626", color: "#fff", padding: "1px 7px", borderRadius: 20, marginLeft: 6 }}>{naoLidas} novas</span>}
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                {naoLidas > 0 && (
+                  <button onClick={marcarTodasLidas} style={{ background: "none", border: "none", fontSize: 11, color: "#0891b2", cursor: "pointer", fontWeight: 600 }}>Marcar todas como lidas</button>
+                )}
+                {notificacoes.length > 0 && (
+                  <button onClick={limparTodas} style={{ background: "none", border: "none", fontSize: 11, color: "#94a3b8", cursor: "pointer" }}>Limpar</button>
+                )}
+              </div>
+            </div>
+
+            {/* Lista */}
+            <div style={{ maxHeight: 420, overflowY: "auto" }}>
+              {notificacoes.length === 0 ? (
+                <div style={{ padding: "32px 16px", textAlign: "center", color: "#94a3b8" }}>
+                  <div style={{ fontSize: 32, marginBottom: 8 }}>🔔</div>
+                  <div style={{ fontSize: 13 }}>Nenhuma notificação</div>
+                  <div style={{ fontSize: 11, marginTop: 4 }}>Reconecte o ML para verificar novos pedidos</div>
+                </div>
+              ) : notificacoes.map(n => (
+                <div key={n.id} onClick={() => marcarLida(n.id)}
+                  style={{ padding: "12px 16px", borderBottom: `1px solid ${border}`, cursor: "pointer", background: !n.lido ? (darkMode ? "#1e3a5f" : "#eff6ff") : "transparent", transition: "background .15s" }}>
+                  <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: n.tipo === "pedido" ? "#dcfce7" : "#fef3c7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
+                      {n.tipo === "pedido" ? "🛒" : "⚠️"}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: darkMode ? "#e2e8f0" : "#0f172a" }}>{n.titulo}</div>
+                        {!n.lido && <div style={{ width: 8, height: 8, background: "#0891b2", borderRadius: "50%", flexShrink: 0, marginTop: 4 }} />}
+                      </div>
+                      <div style={{ fontSize: 12, color: darkMode ? "#94a3b8" : "#475569", marginTop: 2, lineHeight: 1.4 }}>{n.msg}</div>
+                      <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>{n.data}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer — permissão browser */}
+            {typeof Notification !== "undefined" && Notification.permission === "default" && (
+              <div style={{ padding: "10px 16px", borderTop: `1px solid ${border}`, background: darkMode ? "#0f172a" : "#f8fafc" }}>
+                <button onClick={pedirPermissao} style={{ width: "100%", background: "#0f172a", border: "none", color: "#fff", fontWeight: 600, padding: "8px", borderRadius: 8, cursor: "pointer", fontSize: 12 }}>
+                  🔔 Ativar notificações do navegador
+                </button>
+              </div>
+            )}
+            {typeof Notification !== "undefined" && Notification.permission === "granted" && (
+              <div style={{ padding: "8px 16px", borderTop: `1px solid ${border}`, fontSize: 11, color: "#15803d", textAlign: "center" }}>
+                ✓ Notificações do navegador ativadas
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+
+// ════════════════════════════════════════════════════════════
 //  SISTEMA DE AUTENTICAÇÃO E CONTROLE DE ACESSO
 // ════════════════════════════════════════════════════════════
 
@@ -3634,6 +3749,12 @@ export default function App() {
     try { return JSON.parse(localStorage.getItem("custos_fixos_config") || "[]"); } catch { return []; }
   });
   const [showNotif, setShowNotif] = useState(false);
+  const [notificacoes, setNotificacoes] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("ml_notificacoes") || "[]"); } catch { return []; }
+  });
+  const [ultimosPedidosIds, setUltimosPedidosIds] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("ml_ultimos_pedidos") || "[]"); } catch { return []; }
+  });
   const [periodoFiltro, setPeriodoFiltro] = useState("mes"); // hoje | semana | mes | ano | custom
   const [periodoCustomDe, setPeriodoCustomDe] = useState("");
   const [periodoCustomAte, setPeriodoCustomAte] = useState("");
@@ -3793,6 +3914,62 @@ export default function App() {
     const now = Date.now().toString();
     localStorage.setItem("ml_last_update", now);
     setLastUpdate(now);
+
+    // ── Verificar novos pedidos e estoque baixo ─────────
+    const savedIds = JSON.parse(localStorage.getItem("ml_ultimos_pedidos") || "[]");
+    const novasNotifs = [];
+
+    // Novos pedidos (IDs que não existiam antes)
+    orders.forEach(o => {
+      if (o.status === "paid" && !savedIds.includes(String(o.id))) {
+        const titulo = o.order_items?.[0]?.item?.title?.slice(0,40) || "Novo pedido";
+        const valor = o.total_amount || (o.order_items?.[0]?.unit_price * o.order_items?.[0]?.quantity) || 0;
+        novasNotifs.push({
+          id: `order_${o.id}_${Date.now()}`,
+          tipo: "pedido",
+          titulo: "🛒 Novo pedido!",
+          msg: `Pedido #${o.id} — ${titulo} — R$ ${parseFloat(valor).toFixed(2).replace(".",",")}`,
+          data: new Date().toLocaleString("pt-BR"),
+          lido: false,
+        });
+      }
+    });
+
+    // Estoque baixo nos produtos cadastrados
+    const produtosAtual = JSON.parse(localStorage.getItem("produtos_cadastro") || "[]");
+    const jaNotifEstoque = JSON.parse(localStorage.getItem("ml_notif_estoque") || "[]");
+    produtosAtual.forEach(p => {
+      if (p.estoqueMinimo && p.estoqueAtual !== undefined &&
+          parseFloat(p.estoqueAtual) <= parseFloat(p.estoqueMinimo) &&
+          !jaNotifEstoque.includes(String(p.id))) {
+        novasNotifs.push({
+          id: `estoque_${p.id}_${Date.now()}`,
+          tipo: "estoque",
+          titulo: "⚠️ Estoque crítico!",
+          msg: `${p.titulo?.slice(0,45)} — ${p.estoqueAtual} un (mín: ${p.estoqueMinimo})`,
+          data: new Date().toLocaleString("pt-BR"),
+          lido: false,
+        });
+        jaNotifEstoque.push(String(p.id));
+      }
+    });
+    localStorage.setItem("ml_notif_estoque", JSON.stringify(jaNotifEstoque));
+
+    // Salva todos os IDs de pedidos vistos
+    const todosIds = [...new Set([...savedIds, ...orders.map(o => String(o.id))])];
+    localStorage.setItem("ml_ultimos_pedidos", JSON.stringify(todosIds));
+    setUltimosPedidosIds(todosIds);
+
+    if (novasNotifs.length > 0) {
+      const todasNotifs = [...novasNotifs, ...JSON.parse(localStorage.getItem("ml_notificacoes") || "[]")].slice(0, 50);
+      localStorage.setItem("ml_notificacoes", JSON.stringify(todasNotifs));
+      setNotificacoes(todasNotifs);
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+        novasNotifs.slice(0,3).forEach(n => {
+          try { new Notification(n.titulo, { body: n.msg }); } catch {}
+        });
+      }
+    }
   }
 
   const MOCK_LISTINGS = [
@@ -4129,6 +4306,11 @@ export default function App() {
           <button onClick={() => setShowMLModal(true)} style={{ background: "#0f172a", border: "none", color: "#fff", fontWeight: 700, padding: "8px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>
             {token ? "Reconectar" : "Conectar ML"}
           </button>
+          <SinoNotificacoes
+            notificacoes={notificacoes}
+            setNotificacoes={setNotificacoes}
+            darkMode={darkMode}
+          />
           <button onClick={() => { const n = !darkMode; setDarkMode(n); localStorage.setItem("darkMode", n?"1":"0"); }}
             style={{ background: darkMode?"#334155":"#f1f5f9", border:"none", color: darkMode?"#fff":"#475569", width:36, height:36, borderRadius:8, cursor:"pointer", fontSize:18 }}>
             {darkMode ? "☀️" : "🌙"}

@@ -3728,6 +3728,49 @@ function ModalContaBancaria({ conta, onSave, onClose }) {
               ))}
             </div>
           </div>
+
+          {/* Anexos */}
+          <div style={{ gridColumn:"1/-1" }}>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:8, fontWeight:600, textTransform:"uppercase" }}>📎 Anexos</div>
+            <label style={{ display:"block", border:"2px dashed #e2e8f0", borderRadius:10, padding:"12px", textAlign:"center", cursor:"pointer", background:"#f8fafc", marginBottom:8 }}>
+              <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.xml,.xlsx,.xls,.doc,.docx" style={{ display:"none" }}
+                onChange={async e => {
+                  const files = Array.from(e.target.files);
+                  const converted = await Promise.all(files.map(f => new Promise((res) => {
+                    const reader = new FileReader();
+                    reader.onload = ev => res({ nome: f.name, tipo: f.type, tamanho: f.size, base64: ev.target.result });
+                    reader.readAsDataURL(f);
+                  })));
+                  set("anexos", [...(form.anexos||[]), ...converted].slice(0,5));
+                  e.target.value = "";
+                }} />
+              <div style={{ fontSize:13, color:"#64748b" }}>📎 Clique para anexar arquivos</div>
+              <div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>PDF, imagens, XML, Word, Excel — máx. 5 arquivos</div>
+            </label>
+            {(form.anexos||[]).length > 0 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                {(form.anexos||[]).map((a, i) => {
+                  const isImg = a.tipo && a.tipo.startsWith("image/");
+                  const isPdf = a.tipo === "application/pdf";
+                  const icon = isImg ? "🖼️" : isPdf ? "📄" : "📎";
+                  return (
+                    <div key={i} style={{ display:"flex", alignItems:"center", gap:10, background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:8, padding:"8px 12px" }}>
+                      <span style={{ fontSize:18 }}>{icon}</span>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:12, fontWeight:600, color:"#0f172a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{a.nome}</div>
+                        <div style={{ fontSize:10, color:"#94a3b8" }}>{(a.tamanho/1024).toFixed(1)} KB</div>
+                      </div>
+                      {isImg && <img src={a.base64} alt={a.nome} style={{ width:36, height:36, objectFit:"cover", borderRadius:6, border:"1px solid #e2e8f0", flexShrink:0 }} />}
+                      <a href={a.base64} download={a.nome}
+                        style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", width:26, height:26, borderRadius:6, cursor:"pointer", fontSize:13, display:"flex", alignItems:"center", justifyContent:"center", textDecoration:"none", flexShrink:0 }}>⬇</a>
+                      <button onClick={() => set("anexos", form.anexos.filter((_,j)=>j!==i))}
+                        style={{ background:"#fef2f2", border:"none", color:"#dc2626", width:26, height:26, borderRadius:6, cursor:"pointer", fontSize:11, flexShrink:0 }}>✕</button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
         <div style={{ display:"flex", gap:8 }}>
           <button onClick={onClose} style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
@@ -3844,12 +3887,40 @@ function ModalBaixaML({ order, paymentInfo, contasBancarias, onConfirm, onClose 
 }
 
 // ── Modal de Conta a Pagar ───────────────────────────────────
-function ModalConta({ conta, categoriasPagar, onSave, onClose }) {
+function ModalConta({ conta, categoriasPagar, fornecedores, onSave, onClose }) {
   const [form, setForm] = useState(conta || {
-    id: Date.now(), descricao: "", categoria: categoriasPagar[0] || "Outros",
+    id: Date.now(), descricao: "", fornecedorId: "", fornecedorNome: "", fornecedorCNPJ: "", categoria: categoriasPagar[0] || "Outros", recorrencia: "unica", totalParcelas: "", intervaloParcelas: "mensal",
     valor: "", vencimento: "", status: "Pendente", observacao: ""
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const [sugestoes, setSugestoes] = useState([]);
+  const [showSugestoes, setShowSugestoes] = useState(false);
+
+  function onDescricaoChange(val) {
+    set("descricao", val);
+    if (val.length >= 2 && fornecedores?.length > 0) {
+      const q = val.toLowerCase();
+      const found = fornecedores.filter(f =>
+        f.nome?.toLowerCase().includes(q) ||
+        f.cnpj?.includes(q)
+      ).slice(0, 6);
+      setSugestoes(found);
+      setShowSugestoes(found.length > 0);
+    } else {
+      setShowSugestoes(false);
+    }
+  }
+
+  function selecionarFornecedor(forn) {
+    setForm(f => ({
+      ...f,
+      descricao: forn.nome,
+      fornecedorId: forn.id,
+      fornecedorNome: forn.nome,
+      fornecedorCNPJ: forn.cnpj || "",
+    }));
+    setShowSugestoes(false);
+  }
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:400, padding:24 }}>
       <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:500, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
@@ -3858,10 +3929,46 @@ function ModalConta({ conta, categoriasPagar, onSave, onClose }) {
           <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
         </div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
-          <div style={{ gridColumn:"1/-1" }}>
-            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Descrição *</div>
-            <input value={form.descricao} onChange={e => set("descricao", e.target.value)} placeholder="Ex: Nota fiscal fornecedor X"
+          <div style={{ gridColumn:"1/-1", position:"relative" }}>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Descrição / Fornecedor *</div>
+            <input
+              value={form.descricao}
+              onChange={e => onDescricaoChange(e.target.value)}
+              onBlur={() => setTimeout(() => setShowSugestoes(false), 150)}
+              onFocus={() => form.descricao.length >= 2 && sugestoes.length > 0 && setShowSugestoes(true)}
+              placeholder="Digite o nome do fornecedor ou descrição..."
               style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+            {/* Autocomplete dropdown */}
+            {showSugestoes && sugestoes.length > 0 && (
+              <div style={{ position:"absolute", top:"100%", left:0, right:0, background:"#fff", border:"1px solid #e2e8f0", borderRadius:10, boxShadow:"0 8px 24px rgba(0,0,0,.12)", zIndex:500, overflow:"hidden", marginTop:2 }}>
+                {sugestoes.map(f => (
+                  <button key={f.id} onMouseDown={() => selecionarFornecedor(f)}
+                    style={{ width:"100%", background:"none", border:"none", padding:"10px 14px", textAlign:"left", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center" }}
+                    onMouseEnter={e=>e.currentTarget.style.background="#f0f9ff"}
+                    onMouseLeave={e=>e.currentTarget.style.background="none"}>
+                    <div>
+                      <div style={{ fontSize:13, fontWeight:600, color:"#0f172a" }}>{f.nome}</div>
+                      {f.cnpj && <div style={{ fontSize:11, color:"#94a3b8" }}>{f.cnpj}</div>}
+                    </div>
+                    <div style={{ fontSize:11, color:"#0891b2", fontWeight:600 }}>Fornecedor →</div>
+                  </button>
+                ))}
+                <div style={{ padding:"6px 14px", background:"#f8fafc", borderTop:"1px solid #f1f5f9", fontSize:11, color:"#94a3b8" }}>
+                  {sugestoes.length} fornecedor(es) encontrado(s)
+                </div>
+              </div>
+            )}
+            {/* Badge do fornecedor selecionado */}
+            {form.fornecedorId && (
+              <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:6 }}>
+                <span style={{ fontSize:11, background:"#eff6ff", color:"#1d4ed8", border:"1px solid #bfdbfe", padding:"2px 8px", borderRadius:20, fontWeight:600 }}>
+                  🏭 {form.fornecedorNome}
+                </span>
+                {form.fornecedorCNPJ && <span style={{ fontSize:11, color:"#94a3b8" }}>{form.fornecedorCNPJ}</span>}
+                <button onClick={() => setForm(f=>({...f,fornecedorId:"",fornecedorNome:"",fornecedorCNPJ:""}))}
+                  style={{ background:"none", border:"none", color:"#94a3b8", cursor:"pointer", fontSize:12 }}>✕</button>
+              </div>
+            )}
           </div>
           <div>
             <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Categoria</div>
@@ -3880,6 +3987,68 @@ function ModalConta({ conta, categoriasPagar, onSave, onClose }) {
             <input type="date" value={form.vencimento} onChange={e => set("vencimento", e.target.value)}
               style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", padding:"9px 12px", borderRadius:8, fontSize:13 }} />
           </div>
+          {/* Recorrência */}
+          <div style={{ gridColumn:"1/-1" }}>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:8, fontWeight:600, textTransform:"uppercase" }}>Tipo de Ocorrência</div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+              {[
+                { key:"unica",       label:"Única" },
+                { key:"parcelada",   label:"Parcelada" },
+                { key:"semanal",     label:"Semanal" },
+                { key:"quinzenal",   label:"Quinzenal" },
+                { key:"mensal",      label:"Mensal" },
+                { key:"bimestral",   label:"Bimestral" },
+                { key:"trimestral",  label:"Trimestral" },
+                { key:"semestral",   label:"Semestral" },
+                { key:"anual",       label:"Anual" },
+              ].map(o => (
+                <button key={o.key} onClick={() => set("recorrencia", o.key)}
+                  style={{ padding:"6px 14px", borderRadius:20, border:"none", cursor:"pointer", fontSize:12, fontWeight:600,
+                    background:(form.recorrencia||"unica")===o.key?"#0f172a":"#f1f5f9",
+                    color:(form.recorrencia||"unica")===o.key?"#fff":"#64748b" }}>
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Parcelamento */}
+          {(form.recorrencia === "parcelada") && (
+            <div style={{ gridColumn:"1/-1", background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"12px 14px" }}>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:10, fontWeight:600, textTransform:"uppercase" }}>Configuração do Parcelamento</div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <div>
+                  <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Número de parcelas</div>
+                  <input type="number" min="2" max="60" value={form.totalParcelas||""} onChange={e=>set("totalParcelas",e.target.value)} placeholder="Ex: 12"
+                    style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Intervalo entre parcelas</div>
+                  <select value={form.intervaloParcelas||"mensal"} onChange={e=>set("intervaloParcelas",e.target.value)}
+                    style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"9px 12px", borderRadius:8, fontSize:13 }}>
+                    <option value="semanal">Semanal (7 dias)</option>
+                    <option value="quinzenal">Quinzenal (15 dias)</option>
+                    <option value="mensal">Mensal (30 dias)</option>
+                    <option value="bimestral">Bimestral (60 dias)</option>
+                    <option value="trimestral">Trimestral (90 dias)</option>
+                  </select>
+                </div>
+              </div>
+              {form.totalParcelas && form.valor && form.vencimento && (
+                <div style={{ marginTop:10, background:"#eff6ff", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#1d4ed8" }}>
+                  💡 Serão geradas <strong>{form.totalParcelas} parcelas</strong> de <strong>R$ {(parseFloat(form.valor)/parseInt(form.totalParcelas)).toFixed(2).replace(".",",")}</strong> cada
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Info de recorrência */}
+          {form.recorrencia && form.recorrencia !== "unica" && form.recorrencia !== "parcelada" && form.vencimento && (
+            <div style={{ gridColumn:"1/-1", background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#15803d" }}>
+              🔄 Esta conta se repetirá automaticamente — a próxima será criada ao dar baixa nesta.
+            </div>
+          )}
+
           <div style={{ gridColumn:"1/-1" }}>
             <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Observação</div>
             <input value={form.observacao} onChange={e => set("observacao", e.target.value)} placeholder="Opcional"
@@ -4008,7 +4177,7 @@ function ModalConta({ conta, categoriasPagar, onSave, onClose }) {
 }
 
 // ── FinanceiroTab Principal ──────────────────────────────────
-function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContasBancarias, categoriasPagar, setCategoriasPagar, lancamentos, setLancamentos, enrichedOrders, rawOrders, shipmentStatuses, paymentData, finTab, setFinTab, impostos, setImpostos, custosFixos, setCustosFixos }) {
+function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContasBancarias, categoriasPagar, setCategoriasPagar, lancamentos, setLancamentos, enrichedOrders, rawOrders, shipmentStatuses, paymentData, finTab, setFinTab, impostos, setImpostos, custosFixos, setCustosFixos, fornecedores }) {
   const [showModalConta, setShowModalConta] = useState(false);
   const [showModalBancaria, setShowModalBancaria] = useState(false);
   const [editingConta, setEditingConta] = useState(null);
@@ -4084,7 +4253,35 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
 
   // ── Ações ────────────────────────────────────────────────
   function saveConta(form) {
-    const updated = editingConta ? contasPagar.map(c=>c.id===form.id?form:c) : [...contasPagar, {...form, id:Date.now()}];
+    let novas = [];
+
+    if (!editingConta && form.recorrencia === "parcelada" && form.totalParcelas > 1) {
+      // Gera parcelas automaticamente
+      const total = parseInt(form.totalParcelas);
+      const valorParcela = parseFloat(form.valor) / total;
+      const intervaloDias = { semanal:7, quinzenal:15, mensal:30, bimestral:60, trimestral:90 }[form.intervaloParcelas||"mensal"] || 30;
+      for (let i = 0; i < total; i++) {
+        const dataVenc = new Date(form.vencimento + "T12:00:00");
+        dataVenc.setDate(dataVenc.getDate() + intervaloDias * i);
+        novas.push({
+          ...form,
+          id: Date.now() + i,
+          descricao: `${form.descricao} (${i+1}/${total})`,
+          valor: valorParcela.toFixed(2),
+          vencimento: dataVenc.toLocaleDateString("sv-SE"),
+          recorrencia: "parcelada",
+          parcelaAtual: i + 1,
+          totalParcelas: total,
+          grupoParcelado: Date.now(),
+        });
+      }
+    } else {
+      novas = [editingConta ? form : { ...form, id: Date.now() }];
+    }
+
+    const updated = editingConta
+      ? contasPagar.map(c => c.id === form.id ? form : c)
+      : [...contasPagar, ...novas];
     setContasPagar(updated); saveLS("contas_pagar", updated); setEditingConta(null);
   }
 
@@ -4095,7 +4292,26 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
   }
 
   function confirmarBaixa(conta, { contaBancariaId, dataPagamento, obs }) {
-    const updatedContas = contasPagar.map(c => c.id===conta.id ? {...c, status:"Pago", contaBancariaId, dataPagamento} : c);
+    let updatedContas = contasPagar.map(c => c.id===conta.id ? {...c, status:"Pago", contaBancariaId, dataPagamento} : c);
+
+    // Se for recorrente, cria a próxima ocorrência automaticamente
+    const rec = conta.recorrencia;
+    const diasMap = { semanal:7, quinzenal:15, mensal:30, bimestral:60, trimestral:90, semestral:180, anual:365 };
+    if (rec && diasMap[rec] && conta.vencimento) {
+      const proxVenc = new Date(conta.vencimento + "T12:00:00");
+      proxVenc.setDate(proxVenc.getDate() + diasMap[rec]);
+      const proxConta = {
+        ...conta,
+        id: Date.now() + 1,
+        status: "Pendente",
+        vencimento: proxVenc.toLocaleDateString("sv-SE"),
+        dataPagamento: undefined,
+        contaBancariaId: undefined,
+        descricao: conta.descricao.replace(/ \(próxima\)/g,"") + " (próxima)",
+      };
+      updatedContas = [...updatedContas, proxConta];
+    }
+
     setContasPagar(updatedContas); saveLS("contas_pagar", updatedContas);
     const lan = { id:Date.now(), tipo:"pagamento", descricao:conta.descricao, valor:parseFloat(conta.valor||0), data:dataPagamento, contaBancariaId, contaPagarId:conta.id, obs, categoria:conta.categoria };
     const updatedLan = [...lancamentos, lan];
@@ -4505,7 +4721,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
           <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
             <table style={{ borderCollapse:"collapse", width:"100%" }}>
               <thead>
-                <tr>{["Descrição","Categoria","Valor","Vencimento","Status","Conta paga","Ações"].map(h=>(
+                <tr>{["Descrição","Categoria","Valor","Vencimento","Status","Conta paga","Anexos","Ações"].map(h=>(
                   <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>
                 ))}</tr>
               </thead>
@@ -4519,8 +4735,21 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                   return (
                     <tr key={c.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
                       <td style={{ padding:"10px 14px", fontSize:13, color:"#0f172a", fontWeight:500 }}>
-                        {c.descricao}
-                        {isVencendo&&<span style={{ fontSize:10, background:"#fde68a", color:"#92400e", padding:"1px 6px", borderRadius:4, marginLeft:6, fontWeight:600 }}>Vence em {days}d</span>}
+                        <div>{c.descricao}
+                          {isVencendo&&<span style={{ fontSize:10, background:"#fde68a", color:"#92400e", padding:"1px 6px", borderRadius:4, marginLeft:6, fontWeight:600 }}>Vence em {days}d</span>}
+                        </div>
+                        {c.fornecedorNome && c.fornecedorNome !== c.descricao && (
+                          <div style={{ fontSize:11, color:"#0891b2", marginTop:2 }}>🏭 {c.fornecedorNome}</div>
+                        )}
+                        {c.recorrencia && c.recorrencia !== "unica" && (() => {
+                          const labels = { parcelada:"📋", semanal:"📅", quinzenal:"📅", mensal:"🔄", bimestral:"🔄", trimestral:"🔄", semestral:"🔄", anual:"🔄" };
+                          const names = { parcelada:`Parcela ${c.parcelaAtual||""}/${c.totalParcelas||""}`, semanal:"Semanal", quinzenal:"Quinzenal", mensal:"Mensal", bimestral:"Bimestral", trimestral:"Trimestral", semestral:"Semestral", anual:"Anual" };
+                          return (
+                            <span style={{ fontSize:10, background:"#f0fdf4", color:"#15803d", border:"1px solid #bbf7d0", padding:"1px 7px", borderRadius:20, fontWeight:600, display:"inline-block", marginTop:3 }}>
+                              {labels[c.recorrencia]} {names[c.recorrencia]}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{c.categoria}</td>
                       <td style={{ padding:"10px 14px", fontSize:13, fontWeight:700, color:"#0f172a" }}>{fmt(parseFloat(c.valor||0))}</td>
@@ -4544,6 +4773,18 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                       </td>
                       <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>
                         {contaBanc ? <span style={{ display:"flex", alignItems:"center", gap:4 }}><div style={{ width:8, height:8, borderRadius:"50%", background:contaBanc.cor }} />{contaBanc.nome}</span> : "—"}
+                      </td>
+                      <td style={{ padding:"10px 14px" }}>
+                        {(c.anexos||[]).length > 0 ? (
+                          <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+                            {(c.anexos||[]).map((a,i) => (
+                              <a key={i} href={a.base64} download={a.nome} title={a.nome}
+                                style={{ fontSize:10, background:"#eff6ff", color:"#1d4ed8", border:"1px solid #bfdbfe", padding:"2px 8px", borderRadius:20, textDecoration:"none", fontWeight:600, display:"inline-flex", alignItems:"center", gap:3 }}>
+                                📎 {a.nome.length>15?a.nome.slice(0,15)+"...":a.nome}
+                              </a>
+                            ))}
+                          </div>
+                        ) : <span style={{ fontSize:12, color:"#94a3b8" }}>—</span>}
                       </td>
                       <td style={{ padding:"10px 14px" }}>
                         <div style={{ display:"flex", gap:4 }}>
@@ -4808,6 +5049,22 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
           </div>
 
           <div style={{ borderTop:"1px solid #f1f5f9", paddingTop:20 }}>
+          <div style={{ fontWeight:700, fontSize:15, color:"#0f172a", marginBottom:4 }}>Fornecedores Cadastrados</div>
+          <div style={{ fontSize:12, color:"#94a3b8", marginBottom:10 }}>
+            {fornecedores.length} fornecedor(es) — aparecem no autocomplete das contas a pagar.
+            Cadastre mais em <strong>🛍️ Produtos → 🏭 Fornecedores</strong>.
+          </div>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:20 }}>
+            {fornecedores.length === 0
+              ? <span style={{ fontSize:12, color:"#94a3b8" }}>Nenhum fornecedor cadastrado ainda.</span>
+              : fornecedores.map(f => (
+                <span key={f.id} style={{ fontSize:12, background:"#eff6ff", color:"#1d4ed8", border:"1px solid #bfdbfe", padding:"3px 10px", borderRadius:20, fontWeight:500 }}>
+                  🏭 {f.nome}
+                </span>
+              ))
+            }
+          </div>
+
           <div style={{ fontWeight:700, fontSize:15, color:"#0f172a", marginBottom:14 }}>Categorias de Contas a Pagar</div>
           <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"16px 20px", marginBottom:16 }}>
             <div style={{ display:"flex", gap:8, marginBottom:14 }}>
@@ -4835,7 +5092,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
       )}
 
       {/* Modais */}
-      {showModalConta && <ModalConta conta={editingConta} categoriasPagar={categoriasPagar} onSave={saveConta} onClose={()=>{ setShowModalConta(false); setEditingConta(null); }} />}
+      {showModalConta && <ModalConta conta={editingConta} categoriasPagar={categoriasPagar} fornecedores={fornecedores} onSave={saveConta} onClose={()=>{ setShowModalConta(false); setEditingConta(null); }} />}
       {showModalBancaria && <ModalContaBancaria conta={editingBancaria} onSave={saveBancaria} onClose={()=>{ setShowModalBancaria(false); setEditingBancaria(null); }} />}
       {modalBaixa && <ModalBaixa conta={modalBaixa} contasBancarias={contasBancarias} onConfirm={(data)=>confirmarBaixa(modalBaixa,data)} onClose={()=>setModalBaixa(null)} />}
       {modalBaixaML && <ModalBaixaML order={modalBaixaML} paymentInfo={paymentData?.[modalBaixaML.id]} contasBancarias={contasBancarias} onConfirm={(data)=>confirmarBaixaML(modalBaixaML,data)} onClose={()=>setModalBaixaML(null)} />}
@@ -5866,6 +6123,7 @@ export default function App() {
             setImpostos={setImpostos}
             custosFixos={custosFixos}
             setCustosFixos={setCustosFixos}
+            fornecedores={fornecedores}
           />
         )}
 

@@ -3906,143 +3906,149 @@ function AnexosUpload({ anexos, onChange }) {
 
 // ── Modal de Conta a Pagar ───────────────────────────────────
 function ModalConta({ conta, categoriasPagar, fornecedores, onSave, onClose }) {
-  const [form, setForm] = useState(conta || {
-    id: Date.now(), descricao: "", fornecedorId: "", fornecedorNome: "", fornecedorCNPJ: "", categoria: categoriasPagar[0] || "Outros", recorrencia: "unica", totalParcelas: "", intervaloParcelas: "mensal",
-    valor: "", vencimento: "", status: "Pendente", observacao: ""
-  });
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const initForm = {
+    id: Date.now(), descricao: "", fornecedorId: "", fornecedorNome: "", fornecedorCNPJ: "",
+    categoria: categoriasPagar[0] || "Outros", recorrencia: "unica", totalParcelas: "",
+    intervaloParcelas: "mensal", valor: "", vencimento: "", status: "Pendente", observacao: "",
+    multaTipo: "%", multaPct: "", jurosTipo: "%", jurosDia: "", temProtesto: false,
+    diasProtesto: "", cartorio: "", anexos: []
+  };
+  const [form, setForm] = useState(conta || initForm);
+  const set = (k, v) => setForm(function(f) { return Object.assign({}, f, { [k]: v }); });
   const [sugestoes, setSugestoes] = useState([]);
-  const [showSugestoes, setShowSugestoes] = useState(false);
+  const [showSug, setShowSug] = useState(false);
 
-  function onDescricaoChange(val) {
+  function onDescChange(val) {
     set("descricao", val);
-    if (val.length >= 2 && fornecedores?.length > 0) {
-      const q = val.toLowerCase();
-      const found = fornecedores.filter(f =>
-        f.nome?.toLowerCase().includes(q) ||
-        f.cnpj?.includes(q)
-      ).slice(0, 6);
+    if (val.length >= 2 && fornecedores && fornecedores.length > 0) {
+      var q = val.toLowerCase();
+      var found = fornecedores.filter(function(f) {
+        return (f.nome && f.nome.toLowerCase().includes(q)) || (f.cnpj && f.cnpj.includes(q));
+      }).slice(0, 6);
       setSugestoes(found);
-      setShowSugestoes(found.length > 0);
+      setShowSug(found.length > 0);
     } else {
-      setShowSugestoes(false);
+      setShowSug(false);
     }
   }
 
-  function selecionarFornecedor(forn) {
-    setForm(f => ({
-      ...f,
-      descricao: forn.nome,
-      fornecedorId: forn.id,
-      fornecedorNome: forn.nome,
-      fornecedorCNPJ: forn.cnpj || "",
-    }));
-    setShowSugestoes(false);
+  function selecionarForn(forn) {
+    setForm(function(f) {
+      return Object.assign({}, f, {
+        descricao: forn.nome, fornecedorId: forn.id,
+        fornecedorNome: forn.nome, fornecedorCNPJ: forn.cnpj || ""
+      });
+    });
+    setShowSug(false);
   }
+
+  var canSave = form.descricao && form.valor;
+  var btnStyle = {
+    flex: 2, border: "none", fontWeight: 700, padding: "11px", borderRadius: 10,
+    cursor: canSave ? "pointer" : "not-allowed",
+    background: canSave ? "#0f172a" : "#f1f5f9",
+    color: canSave ? "#fff" : "#94a3b8"
+  };
+
   return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:400, padding:24 }}>
-      <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:500, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
+    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:400, padding:24 }}>
+      <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:520, maxHeight:"90vh", overflowY:"auto", padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
+
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
           <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>{conta ? "Editar Conta" : "Nova Conta a Pagar"}</div>
           <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
         </div>
+
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
+
+          {/* Descrição */}
           <div style={{ gridColumn:"1/-1", position:"relative" }}>
             <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Descrição / Fornecedor *</div>
             <input
               value={form.descricao}
-              onChange={e => onDescricaoChange(e.target.value)}
-              onBlur={() => setTimeout(() => setShowSugestoes(false), 150)}
-              onFocus={() => form.descricao.length >= 2 && sugestoes.length > 0 && setShowSugestoes(true)}
+              onChange={function(e) { onDescChange(e.target.value); }}
+              onBlur={function() { setTimeout(function() { setShowSug(false); }, 150); }}
+              onFocus={function() { if (form.descricao.length >= 2 && sugestoes.length > 0) setShowSug(true); }}
               placeholder="Digite o nome do fornecedor ou descrição..."
-              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
-            {/* Autocomplete dropdown */}
-            {showSugestoes && sugestoes.length > 0 && (
-              <div style={{ position:"absolute", top:"100%", left:0, right:0, background:"#fff", border:"1px solid #e2e8f0", borderRadius:10, boxShadow:"0 8px 24px rgba(0,0,0,.12)", zIndex:500, overflow:"hidden", marginTop:2 }}>
-                {sugestoes.map(f => (
-                  <button key={f.id} onMouseDown={() => selecionarFornecedor(f)}
-                    style={{ width:"100%", background:"none", border:"none", padding:"10px 14px", textAlign:"left", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center" }}
-                    onMouseEnter={e=>e.currentTarget.style.background="#f0f9ff"}
-                    onMouseLeave={e=>e.currentTarget.style.background="none"}>
-                    <div>
-                      <div style={{ fontSize:13, fontWeight:600, color:"#0f172a" }}>{f.nome}</div>
+              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }}
+            />
+            {showSug && sugestoes.length > 0 && (
+              <div style={{ position:"absolute", top:"100%", left:0, right:0, background:"#fff", border:"1px solid #e2e8f0", borderRadius:10, boxShadow:"0 8px 24px rgba(0,0,0,.12)", zIndex:50, overflow:"hidden" }}>
+                {sugestoes.map(function(f) {
+                  return (
+                    <div key={f.id} onClick={function() { selecionarForn(f); }} style={{ padding:"10px 14px", cursor:"pointer", borderBottom:"1px solid #f1f5f9", fontSize:13 }}>
+                      <div style={{ fontWeight:600, color:"#0f172a" }}>{f.nome}</div>
                       {f.cnpj && <div style={{ fontSize:11, color:"#94a3b8" }}>{f.cnpj}</div>}
                     </div>
-                    <div style={{ fontSize:11, color:"#0891b2", fontWeight:600 }}>Fornecedor →</div>
-                  </button>
-                ))}
+                  );
+                })}
                 <div style={{ padding:"6px 14px", background:"#f8fafc", borderTop:"1px solid #f1f5f9", fontSize:11, color:"#94a3b8" }}>
-                  {sugestoes.length} fornecedor(es) encontrado(s)
+                  Fornecedor cadastrado
                 </div>
               </div>
             )}
-            {/* Badge do fornecedor selecionado */}
-            {form.fornecedorId && (
+            {form.fornecedorNome && (
               <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:6 }}>
-                <span style={{ fontSize:11, background:"#eff6ff", color:"#1d4ed8", border:"1px solid #bfdbfe", padding:"2px 8px", borderRadius:20, fontWeight:600 }}>
-                  🏭 {form.fornecedorNome}
-                </span>
-                {form.fornecedorCNPJ && <span style={{ fontSize:11, color:"#94a3b8" }}>{form.fornecedorCNPJ}</span>}
-                <button onClick={() => setForm(f=>({...f,fornecedorId:"",fornecedorNome:"",fornecedorCNPJ:""}))}
-                  style={{ background:"none", border:"none", color:"#94a3b8", cursor:"pointer", fontSize:12 }}>✕</button>
+                <span style={{ fontSize:11, background:"#f0fdf4", color:"#15803d", border:"1px solid #bbf7d0", borderRadius:6, padding:"2px 8px", fontWeight:600 }}>✓ {form.fornecedorNome}</span>
+                {form.fornecedorCNPJ && <span style={{ fontSize:11, color:"#94a3b8" }}>CNPJ: {form.fornecedorCNPJ}</span>}
               </div>
             )}
           </div>
+
+          {/* Categoria */}
           <div>
             <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Categoria</div>
-            <select value={form.categoria} onChange={e => set("categoria", e.target.value)}
+            <select value={form.categoria} onChange={function(e) { set("categoria", e.target.value); }}
               style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", padding:"9px 12px", borderRadius:8, fontSize:13 }}>
-              {categoriasPagar.map(c => <option key={c}>{c}</option>)}
+              {categoriasPagar.map(function(c) { return <option key={c}>{c}</option>; })}
             </select>
           </div>
+
+          {/* Valor */}
           <div>
             <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Valor (R$) *</div>
-            <input type="number" value={form.valor} onChange={e => set("valor", e.target.value)} placeholder="0,00"
+            <input type="number" value={form.valor} onChange={function(e) { set("valor", e.target.value); }} placeholder="0,00"
               style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
           </div>
+
+          {/* Vencimento */}
           <div>
             <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Vencimento</div>
-            <input type="date" value={form.vencimento} onChange={e => set("vencimento", e.target.value)}
+            <input type="date" value={form.vencimento} onChange={function(e) { set("vencimento", e.target.value); }}
               style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", padding:"9px 12px", borderRadius:8, fontSize:13 }} />
           </div>
+
           {/* Recorrência */}
           <div style={{ gridColumn:"1/-1" }}>
             <div style={{ fontSize:11, color:"#94a3b8", marginBottom:8, fontWeight:600, textTransform:"uppercase" }}>Tipo de Ocorrência</div>
             <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-              {[
-                { key:"unica",       label:"Única" },
-                { key:"parcelada",   label:"Parcelada" },
-                { key:"semanal",     label:"Semanal" },
-                { key:"quinzenal",   label:"Quinzenal" },
-                { key:"mensal",      label:"Mensal" },
-                { key:"bimestral",   label:"Bimestral" },
-                { key:"trimestral",  label:"Trimestral" },
-                { key:"semestral",   label:"Semestral" },
-                { key:"anual",       label:"Anual" },
-              ].map(o => (
-                <button key={o.key} onClick={() => set("recorrencia", o.key)}
-                  style={{ padding:"6px 14px", borderRadius:20, border:"none", cursor:"pointer", fontSize:12, fontWeight:600,
-                    background:(form.recorrencia||"unica")===o.key?"#0f172a":"#f1f5f9",
-                    color:(form.recorrencia||"unica")===o.key?"#fff":"#64748b" }}>
-                  {o.label}
-                </button>
-              ))}
+              {["unica","parcelada","semanal","quinzenal","mensal","bimestral","trimestral","semestral","anual"].map(function(key) {
+                var labels = { unica:"Única", parcelada:"Parcelada", semanal:"Semanal", quinzenal:"Quinzenal", mensal:"Mensal", bimestral:"Bimestral", trimestral:"Trimestral", semestral:"Semestral", anual:"Anual" };
+                var active = (form.recorrencia || "unica") === key;
+                return (
+                  <button key={key} onClick={function() { set("recorrencia", key); }}
+                    style={{ padding:"6px 14px", borderRadius:20, border:"none", cursor:"pointer", fontSize:12, fontWeight:600,
+                      background: active ? "#0f172a" : "#f1f5f9", color: active ? "#fff" : "#64748b" }}>
+                    {labels[key]}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           {/* Parcelamento */}
-          {(form.recorrencia === "parcelada") && (
+          {form.recorrencia === "parcelada" && (
             <div style={{ gridColumn:"1/-1", background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"12px 14px" }}>
               <div style={{ fontSize:11, color:"#94a3b8", marginBottom:10, fontWeight:600, textTransform:"uppercase" }}>Configuração do Parcelamento</div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                 <div>
                   <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Número de parcelas</div>
-                  <input type="number" min="2" max="60" value={form.totalParcelas||""} onChange={e=>set("totalParcelas",e.target.value)} placeholder="Ex: 12"
+                  <input type="number" min="2" max="60" value={form.totalParcelas || ""} onChange={function(e) { set("totalParcelas", e.target.value); }} placeholder="Ex: 12"
                     style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
                 </div>
                 <div>
                   <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Intervalo entre parcelas</div>
-                  <select value={form.intervaloParcelas||"mensal"} onChange={e=>set("intervaloParcelas",e.target.value)}
+                  <select value={form.intervaloParcelas || "mensal"} onChange={function(e) { set("intervaloParcelas", e.target.value); }}
                     style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"9px 12px", borderRadius:8, fontSize:13 }}>
                     <option value="semanal">Semanal (7 dias)</option>
                     <option value="quinzenal">Quinzenal (15 dias)</option>
@@ -4054,155 +4060,49 @@ function ModalConta({ conta, categoriasPagar, fornecedores, onSave, onClose }) {
               </div>
               {form.totalParcelas && form.valor && form.vencimento && (
                 <div style={{ marginTop:10, background:"#eff6ff", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#1d4ed8" }}>
-                  💡 Serão geradas <strong>{form.totalParcelas} parcelas</strong> de <strong>R$ {(parseFloat(form.valor)/parseInt(form.totalParcelas)).toFixed(2).replace(".",",")}</strong> cada
+                  Serão geradas {form.totalParcelas} parcelas de R$ {(parseFloat(form.valor) / parseInt(form.totalParcelas)).toFixed(2).replace(".", ",")} cada
                 </div>
               )}
             </div>
           )}
 
-          {/* Info de recorrência */}
+          {/* Info recorrência */}
           {form.recorrencia && form.recorrencia !== "unica" && form.recorrencia !== "parcelada" && form.vencimento && (
             <div style={{ gridColumn:"1/-1", background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#15803d" }}>
-              🔄 Esta conta se repetirá automaticamente — a próxima será criada ao dar baixa nesta.
+              Esta conta se repetirá automaticamente — a próxima será criada ao dar baixa nesta.
             </div>
           )}
 
+          {/* Observação */}
           <div style={{ gridColumn:"1/-1" }}>
             <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Observação</div>
-            <input value={form.observacao} onChange={e => set("observacao", e.target.value)} placeholder="Opcional"
+            <input value={form.observacao} onChange={function(e) { set("observacao", e.target.value); }} placeholder="Opcional"
               style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
           </div>
-          <div style={{ gridColumn:"1/-1", background:"#f8fafc", borderRadius:10, padding:"12px 14px" }}>
-            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:10, fontWeight:700, textTransform:"uppercase" }}>💰 Juros e Multa (para análise IA)</div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-              {/* Multa */}
-              <div>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:5 }}>
-                  <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, textTransform:"uppercase" }}>Multa por atraso</div>
-                  <div style={{ display:"flex", gap:2 }}>
-                    {["%","R$"].map(t => (
-                      <button key={t} onClick={() => set("multaTipo", t)}
-                        style={{ padding:"2px 8px", borderRadius:5, border:"none", cursor:"pointer", fontSize:11, fontWeight:700,
-                          background:(form.multaTipo||"%")===t?"#0f172a":"#e2e8f0",
-                          color:(form.multaTipo||"%")===t?"#fff":"#64748b" }}>
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div style={{ position:"relative" }}>
-                  <input type="number" value={form.multaPct||""} onChange={e => set("multaPct", e.target.value)}
-                    placeholder={(form.multaTipo||"%")==="%" ? "Ex: 2" : "Ex: 50,00"}
-                    style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px 9px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
-                  <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", fontSize:12, color:"#94a3b8", fontWeight:700 }}>
-                    {(form.multaTipo||"%")==="%" ? "%" : "R$"}
-                  </span>
-                </div>
-                {form.multaPct && form.valor && (
-                  <div style={{ fontSize:10, color:"#64748b", marginTop:4 }}>
-                    {(form.multaTipo||"%")==="%" 
-                      ? `= R$ ${(parseFloat(form.valor||0)*parseFloat(form.multaPct||0)/100).toFixed(2).replace(".",",")} de multa`
-                      : `= ${(parseFloat(form.multaPct||0)/parseFloat(form.valor||1)*100).toFixed(2)}% do valor`}
-                  </div>
-                )}
-              </div>
-              {/* Juros */}
-              <div>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:5 }}>
-                  <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, textTransform:"uppercase" }}>Juros ao dia</div>
-                  <div style={{ display:"flex", gap:2 }}>
-                    {["%","R$"].map(t => (
-                      <button key={t} onClick={() => set("jurosTipo", t)}
-                        style={{ padding:"2px 8px", borderRadius:5, border:"none", cursor:"pointer", fontSize:11, fontWeight:700,
-                          background:(form.jurosTipo||"%")===t?"#0f172a":"#e2e8f0",
-                          color:(form.jurosTipo||"%")===t?"#fff":"#64748b" }}>
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div style={{ position:"relative" }}>
-                  <input type="number" value={form.jurosDia||""} onChange={e => set("jurosDia", e.target.value)}
-                    placeholder={(form.jurosTipo||"%")==="%" ? "Ex: 0.033" : "Ex: 5,00"}
-                    style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px 9px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
-                  <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", fontSize:12, color:"#94a3b8", fontWeight:700 }}>
-                    {(form.jurosTipo||"%")==="%" ? "%" : "R$"}
-                  </span>
-                </div>
-                {form.jurosDia && form.valor && (
-                  <div style={{ fontSize:10, color:"#64748b", marginTop:4 }}>
-                    {(form.jurosTipo||"%")==="%" 
-                      ? `= R$ ${(parseFloat(form.valor||0)*parseFloat(form.jurosDia||0)/100).toFixed(2).replace(".",",")} por dia`
-                      : `= ${(parseFloat(form.jurosDia||0)/parseFloat(form.valor||1)*100).toFixed(4)}% ao dia`}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-          <div style={{ gridColumn:"1/-1", background: form.temProtesto ? "#fef2f2" : "#f8fafc", border: `1px solid ${form.temProtesto ? "#fecaca" : "#e2e8f0"}`, borderRadius:10, padding:"12px 14px", transition:"all .2s" }}>
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom: form.temProtesto ? 12 : 0 }}>
-              <div>
-                <div style={{ fontSize:11, color: form.temProtesto ? "#dc2626" : "#94a3b8", marginBottom:2, fontWeight:700, textTransform:"uppercase" }}>⚖️ Protesto</div>
-                <div style={{ fontSize:11, color:"#94a3b8" }}>Será protestada caso não paga no vencimento</div>
-              </div>
-              <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer" }}>
-                <div style={{ position:"relative", width:44, height:24 }}>
-                  <input type="checkbox" checked={form.temProtesto||false} onChange={e => set("temProtesto", e.target.checked)}
-                    style={{ opacity:0, width:0, height:0, position:"absolute" }} />
-                  <div style={{ position:"absolute", inset:0, background:form.temProtesto?"#dc2626":"#cbd5e1", borderRadius:99, transition:"all .2s", cursor:"pointer" }}
-                    onClick={() => set("temProtesto", !form.temProtesto)} />
-                  <div style={{ position:"absolute", top:2, left: form.temProtesto ? 22 : 2, width:20, height:20, background:"#fff", borderRadius:"50%", transition:"all .2s", boxShadow:"0 1px 3px rgba(0,0,0,.2)" }} />
-                </div>
-                <span style={{ fontSize:13, fontWeight:600, color: form.temProtesto ? "#dc2626" : "#94a3b8" }}>
-                  {form.temProtesto ? "Sim, será protestada" : "Não"}
-                </span>
-              </label>
-            </div>
-            {form.temProtesto && (
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginTop:4 }}>
-                <div>
-                  <div style={{ fontSize:11, color:"#dc2626", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Dias após vencimento para protesto</div>
-                  <input type="number" value={form.diasProtesto||""} onChange={e => set("diasProtesto", e.target.value)} placeholder="Ex: 5"
-                    style={{ width:"100%", background:"#fff", border:"1px solid #fecaca", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
-                  <div style={{ fontSize:10, color:"#94a3b8", marginTop:4 }}>
-                    {form.vencimento && form.diasProtesto ? (() => {
-                      const d = new Date(form.vencimento + "T00:00:00");
-                      d.setDate(d.getDate() + parseInt(form.diasProtesto || 0));
-                      return `Protesto em: ${d.toLocaleDateString("pt-BR")}`;
-                    })() : "Informe o vencimento e os dias"}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize:11, color:"#dc2626", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Cartório / Observação</div>
-                  <input value={form.cartorio||""} onChange={e => set("cartorio", e.target.value)} placeholder="Ex: 1º Cartório de Protesto SP"
-                    style={{ width:"100%", background:"#fff", border:"1px solid #fecaca", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
-                </div>
-              </div>
-            )}
-          </div>
 
-          {/* ── ANEXOS ── */}
+          {/* Anexos */}
           <div style={{ gridColumn:"1/-1" }}>
-            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:8, fontWeight:600, textTransform:"uppercase" }}>📎 Anexos</div>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:8, fontWeight:600, textTransform:"uppercase" }}>Anexos</div>
             <AnexosUpload
               anexos={form.anexos || []}
-              onChange={(novosAnexos) => set("anexos", novosAnexos)}
+              onChange={function(novos) { set("anexos", novos); }}
             />
           </div>
+
         </div>
+
         <div style={{ display:"flex", gap:8 }}>
           <button onClick={onClose} style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
-          <button onClick={() => { if (!form.descricao || !form.valor) return; onSave(form); onClose(); }}
-            disabled={!form.descricao || !form.valor}
-            style={{ flex:2, background:!form.descricao||!form.valor?"#f1f5f9":"#0f172a", border:"none", color:!form.descricao||!form.valor?"#94a3b8":"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:!form.descricao||!form.valor?"not-allowed":"pointer" }}>
+          <button onClick={function() { if (canSave) { onSave(form); onClose(); } }} disabled={!canSave} style={btnStyle}>
             Salvar
           </button>
         </div>
+
       </div>
     </div>
-  </div>
   );
 }
+
 
 function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContasBancarias, categoriasPagar, setCategoriasPagar, lancamentos, setLancamentos, enrichedOrders, rawOrders, shipmentStatuses, paymentData, finTab, setFinTab, impostos, setImpostos, custosFixos, setCustosFixos, fornecedores }) {
   const [showModalConta, setShowModalConta] = useState(false);

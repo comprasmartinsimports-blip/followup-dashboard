@@ -4799,6 +4799,8 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
   const [fluxoDe, setFluxoDe] = useState("");
   const [fluxoAte, setFluxoAte] = useState("");
   const [extratoContaId, setExtratoContaId] = useState(null);
+  const [extratoDe, setExtratoDe] = useState("");
+  const [extratoAte, setExtratoAte] = useState("");
   const [selecionadas, setSelecionadas] = useState([]);
   const [showModalMultiBaixa, setShowModalMultiBaixa] = useState(false);
 
@@ -5188,18 +5190,23 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
         return (
           <div>
             {/* Filtro de período */}
-            <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:14, flexWrap:"wrap", background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px" }}>
-              <span style={{ fontSize:12, color:"#64748b", fontWeight:600 }}>📅 Período:</span>
-              <input type="date" value={fluxoDe} onChange={function(e) { setFluxoDe(e.target.value); }}
-                style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"6px 10px", borderRadius:8, fontSize:12 }} />
-              <span style={{ fontSize:12, color:"#94a3b8" }}>até</span>
-              <input type="date" value={fluxoAte} onChange={function(e) { setFluxoAte(e.target.value); }}
-                style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"6px 10px", borderRadius:8, fontSize:12 }} />
-              {(fluxoDe || fluxoAte) && (
-                <button onClick={function() { setFluxoDe(""); setFluxoAte(""); }}
-                  style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"5px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕ Limpar</button>
-              )}
-              <span style={{ fontSize:12, color:"#94a3b8", marginLeft:"auto" }}>{sortedDias.length} dia(s)</span>
+            <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px", marginBottom:14 }}>
+              <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", marginBottom:8 }}>
+                <span style={{ fontSize:12, color:"#64748b", fontWeight:600 }}>📅 Período:</span>
+                <BotoesPeriodo de={fluxoDe} ate={fluxoAte} onChangeDe={setFluxoDe} onChangeAte={setFluxoAte} />
+                <span style={{ fontSize:12, color:"#94a3b8", marginLeft:"auto" }}>{sortedDias.length} dia(s)</span>
+              </div>
+              <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+                <input type="date" value={fluxoDe} onChange={function(e) { setFluxoDe(e.target.value); }}
+                  style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 10px", borderRadius:8, fontSize:12 }} />
+                <span style={{ fontSize:12, color:"#94a3b8" }}>até</span>
+                <input type="date" value={fluxoAte} onChange={function(e) { setFluxoAte(e.target.value); }}
+                  style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 10px", borderRadius:8, fontSize:12 }} />
+                {(fluxoDe || fluxoAte) && (
+                  <button onClick={function() { setFluxoDe(""); setFluxoAte(""); }}
+                    style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"5px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕ Limpar</button>
+                )}
+              </div>
             </div>
             {/* Cards resumo */}
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:16 }}>
@@ -5300,18 +5307,23 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
               {categoriasPagar.map(c=><option key={c} value={c}>{c}</option>)}
             </select>
           </div>
-          <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
-            <span style={{ fontSize:12, color:"#94a3b8", fontWeight:500 }}>Vencimento:</span>
-            <input type="date" value={pagarDe} onChange={e=>setPagarDe(e.target.value)}
-              style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"6px 10px", borderRadius:8, fontSize:12, cursor:"pointer" }} />
-            <span style={{ fontSize:12, color:"#94a3b8" }}>até</span>
-            <input type="date" value={pagarAte} onChange={e=>setPagarAte(e.target.value)}
-              style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"6px 10px", borderRadius:8, fontSize:12, cursor:"pointer" }} />
-            {(pagarDe||pagarAte) && (
-              <button onClick={()=>{setPagarDe("");setPagarAte("");}}
-                style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"5px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕ Limpar</button>
-            )}
-            <span style={{ fontSize:12, color:"#94a3b8", marginLeft:4 }}>{contasFiltradas.length} conta(s)</span>
+          <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px", marginBottom:14 }}>
+            <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", marginBottom:8 }}>
+              <span style={{ fontSize:12, color:"#64748b", fontWeight:600 }}>📅 Vencimento:</span>
+              <BotoesPeriodo de={pagarDe} ate={pagarAte} onChangeDe={setPagarDe} onChangeAte={setPagarAte} />
+              <span style={{ fontSize:12, color:"#94a3b8", marginLeft:"auto" }}>{contasFiltradas.length} conta(s)</span>
+            </div>
+            <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+              <input type="date" value={pagarDe} onChange={function(e){ setPagarDe(e.target.value); }}
+                style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 10px", borderRadius:8, fontSize:12 }} />
+              <span style={{ fontSize:12, color:"#94a3b8" }}>até</span>
+              <input type="date" value={pagarAte} onChange={function(e){ setPagarAte(e.target.value); }}
+                style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 10px", borderRadius:8, fontSize:12 }} />
+              {(pagarDe||pagarAte) && (
+                <button onClick={function(){ setPagarDe(""); setPagarAte(""); }}
+                  style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"5px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕ Limpar</button>
+              )}
+            </div>
           </div>
           {(() => {
             const hoje = new Date(); hoje.setHours(0,0,0,0);
@@ -5589,17 +5601,22 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                 style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"7px 12px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕ Limpar</button>
             )}
           </div>
-          <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
-            <span style={{ fontSize:12, color:"#94a3b8", fontWeight:500 }}>Data da venda:</span>
-            <input type="date" value={receberDe} onChange={function(e){ setReceberDe(e.target.value); }}
-              style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"6px 10px", borderRadius:8, fontSize:12 }} />
-            <span style={{ fontSize:12, color:"#94a3b8" }}>até</span>
-            <input type="date" value={receberAte} onChange={function(e){ setReceberAte(e.target.value); }}
-              style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"6px 10px", borderRadius:8, fontSize:12 }} />
-            {(receberDe||receberAte) && (
-              <button onClick={function(){ setReceberDe(""); setReceberAte(""); }}
-                style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"5px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕ Limpar</button>
-            )}
+          <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px", marginBottom:14 }}>
+            <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", marginBottom:8 }}>
+              <span style={{ fontSize:12, color:"#64748b", fontWeight:600 }}>📅 Data da venda:</span>
+              <BotoesPeriodo de={receberDe} ate={receberAte} onChangeDe={setReceberDe} onChangeAte={setReceberAte} />
+            </div>
+            <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+              <input type="date" value={receberDe} onChange={function(e){ setReceberDe(e.target.value); }}
+                style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 10px", borderRadius:8, fontSize:12 }} />
+              <span style={{ fontSize:12, color:"#94a3b8" }}>até</span>
+              <input type="date" value={receberAte} onChange={function(e){ setReceberAte(e.target.value); }}
+                style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 10px", borderRadius:8, fontSize:12 }} />
+              {(receberDe||receberAte) && (
+                <button onClick={function(){ setReceberDe(""); setReceberAte(""); }}
+                  style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"5px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕ Limpar</button>
+              )}
+            </div>
           </div>
 
           {/* Tabela */}
@@ -5802,7 +5819,12 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
           {extratoContaId && (function() {
             var cb = contasBancarias.find(function(c) { return c.id === extratoContaId; });
             if (!cb) return null;
-            var movs = [...lancamentos].filter(function(l) { return l.contaBancariaId === extratoContaId; }).sort(function(a,b) { return b.data > a.data ? 1 : -1; });
+            var movsAll = [...lancamentos].filter(function(l) { return l.contaBancariaId === extratoContaId; });
+            var movs = movsAll.filter(function(l) {
+              if (extratoDe && l.data && l.data < extratoDe) return false;
+              if (extratoAte && l.data && l.data > extratoAte) return false;
+              return true;
+            }).sort(function(a,b) { return b.data > a.data ? 1 : -1; });
             var saldoInicial = parseFloat(cb.saldoInicial || 0);
             var saldoAtual = getSaldoConta(extratoContaId);
             return (
@@ -5818,12 +5840,31 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                       <div style={{ fontSize:11, color:"#94a3b8" }}>Saldo atual</div>
                       <div style={{ fontSize:17, fontWeight:800, color: saldoAtual>=0?"#15803d":"#dc2626" }}>{fmt(saldoAtual)}</div>
                     </div>
-                    <button onClick={function() { setExtratoContaId(null); }}
+                    <button onClick={function() { setExtratoContaId(null); setExtratoDe(""); setExtratoAte(""); }}
                       style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:14 }}>✕</button>
                   </div>
                 </div>
+                {/* Filtros de período */}
+                <div style={{ padding:"12px 16px", borderBottom:"1px solid #f1f5f9", background:"#fafafa" }}>
+                  <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", marginBottom:6 }}>
+                    <span style={{ fontSize:12, color:"#64748b", fontWeight:600 }}>📅 Período:</span>
+                    <BotoesPeriodo de={extratoDe} ate={extratoAte} onChangeDe={setExtratoDe} onChangeAte={setExtratoAte} />
+                  </div>
+                  <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+                    <input type="date" value={extratoDe} onChange={function(e){ setExtratoDe(e.target.value); }}
+                      style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 10px", borderRadius:8, fontSize:12 }} />
+                    <span style={{ fontSize:12, color:"#94a3b8" }}>até</span>
+                    <input type="date" value={extratoAte} onChange={function(e){ setExtratoAte(e.target.value); }}
+                      style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 10px", borderRadius:8, fontSize:12 }} />
+                    {(extratoDe||extratoAte) && (
+                      <button onClick={function(){ setExtratoDe(""); setExtratoAte(""); }}
+                        style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"5px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕ Limpar</button>
+                    )}
+                    <span style={{ fontSize:12, color:"#94a3b8", marginLeft:"auto" }}>{movs.length} lançamento(s)</span>
+                  </div>
+                </div>
                 {movs.length === 0 ? (
-                  <div style={{ padding:32, textAlign:"center", color:"#94a3b8", fontSize:13 }}>Nenhum lançamento nesta conta</div>
+                  <div style={{ padding:32, textAlign:"center", color:"#94a3b8", fontSize:13 }}>{movsAll.length > 0 ? "Nenhum lançamento neste período" : "Nenhum lançamento nesta conta"}</div>
                 ) : (
                   <div style={{ overflowX:"auto" }}>
                     <table style={{ borderCollapse:"collapse", width:"100%" }}>
@@ -5981,6 +6022,75 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
   );
 }
 
+
+// ── Utilitário de períodos rápidos ──────────────────────────
+function getPeriodo(key) {
+  var hoje = new Date(); hoje.setHours(0,0,0,0);
+  var hojeStr = hoje.toLocaleDateString("sv-SE");
+  if (key === "hoje") {
+    return { de: hojeStr, ate: hojeStr };
+  }
+  if (key === "7dias") {
+    var d = new Date(hoje); d.setDate(d.getDate() - 6);
+    return { de: d.toLocaleDateString("sv-SE"), ate: hojeStr };
+  }
+  if (key === "mesat") {
+    var d = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    return { de: d.toLocaleDateString("sv-SE"), ate: hojeStr };
+  }
+  if (key === "30dias") {
+    var d = new Date(hoje); d.setDate(d.getDate() - 29);
+    return { de: d.toLocaleDateString("sv-SE"), ate: hojeStr };
+  }
+  if (key === "3meses") {
+    var d = new Date(hoje); d.setMonth(d.getMonth() - 3);
+    return { de: d.toLocaleDateString("sv-SE"), ate: hojeStr };
+  }
+  return { de: "", ate: "" }; // todos
+}
+
+var PERIODOS = [
+  { key:"hoje",   label:"Hoje" },
+  { key:"7dias",  label:"7 dias" },
+  { key:"mesat",  label:"Este mês" },
+  { key:"30dias", label:"30 dias" },
+  { key:"3meses", label:"3 meses" },
+  { key:"todos",  label:"Todos" },
+];
+
+function BotoesPeriodo({ de, ate, onChangeDe, onChangeAte }) {
+  // Detecta qual botão está ativo comparando com os períodos
+  function getAtivo() {
+    if (!de && !ate) return "todos";
+    for (var i = 0; i < PERIODOS.length - 1; i++) {
+      var p = getPeriodo(PERIODOS[i].key);
+      if (p.de === de && p.ate === ate) return PERIODOS[i].key;
+    }
+    return null; // custom
+  }
+  var ativo = getAtivo();
+  return (
+    <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+      {PERIODOS.map(function(p) {
+        var isAtivo = ativo === p.key;
+        return (
+          <button key={p.key}
+            onClick={function() {
+              var per = getPeriodo(p.key);
+              onChangeDe(per.de);
+              onChangeAte(per.ate);
+            }}
+            style={{ padding:"5px 12px", borderRadius:20, border: isAtivo ? "2px solid #0f172a" : "1px solid #e2e8f0",
+              background: isAtivo ? "#0f172a" : "#f8fafc",
+              color: isAtivo ? "#fff" : "#64748b",
+              fontWeight: isAtivo ? 700 : 500, fontSize:12, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }}>
+            {p.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function App() {
   // ── Auth do dashboard ─────────────────────────────────────
@@ -6374,6 +6484,7 @@ export default function App() {
     }
     const cutoff = new Date();
     if (orderFilter === "week") cutoff.setDate(now.getDate() - 7);
+    else if (orderFilter === "thismonth") { cutoff = new Date(now.getFullYear(), now.getMonth(), 1); }
     else if (orderFilter === "month") cutoff.setMonth(now.getMonth() - 1);
     else if (orderFilter === "3months") cutoff.setMonth(now.getMonth() - 3);
     cutoff.setHours(0, 0, 0, 0);
@@ -6902,7 +7013,7 @@ export default function App() {
                   style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", color: "#64748b", padding: "5px 10px", borderRadius: 8, cursor: "pointer", fontSize: 12 }}>✕ Limpar</button>}
               </div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {[{ key: "today", label: "Hoje" }, { key: "week", label: "7 dias" }, { key: "month", label: "30 dias" }, { key: "3months", label: "3 meses" }, { key: "all", label: "Todos" }].map(f => (
+                {[{ key: "today", label: "Hoje" }, { key: "week", label: "7 dias" }, { key: "thismonth", label: "Este mês" }, { key: "month", label: "30 dias" }, { key: "3months", label: "3 meses" }, { key: "all", label: "Todos" }].map(f => (
                   <button key={f.key} className={`filter-btn ${orderFilter === f.key ? "active" : ""}`} onClick={() => setOrderFilter(f.key)}>{f.label}</button>
                 ))}
               </div>

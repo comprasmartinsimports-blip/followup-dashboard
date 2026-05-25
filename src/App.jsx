@@ -4587,7 +4587,7 @@ function ModalConta({ conta, categoriasPagar, fornecedores, onSave, onClose }) {
     categoria: categoriasPagar[0] || "Outros", recorrencia: "unica", totalParcelas: "",
     intervaloParcelas: "mensal", valor: "", vencimento: "", status: "Pendente", observacao: "",
     multaTipo: "%", multaPct: "", jurosTipo: "%", jurosDia: "", temProtesto: false,
-    diasProtesto: "", cartorio: "", anexos: []
+    diasProtesto: "", cartorio: "", anexos: [], prioridade: "media"
   };
   const [form, setForm] = useState(conta || initForm);
   const set = (k, v) => setForm(function(f) { return Object.assign({}, f, { [k]: v }); });
@@ -4749,6 +4749,31 @@ function ModalConta({ conta, categoriasPagar, fornecedores, onSave, onClose }) {
             </div>
           )}
 
+          {/* Prioridade */}
+          <div style={{ gridColumn:"1/-1" }}>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:8, fontWeight:600, textTransform:"uppercase" }}>Prioridade</div>
+            <div style={{ display:"flex", gap:8 }}>
+              {[
+                { key:"baixa",  label:"! Baixa",  cor:"#15803d", bg:"#f0fdf4", border:"#bbf7d0" },
+                { key:"media",  label:"!! Média",  cor:"#d97706", bg:"#fffbeb", border:"#fde68a" },
+                { key:"alta",   label:"!!! Alta",  cor:"#dc2626", bg:"#fef2f2", border:"#fecaca" },
+              ].map(function(p) {
+                var active = (form.prioridade || "media") === p.key;
+                return (
+                  <button key={p.key} onClick={function() { set("prioridade", p.key); }}
+                    style={{ flex:1, padding:"10px 8px", borderRadius:10,
+                      border: active ? "2px solid " + p.cor : "2px solid " + p.border,
+                      background: active ? p.bg : "#fff",
+                      color: active ? p.cor : "#94a3b8",
+                      fontWeight: active ? 800 : 500, fontSize:13, cursor:"pointer",
+                      boxShadow: active ? "0 0 0 3px " + p.cor + "22" : "none" }}>
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Observação */}
           <div style={{ gridColumn:"1/-1" }}>
             <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Observação</div>
@@ -4794,6 +4819,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
   const [pagarAte, setPagarAte] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCat, setFilterCat] = useState("all");
+  const [filterPrioridade, setFilterPrioridade] = useState("all-pr");
   const [searchPagar, setSearchPagar] = useState("");
   const [novaCat, setNovaCat] = useState("");
   const [fluxoDe, setFluxoDe] = useState("");
@@ -4816,11 +4842,19 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
     });
     if (filterStatus !== "all") r = r.filter(c => c.status === filterStatus);
     if (filterCat !== "all") r = r.filter(c => c.categoria === filterCat);
+    if (filterPrioridade !== "all-pr") r = r.filter(c => (c.prioridade||"media") === filterPrioridade);
     if (searchPagar) r = r.filter(c => c.descricao.toLowerCase().includes(searchPagar.toLowerCase()));
     if (pagarDe) r = r.filter(c => c.vencimento && c.vencimento >= pagarDe);
     if (pagarAte) r = r.filter(c => c.vencimento && c.vencimento <= pagarAte);
-    return r.sort((a,b) => (a.vencimento||"9999") > (b.vencimento||"9999") ? 1 : -1);
-  }, [contasPagar, filterStatus, filterCat, searchPagar, pagarDe, pagarAte]);
+    // Ordenar: alta > media > baixa > sem prioridade, depois por vencimento
+    const ordPr = { alta:0, media:1, baixa:2 };
+    return r.sort((a,b) => {
+      var pa = ordPr[a.prioridade||"media"] ?? 1;
+      var pb = ordPr[b.prioridade||"media"] ?? 1;
+      if (pa !== pb) return pa - pb;
+      return (a.vencimento||"9999") > (b.vencimento||"9999") ? 1 : -1;
+    });
+  }, [contasPagar, filterStatus, filterCat, filterPrioridade, searchPagar, pagarDe, pagarAte]);
 
   // ── Totais ───────────────────────────────────────────────
   const totalPagar   = contasPagar.filter(c=>c.status!=="Pago").reduce((s,c)=>s+parseFloat(c.valor||0),0);
@@ -5307,6 +5341,33 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
               {categoriasPagar.map(c=><option key={c} value={c}>{c}</option>)}
             </select>
           </div>
+          {/* Filtro de prioridade */}
+          <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:10, flexWrap:"wrap" }}>
+            <span style={{ fontSize:12, color:"#64748b", fontWeight:600 }}>Prioridade:</span>
+            {[
+              { key:"all-pr", label:"Todas",      cor:"#64748b", bg:"#f8fafc", activeBg:"#334155" },
+              { key:"alta",   label:"!!! Alta",   cor:"#dc2626", bg:"#fef2f2", activeBg:"#dc2626" },
+              { key:"media",  label:"!! Média",   cor:"#d97706", bg:"#fffbeb", activeBg:"#d97706" },
+              { key:"baixa",  label:"! Baixa",    cor:"#15803d", bg:"#f0fdf4", activeBg:"#15803d" },
+            ].map(function(p) {
+              var isActive = filterPrioridade === p.key;
+              return (
+                <button key={p.key} onClick={function(){ setFilterPrioridade(p.key); }}
+                  style={{ padding:"5px 14px", borderRadius:20,
+                    border: isActive ? "2px solid " + p.activeBg : "1px solid #e2e8f0",
+                    background: isActive ? p.activeBg : p.bg,
+                    color: isActive ? "#fff" : p.cor,
+                    fontWeight: isActive ? 700 : 500, fontSize:12, cursor:"pointer" }}>
+                  {p.label}
+                  {p.key !== "all-pr" && (
+                    <span style={{ marginLeft:5, fontSize:10, opacity:0.8 }}>
+                      ({contasPagar.filter(function(c){ return (c.prioridade||"media")===p.key && c.status!=="Pago"; }).length})
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
           <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px", marginBottom:14 }}>
             <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", marginBottom:8 }}>
               <span style={{ fontSize:12, color:"#64748b", fontWeight:600 }}>📅 Vencimento:</span>
@@ -5376,17 +5437,52 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
             ))}
           </div>
           {selecionadas.length > 0 && (
-            <div style={{ display:"flex", alignItems:"center", gap:12, background:"#0f172a", borderRadius:10, padding:"12px 16px", marginBottom:10 }}>
-              <span style={{ color:"#fff", fontWeight:700, fontSize:13 }}>{selecionadas.length} conta(s) selecionada(s)</span>
-              <span style={{ color:"#94a3b8", fontSize:12 }}>Total: {fmt(contasFiltradas.filter(function(c) { return selecionadas.includes(c.id); }).reduce(function(s,c) { return s + parseFloat(c.valor||0); }, 0))}</span>
-              <button onClick={function() { setShowModalMultiBaixa(true); }}
-                style={{ background:"#15803d", border:"none", color:"#fff", fontWeight:700, padding:"7px 16px", borderRadius:8, cursor:"pointer", fontSize:12, marginLeft:"auto" }}>
-                💸 Dar Baixa em Lote
-              </button>
-              <button onClick={function() { setSelecionadas([]); }}
-                style={{ background:"#334155", border:"none", color:"#94a3b8", padding:"7px 12px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
-                Cancelar
-              </button>
+            <div style={{ background:"#0f172a", borderRadius:12, padding:"12px 16px", marginBottom:10 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+                <span style={{ color:"#fff", fontWeight:700, fontSize:13 }}>{selecionadas.length} conta(s) selecionada(s)</span>
+                <span style={{ color:"#94a3b8", fontSize:12 }}>
+                  Total: {fmt(contasFiltradas.filter(function(c) { return selecionadas.includes(c.id); }).reduce(function(s,c) { return s + parseFloat(c.valor||0); }, 0))}
+                </span>
+                <div style={{ marginLeft:"auto", display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+                  {/* Alterar prioridade em massa */}
+                  <span style={{ color:"#94a3b8", fontSize:12 }}>Prioridade:</span>
+                  {[
+                    { key:"baixa", label:"! Baixa",  cor:"#15803d", bg:"#f0fdf4" },
+                    { key:"media", label:"!! Média",  cor:"#d97706", bg:"#fffbeb" },
+                    { key:"alta",  label:"!!! Alta",  cor:"#dc2626", bg:"#fef2f2" },
+                  ].map(function(p) {
+                    return (
+                      <button key={p.key}
+                        onClick={function() {
+                          var updated = contasPagar.map(function(c) {
+                            return selecionadas.includes(c.id) ? Object.assign({}, c, { prioridade: p.key }) : c;
+                          });
+                          setContasPagar(updated);
+                          saveLS("contas_pagar", updated);
+                        }}
+                        style={{ background:p.bg, border:"none", color:p.cor, fontWeight:700, padding:"6px 12px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                  <div style={{ width:1, height:24, background:"#334155", margin:"0 4px" }} />
+                  <button onClick={function() { setShowModalMultiBaixa(true); }}
+                    style={{ background:"#15803d", border:"none", color:"#fff", fontWeight:700, padding:"7px 16px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+                    💸 Baixa em Lote
+                  </button>
+                  <button onClick={function() {
+                    if (!window.confirm("Excluir " + selecionadas.length + " conta(s)?")) return;
+                    var updated = contasPagar.filter(function(c) { return !selecionadas.includes(c.id); });
+                    setContasPagar(updated); saveLS("contas_pagar", updated); setSelecionadas([]);
+                  }} style={{ background:"#7f1d1d", border:"none", color:"#fca5a5", fontWeight:700, padding:"7px 12px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+                    🗑 Excluir
+                  </button>
+                  <button onClick={function() { setSelecionadas([]); }}
+                    style={{ background:"#334155", border:"none", color:"#94a3b8", padding:"7px 12px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+                    ✕ Cancelar
+                  </button>
+                </div>
+              </div>
             </div>
           )}
           <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
@@ -5403,7 +5499,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                       style={{ cursor:"pointer" }}
                     />
                   </th>
-                  {["Descrição","Categoria","Valor","Vencimento","Status","Conta paga","Anexos","Ações"].map(function(h) {
+                  {["Prioridade","Descrição","Categoria","Valor","Vencimento","Status","Conta paga","Anexos","Ações"].map(function(h) {
                     return <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>;
                   })}
                 </tr>
@@ -5427,6 +5523,21 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                             style={{ cursor:"pointer" }}
                           />
                         )}
+                      </td>
+                      <td style={{ padding:"10px 6px", textAlign:"center", width:70 }}>
+                        {(function() {
+                          var pr = c.prioridade || "media";
+                          var cfg = pr === "alta"
+                            ? { label:"!!!", title:"Alta Prioridade", cor:"#dc2626", bg:"#fef2f2", border:"#fecaca" }
+                            : pr === "baixa"
+                            ? { label:"!", title:"Baixa Prioridade", cor:"#15803d", bg:"#f0fdf4", border:"#bbf7d0" }
+                            : { label:"!!", title:"Média Prioridade", cor:"#d97706", bg:"#fffbeb", border:"#fde68a" };
+                          return (
+                            <span title={cfg.title} style={{ fontSize:13, fontWeight:800, color:cfg.cor, background:cfg.bg, border:"1px solid " + cfg.border, padding:"3px 8px", borderRadius:6, display:"inline-block", cursor:"default", letterSpacing:1 }}>
+                              {cfg.label}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td style={{ padding:"10px 14px", fontSize:13, color:"#0f172a", fontWeight:500 }}>
                         <div>{c.descricao}

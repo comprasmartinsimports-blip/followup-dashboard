@@ -4153,7 +4153,7 @@ function ModalConta({ conta, categoriasPagar, fornecedores, onSave, onClose }) {
                       {isImg && <img src={a.base64} alt={a.nome} style={{ width:36, height:36, objectFit:"cover", borderRadius:6, border:"1px solid #e2e8f0", flexShrink:0 }} />}
                       <a href={a.base64} download={a.nome}
                         style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", width:26, height:26, borderRadius:6, fontSize:13, display:"flex", alignItems:"center", justifyContent:"center", textDecoration:"none", flexShrink:0 }}>⬇</a>
-                      <button onClick={() => set("anexos", (form.anexos||[]).filter((_,j)=>j!==i))}
+                      <button onClick={() => { const idx2=i; set("anexos", (form.anexos||[]).filter((_,j)=>j!==idx2)); }}
                         style={{ background:"#fef2f2", border:"none", color:"#dc2626", width:26, height:26, borderRadius:6, cursor:"pointer", fontSize:11, flexShrink:0 }}>✕</button>
                     </div>
                   );

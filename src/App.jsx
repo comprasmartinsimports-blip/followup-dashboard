@@ -2748,39 +2748,174 @@ function fileToBase64(file) {
 }
 
 // ── Modal de Fornecedor ──────────────────────────────────────
-function ModalFornecedor({ fornecedor, onSave, onClose }) {
+function ModalFornecedor({ fornecedor, tipoPadrao, onSave, onClose }) {
+  var TIPOS_CADASTRO = [
+    { key:"Fornecedor",            icon:"🏭", label:"Fornecedor" },
+    { key:"Cliente",               icon:"🧑‍💼", label:"Cliente" },
+    { key:"Prestador de Serviço",  icon:"🔧", label:"Prestador de Serviço" },
+    { key:"Transportadora",        icon:"🚚", label:"Transportadora" },
+    { key:"Contador",              icon:"📊", label:"Contador" },
+    { key:"Outro",                 icon:"🏢", label:"Outro" },
+  ];
   const [form, setForm] = useState(fornecedor || {
-    id: Date.now(), nome: "", cnpj: "", telefone: "", email: "", contato: "", obs: ""
+    id: Date.now(), tipo: tipoPadrao || "Fornecedor", nome: "", cnpj: "", cpf: "",
+    ie: "", telefone: "", celular: "", email: "", contato: "", site: "",
+    cep: "", endereco: "", numero: "", complemento: "", bairro: "", cidade: "", estado: "",
+    obs: "", ativo: true,
   });
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const set = (k, v) => setForm(function(f) { return Object.assign({}, f, { [k]: v }); });
+  var tipoInfo = TIPOS_CADASTRO.find(function(t) { return t.key === form.tipo; }) || TIPOS_CADASTRO[0];
+
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:24 }}>
-      <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:480, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)", maxHeight:"90vh", overflowY:"auto" }}>
+      <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:560, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)", maxHeight:"92vh", overflowY:"auto" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
-          <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>{fornecedor ? "Editar Fornecedor" : "Novo Fornecedor"}</div>
+          <div>
+            <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>{fornecedor ? "Editar Cadastro" : "Novo Cadastro"}</div>
+            <div style={{ fontSize:12, color:"#94a3b8", marginTop:2 }}>Clientes, fornecedores, prestadores e mais</div>
+          </div>
           <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
         </div>
-        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-          {[
-            { k:"nome", label:"Nome *", placeholder:"Nome do fornecedor" },
-            { k:"cnpj", label:"CNPJ", placeholder:"00.000.000/0000-00" },
-            { k:"contato", label:"Contato", placeholder:"Nome do contato" },
-            { k:"telefone", label:"Telefone", placeholder:"(11) 99999-9999" },
-            { k:"email", label:"E-mail", placeholder:"email@fornecedor.com" },
-            { k:"obs", label:"Observação", placeholder:"Opcional" },
-          ].map(f => (
-            <div key={f.k}>
-              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>{f.label}</div>
-              <input value={form[f.k]} onChange={e => set(f.k, e.target.value)} placeholder={f.placeholder}
-                style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
-            </div>
-          ))}
+
+        {/* Tipo */}
+        <div style={{ marginBottom:20 }}>
+          <div style={{ fontSize:11, color:"#94a3b8", marginBottom:8, fontWeight:600, textTransform:"uppercase" }}>Tipo de Cadastro *</div>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+            {TIPOS_CADASTRO.map(function(t) {
+              var active = form.tipo === t.key;
+              return (
+                <button key={t.key} onClick={function() { set("tipo", t.key); }}
+                  style={{ padding:"7px 14px", borderRadius:20, border: active ? "2px solid #0f172a" : "1px solid #e2e8f0",
+                    background: active ? "#0f172a" : "#f8fafc", color: active ? "#fff" : "#64748b",
+                    fontWeight:600, fontSize:12, cursor:"pointer", display:"flex", alignItems:"center", gap:5 }}>
+                  {t.icon} {t.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
-        <div style={{ display:"flex", gap:8, marginTop:20 }}>
+
+        {/* Dados principais */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>
+          <div style={{ gridColumn:"1/-1" }}>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Nome / Razão Social *</div>
+            <input value={form.nome} onChange={function(e){ set("nome", e.target.value); }} placeholder={"Nome do " + tipoInfo.label.toLowerCase()}
+              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+          </div>
+          <div>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>CNPJ</div>
+            <input value={form.cnpj} onChange={function(e){ set("cnpj", e.target.value); }} placeholder="00.000.000/0000-00"
+              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+          </div>
+          <div>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>CPF</div>
+            <input value={form.cpf} onChange={function(e){ set("cpf", e.target.value); }} placeholder="000.000.000-00"
+              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+          </div>
+          <div>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Inscrição Estadual</div>
+            <input value={form.ie} onChange={function(e){ set("ie", e.target.value); }} placeholder="IE ou ISENTO"
+              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+          </div>
+          <div>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Contato / Responsável</div>
+            <input value={form.contato} onChange={function(e){ set("contato", e.target.value); }} placeholder="Nome do contato"
+              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+          </div>
+        </div>
+
+        {/* Contato */}
+        <div style={{ background:"#f8fafc", borderRadius:10, padding:"14px", marginBottom:12 }}>
+          <div style={{ fontSize:11, color:"#94a3b8", marginBottom:10, fontWeight:700, textTransform:"uppercase" }}>📞 Contato</div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+            <div>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Telefone</div>
+              <input value={form.telefone} onChange={function(e){ set("telefone", e.target.value); }} placeholder="(11) 3333-3333"
+                style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+            </div>
+            <div>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Celular / WhatsApp</div>
+              <input value={form.celular} onChange={function(e){ set("celular", e.target.value); }} placeholder="(11) 99999-9999"
+                style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+            </div>
+            <div>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>E-mail</div>
+              <input value={form.email} onChange={function(e){ set("email", e.target.value); }} placeholder="email@empresa.com"
+                style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+            </div>
+            <div>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Site</div>
+              <input value={form.site} onChange={function(e){ set("site", e.target.value); }} placeholder="www.empresa.com"
+                style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+            </div>
+          </div>
+        </div>
+
+        {/* Endereço */}
+        <div style={{ background:"#f8fafc", borderRadius:10, padding:"14px", marginBottom:12 }}>
+          <div style={{ fontSize:11, color:"#94a3b8", marginBottom:10, fontWeight:700, textTransform:"uppercase" }}>📍 Endereço</div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+            <div>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>CEP</div>
+              <input value={form.cep} onChange={function(e){ set("cep", e.target.value); }} placeholder="00000-000"
+                style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+            </div>
+            <div>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Número</div>
+              <input value={form.numero} onChange={function(e){ set("numero", e.target.value); }} placeholder="123"
+                style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+            </div>
+            <div style={{ gridColumn:"1/-1" }}>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Logradouro</div>
+              <input value={form.endereco} onChange={function(e){ set("endereco", e.target.value); }} placeholder="Rua, Av, Travessa..."
+                style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+            </div>
+            <div>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Complemento</div>
+              <input value={form.complemento} onChange={function(e){ set("complemento", e.target.value); }} placeholder="Apto, Sala..."
+                style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+            </div>
+            <div>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Bairro</div>
+              <input value={form.bairro} onChange={function(e){ set("bairro", e.target.value); }} placeholder="Bairro"
+                style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+            </div>
+            <div>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Cidade</div>
+              <input value={form.cidade} onChange={function(e){ set("cidade", e.target.value); }} placeholder="Cidade"
+                style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+            </div>
+            <div>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Estado</div>
+              <select value={form.estado} onChange={function(e){ set("estado", e.target.value); }}
+                style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"9px 12px", borderRadius:8, fontSize:13 }}>
+                <option value="">— UF —</option>
+                {["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"].map(function(uf){ return <option key={uf} value={uf}>{uf}</option>; })}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Observação e status */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:10, marginBottom:20, alignItems:"flex-start" }}>
+          <div>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Observação</div>
+            <input value={form.obs} onChange={function(e){ set("obs", e.target.value); }} placeholder="Condições, notas, informações extras..."
+              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+          </div>
+          <div style={{ paddingTop:24 }}>
+            <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer" }}>
+              <input type="checkbox" checked={form.ativo !== false} onChange={function(e){ set("ativo", e.target.checked); }} />
+              <span style={{ fontSize:13, fontWeight:600, color:"#0f172a" }}>Ativo</span>
+            </label>
+          </div>
+        </div>
+
+        <div style={{ display:"flex", gap:8 }}>
           <button onClick={onClose} style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
-          <button onClick={() => { if (!form.nome) return; onSave(form); onClose(); }} disabled={!form.nome}
-            style={{ flex:2, background:!form.nome?"#f1f5f9":"#0f172a", border:"none", color:!form.nome?"#94a3b8":"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:!form.nome?"not-allowed":"pointer" }}>
-            Salvar
+          <button onClick={function(){ if (!form.nome) return; onSave(form); onClose(); }} disabled={!form.nome}
+            style={{ flex:2, background: form.nome ? "#0f172a" : "#f1f5f9", border:"none", color: form.nome ? "#fff" : "#94a3b8", fontWeight:700, padding:"11px", borderRadius:10, cursor: form.nome ? "pointer" : "not-allowed" }}>
+            Salvar {tipoInfo.icon} {tipoInfo.label}
           </button>
         </div>
       </div>
@@ -3098,7 +3233,7 @@ function ModalProduto({ produto, fornecedores, listings, onSave, onClose }) {
 
 // ── ProdutosTab Principal ────────────────────────────────────
 function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, listings, costs, setCosts }) {
-  const [prodTab, setProdTab] = useState("lista"); // lista | fornecedores
+  const [prodTab, setProdTab] = useState("lista"); // lista | cadastros
   const [showModalProd, setShowModalProd] = useState(false);
   const [showModalForn, setShowModalForn] = useState(false);
   const [editingProd, setEditingProd] = useState(null);
@@ -3106,6 +3241,9 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [filtroTipo, setFiltroTipo] = useState("todos");
+  const [searchCad, setSearchCad] = useState("");
+  const [tipoPadraoCad, setTipoPadraoCad] = useState("Fornecedor");
 
   function saveProd(form) {
     const updated = editingProd ? produtos.map(p => p.id===form.id?form:p) : [...produtos, {...form, id:Date.now()}];
@@ -3165,14 +3303,16 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
       {/* Sub-tabs */}
       <div style={{ display:"flex", gap:2, marginBottom:16, background:"#f1f5f9", padding:4, borderRadius:10, width:"fit-content" }}>
         {[
-          { key:"lista", label:"📦 Produtos" },
-          { key:"fornecedores", label:"🏭 Fornecedores" },
-        ].map(t => (
-          <button key={t.key} onClick={() => setProdTab(t.key)}
-            style={{ background:prodTab===t.key?"#fff":"transparent", border:"none", color:prodTab===t.key?"#0f172a":"#94a3b8", padding:"8px 18px", cursor:"pointer", fontFamily:"inherit", fontSize:13, borderRadius:8, fontWeight:prodTab===t.key?700:500, boxShadow:prodTab===t.key?"0 1px 3px rgba(0,0,0,.08)":"none" }}>
-            {t.label}
-          </button>
-        ))}
+          { key:"lista",     label:"📦 Produtos" },
+          { key:"cadastros", label:"🗂️ Cadastros" },
+        ].map(function(t) {
+          return (
+            <button key={t.key} onClick={function(){ setProdTab(t.key); }}
+              style={{ background:prodTab===t.key?"#fff":"transparent", border:"none", color:prodTab===t.key?"#0f172a":"#94a3b8", padding:"8px 18px", cursor:"pointer", fontFamily:"inherit", fontSize:13, borderRadius:8, fontWeight:prodTab===t.key?700:500, boxShadow:prodTab===t.key?"0 1px 3px rgba(0,0,0,.08)":"none" }}>
+              {t.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* ── LISTA DE PRODUTOS ── */}
@@ -3315,50 +3455,149 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
       )}
 
       {/* ── FORNECEDORES ── */}
-      {prodTab === "fornecedores" && (
+      {prodTab === "cadastros" && (
         <div>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-            <div style={{ fontWeight:700, fontSize:15, color:"#0f172a" }}>Fornecedores Cadastrados</div>
-            <button onClick={() => { setEditingForn(null); setShowModalForn(true); }}
-              style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Novo Fornecedor</button>
-          </div>
-          {fornecedores.length === 0 ? (
-            <div style={{ background:"#f8fafc", border:"2px dashed #e2e8f0", borderRadius:12, padding:40, textAlign:"center", color:"#94a3b8" }}>
-              <div style={{ fontSize:32, marginBottom:8 }}>🏭</div>
-              <div style={{ fontWeight:600 }}>Nenhum fornecedor cadastrado</div>
+          {/* Filtros e ações */}
+          <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
+            <button onClick={function(){ setEditingForn(null); setTipoPadraoCad("Fornecedor"); setShowModalForn(true); }}
+              style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Novo Cadastro</button>
+            <div style={{ position:"relative", flex:1, minWidth:180 }}>
+              <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
+              <input value={searchCad} onChange={function(e){ setSearchCad(e.target.value); }} placeholder="Buscar nome, CNPJ, cidade..."
+                style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px 8px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
             </div>
-          ) : (
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:12 }}>
-              {fornecedores.map(f => {
-                const qtdProdutos = produtos.filter(p => p.fornecedorId === f.id).length;
-                return (
-                  <div key={f.id} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"18px 20px", position:"relative" }}>
-                    <div style={{ position:"absolute", top:12, right:12, display:"flex", gap:4 }}>
-                      <button onClick={() => { setEditingForn(f); setShowModalForn(true); }}
-                        style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:12 }}>✏️</button>
-                      <button onClick={() => deleteForn(f.id)}
-                        style={{ background:"#fef2f2", border:"none", color:"#dc2626", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:12 }}>🗑</button>
-                    </div>
-                    <div style={{ fontWeight:700, fontSize:15, color:"#0f172a", marginBottom:4, paddingRight:70 }}>{f.nome}</div>
-                    <div style={{ fontSize:11, color:"#94a3b8", marginBottom:10 }}>{f.cnpj || "CNPJ não informado"}</div>
-                    <div style={{ display:"flex", flexDirection:"column", gap:4, fontSize:12, color:"#64748b" }}>
-                      {f.contato && <span>👤 {f.contato}</span>}
-                      {f.telefone && <span>📞 {f.telefone}</span>}
-                      {f.email && <span>✉️ {f.email}</span>}
-                    </div>
-                    <div style={{ marginTop:10, paddingTop:10, borderTop:"1px solid #f1f5f9", fontSize:12, color:"#94a3b8" }}>
-                      {qtdProdutos} produto(s) vinculado(s)
-                    </div>
-                  </div>
-                );
-              })}
+          </div>
+
+          {/* Filtro por tipo */}
+          <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
+            {[
+              { key:"todos",                label:"Todos",              icon:"🗂️" },
+              { key:"Fornecedor",           label:"Fornecedores",       icon:"🏭" },
+              { key:"Cliente",              label:"Clientes",           icon:"🧑‍💼" },
+              { key:"Prestador de Serviço", label:"Prestadores",        icon:"🔧" },
+              { key:"Transportadora",       label:"Transportadoras",    icon:"🚚" },
+              { key:"Contador",             label:"Contadores",         icon:"📊" },
+              { key:"Outro",                label:"Outros",             icon:"🏢" },
+            ].map(function(t) {
+              var active = filtroTipo === t.key;
+              var count = t.key === "todos" ? fornecedores.length : fornecedores.filter(function(f){ return f.tipo === t.key; }).length;
+              if (count === 0 && t.key !== "todos") return null;
+              return (
+                <button key={t.key} onClick={function(){ setFiltroTipo(t.key); }}
+                  style={{ padding:"6px 14px", borderRadius:20, border: active ? "2px solid #0f172a" : "1px solid #e2e8f0",
+                    background: active ? "#0f172a" : "#f8fafc", color: active ? "#fff" : "#64748b",
+                    fontWeight:600, fontSize:12, cursor:"pointer" }}>
+                  {t.icon} {t.label} <span style={{ opacity:0.7, fontSize:11 }}>({count})</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Cards de ação rápida para criar */}
+          {fornecedores.length === 0 && (
+            <div style={{ marginBottom:20 }}>
+              <div style={{ fontSize:13, color:"#64748b", marginBottom:12, fontWeight:600 }}>Criar novo cadastro:</div>
+              <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+                {[
+                  { tipo:"Fornecedor",           icon:"🏭", cor:"#0891b2" },
+                  { tipo:"Cliente",              icon:"🧑‍💼", cor:"#15803d" },
+                  { tipo:"Prestador de Serviço", icon:"🔧", cor:"#7c3aed" },
+                  { tipo:"Transportadora",       icon:"🚚", cor:"#d97706" },
+                ].map(function(t) {
+                  return (
+                    <button key={t.tipo} onClick={function(){ setEditingForn(null); setTipoPadraoCad(t.tipo); setShowModalForn(true); }}
+                      style={{ padding:"12px 20px", borderRadius:12, border:"2px dashed #e2e8f0", background:"#f8fafc", cursor:"pointer", display:"flex", alignItems:"center", gap:8, fontSize:13, fontWeight:600, color:"#64748b" }}>
+                      <span style={{ fontSize:20 }}>{t.icon}</span> + {t.tipo}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
+
+          {/* Lista de cadastros */}
+          {(function() {
+            var lista = fornecedores.filter(function(f) {
+              if (filtroTipo !== "todos" && f.tipo !== filtroTipo) return false;
+              if (searchCad) {
+                var q = searchCad.toLowerCase();
+                return (f.nome&&f.nome.toLowerCase().includes(q)) || (f.cnpj&&f.cnpj.includes(q)) || (f.cidade&&f.cidade.toLowerCase().includes(q)) || (f.email&&f.email.toLowerCase().includes(q));
+              }
+              return true;
+            });
+
+            var TIPO_CONFIG = {
+              "Fornecedor":           { icon:"🏭", cor:"#0891b2", bg:"#ecfeff" },
+              "Cliente":              { icon:"🧑‍💼", cor:"#15803d", bg:"#f0fdf4" },
+              "Prestador de Serviço": { icon:"🔧", cor:"#7c3aed", bg:"#f5f3ff" },
+              "Transportadora":       { icon:"🚚", cor:"#d97706", bg:"#fffbeb" },
+              "Contador":             { icon:"📊", cor:"#0f172a", bg:"#f8fafc" },
+              "Outro":                { icon:"🏢", cor:"#64748b", bg:"#f8fafc" },
+            };
+
+            if (lista.length === 0) {
+              return (
+                <div style={{ background:"#f8fafc", border:"2px dashed #e2e8f0", borderRadius:12, padding:40, textAlign:"center", color:"#94a3b8" }}>
+                  <div style={{ fontSize:32, marginBottom:8 }}>🗂️</div>
+                  <div style={{ fontWeight:600, marginBottom:4 }}>Nenhum cadastro encontrado</div>
+                  <div style={{ fontSize:13 }}>Clique em "+ Novo Cadastro" para começar</div>
+                </div>
+              );
+            }
+
+            return (
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))", gap:12 }}>
+                {lista.map(function(f) {
+                  var cfg = TIPO_CONFIG[f.tipo] || TIPO_CONFIG["Outro"];
+                  var qtdProdutos = f.tipo === "Fornecedor" ? produtos.filter(function(p){ return p.fornecedorId === f.id; }).length : 0;
+                  return (
+                    <div key={f.id} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"18px 20px", position:"relative" }}>
+                      {/* Tipo badge */}
+                      <span style={{ position:"absolute", top:12, left:16, fontSize:10, fontWeight:700, color:cfg.cor, background:cfg.bg, padding:"2px 8px", borderRadius:20, border:"1px solid " + cfg.cor + "33" }}>
+                        {cfg.icon} {f.tipo || "Fornecedor"}
+                      </span>
+                      {/* Ações */}
+                      <div style={{ position:"absolute", top:10, right:12, display:"flex", gap:4 }}>
+                        <button onClick={function(){ setEditingForn(f); setShowModalForn(true); }}
+                          style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:12 }}>✏️</button>
+                        <button onClick={function(){ deleteForn(f.id); }}
+                          style={{ background:"#fef2f2", border:"none", color:"#dc2626", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:12 }}>🗑</button>
+                      </div>
+                      {/* Info principal */}
+                      <div style={{ marginTop:26, fontWeight:700, fontSize:15, color:"#0f172a", marginBottom:2 }}>{f.nome}</div>
+                      {f.ativo === false && <span style={{ fontSize:10, background:"#fef2f2", color:"#dc2626", padding:"1px 6px", borderRadius:4, fontWeight:600 }}>INATIVO</span>}
+                      <div style={{ fontSize:11, color:"#94a3b8", marginBottom:10 }}>
+                        {f.cnpj ? "CNPJ: " + f.cnpj : f.cpf ? "CPF: " + f.cpf : "Sem documento"}
+                        {f.ie ? " · IE: " + f.ie : ""}
+                      </div>
+                      <div style={{ display:"flex", flexDirection:"column", gap:3, fontSize:12, color:"#64748b" }}>
+                        {f.contato && <span>👤 {f.contato}</span>}
+                        {f.celular && <span>📱 {f.celular}</span>}
+                        {f.telefone && !f.celular && <span>📞 {f.telefone}</span>}
+                        {f.email && <span>✉️ {f.email}</span>}
+                        {(f.cidade || f.estado) && <span>📍 {[f.cidade, f.estado].filter(Boolean).join(" / ")}</span>}
+                      </div>
+                      {qtdProdutos > 0 && (
+                        <div style={{ marginTop:10, paddingTop:10, borderTop:"1px solid #f1f5f9", fontSize:12, color:"#94a3b8" }}>
+                          📦 {qtdProdutos} produto(s) vinculado(s)
+                        </div>
+                      )}
+                      {f.obs && (
+                        <div style={{ marginTop:6, fontSize:11, color:"#94a3b8", fontStyle:"italic", borderTop: qtdProdutos > 0 ? "none" : "1px solid #f1f5f9", paddingTop: qtdProdutos > 0 ? 0 : 6 }}>
+                          💬 {f.obs.slice(0, 60)}{f.obs.length > 60 ? "..." : ""}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
       )}
 
       {showModalProd && <ModalProduto produto={editingProd} fornecedores={fornecedores} listings={listings} onSave={saveProd} onClose={() => { setShowModalProd(false); setEditingProd(null); }} />}
-      {showModalForn && <ModalFornecedor fornecedor={editingForn} onSave={saveForn} onClose={() => { setShowModalForn(false); setEditingForn(null); }} />}
+      {showModalForn && <ModalFornecedor fornecedor={editingForn} tipoPadrao={tipoPadraoCad} onSave={saveForn} onClose={function(){ setShowModalForn(false); setEditingForn(null); }} />}
     </div>
   );
 }

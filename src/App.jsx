@@ -3743,20 +3743,133 @@ function ModalContaBancaria({ conta, onSave, onClose }) {
 
 // ── Modal de Baixa de Pagamento ──────────────────────────────
 function ModalBaixa({ conta, contasBancarias, onConfirm, onClose }) {
+  var valorTotal = parseFloat(conta.valor || 0);
   const [contaBancariaId, setContaBancariaId] = useState(contasBancarias[0]?.id || "");
   const [dataPagamento, setDataPagamento] = useState(new Date().toLocaleDateString("sv-SE"));
   const [obs, setObs] = useState("");
+  const [tipoPagamento, setTipoPagamento] = useState("total");
+  const [valorParcial, setValorParcial] = useState(valorTotal.toFixed(2));
+
+  var valorFinal = tipoPagamento === "total" ? valorTotal : parseFloat(valorParcial || 0);
+  var canConfirm = contaBancariaId && dataPagamento && valorFinal > 0;
+
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:500, padding:24 }}>
-      <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:400, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
+      <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:440, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-          <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>Dar Baixa</div>
+          <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>💸 Dar Baixa</div>
           <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
         </div>
         <div style={{ background:"#f8fafc", borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
           <div style={{ fontSize:12, color:"#94a3b8", marginBottom:2 }}>Conta a pagar</div>
           <div style={{ fontSize:14, fontWeight:700, color:"#0f172a" }}>{conta.descricao}</div>
-          <div style={{ fontSize:16, fontWeight:800, color:"#dc2626", marginTop:4 }}>{`R$ ${parseFloat(conta.valor||0).toFixed(2).replace(".",",")}`}</div>
+          <div style={{ fontSize:16, fontWeight:800, color:"#dc2626", marginTop:4 }}>R$ {valorTotal.toFixed(2).replace(".",",")}</div>
+        </div>
+        <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:16 }}>
+          <div>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:8, fontWeight:600, textTransform:"uppercase" }}>Tipo de pagamento</div>
+            <div style={{ display:"flex", gap:8 }}>
+              {[{k:"total",l:"💯 Valor Total"},{k:"parcial",l:"✂️ Valor Parcial"}].map(function(op) {
+                var active = tipoPagamento === op.k;
+                return (
+                  <button key={op.k} onClick={function() { setTipoPagamento(op.k); }}
+                    style={{ flex:1, padding:"9px", borderRadius:8, border: active ? "2px solid #0f172a" : "1px solid #e2e8f0",
+                      background: active ? "#0f172a" : "#f8fafc", color: active ? "#fff" : "#64748b",
+                      fontWeight:600, fontSize:12, cursor:"pointer" }}>
+                    {op.l}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {tipoPagamento === "parcial" && (
+            <div>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Valor a pagar agora (R$)</div>
+              <input
+                type="number"
+                value={valorParcial}
+                onChange={function(e) { setValorParcial(e.target.value); }}
+                placeholder="0,00"
+                max={valorTotal}
+                style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }}
+              />
+              {parseFloat(valorParcial||0) < valorTotal && parseFloat(valorParcial||0) > 0 && (
+                <div style={{ fontSize:11, color:"#d97706", marginTop:4 }}>
+                  Saldo restante: R$ {(valorTotal - parseFloat(valorParcial||0)).toFixed(2).replace(".",",")} — a conta ficará como Pago Parcial
+                </div>
+              )}
+            </div>
+          )}
+          <div>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Pagar com qual conta *</div>
+            {contasBancarias.length === 0 ? (
+              <div style={{ color:"#dc2626", fontSize:13 }}>⚠ Cadastre uma conta bancária primeiro</div>
+            ) : (
+              <select value={contaBancariaId} onChange={function(e) { setContaBancariaId(e.target.value); }}
+                style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", padding:"9px 12px", borderRadius:8, fontSize:13 }}>
+                {contasBancarias.map(function(c) { return <option key={c.id} value={c.id}>{c.nome}</option>; })}
+              </select>
+            )}
+          </div>
+          <div>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Data do pagamento</div>
+            <input type="date" value={dataPagamento} onChange={function(e) { setDataPagamento(e.target.value); }}
+              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", padding:"9px 12px", borderRadius:8, fontSize:13 }} />
+          </div>
+          <div>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Observação</div>
+            <input value={obs} onChange={function(e) { setObs(e.target.value); }} placeholder="Opcional"
+              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+          </div>
+          <div style={{ background: tipoPagamento==="total" ? "#f0fdf4" : "#fffbeb", border:"1px solid", borderColor: tipoPagamento==="total" ? "#bbf7d0" : "#fde68a", borderRadius:8, padding:"10px 14px" }}>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:2 }}>Valor a ser baixado</div>
+            <div style={{ fontSize:18, fontWeight:800, color: tipoPagamento==="total" ? "#15803d" : "#d97706" }}>
+              R$ {valorFinal.toFixed(2).replace(".",",")}
+            </div>
+          </div>
+        </div>
+        <div style={{ display:"flex", gap:8 }}>
+          <button onClick={onClose} style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
+          <button
+            onClick={function() { if (canConfirm) { onConfirm({ contaBancariaId, dataPagamento, obs, valorPago: valorFinal, parcial: tipoPagamento === "parcial" && valorFinal < valorTotal }); onClose(); } }}
+            disabled={!canConfirm}
+            style={{ flex:2, background: canConfirm ? "#15803d" : "#f1f5f9", border:"none", color: canConfirm ? "#fff" : "#94a3b8", fontWeight:700, padding:"11px", borderRadius:10, cursor: canConfirm ? "pointer" : "not-allowed" }}>
+            ✓ Confirmar Pagamento
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Modal de Baixa em Lote ──────────────────────────────────
+function ModalMultiBaixa({ contas, contasBancarias, onConfirm, onClose }) {
+  var total = contas.reduce(function(s,c){ return s + parseFloat(c.valor||0); }, 0);
+  const [contaBancariaId, setContaBancariaId] = useState(contasBancarias[0]?.id || "");
+  const [dataPagamento, setDataPagamento] = useState(new Date().toLocaleDateString("sv-SE"));
+  const [obs, setObs] = useState("");
+  var canConfirm = contaBancariaId && dataPagamento;
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:500, padding:24 }}>
+      <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:480, maxHeight:"90vh", overflowY:"auto", padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+          <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>💸 Baixa em Lote</div>
+          <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
+        </div>
+        <div style={{ background:"#f8fafc", borderRadius:10, padding:"12px 16px", marginBottom:16, maxHeight:160, overflowY:"auto" }}>
+          <div style={{ fontSize:11, color:"#94a3b8", marginBottom:8, fontWeight:600 }}>{contas.length} CONTA(S) SELECIONADA(S)</div>
+          {contas.map(function(c) {
+            return (
+              <div key={c.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"4px 0", borderBottom:"1px solid #f1f5f9" }}>
+                <span style={{ fontSize:12, color:"#0f172a" }}>{c.descricao}</span>
+                <span style={{ fontSize:12, fontWeight:700, color:"#dc2626" }}>R$ {parseFloat(c.valor||0).toFixed(2).replace(".",",")}</span>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ background:"#fef2f2", borderRadius:8, padding:"10px 14px", marginBottom:16, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <span style={{ fontSize:13, fontWeight:600, color:"#dc2626" }}>Total a pagar</span>
+          <span style={{ fontSize:20, fontWeight:800, color:"#dc2626" }}>R$ {total.toFixed(2).replace(".",",")}</span>
         </div>
         <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:16 }}>
           <div>
@@ -3764,29 +3877,30 @@ function ModalBaixa({ conta, contasBancarias, onConfirm, onClose }) {
             {contasBancarias.length === 0 ? (
               <div style={{ color:"#dc2626", fontSize:13 }}>⚠ Cadastre uma conta bancária primeiro</div>
             ) : (
-              <select value={contaBancariaId} onChange={e => setContaBancariaId(e.target.value)}
+              <select value={contaBancariaId} onChange={function(e){ setContaBancariaId(e.target.value); }}
                 style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", padding:"9px 12px", borderRadius:8, fontSize:13 }}>
-                {contasBancarias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                {contasBancarias.map(function(c){ return <option key={c.id} value={c.id}>{c.nome}</option>; })}
               </select>
             )}
           </div>
           <div>
             <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Data do pagamento</div>
-            <input type="date" value={dataPagamento} onChange={e => setDataPagamento(e.target.value)}
+            <input type="date" value={dataPagamento} onChange={function(e){ setDataPagamento(e.target.value); }}
               style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", padding:"9px 12px", borderRadius:8, fontSize:13 }} />
           </div>
           <div>
             <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Observação</div>
-            <input value={obs} onChange={e => setObs(e.target.value)} placeholder="Opcional"
+            <input value={obs} onChange={function(e){ setObs(e.target.value); }} placeholder="Opcional"
               style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
           </div>
         </div>
         <div style={{ display:"flex", gap:8 }}>
           <button onClick={onClose} style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
-          <button onClick={() => { if (!contaBancariaId || !dataPagamento) return; onConfirm({ contaBancariaId, dataPagamento, obs }); onClose(); }}
-            disabled={!contaBancariaId || contasBancarias.length === 0}
-            style={{ flex:2, background:contaBancariaId&&contasBancarias.length>0?"#15803d":"#f1f5f9", border:"none", color:contaBancariaId&&contasBancarias.length>0?"#fff":"#94a3b8", fontWeight:700, padding:"11px", borderRadius:10, cursor:contaBancariaId&&contasBancarias.length>0?"pointer":"not-allowed" }}>
-            ✓ Confirmar Pagamento
+          <button
+            onClick={function(){ if(canConfirm){ onConfirm({ contaBancariaId, dataPagamento, obs }); onClose(); } }}
+            disabled={!canConfirm}
+            style={{ flex:2, background: canConfirm?"#15803d":"#f1f5f9", border:"none", color: canConfirm?"#fff":"#94a3b8", fontWeight:700, padding:"11px", borderRadius:10, cursor: canConfirm?"pointer":"not-allowed" }}>
+            ✓ Confirmar Pagamento de {contas.length} Conta(s)
           </button>
         </div>
       </div>
@@ -4120,6 +4234,11 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
   const [filterCat, setFilterCat] = useState("all");
   const [searchPagar, setSearchPagar] = useState("");
   const [novaCat, setNovaCat] = useState("");
+  const [fluxoDe, setFluxoDe] = useState("");
+  const [fluxoAte, setFluxoAte] = useState("");
+  const [extratoContaId, setExtratoContaId] = useState(null);
+  const [selecionadas, setSelecionadas] = useState([]);
+  const [showModalMultiBaixa, setShowModalMultiBaixa] = useState(false);
 
   // ── Helpers ──────────────────────────────────────────────
   const statusColor = s => s==="Pago"?"#15803d":s==="Vencido"?"#dc2626":"#d97706";
@@ -4218,8 +4337,24 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
     setContasPagar(updated); saveLS("contas_pagar", updated);
   }
 
-  function confirmarBaixa(conta, { contaBancariaId, dataPagamento, obs }) {
-    let updatedContas = contasPagar.map(c => c.id===conta.id ? {...c, status:"Pago", contaBancariaId, dataPagamento} : c);
+  function confirmarMultiBaixa(ids, { contaBancariaId, dataPagamento, obs }) {
+    var updated = contasPagar.map(function(c) {
+      if (!ids.includes(c.id)) return c;
+      return Object.assign({}, c, { status:"Pago", dataPagamento, contaBancariaId });
+    });
+    setContasPagar(updated); saveLS("contas_pagar", updated);
+    var novosLanc = ids.map(function(id) {
+      var c = contasPagar.find(function(x){return x.id===id;});
+      return { id: Date.now()+Math.random(), tipo:"pagamento", descricao: c?c.descricao:"Conta", valor: parseFloat(c?c.valor:0), data:dataPagamento, contaBancariaId, contaPagarId:id };
+    });
+    setLancamentos(function(prev) { var u=[...prev,...novosLanc]; saveLS("lancamentos",u); return u; });
+    setSelecionadas([]);
+  }
+
+  function confirmarBaixa(conta, { contaBancariaId, dataPagamento, obs, valorPago, parcial }) {
+    var novoStatus = parcial ? "Pago Parcial" : "Pago";
+    var valorFinal = valorPago || parseFloat(conta.valor || 0);
+    let updatedContas = contasPagar.map(c => c.id===conta.id ? {...c, status: novoStatus, contaBancariaId, dataPagamento, valorPago: valorFinal} : c);
 
     // Se for recorrente, cria a próxima ocorrência automaticamente
     const rec = conta.recorrencia;
@@ -4466,7 +4601,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
           });
         });
 
-        const sortedDias = Object.keys(dias).sort().reverse().slice(0, 60);
+        // sortedDias já definido pelo filtro acima
         let saldoAcumulado = contasBancarias.reduce((s, c) => s + parseFloat(c.saldoInicial || 0), 0);
         
         // Calcula saldo acumulado na ordem cronológica
@@ -4481,8 +4616,31 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
         const totalEntradas = sortedDias.reduce((s,d) => s + dias[d].entradas.filter(e=>!e.previsto).reduce((a,e)=>a+e.valor,0), 0);
         const totalSaidas   = sortedDias.reduce((s,d) => s + dias[d].saidas.filter(e=>!e.previsto).reduce((a,e)=>a+e.valor,0), 0);
 
+        // Filtro por período
+        const fluxoSortedAll = Object.keys(dias).sort().reverse();
+        const fluxoFiltrado = fluxoSortedAll.filter(function(d) {
+          if (fluxoDe && d < fluxoDe) return false;
+          if (fluxoAte && d > fluxoAte) return false;
+          return true;
+        });
+        const sortedDias = fluxoFiltrado.slice(0, 90);
+
         return (
           <div>
+            {/* Filtro de período */}
+            <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:14, flexWrap:"wrap", background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px" }}>
+              <span style={{ fontSize:12, color:"#64748b", fontWeight:600 }}>📅 Período:</span>
+              <input type="date" value={fluxoDe} onChange={function(e) { setFluxoDe(e.target.value); }}
+                style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"6px 10px", borderRadius:8, fontSize:12 }} />
+              <span style={{ fontSize:12, color:"#94a3b8" }}>até</span>
+              <input type="date" value={fluxoAte} onChange={function(e) { setFluxoAte(e.target.value); }}
+                style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"6px 10px", borderRadius:8, fontSize:12 }} />
+              {(fluxoDe || fluxoAte) && (
+                <button onClick={function() { setFluxoDe(""); setFluxoAte(""); }}
+                  style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"5px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕ Limpar</button>
+              )}
+              <span style={{ fontSize:12, color:"#94a3b8", marginLeft:"auto" }}>{sortedDias.length} dia(s)</span>
+            </div>
             {/* Cards resumo */}
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:16 }}>
               {[
@@ -4645,12 +4803,38 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
               </div>
             ))}
           </div>
+          {selecionadas.length > 0 && (
+            <div style={{ display:"flex", alignItems:"center", gap:12, background:"#0f172a", borderRadius:10, padding:"12px 16px", marginBottom:10 }}>
+              <span style={{ color:"#fff", fontWeight:700, fontSize:13 }}>{selecionadas.length} conta(s) selecionada(s)</span>
+              <span style={{ color:"#94a3b8", fontSize:12 }}>Total: {fmt(contasFiltradas.filter(function(c) { return selecionadas.includes(c.id); }).reduce(function(s,c) { return s + parseFloat(c.valor||0); }, 0))}</span>
+              <button onClick={function() { setShowModalMultiBaixa(true); }}
+                style={{ background:"#15803d", border:"none", color:"#fff", fontWeight:700, padding:"7px 16px", borderRadius:8, cursor:"pointer", fontSize:12, marginLeft:"auto" }}>
+                💸 Dar Baixa em Lote
+              </button>
+              <button onClick={function() { setSelecionadas([]); }}
+                style={{ background:"#334155", border:"none", color:"#94a3b8", padding:"7px 12px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+                Cancelar
+              </button>
+            </div>
+          )}
           <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
             <table style={{ borderCollapse:"collapse", width:"100%" }}>
               <thead>
-                <tr>{["Descrição","Categoria","Valor","Vencimento","Status","Conta paga","Anexos","Ações"].map(h=>(
-                  <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>
-                ))}</tr>
+                <tr>
+                  <th style={{ fontSize:11, color:"#94a3b8", padding:"10px 14px", borderBottom:"1px solid #f1f5f9", background:"#fafafa", width:36 }}>
+                    <input type="checkbox"
+                      checked={contasFiltradas.filter(function(c){return c.status!=="Pago";}).length > 0 && contasFiltradas.filter(function(c){return c.status!=="Pago";}).every(function(c){return selecionadas.includes(c.id);})}
+                      onChange={function(e) {
+                        var pendentes = contasFiltradas.filter(function(c){return c.status!=="Pago";}).map(function(c){return c.id;});
+                        setSelecionadas(e.target.checked ? pendentes : []);
+                      }}
+                      style={{ cursor:"pointer" }}
+                    />
+                  </th>
+                  {["Descrição","Categoria","Valor","Vencimento","Status","Conta paga","Anexos","Ações"].map(function(h) {
+                    return <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>;
+                  })}
+                </tr>
               </thead>
               <tbody>
                 {contasFiltradas.length===0 ? (
@@ -4659,8 +4843,19 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                   const days = getDaysUntil(c.vencimento);
                   const isVencendo = c.status==="Pendente"&&days!==null&&days>=0&&days<=7;
                   const contaBanc = contasBancarias.find(cb=>cb.id===c.contaBancariaId);
+                  var isSel = selecionadas.includes(c.id);
                   return (
-                    <tr key={c.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
+                    <tr key={c.id} style={{ background: isSel ? "#eff6ff" : i%2===0?"#f8fafc":"#fff" }}>
+                      <td style={{ padding:"10px 14px", textAlign:"center" }}>
+                        {c.status !== "Pago" && (
+                          <input type="checkbox" checked={isSel}
+                            onChange={function(e) {
+                              setSelecionadas(e.target.checked ? [...selecionadas, c.id] : selecionadas.filter(function(id){return id!==c.id;}));
+                            }}
+                            style={{ cursor:"pointer" }}
+                          />
+                        )}
+                      </td>
                       <td style={{ padding:"10px 14px", fontSize:13, color:"#0f172a", fontWeight:500 }}>
                         <div>{c.descricao}
                           {isVencendo&&<span style={{ fontSize:10, background:"#fde68a", color:"#92400e", padding:"1px 6px", borderRadius:4, marginLeft:6, fontWeight:600 }}>Vence em {days}d</span>}
@@ -4898,9 +5093,12 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                 return (
                   <div key={cb.id} style={{ background:"#fff", border:`2px solid ${cb.cor}33`, borderRadius:12, padding:"18px 20px", position:"relative" }}>
                     <div style={{ position:"absolute", top:12, right:12, display:"flex", gap:4 }}>
-                      <button onClick={() => { setEditingBancaria(cb); setShowModalBancaria(true); }}
+                      <button onClick={function() { setExtratoContaId(extratoContaId === cb.id ? null : cb.id); }}
+                        title="Ver extrato"
+                        style={{ background: extratoContaId===cb.id ? "#0f172a" : "#f1f5f9", border:"none", color: extratoContaId===cb.id ? "#fff" : "#64748b", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:12 }}>📋</button>
+                      <button onClick={function() { setEditingBancaria(cb); setShowModalBancaria(true); }}
                         style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:12 }}>✏️</button>
-                      <button onClick={() => deleteBancaria(cb.id)}
+                      <button onClick={function() { deleteBancaria(cb.id); }}
                         style={{ background:"#fef2f2", border:"none", color:"#dc2626", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:12 }}>🗑</button>
                     </div>
                     <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
@@ -4918,6 +5116,73 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
               })}
             </div>
           )}
+
+          {/* Extrato individual por conta */}
+          {extratoContaId && (function() {
+            var cb = contasBancarias.find(function(c) { return c.id === extratoContaId; });
+            if (!cb) return null;
+            var movs = [...lancamentos].filter(function(l) { return l.contaBancariaId === extratoContaId; }).sort(function(a,b) { return b.data > a.data ? 1 : -1; });
+            var saldoInicial = parseFloat(cb.saldoInicial || 0);
+            var saldoAtual = getSaldoConta(extratoContaId);
+            return (
+              <div style={{ marginTop:16, background:"#fff", border:`2px solid ${cb.cor}44`, borderRadius:12, overflow:"hidden" }}>
+                <div style={{ background:`${cb.cor}11`, borderBottom:`1px solid ${cb.cor}33`, padding:"14px 20px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                    <div style={{ width:14, height:14, borderRadius:"50%", background:cb.cor }} />
+                    <div style={{ fontWeight:700, fontSize:15, color:"#0f172a" }}>Extrato — {cb.nome}</div>
+                    <span style={{ fontSize:12, color:"#64748b" }}>{cb.tipo}{cb.banco ? " · " + cb.banco : ""}</span>
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:16 }}>
+                    <div style={{ textAlign:"right" }}>
+                      <div style={{ fontSize:11, color:"#94a3b8" }}>Saldo atual</div>
+                      <div style={{ fontSize:17, fontWeight:800, color: saldoAtual>=0?"#15803d":"#dc2626" }}>{fmt(saldoAtual)}</div>
+                    </div>
+                    <button onClick={function() { setExtratoContaId(null); }}
+                      style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:14 }}>✕</button>
+                  </div>
+                </div>
+                {movs.length === 0 ? (
+                  <div style={{ padding:32, textAlign:"center", color:"#94a3b8", fontSize:13 }}>Nenhum lançamento nesta conta</div>
+                ) : (
+                  <div style={{ overflowX:"auto" }}>
+                    <table style={{ borderCollapse:"collapse", width:"100%" }}>
+                      <thead>
+                        <tr>
+                          {["Data","Descrição","Tipo","Valor"].map(function(h) {
+                            return <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 16px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa" }}>{h}</th>;
+                          })}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {movs.map(function(l, i) {
+                          return (
+                            <tr key={l.id} style={{ background: i%2===0?"#f8fafc":"#fff" }}>
+                              <td style={{ padding:"10px 16px", fontSize:12, color:"#64748b", whiteSpace:"nowrap" }}>{fmtDate(l.data)}</td>
+                              <td style={{ padding:"10px 16px", fontSize:13, color:"#0f172a" }}>{l.descricao}</td>
+                              <td style={{ padding:"10px 16px" }}>
+                                <span style={{ fontSize:11, fontWeight:600, color: l.tipo==="recebimento"?"#15803d":"#dc2626", background: l.tipo==="recebimento"?"#f0fdf4":"#fef2f2", padding:"2px 8px", borderRadius:5 }}>
+                                  {l.tipo==="recebimento" ? "↑ Entrada" : "↓ Saída"}
+                                </span>
+                              </td>
+                              <td style={{ padding:"10px 16px", fontSize:13, fontWeight:700, color: l.tipo==="recebimento"?"#15803d":"#dc2626", textAlign:"right" }}>
+                                {l.tipo==="recebimento" ? "+" : "-"}{fmt(l.valor)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{ background:"#f8fafc", borderTop:"2px solid #e2e8f0" }}>
+                          <td colSpan={3} style={{ padding:"12px 16px", fontSize:12, fontWeight:700, color:"#0f172a" }}>Saldo inicial: {fmt(saldoInicial)}</td>
+                          <td style={{ padding:"12px 16px", fontSize:14, fontWeight:800, color: saldoAtual>=0?"#15803d":"#dc2626", textAlign:"right" }}>= {fmt(saldoAtual)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Extrato de lançamentos */}
           {lancamentos.length > 0 && (
@@ -5023,6 +5288,14 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
       {showModalBancaria && <ModalContaBancaria conta={editingBancaria} onSave={saveBancaria} onClose={()=>{ setShowModalBancaria(false); setEditingBancaria(null); }} />}
       {modalBaixa && <ModalBaixa conta={modalBaixa} contasBancarias={contasBancarias} onConfirm={(data)=>confirmarBaixa(modalBaixa,data)} onClose={()=>setModalBaixa(null)} />}
       {modalBaixaML && <ModalBaixaML order={modalBaixaML} paymentInfo={paymentData?.[modalBaixaML.id]} contasBancarias={contasBancarias} onConfirm={(data)=>confirmarBaixaML(modalBaixaML,data)} onClose={()=>setModalBaixaML(null)} />}
+      {showModalMultiBaixa && selecionadas.length > 0 && (
+        <ModalMultiBaixa
+          contas={contasPagar.filter(function(c){return selecionadas.includes(c.id);})}
+          contasBancarias={contasBancarias}
+          onConfirm={function(data){confirmarMultiBaixa(selecionadas,data);}}
+          onClose={function(){setShowModalMultiBaixa(false);}}
+        />
+      )}
     </div>
   );
 }

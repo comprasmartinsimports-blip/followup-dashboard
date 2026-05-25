@@ -1797,7 +1797,6 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
         </div>
       )}
     </div>
-  </div>
   );
 }
 
@@ -4172,7 +4171,6 @@ function ModalConta({ conta, categoriasPagar, fornecedores, onSave, onClose }) {
           </button>
         </div>
       </div>
-    </div>
     </div>
   </div>
   );

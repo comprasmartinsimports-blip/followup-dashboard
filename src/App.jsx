@@ -3629,9 +3629,16 @@ async function chamarIA(prompt, maxTokens) {
 }
 
 function sanitize(str) {
-  // Remove caracteres que podem quebrar JSON
-  return String(str || "").replace(/[
-	"\\]/g, " ").replace(/\s+/g, " ").trim();
+  var s = String(str || "");
+  var result = "";
+  for (var i = 0; i < s.length; i++) {
+    var code = s.charCodeAt(i);
+    if (code === 10 || code === 13 || code === 9) { result += " "; }
+    else if (code === 34) { result += "'"; }
+    else if (code === 92) { result += " "; }
+    else { result += s[i]; }
+  }
+  return result.trim();
 }
 
 function parseIAJson(text) {

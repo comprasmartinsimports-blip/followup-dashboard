@@ -4161,7 +4161,8 @@ function ModalConta({ conta, categoriasPagar, fornecedores, onSave, onClose }) {
               </div>
             )}
           </div>
-          </div>
+        </div>
+        </div>
         </div>
         <div style={{ display:"flex", gap:8 }}>
           <button onClick={onClose} style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>

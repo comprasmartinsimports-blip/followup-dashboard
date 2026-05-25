@@ -4117,7 +4117,8 @@ function ModalConta({ conta, categoriasPagar, fornecedores, onSave, onClose }) {
                     style={{ width:"100%", background:"#fff", border:"1px solid #fecaca", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
                 </div>
               </div>
-
+            )}
+          </div>
 
           {/* ── ANEXOS ── */}
           <div style={{ gridColumn:"1/-1" }}>

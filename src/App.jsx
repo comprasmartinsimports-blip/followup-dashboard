@@ -571,6 +571,228 @@ function SinoNotificacoes({ notificacoes, setNotificacoes, darkMode }) {
 
 
 // ════════════════════════════════════════════════════════════
+//  BACKUP E RESTAURAÇÃO DE DADOS
+// ════════════════════════════════════════════════════════════
+
+const BACKUP_KEYS = [
+  { key: "contas_pagar",            label: "Contas a Pagar" },
+  { key: "contas_bancarias",        label: "Caixas e Bancos" },
+  { key: "lancamentos",             label: "Lançamentos Financeiros" },
+  { key: "categorias_pagar",        label: "Categorias" },
+  { key: "produtos_cadastro",       label: "Produtos" },
+  { key: "fornecedores_cadastro",   label: "Fornecedores" },
+  { key: "notas_fiscais_entrada",   label: "Notas Fiscais" },
+  { key: "impostos_config",         label: "Impostos" },
+  { key: "custos_fixos_config",     label: "Custos Fixos" },
+  { key: "metaMensal",              label: "Meta Mensal" },
+  { key: "ml_auth_users",           label: "Usuários do Sistema" },
+];
+
+function PainelBackup({ onClose }) {
+  const [status, setStatus] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [preview, setPreview] = useState(null);
+
+  // Calcula tamanho e contagem de cada chave
+  const resumo = BACKUP_KEYS.map(({ key, label }) => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return { key, label, count: 0, size: 0, empty: true };
+      const parsed = JSON.parse(raw);
+      const count = Array.isArray(parsed) ? parsed.length : (typeof parsed === "object" ? Object.keys(parsed).length : 1);
+      const size = new Blob([raw]).size;
+      return { key, label, count, size, empty: false };
+    } catch { return { key, label, count: 0, size: 0, empty: true }; }
+  });
+
+  const totalSize = resumo.reduce((s, r) => s + r.size, 0);
+
+  function exportarBackup() {
+    const backup = {
+      versao: "1.0",
+      sistema: "ML Margem Dashboard",
+      dataBackup: new Date().toLocaleString("pt-BR"),
+      dados: {},
+    };
+    BACKUP_KEYS.forEach(({ key }) => {
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) backup.dados[key] = JSON.parse(raw);
+      } catch {}
+    });
+    const json = JSON.stringify(backup, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ml_margem_backup_${new Date().toLocaleDateString("sv-SE")}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setStatus("✅ Backup exportado com sucesso!");
+    setTimeout(() => setStatus(""), 3000);
+  }
+
+  function handleImportFile(file) {
+    if (!file) return;
+    setImporting(true);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const backup = JSON.parse(e.target.result);
+        if (!backup.dados || !backup.versao) throw new Error("Arquivo inválido — não é um backup do ML Margem.");
+        // Mostra preview antes de confirmar
+        const prev = Object.entries(backup.dados).map(([key, val]) => {
+          const info = BACKUP_KEYS.find(b => b.key === key);
+          const count = Array.isArray(val) ? val.length : 1;
+          return { key, label: info?.label || key, count };
+        });
+        setPreview({ backup, prev, dataBackup: backup.dataBackup });
+      } catch(err) {
+        setStatus("❌ Erro: " + err.message);
+        setTimeout(() => setStatus(""), 4000);
+      }
+      setImporting(false);
+    };
+    reader.readAsText(file, "UTF-8");
+  }
+
+  function confirmarImport() {
+    if (!preview) return;
+    try {
+      Object.entries(preview.backup.dados).forEach(([key, val]) => {
+        localStorage.setItem(key, JSON.stringify(val));
+      });
+      setStatus("✅ Dados restaurados! Recarregando...");
+      setPreview(null);
+      setTimeout(() => window.location.reload(), 1500);
+    } catch(err) {
+      setStatus("❌ Erro ao restaurar: " + err.message);
+    }
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024*1024) return `${(bytes/1024).toFixed(1)} KB`;
+    return `${(bytes/1024/1024).toFixed(2)} MB`;
+  }
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.65)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:700, padding:24 }}>
+      <div style={{ background:"#fff", borderRadius:20, width:"100%", maxWidth:580, maxHeight:"90vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 64px rgba(0,0,0,.2)" }}>
+        {/* Header */}
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"20px 28px", borderBottom:"1px solid #f1f5f9" }}>
+          <div>
+            <div style={{ fontWeight:800, fontSize:18, color:"#0f172a" }}>💾 Backup e Restauração</div>
+            <div style={{ fontSize:12, color:"#94a3b8", marginTop:2 }}>Exporte seus dados para um arquivo seguro ou restaure de um backup anterior</div>
+          </div>
+          <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
+        </div>
+
+        <div style={{ flex:1, overflowY:"auto", padding:"20px 28px" }}>
+
+          {/* Status */}
+          {status && (
+            <div style={{ background:status.startsWith("✅")?"#f0fdf4":"#fef2f2", border:`1px solid ${status.startsWith("✅")?"#bbf7d0":"#fecaca"}`, borderRadius:10, padding:"10px 16px", marginBottom:16, fontSize:13, fontWeight:600, color:status.startsWith("✅")?"#15803d":"#dc2626" }}>
+              {status}
+            </div>
+          )}
+
+          {/* Preview de importação */}
+          {preview && (
+            <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:12, padding:"16px 18px", marginBottom:16 }}>
+              <div style={{ fontWeight:700, fontSize:14, color:"#92400e", marginBottom:8 }}>⚠️ Confirmar Restauração</div>
+              <div style={{ fontSize:12, color:"#78350f", marginBottom:12 }}>
+                Backup de: <strong>{preview.dataBackup}</strong><br/>
+                <strong>Atenção:</strong> os dados atuais serão substituídos pelos dados do backup!
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", gap:4, marginBottom:14 }}>
+                {preview.prev.map(p => (
+                  <div key={p.key} style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:"#0f172a" }}>
+                    <span>{p.label}</span>
+                    <span style={{ fontWeight:600, color:"#d97706" }}>{p.count} registro(s)</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display:"flex", gap:8 }}>
+                <button onClick={() => setPreview(null)}
+                  style={{ flex:1, background:"#fff", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"10px", borderRadius:8, cursor:"pointer" }}>Cancelar</button>
+                <button onClick={confirmarImport}
+                  style={{ flex:2, background:"#d97706", border:"none", color:"#fff", fontWeight:700, padding:"10px", borderRadius:8, cursor:"pointer" }}>
+                  ✓ Sim, restaurar dados
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Resumo dos dados atuais */}
+          <div style={{ marginBottom:20 }}>
+            <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", marginBottom:12 }}>📊 Dados Armazenados Atualmente</div>
+            <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:12, overflow:"hidden" }}>
+              {resumo.map((r, i) => (
+                <div key={r.key} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 16px", borderBottom:i<resumo.length-1?"1px solid #f1f5f9":"none", background:i%2===0?"#f8fafc":"#fff" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <div style={{ width:8, height:8, borderRadius:"50%", background:r.empty?"#e2e8f0":"#15803d" }} />
+                    <span style={{ fontSize:13, color:"#0f172a" }}>{r.label}</span>
+                  </div>
+                  <div style={{ display:"flex", gap:16, alignItems:"center" }}>
+                    {!r.empty ? (
+                      <>
+                        <span style={{ fontSize:12, color:"#64748b" }}>{r.count} registro(s)</span>
+                        <span style={{ fontSize:11, color:"#94a3b8", background:"#f1f5f9", padding:"2px 8px", borderRadius:20 }}>{formatSize(r.size)}</span>
+                      </>
+                    ) : (
+                      <span style={{ fontSize:12, color:"#94a3b8" }}>vazio</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", background:"#f1f5f9", borderTop:"2px solid #e2e8f0" }}>
+                <span style={{ fontSize:13, fontWeight:700, color:"#0f172a" }}>Total</span>
+                <span style={{ fontSize:13, fontWeight:700, color:"#0f172a" }}>{formatSize(totalSize)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Ações */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            {/* Exportar */}
+            <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:12, padding:"18px 20px" }}>
+              <div style={{ fontSize:28, marginBottom:8 }}>⬇️</div>
+              <div style={{ fontWeight:700, fontSize:14, color:"#15803d", marginBottom:4 }}>Exportar Backup</div>
+              <div style={{ fontSize:12, color:"#64748b", marginBottom:14, lineHeight:1.5 }}>
+                Baixa um arquivo JSON com todos os seus dados. Guarde em local seguro.
+              </div>
+              <button onClick={exportarBackup}
+                style={{ width:"100%", background:"#15803d", border:"none", color:"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
+                ⬇️ Exportar Backup Agora
+              </button>
+            </div>
+
+            {/* Importar */}
+            <div style={{ background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:12, padding:"18px 20px" }}>
+              <div style={{ fontSize:28, marginBottom:8 }}>⬆️</div>
+              <div style={{ fontWeight:700, fontSize:14, color:"#1d4ed8", marginBottom:4 }}>Restaurar Backup</div>
+              <div style={{ fontSize:12, color:"#64748b", marginBottom:14, lineHeight:1.5 }}>
+                Selecione um arquivo de backup (.json) para restaurar seus dados.
+              </div>
+              <label style={{ display:"block", width:"100%", background:"#1d4ed8", border:"none", color:"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:"pointer", fontSize:13, textAlign:"center" }}>
+                {importing ? "Lendo arquivo..." : "⬆️ Selecionar Arquivo"}
+                <input type="file" accept=".json" style={{ display:"none" }} onChange={e => { if(e.target.files[0]) handleImportFile(e.target.files[0]); e.target.value=""; }} />
+              </label>
+            </div>
+          </div>
+
+          <div style={{ marginTop:16, background:"#fef9c3", border:"1px solid #fde68a", borderRadius:10, padding:"12px 16px", fontSize:12, color:"#78350f" }}>
+            💡 <strong>Dica:</strong> Faça backup sempre que cadastrar muitas informações. Recomendamos exportar pelo menos uma vez por semana.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ════════════════════════════════════════════════════════════
 //  SISTEMA DE AUTENTICAÇÃO E CONTROLE DE ACESSO
 // ════════════════════════════════════════════════════════════
 
@@ -1573,6 +1795,921 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
             ))}
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  NOTAS FISCAIS DE ENTRADA
+// ════════════════════════════════════════════════════════════
+
+function saveNFs(v) { try { localStorage.setItem("notas_fiscais_entrada", JSON.stringify(v)); } catch {} }
+
+// ── Parser de XML de NF-e ────────────────────────────────────
+function parseNFeXML(xmlText) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlText, "text/xml");
+  const get = (selector) => doc.querySelector(selector)?.textContent?.trim() ?? "";
+
+  const itens = [];
+  doc.querySelectorAll("det").forEach(det => {
+    const prod = det.querySelector("prod");
+    const imposto = det.querySelector("imposto");
+    itens.push({
+      cProd: prod?.querySelector("cProd")?.textContent?.trim() ?? "",
+      xProd: prod?.querySelector("xProd")?.textContent?.trim() ?? "",
+      ncm: prod?.querySelector("NCM")?.textContent?.trim() ?? "",
+      ean: prod?.querySelector("cEAN")?.textContent?.trim() ?? "",
+      cfop: prod?.querySelector("CFOP")?.textContent?.trim() ?? "",
+      uCom: prod?.querySelector("uCom")?.textContent?.trim() ?? "",
+      qCom: parseFloat(prod?.querySelector("qCom")?.textContent ?? "0"),
+      vUnCom: parseFloat(prod?.querySelector("vUnCom")?.textContent ?? "0"),
+      vProd: parseFloat(prod?.querySelector("vProd")?.textContent ?? "0"),
+      vDesc: parseFloat(prod?.querySelector("vDesc")?.textContent ?? "0"),
+      pICMS: parseFloat(imposto?.querySelector("pICMS")?.textContent ?? "0"),
+      vICMS: parseFloat(imposto?.querySelector("vICMS")?.textContent ?? "0"),
+      vIPI: parseFloat(det.querySelector("IPI vIPI")?.textContent ?? "0"),
+    });
+  });
+
+  // Cobranças/duplicatas (boletos)
+  const dups = [];
+  doc.querySelectorAll("dup").forEach(d => {
+    dups.push({
+      nDup: d.querySelector("nDup")?.textContent?.trim() ?? "",
+      dVenc: d.querySelector("dVenc")?.textContent?.trim() ?? "",
+      vDup: parseFloat(d.querySelector("vDup")?.textContent ?? "0"),
+    });
+  });
+
+  return {
+    chave: get("infNFe").replace(/[^0-9]/g,"").slice(0,44) || get("Id").replace(/[^0-9]/g,"").slice(0,44),
+    numero: get("nNF"),
+    serie: get("serie"),
+    dataEmissao: get("dhEmi")?.slice(0,10) ?? get("dEmi"),
+    natureza: get("natOp"),
+    emitente: {
+      cnpj: get("emit CNPJ"),
+      nome: get("emit xNome"),
+      uf: get("emit UF"),
+    },
+    destinatario: {
+      cnpj: get("dest CNPJ"),
+      nome: get("dest xNome"),
+    },
+    totais: {
+      vProd: parseFloat(get("ICMSTot vProd") || "0"),
+      vFrete: parseFloat(get("ICMSTot vFrete") || "0"),
+      vDesc: parseFloat(get("ICMSTot vDesc") || "0"),
+      vIPI: parseFloat(get("ICMSTot vIPI") || "0"),
+      vICMS: parseFloat(get("ICMSTot vICMS") || "0"),
+      vPIS: parseFloat(get("ICMSTot vPIS") || "0"),
+      vCOFINS: parseFloat(get("ICMSTot vCOFINS") || "0"),
+      vNF: parseFloat(get("ICMSTot vNF") || "0"),
+    },
+    itens,
+    duplicatas: dups,
+    infAdic: get("infCpl") || get("infAdFisco"),
+  };
+}
+
+// ── Modal de lançamento de NF ────────────────────────────────
+function ModalNF({ nf, fornecedores, produtos, categoriasPagar, onSave, onClose }) {
+  const emptyNF = {
+    id: Date.now().toString(),
+    numero: "", serie: "1", chave: "", dataEmissao: new Date().toLocaleDateString("sv-SE"),
+    natureza: "Compra de mercadoria", fornecedorId: "", fornecedorNome: "", fornecedorCNPJ: "",
+    totais: { vProd:0, vFrete:0, vDesc:0, vIPI:0, vICMS:0, vPIS:0, vCOFINS:0, vNF:0 },
+    itens: [], duplicatas: [],
+    gerarContaPagar: true,
+    atualizarEstoque: true,
+    contaPagarConfig: { categoria:"Fornecedor", multaPct:"2", multaTipo:"%", jurosDia:"0.033", jurosTipo:"%", temProtesto:false, diasProtesto:"", cartorio:"" },
+    status: "Lançada", obs: "",
+  };
+
+  const [form, setForm] = useState(nf || emptyNF);
+  const [subTab, setSubTab] = useState("geral");
+  const [xmlError, setXmlError] = useState("");
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const setTot = (k, v) => setForm(f => ({ ...f, totais: { ...f.totais, [k]: v } }));
+  const setCPConfig = (k, v) => setForm(f => ({ ...f, contaPagarConfig: { ...f.contaPagarConfig, [k]: v } }));
+
+  function handleXML(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const parsed = parseNFeXML(e.target.result);
+        const forn = fornecedores.find(f => f.cnpj?.replace(/\D/g,"") === parsed.emitente.cnpj?.replace(/\D/g,""));
+        setForm(prev => ({
+          ...prev,
+          numero: parsed.numero,
+          serie: parsed.serie,
+          chave: parsed.chave,
+          dataEmissao: parsed.dataEmissao?.slice(0,10),
+          natureza: parsed.natureza,
+          fornecedorId: forn?.id || "",
+          fornecedorNome: parsed.emitente.nome,
+          fornecedorCNPJ: parsed.emitente.cnpj,
+          totais: parsed.totais,
+          itens: parsed.itens.map(it => ({
+            ...it,
+            produtoCadastradoId: produtos.find(p =>
+              (p.ean && p.ean === it.ean && it.ean !== "SEM GTIN") ||
+              (p.sku && p.sku === it.cProd)
+            )?.id || "",
+          })),
+          duplicatas: parsed.duplicatas,
+          infAdic: parsed.infAdic,
+        }));
+        setXmlError("");
+      } catch(e) { setXmlError("Erro ao ler XML: " + e.message); }
+    };
+    reader.readAsText(file, "UTF-8");
+  }
+
+  function addItem() {
+    set("itens", [...form.itens, { cProd:"", xProd:"", ncm:"", ean:"", cfop:"1102", uCom:"UN", qCom:1, vUnCom:0, vProd:0, produtoCadastradoId:"" }]);
+  }
+
+  function updateItem(idx, field, val) {
+    const updated = form.itens.map((it,i) => {
+      if (i !== idx) return it;
+      const up = { ...it, [field]: val };
+      if (field === "qCom" || field === "vUnCom") up.vProd = parseFloat(up.qCom||0) * parseFloat(up.vUnCom||0);
+      return up;
+    });
+    set("itens", updated);
+  }
+
+  function addDup() { set("duplicatas", [...form.duplicatas, { nDup:"", dVenc:"", vDup:0 }]); }
+  function updateDup(idx, field, val) {
+    set("duplicatas", form.duplicatas.map((d,i) => i===idx ? {...d,[field]:val} : d));
+  }
+  function removeDup(idx) { set("duplicatas", form.duplicatas.filter((_,i)=>i!==idx)); }
+
+  const inp = { background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:13, outline:"none", fontFamily:"inherit", width:"100%" };
+
+  const SUBTABS = [
+    { key:"geral", label:"📋 Geral" },
+    { key:"itens", label:`📦 Itens (${form.itens.length})` },
+    { key:"financeiro", label:`💰 Financeiro (${form.duplicatas.length})` },
+    { key:"config", label:"⚙️ Opções" },
+  ];
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.65)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:16 }}>
+      <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:820, maxHeight:"94vh", display:"flex", flexDirection:"column", boxShadow:"0 20px 60px rgba(0,0,0,.2)" }}>
+        {/* Header */}
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"18px 28px", borderBottom:"1px solid #f1f5f9" }}>
+          <div>
+            <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>{nf ? "Editar Nota Fiscal" : "Nova Nota Fiscal de Entrada"}</div>
+            <div style={{ fontSize:12, color:"#94a3b8", marginTop:2 }}>NF {form.numero || "s/n"} — {form.fornecedorNome || "Fornecedor não selecionado"}</div>
+          </div>
+          <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+            {!nf && (
+              <label style={{ background:"#ffe000", border:"none", color:"#0f172a", fontWeight:700, padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13 }}>
+                📎 Importar XML
+                <input type="file" accept=".xml" style={{ display:"none" }} onChange={e => e.target.files[0] && handleXML(e.target.files[0])} />
+              </label>
+            )}
+            <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
+          </div>
+        </div>
+
+        {xmlError && <div style={{ background:"#fef2f2", color:"#dc2626", fontSize:12, padding:"8px 28px", borderBottom:"1px solid #fecaca" }}>⚠ {xmlError}</div>}
+
+        {/* Sub-tabs */}
+        <div style={{ display:"flex", gap:0, padding:"0 28px", background:"#fafafa", borderBottom:"1px solid #f1f5f9" }}>
+          {SUBTABS.map(t => (
+            <button key={t.key} onClick={() => setSubTab(t.key)}
+              style={{ background:"transparent", border:"none", borderBottom:subTab===t.key?"2px solid #0f172a":"2px solid transparent", color:subTab===t.key?"#0f172a":"#94a3b8", padding:"10px 16px", cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:subTab===t.key?700:500 }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div style={{ flex:1, overflowY:"auto", padding:"20px 28px" }}>
+
+          {/* ── GERAL ── */}
+          {subTab === "geral" && (
+            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
+                <div><div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Número NF *</div>
+                  <input style={inp} value={form.numero} onChange={e=>set("numero",e.target.value)} placeholder="Ex: 000001" /></div>
+                <div><div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Série</div>
+                  <input style={inp} value={form.serie} onChange={e=>set("serie",e.target.value)} placeholder="1" /></div>
+                <div><div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Data Emissão</div>
+                  <input type="date" style={inp} value={form.dataEmissao} onChange={e=>set("dataEmissao",e.target.value)} /></div>
+              </div>
+              <div><div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Chave de Acesso (44 dígitos)</div>
+                <input style={inp} value={form.chave} onChange={e=>set("chave",e.target.value)} placeholder="0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 000" maxLength={44} /></div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <div><div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Fornecedor</div>
+                  <select style={{ ...inp }} value={form.fornecedorId} onChange={e => {
+                    const f = fornecedores.find(f=>f.id===e.target.value);
+                    set("fornecedorId", e.target.value);
+                    if (f) { set("fornecedorNome", f.nome); set("fornecedorCNPJ", f.cnpj||""); }
+                  }}>
+                    <option value="">— Selecione ou digite abaixo —</option>
+                    {fornecedores.map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}
+                  </select>
+                </div>
+                <div><div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Nome do Emitente</div>
+                  <input style={inp} value={form.fornecedorNome} onChange={e=>set("fornecedorNome",e.target.value)} placeholder="Razão social do fornecedor" /></div>
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <div><div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>CNPJ Emitente</div>
+                  <input style={inp} value={form.fornecedorCNPJ} onChange={e=>set("fornecedorCNPJ",e.target.value)} placeholder="00.000.000/0000-00" /></div>
+                <div><div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Natureza da Operação</div>
+                  <input style={inp} value={form.natureza} onChange={e=>set("natureza",e.target.value)} placeholder="Compra de mercadoria" /></div>
+              </div>
+              {/* Totais */}
+              <div style={{ background:"#f8fafc", borderRadius:10, padding:"14px 16px" }}>
+                <div style={{ fontWeight:700, fontSize:13, color:"#0f172a", marginBottom:12 }}>Totais da Nota</div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
+                  {[
+                    { k:"vProd", label:"Produtos (R$)" },
+                    { k:"vFrete", label:"Frete (R$)" },
+                    { k:"vDesc", label:"Desconto (R$)" },
+                    { k:"vIPI", label:"IPI (R$)" },
+                    { k:"vICMS", label:"ICMS (R$)" },
+                    { k:"vPIS", label:"PIS (R$)" },
+                    { k:"vCOFINS", label:"COFINS (R$)" },
+                    { k:"vNF", label:"Total NF (R$) *" },
+                  ].map(f => (
+                    <div key={f.k}>
+                      <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4, fontWeight:600, textTransform:"uppercase" }}>{f.label}</div>
+                      <input type="number" style={{ ...inp, padding:"6px 8px", fontSize:12 }} value={form.totais[f.k]||""} onChange={e=>setTot(f.k,parseFloat(e.target.value)||0)} placeholder="0,00" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div><div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Observações</div>
+                <textarea style={{ ...inp, resize:"vertical" }} rows={2} value={form.obs||""} onChange={e=>set("obs",e.target.value)} placeholder="Informações adicionais..." /></div>
+            </div>
+          )}
+
+          {/* ── ITENS ── */}
+          {subTab === "itens" && (
+            <div>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+                <div style={{ fontSize:13, color:"#64748b" }}>{form.itens.length} item(ns) na nota</div>
+                <button onClick={addItem} style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"7px 16px", borderRadius:8, cursor:"pointer", fontSize:12 }}>+ Adicionar Item</button>
+              </div>
+              {form.itens.length === 0 ? (
+                <div style={{ background:"#f8fafc", border:"2px dashed #e2e8f0", borderRadius:12, padding:32, textAlign:"center", color:"#94a3b8" }}>
+                  <div style={{ fontSize:28, marginBottom:8 }}>📦</div>
+                  <div style={{ fontSize:13 }}>Importe um XML ou adicione itens manualmente</div>
+                </div>
+              ) : form.itens.map((it, idx) => (
+                <div key={idx} style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"12px 14px", marginBottom:8 }}>
+                  <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"flex-end" }}>
+                    <div style={{ flex:3, minWidth:200 }}>
+                      <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4, fontWeight:600 }}>DESCRIÇÃO *</div>
+                      <input style={{ ...inp, fontSize:12 }} value={it.xProd} onChange={e=>updateItem(idx,"xProd",e.target.value)} placeholder="Descrição do produto" />
+                    </div>
+                    <div style={{ flex:1, minWidth:90 }}>
+                      <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4, fontWeight:600 }}>CÓD. PROD.</div>
+                      <input style={{ ...inp, fontSize:12 }} value={it.cProd} onChange={e=>updateItem(idx,"cProd",e.target.value)} placeholder="SKU/Ref" />
+                    </div>
+                    <div style={{ flex:1, minWidth:100 }}>
+                      <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4, fontWeight:600 }}>EAN/GTIN</div>
+                      <input style={{ ...inp, fontSize:12 }} value={it.ean} onChange={e=>updateItem(idx,"ean",e.target.value)} placeholder="7891234..." />
+                    </div>
+                    <div style={{ flex:1, minWidth:70 }}>
+                      <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4, fontWeight:600 }}>QTD</div>
+                      <input type="number" style={{ ...inp, fontSize:12 }} value={it.qCom} onChange={e=>updateItem(idx,"qCom",e.target.value)} />
+                    </div>
+                    <div style={{ flex:1, minWidth:90 }}>
+                      <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4, fontWeight:600 }}>VL. UNIT.</div>
+                      <input type="number" style={{ ...inp, fontSize:12 }} value={it.vUnCom} onChange={e=>updateItem(idx,"vUnCom",e.target.value)} />
+                    </div>
+                    <div style={{ flex:1, minWidth:90 }}>
+                      <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4, fontWeight:600 }}>TOTAL</div>
+                      <input type="number" style={{ ...inp, fontSize:12 }} value={it.vProd} onChange={e=>updateItem(idx,"vProd",e.target.value)} />
+                    </div>
+                  </div>
+                  <div style={{ display:"flex", gap:8, marginTop:8, alignItems:"center", flexWrap:"wrap" }}>
+                    <div style={{ flex:2, minWidth:160 }}>
+                      <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4, fontWeight:600 }}>VINCULAR AO PRODUTO CADASTRADO</div>
+                      <select style={{ ...inp, fontSize:12 }} value={it.produtoCadastradoId||""} onChange={e=>updateItem(idx,"produtoCadastradoId",e.target.value)}>
+                        <option value="">— Selecione para atualizar estoque —</option>
+                        {produtos.map(p=><option key={p.id} value={p.id}>{p.titulo?.slice(0,50)} {p.sku?`(${p.sku})`:""}</option>)}
+                      </select>
+                    </div>
+                    <div style={{ flex:1, minWidth:80 }}>
+                      <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4, fontWeight:600 }}>NCM</div>
+                      <input style={{ ...inp, fontSize:12 }} value={it.ncm||""} onChange={e=>updateItem(idx,"ncm",e.target.value)} placeholder="0000.00.00" />
+                    </div>
+                    <div style={{ flex:1, minWidth:70 }}>
+                      <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4, fontWeight:600 }}>CFOP</div>
+                      <input style={{ ...inp, fontSize:12 }} value={it.cfop||""} onChange={e=>updateItem(idx,"cfop",e.target.value)} />
+                    </div>
+                    {it.produtoCadastradoId && (
+                      <div style={{ fontSize:11, color:"#15803d", background:"#f0fdf4", padding:"4px 10px", borderRadius:6, border:"1px solid #bbf7d0", marginTop:16 }}>
+                        ✓ Estoque será atualizado: +{it.qCom} un
+                      </div>
+                    )}
+                    <button onClick={()=>set("itens",form.itens.filter((_,i)=>i!==idx))}
+                      style={{ background:"#fef2f2", border:"none", color:"#dc2626", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:12, marginTop:16, flexShrink:0 }}>🗑</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── FINANCEIRO ── */}
+          {subTab === "financeiro" && (
+            <div>
+              <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:10, padding:"12px 16px", marginBottom:16, fontSize:13, color:"#15803d" }}>
+                💡 Cada duplicata (parcela) será lançada como uma conta a pagar no Financeiro.
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+                <div style={{ fontWeight:700, fontSize:14, color:"#0f172a" }}>{form.duplicatas.length} duplicata(s) / parcela(s)</div>
+                <button onClick={addDup} style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"7px 16px", borderRadius:8, cursor:"pointer", fontSize:12 }}>+ Adicionar Parcela</button>
+              </div>
+              {form.duplicatas.length === 0 ? (
+                <div style={{ background:"#f8fafc", border:"2px dashed #e2e8f0", borderRadius:12, padding:24, textAlign:"center", color:"#94a3b8", fontSize:13 }}>
+                  Nenhuma duplicata. Adicione parcelas ou importe o XML que traz automaticamente.
+                </div>
+              ) : form.duplicatas.map((d, idx) => (
+                <div key={idx} style={{ display:"flex", gap:8, alignItems:"center", marginBottom:8, background:"#f8fafc", padding:"10px 12px", borderRadius:8, border:"1px solid #e2e8f0" }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:10, color:"#94a3b8", marginBottom:3, fontWeight:600 }}>Nº DUPLICATA</div>
+                    <input style={{ ...inp, padding:"6px 8px", fontSize:12 }} value={d.nDup} onChange={e=>updateDup(idx,"nDup",e.target.value)} placeholder="001" />
+                  </div>
+                  <div style={{ flex:2 }}>
+                    <div style={{ fontSize:10, color:"#94a3b8", marginBottom:3, fontWeight:600 }}>VENCIMENTO</div>
+                    <input type="date" style={{ ...inp, padding:"6px 8px", fontSize:12 }} value={d.dVenc} onChange={e=>updateDup(idx,"dVenc",e.target.value)} />
+                  </div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:10, color:"#94a3b8", marginBottom:3, fontWeight:600 }}>VALOR (R$)</div>
+                    <input type="number" style={{ ...inp, padding:"6px 8px", fontSize:12 }} value={d.vDup} onChange={e=>updateDup(idx,"vDup",e.target.value)} />
+                  </div>
+                  <button onClick={()=>removeDup(idx)} style={{ background:"#fef2f2", border:"none", color:"#dc2626", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:12, marginTop:16, flexShrink:0 }}>🗑</button>
+                </div>
+              ))}
+              <div style={{ display:"flex", justifyContent:"flex-end", marginTop:8, paddingTop:8, borderTop:"1px solid #f1f5f9" }}>
+                <div style={{ fontSize:13, fontWeight:700, color:"#0f172a" }}>
+                  Total duplicatas: R$ {form.duplicatas.reduce((s,d)=>s+parseFloat(d.vDup||0),0).toFixed(2).replace(".",",")}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── OPÇÕES ── */}
+          {subTab === "config" && (
+            <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+              {/* Opções gerais */}
+              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                <label style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer", padding:"12px 16px", background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:10 }}>
+                  <input type="checkbox" checked={form.atualizarEstoque} onChange={e=>set("atualizarEstoque",e.target.checked)} style={{ width:16, height:16 }} />
+                  <div>
+                    <div style={{ fontWeight:700, fontSize:13, color:"#15803d" }}>📦 Atualizar estoque dos produtos</div>
+                    <div style={{ fontSize:12, color:"#64748b" }}>Soma a quantidade de cada item vinculado ao seu produto cadastrado</div>
+                  </div>
+                </label>
+                <label style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer", padding:"12px 16px", background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:10 }}>
+                  <input type="checkbox" checked={form.gerarContaPagar} onChange={e=>set("gerarContaPagar",e.target.checked)} style={{ width:16, height:16 }} />
+                  <div>
+                    <div style={{ fontWeight:700, fontSize:13, color:"#1d4ed8" }}>💰 Gerar contas a pagar no Financeiro</div>
+                    <div style={{ fontSize:12, color:"#64748b" }}>Cria uma conta a pagar para cada duplicata da nota</div>
+                  </div>
+                </label>
+              </div>
+
+              {/* Config das contas a pagar */}
+              {form.gerarContaPagar && (
+                <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:12, padding:"16px 18px" }}>
+                  <div style={{ fontWeight:700, fontSize:13, color:"#0f172a", marginBottom:14 }}>Configuração das Contas a Pagar</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                    <div>
+                      <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Categoria</div>
+                      <select style={inp} value={form.contaPagarConfig.categoria} onChange={e=>setCPConfig("categoria",e.target.value)}>
+                        {(categoriasPagar||["Fornecedor","Outros"]).map(c=><option key={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Multa por atraso</div>
+                      <div style={{ display:"flex", gap:4 }}>
+                        <input type="number" style={{ ...inp, flex:1 }} value={form.contaPagarConfig.multaPct} onChange={e=>setCPConfig("multaPct",e.target.value)} placeholder="2" />
+                        {["%","R$"].map(t=>(
+                          <button key={t} onClick={()=>setCPConfig("multaTipo",t)}
+                            style={{ padding:"0 10px", borderRadius:6, border:"none", cursor:"pointer", fontSize:12, fontWeight:700, background:form.contaPagarConfig.multaTipo===t?"#0f172a":"#e2e8f0", color:form.contaPagarConfig.multaTipo===t?"#fff":"#64748b" }}>{t}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Juros ao dia</div>
+                      <div style={{ display:"flex", gap:4 }}>
+                        <input type="number" style={{ ...inp, flex:1 }} value={form.contaPagarConfig.jurosDia} onChange={e=>setCPConfig("jurosDia",e.target.value)} placeholder="0.033" />
+                        {["%","R$"].map(t=>(
+                          <button key={t} onClick={()=>setCPConfig("jurosTipo",t)}
+                            style={{ padding:"0 10px", borderRadius:6, border:"none", cursor:"pointer", fontSize:12, fontWeight:700, background:form.contaPagarConfig.jurosTipo===t?"#0f172a":"#e2e8f0", color:form.contaPagarConfig.jurosTipo===t?"#fff":"#64748b" }}>{t}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                      <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer" }}>
+                        <input type="checkbox" checked={form.contaPagarConfig.temProtesto||false} onChange={e=>setCPConfig("temProtesto",e.target.checked)} />
+                        <span style={{ fontSize:13, color:"#334155" }}>⚖️ Será protestada por atraso</span>
+                      </label>
+                      {form.contaPagarConfig.temProtesto && (
+                        <div style={{ display:"flex", gap:8 }}>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:10, color:"#94a3b8", marginBottom:3, fontWeight:600 }}>DIAS P/ PROTESTO</div>
+                            <input type="number" style={{ ...inp, padding:"6px 8px", fontSize:12 }} value={form.contaPagarConfig.diasProtesto} onChange={e=>setCPConfig("diasProtesto",e.target.value)} placeholder="5" />
+                          </div>
+                          <div style={{ flex:2 }}>
+                            <div style={{ fontSize:10, color:"#94a3b8", marginBottom:3, fontWeight:600 }}>CARTÓRIO</div>
+                            <input style={{ ...inp, padding:"6px 8px", fontSize:12 }} value={form.contaPagarConfig.cartorio||""} onChange={e=>setCPConfig("cartorio",e.target.value)} placeholder="1º Cartório..." />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{ display:"flex", gap:8, padding:"14px 28px", borderTop:"1px solid #f1f5f9", background:"#fafafa" }}>
+          <button onClick={onClose} style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
+          <button onClick={() => { if (!form.numero) { alert("Informe o número da NF"); return; } onSave(form); onClose(); }}
+            style={{ flex:3, background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:"pointer", fontSize:14 }}>
+            ✓ Lançar Nota Fiscal
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Menu de 3 pontinhos para NF ─────────────────────────────
+function MenuAcoes({ nf, produtos, setProdutos, contasPagar, setContasPagar, categoriasPagar }) {
+  const [aberto, setAberto] = useState(false);
+  const [modalEstoque, setModalEstoque] = useState(false);
+  const [modalContas, setModalContas] = useState(false);
+
+  // Itens que têm produto vinculado
+  const itensComProduto = (nf.itens || []).filter(it => it.produtoCadastradoId);
+  // Duplicatas ainda não lançadas como conta a pagar
+  const dupsJaLancadas = new Set(contasPagar.filter(c => c.nfId === nf.id).map(c => c.id));
+  const dupsDisponiveis = nf.duplicatas || [];
+
+  function lancarEstoque() {
+    if (itensComProduto.length === 0) { alert("Nenhum item desta NF está vinculado a um produto cadastrado."); return; }
+    const novoProdutos = produtos.map(p => {
+      const item = itensComProduto.find(it => it.produtoCadastradoId === p.id);
+      if (!item) return p;
+      return { ...p, estoqueAtual: String(parseFloat(p.estoqueAtual || 0) + parseFloat(item.qCom || 0)) };
+    });
+    setProdutos(novoProdutos);
+    try { localStorage.setItem("produtos_cadastro", JSON.stringify(novoProdutos)); } catch {}
+    alert(`✅ Estoque atualizado para ${itensComProduto.length} produto(s)!`);
+    setAberto(false);
+  }
+
+  function lancarContasPagar(cfg) {
+    const novas = dupsDisponiveis.map((d, i) => ({
+      id: Date.now() + i,
+      descricao: `NF ${nf.numero}/${nf.serie} — ${nf.fornecedorNome} — Dup. ${d.nDup || String(i+1).padStart(3,"0")}`,
+      categoria: cfg.categoria || "Fornecedor",
+      valor: String(d.vDup),
+      vencimento: d.dVenc,
+      status: "Pendente",
+      observacao: `Nota Fiscal ${nf.numero} — Chave: ${(nf.chave||"").slice(0,20)}...`,
+      multaPct: cfg.multaPct, multaTipo: cfg.multaTipo || "%",
+      jurosDia: cfg.jurosDia, jurosTipo: cfg.jurosTipo || "%",
+      temProtesto: cfg.temProtesto, diasProtesto: cfg.diasProtesto, cartorio: cfg.cartorio,
+      nfId: nf.id,
+    }));
+    const updated = [...contasPagar, ...novas];
+    setContasPagar(updated);
+    try { localStorage.setItem("contas_pagar", JSON.stringify(updated)); } catch {}
+    alert(`✅ ${novas.length} conta(s) a pagar lançada(s) no Financeiro!`);
+    setAberto(false); setModalContas(false);
+  }
+
+  return (
+    <div style={{ position:"relative" }}>
+      <button onClick={() => setAberto(a => !a)}
+        style={{ background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700 }}>
+        ⋯
+      </button>
+
+      {aberto && (
+        <>
+          <div onClick={() => setAberto(false)} style={{ position:"fixed", inset:0, zIndex:299 }} />
+          <div style={{ position:"absolute", right:0, top:32, background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, boxShadow:"0 8px 24px rgba(0,0,0,.12)", zIndex:300, minWidth:220, overflow:"hidden" }}>
+            {/* Lançar Estoque */}
+            <button onClick={() => { setAberto(false); setModalEstoque(true); }}
+              style={{ width:"100%", background:"none", border:"none", padding:"12px 16px", textAlign:"left", cursor:"pointer", display:"flex", alignItems:"center", gap:10, fontSize:13, color:"#0f172a" }}
+              onMouseEnter={e=>e.currentTarget.style.background="#f0fdf4"}
+              onMouseLeave={e=>e.currentTarget.style.background="none"}>
+              <span style={{ fontSize:16 }}>📦</span>
+              <div>
+                <div style={{ fontWeight:600 }}>Lançar no Estoque</div>
+                <div style={{ fontSize:11, color:"#94a3b8" }}>{itensComProduto.length} produto(s) vinculado(s)</div>
+              </div>
+            </button>
+            <div style={{ height:1, background:"#f1f5f9" }} />
+            {/* Lançar Contas a Pagar */}
+            <button onClick={() => { setAberto(false); setModalContas(true); }}
+              style={{ width:"100%", background:"none", border:"none", padding:"12px 16px", textAlign:"left", cursor:"pointer", display:"flex", alignItems:"center", gap:10, fontSize:13, color:"#0f172a" }}
+              onMouseEnter={e=>e.currentTarget.style.background="#eff6ff"}
+              onMouseLeave={e=>e.currentTarget.style.background="none"}>
+              <span style={{ fontSize:16 }}>💰</span>
+              <div>
+                <div style={{ fontWeight:600 }}>Lançar Contas a Pagar</div>
+                <div style={{ fontSize:11, color:"#94a3b8" }}>{dupsDisponiveis.length} duplicata(s)</div>
+              </div>
+            </button>
+            <div style={{ height:1, background:"#f1f5f9" }} />
+            {/* Lançar Ambos */}
+            <button onClick={() => { lancarEstoque(); setTimeout(() => setModalContas(true), 100); }}
+              style={{ width:"100%", background:"none", border:"none", padding:"12px 16px", textAlign:"left", cursor:"pointer", display:"flex", alignItems:"center", gap:10, fontSize:13, color:"#0f172a" }}
+              onMouseEnter={e=>e.currentTarget.style.background="#fafafa"}
+              onMouseLeave={e=>e.currentTarget.style.background="none"}>
+              <span style={{ fontSize:16 }}>⚡</span>
+              <div>
+                <div style={{ fontWeight:600 }}>Lançar Estoque + Financeiro</div>
+                <div style={{ fontSize:11, color:"#94a3b8" }}>Faz tudo de uma vez</div>
+              </div>
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Modal de confirmação de estoque */}
+      {modalEstoque && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:24 }}>
+          <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:480, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
+            <div style={{ fontWeight:800, fontSize:17, color:"#0f172a", marginBottom:6 }}>📦 Lançar no Estoque</div>
+            <div style={{ fontSize:13, color:"#64748b", marginBottom:16 }}>Os seguintes produtos terão seu estoque atualizado:</div>
+            {itensComProduto.length === 0 ? (
+              <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"12px 16px", color:"#dc2626", fontSize:13, marginBottom:16 }}>
+                ⚠ Nenhum item desta NF está vinculado a um produto cadastrado. Edite a NF e vincule os itens.
+              </div>
+            ) : (
+              <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
+                {itensComProduto.map((it, i) => {
+                  const prod = produtos.find(p => p.id === it.produtoCadastradoId);
+                  return (
+                    <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"4px 0", borderBottom:i<itensComProduto.length-1?"1px solid #dcfce7":"none" }}>
+                      <span style={{ fontSize:13, color:"#0f172a" }}>{prod?.titulo?.slice(0,40) || it.xProd?.slice(0,40)}</span>
+                      <span style={{ fontSize:13, fontWeight:700, color:"#15803d" }}>+{it.qCom} {it.uCom||"un"}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div style={{ display:"flex", gap:8 }}>
+              <button onClick={() => setModalEstoque(false)}
+                style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
+              <button onClick={() => { lancarEstoque(); setModalEstoque(false); }} disabled={itensComProduto.length === 0}
+                style={{ flex:2, background:itensComProduto.length>0?"#15803d":"#f1f5f9", border:"none", color:itensComProduto.length>0?"#fff":"#94a3b8", fontWeight:700, padding:"11px", borderRadius:10, cursor:itensComProduto.length>0?"pointer":"not-allowed" }}>
+                ✓ Confirmar Lançamento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de configuração de contas a pagar */}
+      {modalContas && (
+        <ModalLancarContas
+          nf={nf}
+          categoriasPagar={categoriasPagar}
+          onConfirm={lancarContasPagar}
+          onClose={() => setModalContas(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Modal de lançamento de contas a pagar da NF ──────────────
+function ModalLancarContas({ nf, categoriasPagar, onConfirm, onClose }) {
+  const [cfg, setCfg] = useState({
+    categoria: "Fornecedor",
+    multaPct: "2", multaTipo: "%",
+    jurosDia: "0.033", jurosTipo: "%",
+    temProtesto: false, diasProtesto: "", cartorio: "",
+  });
+  const set = (k, v) => setCfg(c => ({ ...c, [k]: v }));
+  const dups = nf.duplicatas || [];
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:24 }}>
+      <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:500, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)", maxHeight:"90vh", overflowY:"auto" }}>
+        <div style={{ fontWeight:800, fontSize:17, color:"#0f172a", marginBottom:4 }}>💰 Lançar Contas a Pagar</div>
+        <div style={{ fontSize:13, color:"#64748b", marginBottom:16 }}>NF {nf.numero}/{nf.serie} — {nf.fornecedorNome}</div>
+
+        {/* Duplicatas */}
+        <div style={{ background:"#f8fafc", borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
+          <div style={{ fontWeight:700, fontSize:13, color:"#0f172a", marginBottom:10 }}>{dups.length} duplicata(s) a lançar</div>
+          {dups.length === 0 ? (
+            <div style={{ fontSize:13, color:"#94a3b8" }}>Nenhuma duplicata cadastrada nesta NF.</div>
+          ) : dups.map((d, i) => (
+            <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"6px 0", borderBottom:i<dups.length-1?"1px solid #f1f5f9":"none" }}>
+              <div>
+                <span style={{ fontSize:12, fontWeight:600, color:"#0f172a" }}>Dup. {d.nDup || String(i+1).padStart(3,"0")}</span>
+                <span style={{ fontSize:11, color:"#94a3b8", marginLeft:8 }}>Venc: {d.dVenc ? new Date(d.dVenc+"T12:00:00").toLocaleDateString("pt-BR") : "—"}</span>
+              </div>
+              <span style={{ fontSize:13, fontWeight:700, color:"#0f172a" }}>R$ {parseFloat(d.vDup||0).toFixed(2).replace(".",",")}</span>
+            </div>
+          ))}
+          <div style={{ display:"flex", justifyContent:"flex-end", marginTop:8, paddingTop:8, borderTop:"1px solid #f1f5f9" }}>
+            <span style={{ fontSize:13, fontWeight:800, color:"#0f172a" }}>Total: R$ {dups.reduce((s,d)=>s+parseFloat(d.vDup||0),0).toFixed(2).replace(".",",")}</span>
+          </div>
+        </div>
+
+        {/* Configuração */}
+        <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:20 }}>
+          <div>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Categoria</div>
+            <select value={cfg.categoria} onChange={e=>set("categoria",e.target.value)}
+              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", padding:"9px 12px", borderRadius:8, fontSize:13 }}>
+              {(categoriasPagar||["Fornecedor","Outros"]).map(c=><option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+            <div>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Multa por atraso</div>
+              <div style={{ display:"flex", gap:4 }}>
+                <input type="number" value={cfg.multaPct} onChange={e=>set("multaPct",e.target.value)}
+                  style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:13, outline:"none" }} placeholder="2" />
+                {["%","R$"].map(t=>(
+                  <button key={t} onClick={()=>set("multaTipo",t)}
+                    style={{ padding:"0 10px", borderRadius:6, border:"none", cursor:"pointer", fontSize:12, fontWeight:700, background:cfg.multaTipo===t?"#0f172a":"#e2e8f0", color:cfg.multaTipo===t?"#fff":"#64748b" }}>{t}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Juros ao dia</div>
+              <div style={{ display:"flex", gap:4 }}>
+                <input type="number" value={cfg.jurosDia} onChange={e=>set("jurosDia",e.target.value)}
+                  style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:13, outline:"none" }} placeholder="0.033" />
+                {["%","R$"].map(t=>(
+                  <button key={t} onClick={()=>set("jurosTipo",t)}
+                    style={{ padding:"0 10px", borderRadius:6, border:"none", cursor:"pointer", fontSize:12, fontWeight:700, background:cfg.jurosTipo===t?"#0f172a":"#e2e8f0", color:cfg.jurosTipo===t?"#fff":"#64748b" }}>{t}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer" }}>
+            <input type="checkbox" checked={cfg.temProtesto} onChange={e=>set("temProtesto",e.target.checked)} style={{ width:14, height:14 }} />
+            <span style={{ fontSize:13, color:"#334155" }}>⚖️ Será protestada por atraso</span>
+          </label>
+          {cfg.temProtesto && (
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 2fr", gap:8 }}>
+              <div>
+                <div style={{ fontSize:11, color:"#94a3b8", marginBottom:4, fontWeight:600, textTransform:"uppercase" }}>Dias p/ Protesto</div>
+                <input type="number" value={cfg.diasProtesto} onChange={e=>set("diasProtesto",e.target.value)}
+                  style={{ width:"100%", background:"#f8fafc", border:"1px solid #fecaca", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:13, outline:"none" }} placeholder="5" />
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:"#94a3b8", marginBottom:4, fontWeight:600, textTransform:"uppercase" }}>Cartório</div>
+                <input value={cfg.cartorio||""} onChange={e=>set("cartorio",e.target.value)}
+                  style={{ width:"100%", background:"#f8fafc", border:"1px solid #fecaca", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:13, outline:"none" }} placeholder="1º Cartório..." />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ display:"flex", gap:8 }}>
+          <button onClick={onClose} style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
+          <button onClick={() => onConfirm(cfg)} disabled={dups.length===0}
+            style={{ flex:2, background:dups.length>0?"#0f172a":"#f1f5f9", border:"none", color:dups.length>0?"#fff":"#94a3b8", fontWeight:700, padding:"11px", borderRadius:10, cursor:dups.length>0?"pointer":"not-allowed" }}>
+            ✓ Lançar {dups.length} Conta(s) a Pagar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ── Aba Principal de Notas Fiscais ───────────────────────────
+function NotasFiscaisTab({ notasFiscais, setNotasFiscais, fornecedores, produtos, setProdutos, contasPagar, setContasPagar, categoriasPagar }) {
+  const [showModal, setShowModal] = useState(false);
+  const [editingNF, setEditingNF] = useState(null);
+  const [search, setSearch] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
+
+  function saveNF(form) {
+    const isNew = !notasFiscais.find(n => n.id === form.id);
+    const updated = isNew ? [{ ...form, lancadaEm: new Date().toLocaleDateString("sv-SE") }, ...notasFiscais]
+                          : notasFiscais.map(n => n.id === form.id ? form : n);
+    setNotasFiscais(updated);
+    saveNFs(updated);
+
+    if (isNew) {
+      // Atualizar estoque dos produtos vinculados
+      if (form.atualizarEstoque) {
+        const novoProdutos = produtos.map(p => {
+          const item = form.itens.find(it => it.produtoCadastradoId === p.id);
+          if (!item) return p;
+          const novoEstoque = parseFloat(p.estoqueAtual || 0) + parseFloat(item.qCom || 0);
+          return { ...p, estoqueAtual: String(novoEstoque) };
+        });
+        setProdutos(novoProdutos);
+        try { localStorage.setItem("produtos_cadastro", JSON.stringify(novoProdutos)); } catch {}
+      }
+
+      // Gerar contas a pagar para cada duplicata
+      if (form.gerarContaPagar && form.duplicatas.length > 0) {
+        const cfg = form.contaPagarConfig;
+        const novasContas = form.duplicatas.map((d, i) => ({
+          id: Date.now() + i,
+          descricao: `NF ${form.numero}/${form.serie} — ${form.fornecedorNome} — Dup. ${d.nDup || String(i+1).padStart(3,"0")}`,
+          categoria: cfg.categoria || "Fornecedor",
+          valor: String(d.vDup),
+          vencimento: d.dVenc,
+          status: "Pendente",
+          observacao: `Nota Fiscal ${form.numero} — Chave: ${form.chave?.slice(0,20)}...`,
+          multaPct: cfg.multaPct, multaTipo: cfg.multaTipo,
+          jurosDia: cfg.jurosDia, jurosTipo: cfg.jurosTipo,
+          temProtesto: cfg.temProtesto, diasProtesto: cfg.diasProtesto, cartorio: cfg.cartorio,
+          nfId: form.id,
+        }));
+        const updatedContas = [...contasPagar, ...novasContas];
+        setContasPagar(updatedContas);
+        try { localStorage.setItem("contas_pagar", JSON.stringify(updatedContas)); } catch {}
+      }
+    }
+    setEditingNF(null);
+  }
+
+  function deleteNF(id) {
+    if (!confirm("Excluir esta nota fiscal? As contas a pagar geradas NÃO serão excluídas.")) return;
+    const updated = notasFiscais.filter(n => n.id !== id);
+    setNotasFiscais(updated); saveNFs(updated);
+  }
+
+  const nfsFiltradas = notasFiscais.filter(n => {
+    if (filterStatus !== "all" && n.status !== filterStatus) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return n.numero?.includes(q) || n.fornecedorNome?.toLowerCase().includes(q) || n.chave?.includes(q);
+    }
+    return true;
+  });
+
+  const totalNFs = notasFiscais.reduce((s,n) => s + (n.totais?.vNF||0), 0);
+  const totalItens = notasFiscais.reduce((s,n) => s + (n.itens?.length||0), 0);
+
+  return (
+    <div>
+      {/* Cards */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:10, marginBottom:16 }}>
+        {[
+          { label:"Total de NFs", value:String(notasFiscais.length), color:"#0f172a", desc:"lançadas" },
+          { label:"Valor Total", value:`R$ ${totalNFs.toFixed(2).replace(".",",")}`, color:"#15803d", desc:"em compras" },
+          { label:"Total de Itens", value:String(totalItens), color:"#0891b2", desc:"produtos" },
+          { label:"Contas Geradas", value:String(notasFiscais.reduce((s,n)=>s+(n.duplicatas?.length||0),0)), color:"#7c3aed", desc:"duplicatas" },
+        ].map(k => (
+          <div key={k.label} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"14px 18px" }}>
+            <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:4 }}>{k.label}</div>
+            <div style={{ fontSize:20, fontWeight:800, color:k.color }}>{k.value}</div>
+            <div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{k.desc}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Toolbar */}
+      <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
+        <button onClick={() => { setEditingNF(null); setShowModal(true); }}
+          style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>
+          + Nova Nota Fiscal
+        </button>
+        <label style={{ background:"#ffe000", border:"none", color:"#0f172a", fontWeight:700, padding:"9px 16px", borderRadius:8, cursor:"pointer", fontSize:13 }}>
+          📎 Importar XML
+          <input type="file" accept=".xml" style={{ display:"none" }} onChange={e => {
+            if (!e.target.files[0]) return;
+            const reader = new FileReader();
+            reader.onload = ev => {
+              try {
+                const parsed = parseNFeXML(ev.target.result);
+                const forn = fornecedores.find(f => f.cnpj?.replace(/\D/g,"") === parsed.emitente.cnpj?.replace(/\D/g,""));
+                setEditingNF({
+                  id: Date.now().toString(),
+                  numero: parsed.numero, serie: parsed.serie, chave: parsed.chave,
+                  dataEmissao: parsed.dataEmissao?.slice(0,10),
+                  natureza: parsed.natureza,
+                  fornecedorId: forn?.id || "",
+                  fornecedorNome: parsed.emitente.nome,
+                  fornecedorCNPJ: parsed.emitente.cnpj,
+                  totais: parsed.totais,
+                  itens: parsed.itens.map(it => ({
+                    ...it,
+                    produtoCadastradoId: produtos.find(p =>
+                      (p.ean && p.ean === it.ean && it.ean !== "SEM GTIN") ||
+                      (p.sku && p.sku === it.cProd)
+                    )?.id || "",
+                  })),
+                  duplicatas: parsed.duplicatas,
+                  infAdic: parsed.infAdic,
+                  gerarContaPagar: true, atualizarEstoque: true,
+                  contaPagarConfig: { categoria:"Fornecedor", multaPct:"2", multaTipo:"%", jurosDia:"0.033", jurosTipo:"%", temProtesto:false, diasProtesto:"", cartorio:"" },
+                  status: "Lançada", obs: "",
+                });
+                setShowModal(true);
+              } catch(err) { alert("Erro ao ler XML: " + err.message); }
+            };
+            reader.readAsText(e.target.files[0], "UTF-8");
+            e.target.value = "";
+          }} />
+        </label>
+        <div style={{ position:"relative", flex:1, minWidth:200 }}>
+          <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8" }}>🔍</span>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por NF, fornecedor, chave..."
+            style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px 8px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
+        </div>
+        <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}
+          style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 12px", borderRadius:8, fontSize:12 }}>
+          <option value="all">Todos status</option>
+          <option value="Lançada">Lançada</option>
+          <option value="Cancelada">Cancelada</option>
+        </select>
+        <span style={{ fontSize:12, color:"#94a3b8" }}>{nfsFiltradas.length} nota(s)</span>
+      </div>
+
+      {/* Tabela */}
+      {nfsFiltradas.length === 0 ? (
+        <div style={{ background:"#f8fafc", border:"2px dashed #e2e8f0", borderRadius:12, padding:60, textAlign:"center", color:"#94a3b8" }}>
+          <div style={{ fontSize:40, marginBottom:12 }}>🧾</div>
+          <div style={{ fontWeight:700, fontSize:16, marginBottom:6 }}>Nenhuma nota fiscal lançada</div>
+          <div style={{ fontSize:13 }}>Clique em "+ Nova Nota Fiscal" ou importe um XML</div>
+        </div>
+      ) : (
+        <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
+          <table style={{ borderCollapse:"collapse", width:"100%" }}>
+            <thead>
+              <tr>{["NF/Série","Data","Fornecedor","Itens","Total NF","Duplicatas","Status","Ações"].map(h=>(
+                <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>
+              ))}</tr>
+            </thead>
+            <tbody>
+              {nfsFiltradas.map((n,i) => (
+                <tr key={n.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
+                  <td style={{ padding:"10px 14px" }}>
+                    <div style={{ fontWeight:700, fontSize:13, color:"#0f172a" }}>{n.numero}/{n.serie}</div>
+                    <div style={{ fontSize:10, color:"#94a3b8", fontFamily:"monospace" }}>{n.chave?.slice(0,20)}...</div>
+                  </td>
+                  <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{n.dataEmissao ? new Date(n.dataEmissao+"T12:00:00").toLocaleDateString("pt-BR") : "—"}</td>
+                  <td style={{ padding:"10px 14px" }}>
+                    <div style={{ fontSize:13, color:"#0f172a", fontWeight:500 }}>{n.fornecedorNome?.slice(0,30)}</div>
+                    <div style={{ fontSize:11, color:"#94a3b8" }}>{n.fornecedorCNPJ}</div>
+                  </td>
+                  <td style={{ padding:"10px 14px", fontSize:13, color:"#0f172a", textAlign:"center" }}>{n.itens?.length||0}</td>
+                  <td style={{ padding:"10px 14px", fontSize:13, fontWeight:700, color:"#0f172a" }}>R$ {(n.totais?.vNF||0).toFixed(2).replace(".",",")}</td>
+                  <td style={{ padding:"10px 14px" }}>
+                    {(n.duplicatas||[]).map((d,di) => (
+                      <div key={di} style={{ fontSize:11, color:"#64748b" }}>Dup.{d.nDup||di+1} — {d.dVenc ? new Date(d.dVenc+"T12:00:00").toLocaleDateString("pt-BR") : "—"} — R$ {parseFloat(d.vDup||0).toFixed(2).replace(".",",")}</div>
+                    ))}
+                  </td>
+                  <td style={{ padding:"10px 14px" }}>
+                    <span style={{ fontSize:11, fontWeight:600, color:n.status==="Cancelada"?"#dc2626":"#15803d", background:n.status==="Cancelada"?"#fef2f2":"#f0fdf4", padding:"3px 8px", borderRadius:6 }}>{n.status||"Lançada"}</span>
+                  </td>
+                  <td style={{ padding:"10px 14px" }}>
+                    <div style={{ display:"flex", gap:4, alignItems:"center" }}>
+                      <button onClick={() => { setEditingNF(n); setShowModal(true); }}
+                        style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"4px 8px", borderRadius:6, cursor:"pointer", fontSize:11 }}>✏️</button>
+                      <button onClick={() => deleteNF(n.id)}
+                        style={{ background:"#fef2f2", border:"1px solid #fecaca", color:"#dc2626", padding:"4px 8px", borderRadius:6, cursor:"pointer", fontSize:11 }}>🗑</button>
+                      <MenuAcoes
+                        nf={n}
+                        produtos={produtos}
+                        setProdutos={setProdutos}
+                        contasPagar={contasPagar}
+                        setContasPagar={setContasPagar}
+                        categoriasPagar={categoriasPagar}
+                      />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {showModal && (
+        <ModalNF
+          nf={editingNF}
+          fornecedores={fornecedores}
+          produtos={produtos}
+          categoriasPagar={categoriasPagar}
+          onSave={saveNF}
+          onClose={() => { setShowModal(false); setEditingNF(null); }}
+        />
       )}
     </div>
   );
@@ -3749,6 +4886,7 @@ export default function App() {
     try { return JSON.parse(localStorage.getItem("custos_fixos_config") || "[]"); } catch { return []; }
   });
   const [showNotif, setShowNotif] = useState(false);
+  const [showBackup, setShowBackup] = useState(false);
   const [notificacoes, setNotificacoes] = useState(() => {
     try { return JSON.parse(localStorage.getItem("ml_notificacoes") || "[]"); } catch { return []; }
   });
@@ -3777,6 +4915,9 @@ export default function App() {
   });
   const [fornecedores, setFornecedores] = useState(() => {
     try { return JSON.parse(localStorage.getItem("fornecedores_cadastro") || "[]"); } catch { return []; }
+  });
+  const [notasFiscais, setNotasFiscais] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("notas_fiscais_entrada") || "[]"); } catch { return []; }
   });
   const [paymentData, setPaymentData] = useState({}); // orderId → { releaseDate, netAmount }
   const [loadError, setLoadError] = useState(null);
@@ -4311,6 +5452,11 @@ export default function App() {
             setNotificacoes={setNotificacoes}
             darkMode={darkMode}
           />
+          <button onClick={() => setShowBackup(true)}
+            title="Backup e Restauração"
+            style={{ background: darkMode?"#1e293b":"#f1f5f9", border:`1px solid ${darkMode?"#334155":"#e2e8f0"}`, color: darkMode?"#94a3b8":"#64748b", width:36, height:36, borderRadius:8, cursor:"pointer", fontSize:16 }}>
+            💾
+          </button>
           <button onClick={() => { const n = !darkMode; setDarkMode(n); localStorage.setItem("darkMode", n?"1":"0"); }}
             style={{ background: darkMode?"#334155":"#f1f5f9", border:"none", color: darkMode?"#fff":"#475569", width:36, height:36, borderRadius:8, cursor:"pointer", fontSize:18 }}>
             {darkMode ? "☀️" : "🌙"}
@@ -4391,6 +5537,7 @@ export default function App() {
           {currentUser?.permissoes?.includes("financeiro") && <button className={`tab-btn ${tab === "financeiro" ? "active" : ""}`} onClick={() => setTab("financeiro")}>💰 Financeiro</button>}
           {currentUser?.admin && <button className={`tab-btn ${tab === "admin" ? "active" : ""}`} onClick={() => setTab("admin")}>⚙️ Usuários</button>}
           {currentUser?.permissoes?.includes("produtos") && <button className={`tab-btn ${tab === "produtos" ? "active" : ""}`} onClick={() => setTab("produtos")}>📦 Produtos</button>}
+          {currentUser?.permissoes?.includes("produtos") && <button className={`tab-btn ${tab === "nf" ? "active" : ""}`} onClick={() => setTab("nf")}>🧾 Notas Fiscais</button>}
         </div>
 
         {tab === "overview" && currentUser?.permissoes?.includes("overview") && (
@@ -4722,6 +5869,19 @@ export default function App() {
           />
         )}
 
+        {tab === "nf" && currentUser?.permissoes?.includes("produtos") && (
+          <NotasFiscaisTab
+            notasFiscais={notasFiscais}
+            setNotasFiscais={setNotasFiscais}
+            fornecedores={fornecedores}
+            produtos={produtos}
+            setProdutos={setProdutos}
+            contasPagar={contasPagar}
+            setContasPagar={setContasPagar}
+            categoriasPagar={categoriasPagar}
+          />
+        )}
+
         {tab === "produtos" && currentUser?.permissoes?.includes("produtos") && (
           <ProdutosTab
             produtos={produtos}
@@ -4737,6 +5897,8 @@ export default function App() {
         {tab === "admin" && currentUser?.admin && (
           <AdminTab currentUser={currentUser} />
         )}
+
+      {showBackup && <PainelBackup onClose={() => setShowBackup(false)} />}
 
       {showMLModal && <MLConnectModal onConnect={handleConnect} onClose={() => setShowMLModal(false)} />}
       {selectedListing && <AIPanel listing={selectedListing} onClose={() => setSelectedListing(null)} />}

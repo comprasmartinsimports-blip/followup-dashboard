@@ -3728,49 +3728,6 @@ function ModalContaBancaria({ conta, onSave, onClose }) {
               ))}
             </div>
           </div>
-
-          {/* Anexos */}
-          <div style={{ gridColumn:"1/-1" }}>
-            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:8, fontWeight:600, textTransform:"uppercase" }}>📎 Anexos</div>
-            <label style={{ display:"block", border:"2px dashed #e2e8f0", borderRadius:10, padding:"12px", textAlign:"center", cursor:"pointer", background:"#f8fafc", marginBottom:8 }}>
-              <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.xml,.xlsx,.xls,.doc,.docx" style={{ display:"none" }}
-                onChange={async e => {
-                  const files = Array.from(e.target.files);
-                  const converted = await Promise.all(files.map(f => new Promise((res) => {
-                    const reader = new FileReader();
-                    reader.onload = ev => res({ nome: f.name, tipo: f.type, tamanho: f.size, base64: ev.target.result });
-                    reader.readAsDataURL(f);
-                  })));
-                  set("anexos", [...(form.anexos||[]), ...converted].slice(0,5));
-                  e.target.value = "";
-                }} />
-              <div style={{ fontSize:13, color:"#64748b" }}>📎 Clique para anexar arquivos</div>
-              <div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>PDF, imagens, XML, Word, Excel — máx. 5 arquivos</div>
-            </label>
-            {(form.anexos||[]).length > 0 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                {(form.anexos||[]).map((a, i) => {
-                  const isImg = a.tipo && a.tipo.startsWith("image/");
-                  const isPdf = a.tipo === "application/pdf";
-                  const icon = isImg ? "🖼️" : isPdf ? "📄" : "📎";
-                  return (
-                    <div key={i} style={{ display:"flex", alignItems:"center", gap:10, background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:8, padding:"8px 12px" }}>
-                      <span style={{ fontSize:18 }}>{icon}</span>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:12, fontWeight:600, color:"#0f172a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{a.nome}</div>
-                        <div style={{ fontSize:10, color:"#94a3b8" }}>{(a.tamanho/1024).toFixed(1)} KB</div>
-                      </div>
-                      {isImg && <img src={a.base64} alt={a.nome} style={{ width:36, height:36, objectFit:"cover", borderRadius:6, border:"1px solid #e2e8f0", flexShrink:0 }} />}
-                      <a href={a.base64} download={a.nome}
-                        style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", width:26, height:26, borderRadius:6, cursor:"pointer", fontSize:13, display:"flex", alignItems:"center", justifyContent:"center", textDecoration:"none", flexShrink:0 }}>⬇</a>
-                      <button onClick={() => set("anexos", form.anexos.filter((_,j)=>j!==i))}
-                        style={{ background:"#fef2f2", border:"none", color:"#dc2626", width:26, height:26, borderRadius:6, cursor:"pointer", fontSize:11, flexShrink:0 }}>✕</button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
         </div>
         <div style={{ display:"flex", gap:8 }}>
           <button onClick={onClose} style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
@@ -4160,7 +4117,49 @@ function ModalConta({ conta, categoriasPagar, fornecedores, onSave, onClose }) {
                     style={{ width:"100%", background:"#fff", border:"1px solid #fecaca", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
                 </div>
               </div>
+
+
+          {/* ── ANEXOS ── */}
+          <div style={{ gridColumn:"1/-1" }}>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:8, fontWeight:600, textTransform:"uppercase" }}>📎 Anexos</div>
+            <label style={{ display:"block", border:"2px dashed #e2e8f0", borderRadius:10, padding:"12px", textAlign:"center", cursor:"pointer", background:"#f8fafc", marginBottom:8 }}>
+              <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.xml,.xlsx,.xls,.doc,.docx" style={{ display:"none" }}
+                onChange={async e => {
+                  const files = Array.from(e.target.files);
+                  const converted = await Promise.all(files.map(f => new Promise((res) => {
+                    const reader = new FileReader();
+                    reader.onload = ev => res({ nome: f.name, tipo: f.type, tamanho: f.size, base64: ev.target.result });
+                    reader.readAsDataURL(f);
+                  })));
+                  set("anexos", [...(form.anexos||[]), ...converted].slice(0,5));
+                  e.target.value = "";
+                }} />
+              <div style={{ fontSize:13, color:"#64748b" }}>📎 Clique para anexar arquivos</div>
+              <div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>PDF, imagens, XML, Word, Excel — máx. 5 arquivos</div>
+            </label>
+            {(form.anexos||[]).length > 0 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                {(form.anexos||[]).map((a, i) => {
+                  const isImg = a.tipo && a.tipo.startsWith("image/");
+                  const icon = isImg ? "🖼️" : a.tipo === "application/pdf" ? "📄" : "📎";
+                  return (
+                    <div key={i} style={{ display:"flex", alignItems:"center", gap:10, background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:8, padding:"8px 12px" }}>
+                      <span style={{ fontSize:18 }}>{icon}</span>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:12, fontWeight:600, color:"#0f172a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{a.nome}</div>
+                        <div style={{ fontSize:10, color:"#94a3b8" }}>{(a.tamanho/1024).toFixed(1)} KB</div>
+                      </div>
+                      {isImg && <img src={a.base64} alt={a.nome} style={{ width:36, height:36, objectFit:"cover", borderRadius:6, border:"1px solid #e2e8f0", flexShrink:0 }} />}
+                      <a href={a.base64} download={a.nome}
+                        style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", width:26, height:26, borderRadius:6, fontSize:13, display:"flex", alignItems:"center", justifyContent:"center", textDecoration:"none", flexShrink:0 }}>⬇</a>
+                      <button onClick={() => set("anexos", (form.anexos||[]).filter((_,j)=>j!==i))}
+                        style={{ background:"#fef2f2", border:"none", color:"#dc2626", width:26, height:26, borderRadius:6, cursor:"pointer", fontSize:11, flexShrink:0 }}>✕</button>
+                    </div>
+                  );
+                })}
+              </div>
             )}
+          </div>
           </div>
         </div>
         <div style={{ display:"flex", gap:8 }}>

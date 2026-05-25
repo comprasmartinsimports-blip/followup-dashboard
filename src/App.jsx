@@ -3628,6 +3628,35 @@ async function chamarIA(prompt, maxTokens) {
   return data.content?.map(function(b) { return b.text || ""; }).join("") ?? "";
 }
 
+function sanitize(str) {
+  // Remove caracteres que podem quebrar JSON
+  return String(str || "").replace(/[
+	"\\]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function parseIAJson(text) {
+  // Tenta extrair JSON de forma robusta
+  var clean = text.replace(/```json[\s\S]*?```/g, function(m) { return m.slice(7, -3); });
+  clean = clean.replace(/```/g, "").trim();
+  var start = clean.indexOf("{");
+  var end = clean.lastIndexOf("}");
+  if (start === -1 || end === -1) throw new Error("IA não retornou JSON válido");
+  var jsonStr = clean.slice(start, end + 1);
+  try {
+    return JSON.parse(jsonStr);
+  } catch(e) {
+    // Tenta corrigir JSON com aspas simples ou aspas internas mal escapadas
+    var fixed = jsonStr
+      .replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3')  // chaves sem aspas
+      .replace(/:\s*'([^']*)'/g, ': "$1"')              // valores com aspas simples
+      .replace(/,\s*}/g, '}')                           // trailing comma
+      .replace(/,\s*]/g, ']');
+    try { return JSON.parse(fixed); } catch(e2) {
+      throw new Error("JSON inválido da IA: " + e.message);
+    }
+  }
+}
+
 async function analisarPrioridadePagamentos(contas, saldoDisponivel) {
   const contasComCusto = contas.filter(function(c) { return c.status !== "Pago"; }).map(function(c) {
     const valor = parseFloat(c.valor || 0);
@@ -3639,30 +3668,49 @@ async function analisarPrioridadePagamentos(contas, saldoDisponivel) {
     const diasParaVencer = dueDate ? Math.round((dueDate - hoje) / 86400000) : 999;
     const multaValor = diasAtraso > 0 ? multaR : 0;
     const jurosValor = diasAtraso > 0 ? jurosDiaR * diasAtraso : 0;
-    const custoHoje = valor + multaValor + jurosValor;
-    const custoPorDia = jurosDiaR + (diasAtraso === 0 && dueDate ? multaR : 0);
-    return Object.assign({}, c, { valor, diasAtraso, diasParaVencer, multaValor, jurosValor, custoHoje, custoPorDia });
+    return Object.assign({}, c, { valor, diasAtraso, diasParaVencer, multaValor, jurosValor });
   });
 
-  const prompt = `Você é um consultor financeiro especialista em gestão de fluxo de caixa para pequenas empresas brasileiras.
+  // Usar JSON estruturado no prompt evita problemas com caracteres especiais
+  var contasData = contasComCusto.map(function(c, i) {
+    return {
+      num: i + 1,
+      id: String(c.id),
+      desc: sanitize(c.descricao),
+      valor: c.valor.toFixed(2),
+      venc: c.vencimento || "sem data",
+      situacao: c.diasAtraso > 0 ? ("VENCIDA " + c.diasAtraso + "d") : ("vence em " + c.diasParaVencer + "d"),
+      multa: c.multaValor.toFixed(2),
+      juros: c.jurosValor.toFixed(2),
+      protesto: c.temProtesto ? ("SIM " + (c.diasProtesto || 0) + "d") : "Nao",
+      cat: sanitize(c.categoria),
+      prioridade: c.prioridade || "media"
+    };
+  });
 
-Analise as contas a pagar e forneça prioridade de pagamento.
+  const prompt = "Você é um consultor financeiro especialista em fluxo de caixa para pequenas empresas brasileiras.
 
-Saldo disponível: R$ ${saldoDisponivel.toFixed(2)}
+" +
+    "Saldo disponível: R$ " + saldoDisponivel.toFixed(2) + "
 
-Contas:
-${contasComCusto.map(function(c, i) {
-  return (i+1) + ". " + c.descricao + " | Valor: R$ " + c.valor.toFixed(2) + " | Venc: " + (c.vencimento||"s/d") + " | " + (c.diasAtraso > 0 ? "VENCIDA " + c.diasAtraso + "d" : "vence em " + c.diasParaVencer + "d") + " | Multa: R$ " + c.multaValor.toFixed(2) + " | Juros: R$ " + c.jurosValor.toFixed(2) + " | Protesto: " + (c.temProtesto ? "SIM " + c.diasProtesto + "d" : "Não") + " | Cat: " + c.categoria;
-}).join("\n")}
+" +
+    "Contas a pagar:
+" +
+    contasData.map(function(c) {
+      return c.num + ". " + c.desc + " | R$ " + c.valor + " | " + c.situacao +
+        " | Multa: R$ " + c.multa + " | Juros: R$ " + c.juros +
+        " | Protesto: " + c.protesto + " | Cat: " + c.cat +
+        " | Prioridade cadastrada: " + c.prioridade + " | ID: " + c.id;
+    }).join("
+") + "
 
-Retorne APENAS JSON válido:
-{"resumo":"...","alerta_critico":"...ou null","prioridade":[{"posicao":1,"id":"id","razao":"...","urgencia":"critica|alta|media|baixa","pagar_hoje":true,"economia_se_pagar_hoje":0.00}],"contas_no_saldo":["id1"],"total_se_pagar_prioritarias":0.00,"recomendacao_final":"..."}`;
+" +
+    "Retorne APENAS este JSON preenchido (sem texto extra, sem markdown):
+" +
+    '{"resumo":"texto","alerta_critico":null,"prioridade":[{"posicao":1,"id":"ID_AQUI","razao":"texto","urgencia":"critica","pagar_hoje":true}],"recomendacao_final":"texto"}';
 
-  const text = await chamarIA(prompt, 1200);
-  const clean = text.replace(/```json|```/g, "").trim();
-  const jsonStart = clean.indexOf("{");
-  const jsonEnd = clean.lastIndexOf("}");
-  return JSON.parse(clean.slice(jsonStart, jsonEnd + 1));
+  const text = await chamarIA(prompt, 1400);
+  return parseIAJson(text);
 }
 
 async function analisarEmprestimo(dados) {
@@ -3711,10 +3759,7 @@ Retorne APENAS JSON:
 }`;
 
   const text = await chamarIA(prompt, 1800);
-  const clean = text.replace(/```json|```/g, "").trim();
-  const jsonStart = clean.indexOf("{");
-  const jsonEnd = clean.lastIndexOf("}");
-  return JSON.parse(clean.slice(jsonStart, jsonEnd + 1));
+  return parseIAJson(text);
 }
 
 async function analisarDecisaoFinanceira(dados) {
@@ -3745,10 +3790,7 @@ Retorne APENAS JSON:
 }`;
 
   const text = await chamarIA(prompt, 1500);
-  const clean = text.replace(/```json|```/g, "").trim();
-  const jsonStart = clean.indexOf("{");
-  const jsonEnd = clean.lastIndexOf("}");
-  return JSON.parse(clean.slice(jsonStart, jsonEnd + 1));
+  return parseIAJson(text);
 }
 
 function PainelIAPagamentos({ contasPagar, contasBancarias, lancamentos, enrichedOrders, paymentData, shipmentStatuses }) {

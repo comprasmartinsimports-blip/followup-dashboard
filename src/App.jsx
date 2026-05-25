@@ -4924,10 +4924,17 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
           });
         });
 
-        // sortedDias já definido pelo filtro acima
+        // Filtro por período
+        const fluxoSortedAll = Object.keys(dias).sort().reverse();
+        const fluxoFiltrado = fluxoSortedAll.filter(function(d) {
+          if (fluxoDe && d < fluxoDe) return false;
+          if (fluxoAte && d > fluxoAte) return false;
+          return true;
+        });
+        const sortedDias = fluxoFiltrado.slice(0, 90);
+
+        // Saldo acumulado
         let saldoAcumulado = contasBancarias.reduce((s, c) => s + parseFloat(c.saldoInicial || 0), 0);
-        
-        // Calcula saldo acumulado na ordem cronológica
         const saldosPorDia = {};
         [...sortedDias].reverse().forEach(d => {
           const entrada = dias[d].entradas.filter(e => !e.previsto).reduce((s,e) => s+e.valor, 0);
@@ -4938,15 +4945,6 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
 
         const totalEntradas = sortedDias.reduce((s,d) => s + dias[d].entradas.filter(e=>!e.previsto).reduce((a,e)=>a+e.valor,0), 0);
         const totalSaidas   = sortedDias.reduce((s,d) => s + dias[d].saidas.filter(e=>!e.previsto).reduce((a,e)=>a+e.valor,0), 0);
-
-        // Filtro por período
-        const fluxoSortedAll = Object.keys(dias).sort().reverse();
-        const fluxoFiltrado = fluxoSortedAll.filter(function(d) {
-          if (fluxoDe && d < fluxoDe) return false;
-          if (fluxoAte && d > fluxoAte) return false;
-          return true;
-        });
-        const sortedDias = fluxoFiltrado.slice(0, 90);
 
         return (
           <div>

@@ -3368,83 +3368,8 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
 //  IA — Analisador de Prioridade de Pagamentos
 // ════════════════════════════════════════════════════════════
 
-async function analisarPrioridadePagamentos(contas, saldoDisponivel) {
-  const hoje = new Date().toLocaleDateString("sv-SE");
-  
-  // Calcula custo acumulado de cada conta
-  const contasComCusto = contas.filter(c => c.status !== "Pago").map(c => {
-    const valor = parseFloat(c.valor || 0);
-    // Converte multa para valor R$
-    const multaR = c.multaTipo === "R$"
-      ? parseFloat(c.multaPct || 0)
-      : valor * (parseFloat(c.multaPct || 0) / 100);
-    // Converte juros para valor R$ por dia
-    const jurosDiaR = c.jurosTipo === "R$"
-      ? parseFloat(c.jurosDia || 0)
-      : valor * (parseFloat(c.jurosDia || 0) / 100);
-    const multa = valor > 0 ? multaR / valor : 0;
-    const jurosDia = valor > 0 ? jurosDiaR / valor : 0;
-    const venc = c.vencimento;
-    const hoje = new Date(); hoje.setHours(0,0,0,0);
-    const dueDate = venc ? new Date(venc + "T00:00:00") : null;
-    const diasAtraso = dueDate ? Math.max(0, Math.round((hoje - dueDate) / 86400000)) : 0;
-    const diasParaVencer = dueDate ? Math.round((dueDate - hoje) / 86400000) : 999;
-    
-    const multaValor = diasAtraso > 0 ? multaR : 0;
-    const jurosValor = diasAtraso > 0 ? jurosDiaR * diasAtraso : 0;
-    const custoHoje = valor + multaValor + jurosValor;
-    const custoAmanha = valor + (diasAtraso === 0 && dueDate ? multaR : multaValor) + jurosDiaR * (diasAtraso + 1);
-    const custoPorDia = jurosDiaR + (diasAtraso === 0 && dueDate ? multaR : 0);
-    
-    return {
-      ...c, valor, multa, jurosDia, diasAtraso, diasParaVencer,
-      multaValor, jurosValor, custoHoje, custoAmanha, custoPorDia,
-    };
-  });
-
-  const prompt = `Você é um consultor financeiro especialista em gestão de fluxo de caixa para pequenas empresas brasileiras.
-
-Analise as seguintes contas a pagar e forneça uma recomendação de prioridade de pagamento considerando:
-1. Custo total atual (valor + multa + juros acumulados)
-2. Custo por dia de atraso adicional
-3. Dias até o vencimento (ou de atraso)
-4. Valor total de cada conta
-
-Saldo disponível para pagamento hoje: R$ ${saldoDisponivel.toFixed(2)}
-
-Contas a pagar:
-${contasComCusto.map((c, i) => `
-${i+1}. ${c.descricao}
-   - Valor original: R$ ${c.valor.toFixed(2)}
-   - Vencimento: ${c.vencimento || "não informado"}
-   - Situação: ${c.diasAtraso > 0 ? `VENCIDA há ${c.diasAtraso} dias` : c.diasParaVencer === 0 ? "VENCE HOJE" : `vence em ${c.diasParaVencer} dias`}
-   - Multa acumulada: R$ ${c.multaValor.toFixed(2)} (${c.multaTipo||"%"} ${c.multaPct || 0}${c.multaTipo==="R$"?" R$/ocorrência":" %"})
-   - Juros acumulados: R$ ${c.jurosValor.toFixed(2)} (${c.jurosTipo||"%"} ${c.jurosDia || 0}${c.jurosTipo==="R$"?" R$/dia":" % ao dia"})
-   - Custo total hoje: R$ ${c.custoHoje.toFixed(2)}
-   - Custo adicional por dia: R$ ${c.custoPorDia.toFixed(2)}
-   - Categoria: ${c.categoria}
-   - Protesto: ${c.temProtesto ? `SIM — será protestada ${c.diasProtesto} dias após vencimento${c.cartorio ? ` (${c.cartorio})` : ""}` : "Não"}
-`).join("")}
-
-Retorne APENAS um JSON válido neste formato exato:
-{
-  "resumo": "frase curta explicando a situação geral",
-  "alerta_critico": "alerta se houver situação urgente ou null",
-  "prioridade": [
-    {
-      "posicao": 1,
-      "id": "id_da_conta",
-      "razao": "explicação curta do motivo da prioridade",
-      "urgencia": "critica|alta|media|baixa",
-      "pagar_hoje": true|false,
-      "economia_se_pagar_hoje": 0.00
-    }
-  ],
-  "contas_no_saldo": ["id1", "id2"],
-  "total_se_pagar_prioritarias": 0.00,
-  "recomendacao_final": "texto com recomendação final considerando o saldo disponível"
-}`;
-
+async function chamarIA(prompt, maxTokens) {
+  maxTokens = maxTokens || 1500;
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -3455,38 +3380,202 @@ Retorne APENAS um JSON válido neste formato exato:
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-5",
-      max_tokens: 1000,
+      max_tokens: maxTokens,
       messages: [{ role: "user", content: prompt }],
     }),
   });
-
   const data = await response.json();
   if (data.error) throw new Error(data.error.message);
-  const text = data.content?.map(b => b.text || "").join("") ?? "";
+  return data.content?.map(function(b) { return b.text || ""; }).join("") ?? "";
+}
+
+async function analisarPrioridadePagamentos(contas, saldoDisponivel) {
+  const contasComCusto = contas.filter(function(c) { return c.status !== "Pago"; }).map(function(c) {
+    const valor = parseFloat(c.valor || 0);
+    const multaR = c.multaTipo === "R$" ? parseFloat(c.multaPct || 0) : valor * (parseFloat(c.multaPct || 0) / 100);
+    const jurosDiaR = c.jurosTipo === "R$" ? parseFloat(c.jurosDia || 0) : valor * (parseFloat(c.jurosDia || 0) / 100);
+    const hoje = new Date(); hoje.setHours(0,0,0,0);
+    const dueDate = c.vencimento ? new Date(c.vencimento + "T00:00:00") : null;
+    const diasAtraso = dueDate ? Math.max(0, Math.round((hoje - dueDate) / 86400000)) : 0;
+    const diasParaVencer = dueDate ? Math.round((dueDate - hoje) / 86400000) : 999;
+    const multaValor = diasAtraso > 0 ? multaR : 0;
+    const jurosValor = diasAtraso > 0 ? jurosDiaR * diasAtraso : 0;
+    const custoHoje = valor + multaValor + jurosValor;
+    const custoPorDia = jurosDiaR + (diasAtraso === 0 && dueDate ? multaR : 0);
+    return Object.assign({}, c, { valor, diasAtraso, diasParaVencer, multaValor, jurosValor, custoHoje, custoPorDia });
+  });
+
+  const prompt = `Você é um consultor financeiro especialista em gestão de fluxo de caixa para pequenas empresas brasileiras.
+
+Analise as contas a pagar e forneça prioridade de pagamento.
+
+Saldo disponível: R$ ${saldoDisponivel.toFixed(2)}
+
+Contas:
+${contasComCusto.map(function(c, i) {
+  return (i+1) + ". " + c.descricao + " | Valor: R$ " + c.valor.toFixed(2) + " | Venc: " + (c.vencimento||"s/d") + " | " + (c.diasAtraso > 0 ? "VENCIDA " + c.diasAtraso + "d" : "vence em " + c.diasParaVencer + "d") + " | Multa: R$ " + c.multaValor.toFixed(2) + " | Juros: R$ " + c.jurosValor.toFixed(2) + " | Protesto: " + (c.temProtesto ? "SIM " + c.diasProtesto + "d" : "Não") + " | Cat: " + c.categoria;
+}).join("\n")}
+
+Retorne APENAS JSON válido:
+{"resumo":"...","alerta_critico":"...ou null","prioridade":[{"posicao":1,"id":"id","razao":"...","urgencia":"critica|alta|media|baixa","pagar_hoje":true,"economia_se_pagar_hoje":0.00}],"contas_no_saldo":["id1"],"total_se_pagar_prioritarias":0.00,"recomendacao_final":"..."}`;
+
+  const text = await chamarIA(prompt, 1200);
   const clean = text.replace(/```json|```/g, "").trim();
   const jsonStart = clean.indexOf("{");
   const jsonEnd = clean.lastIndexOf("}");
   return JSON.parse(clean.slice(jsonStart, jsonEnd + 1));
 }
 
-function PainelIAPagamentos({ contasPagar, contasBancarias }) {
-  const [state, setState] = useState("idle"); // idle | loading | done | error
+async function analisarEmprestimo(dados) {
+  const prompt = `Você é um consultor financeiro especialista em crédito para pequenas empresas brasileiras.
+
+Analise se vale a pena fazer um empréstimo para quitar dívidas, considerando:
+
+SITUAÇÃO FINANCEIRA:
+- Saldo atual disponível: R$ ${dados.saldoAtual.toFixed(2)}
+- Total de dívidas vencidas: R$ ${dados.totalVencido.toFixed(2)} (${dados.qtdVencidas} contas)
+- Total de dívidas protestadas: R$ ${dados.totalProtestado.toFixed(2)} (${dados.qtdProtestadas} contas)
+- Total de multas e juros acumulados: R$ ${dados.totalMultasJuros.toFixed(2)}
+- Total a pagar (todas pendentes): R$ ${dados.totalPendente.toFixed(2)}
+- Custo médio por dia de atraso: R$ ${dados.custoDiario.toFixed(2)}
+
+DADOS DO EMPRÉSTIMO CONSIDERADO:
+- Valor desejado: R$ ${dados.valorEmprestimo.toFixed(2)}
+- Taxa de juros: ${dados.taxaEmprestimo}% ao mês
+- Prazo: ${dados.prazoEmprestimo} meses
+- Parcela estimada: R$ ${dados.parcelaEstimada.toFixed(2)}/mês
+- Custo total do empréstimo: R$ ${dados.custoTotalEmprestimo.toFixed(2)}
+
+CONTAS MAIS CRÍTICAS:
+${dados.contasCriticas.map(function(c, i) {
+  return (i+1) + ". " + c.descricao + " — R$ " + parseFloat(c.valor||0).toFixed(2) + (c.diasAtraso > 0 ? " (vencida " + c.diasAtraso + "d, multa+juros: R$ " + c.encargos.toFixed(2) + ")" : "") + (c.temProtesto ? " ⚖️ PROTESTO" : "");
+}).join("\n")}
+
+Análise detalhada considerando:
+1. Vale a pena quitar as dívidas com empréstimo? Compare o custo do empréstimo vs custo das multas/juros/protesto
+2. Qual o risco financeiro de não quitar agora vs fazer o empréstimo?
+3. Qual o impacto do protesto no nome da empresa?
+4. Alternativas ao empréstimo (negociação, parcelamento, priorização)
+5. Recomendação clara e objetiva
+
+Retorne APENAS JSON:
+{
+  "viavel": true,
+  "score_risco": "alto|medio|baixo",
+  "economia_estimada": 0.00,
+  "analise_custo_beneficio": "comparativo detalhado em 2-3 frases",
+  "risco_sem_emprestimo": "o que acontece se não fizer nada, em 2 frases",
+  "impacto_protesto": "impacto do protesto no negócio, em 1-2 frases",
+  "alternativas": ["alternativa 1", "alternativa 2", "alternativa 3"],
+  "recomendacao": "recomendação clara e direta em 2-3 frases",
+  "plano_acao": ["passo 1", "passo 2", "passo 3", "passo 4"]
+}`;
+
+  const text = await chamarIA(prompt, 1800);
+  const clean = text.replace(/```json|```/g, "").trim();
+  const jsonStart = clean.indexOf("{");
+  const jsonEnd = clean.lastIndexOf("}");
+  return JSON.parse(clean.slice(jsonStart, jsonEnd + 1));
+}
+
+async function analisarDecisaoFinanceira(dados) {
+  const prompt = `Você é um CFO (Diretor Financeiro) experiente em pequenas e médias empresas brasileiras. Seja direto, prático e objetivo.
+
+CENÁRIO FINANCEIRO COMPLETO:
+Saldo em caixa/bancos: R$ ${dados.saldoTotal.toFixed(2)}
+Contas a pagar pendentes: R$ ${dados.totalPendente.toFixed(2)} (${dados.qtdPendentes} contas)
+Contas vencidas: R$ ${dados.totalVencido.toFixed(2)} (${dados.qtdVencidas} contas)
+Contas protestadas: R$ ${dados.totalProtestado.toFixed(2)}
+Multas e juros acumulados: R$ ${dados.totalEncargos.toFixed(2)}
+Recebimentos previstos (ML): R$ ${dados.totalAReceber.toFixed(2)}
+Saldo projetado após pagar tudo: R$ ${(dados.saldoTotal + dados.totalAReceber - dados.totalPendente).toFixed(2)}
+
+PERGUNTA DO USUÁRIO: "${dados.pergunta}"
+
+Responda de forma prática e direta como um CFO. Use dados reais da situação acima.
+Seja específico com valores. Máximo 4 parágrafos curtos.
+
+Retorne APENAS JSON:
+{
+  "resposta": "resposta direta e prática",
+  "situacao": "critica|atencao|estavel|otima",
+  "acoes_imediatas": ["ação 1", "ação 2", "ação 3"],
+  "indicadores": [
+    {"label": "Nome do indicador", "valor": "R$ X ou X%", "status": "bom|atencao|critico"}
+  ]
+}`;
+
+  const text = await chamarIA(prompt, 1500);
+  const clean = text.replace(/```json|```/g, "").trim();
+  const jsonStart = clean.indexOf("{");
+  const jsonEnd = clean.lastIndexOf("}");
+  return JSON.parse(clean.slice(jsonStart, jsonEnd + 1));
+}
+
+function PainelIAPagamentos({ contasPagar, contasBancarias, lancamentos, enrichedOrders, paymentData, shipmentStatuses }) {
+  const [aba, setAba] = useState("prioridade"); // prioridade | emprestimo | consultor
+  const [state, setState] = useState("idle");
   const [result, setResult] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
+
+  // Prioridade
   const [saldo, setSaldo] = useState("");
   const [contaSelecionada, setContaSelecionada] = useState("");
 
-  const contasPendentes = contasPagar.filter(c => c.status !== "Pago");
+  // Empréstimo
+  const [valorEmprestimo, setValorEmprestimo] = useState("");
+  const [taxaEmprestimo, setTaxaEmprestimo] = useState("3");
+  const [prazoEmprestimo, setPrazoEmprestimo] = useState("12");
 
-  async function analisar() {
-    if (!import.meta.env.VITE_ANTHROPIC_KEY) {
-      setErrorMsg("Chave da API Anthropic não configurada (VITE_ANTHROPIC_KEY)");
-      setState("error"); return;
-    }
-    if (contasPendentes.length === 0) {
-      setErrorMsg("Nenhuma conta pendente para analisar");
-      setState("error"); return;
-    }
+  // Consultor
+  const [pergunta, setPergunta] = useState("");
+
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+
+  const contasPendentes = contasPagar.filter(function(c) { return c.status !== "Pago"; });
+  const contasVencidas = contasPendentes.filter(function(c) {
+    if (!c.vencimento) return false;
+    return new Date(c.vencimento + "T00:00:00") < hoje;
+  });
+  const contasProtestadas = contasPendentes.filter(function(c) {
+    if (!c.temProtesto || !c.vencimento || !c.diasProtesto) return false;
+    const venc = new Date(c.vencimento + "T00:00:00");
+    const dataProtesto = new Date(venc); dataProtesto.setDate(dataProtesto.getDate() + parseInt(c.diasProtesto));
+    return dataProtesto <= hoje;
+  });
+
+  function calcEncargos(c) {
+    const valor = parseFloat(c.valor || 0);
+    const multaR = c.multaTipo === "R$" ? parseFloat(c.multaPct || 0) : valor * (parseFloat(c.multaPct || 0) / 100);
+    const jurosDiaR = c.jurosTipo === "R$" ? parseFloat(c.jurosDia || 0) : valor * (parseFloat(c.jurosDia || 0) / 100);
+    const dueDate = c.vencimento ? new Date(c.vencimento + "T00:00:00") : null;
+    const diasAtraso = dueDate ? Math.max(0, Math.round((hoje - dueDate) / 86400000)) : 0;
+    return diasAtraso > 0 ? multaR + jurosDiaR * diasAtraso : 0;
+  }
+
+  const totalVencido = contasVencidas.reduce(function(s,c){ return s + parseFloat(c.valor||0); }, 0);
+  const totalProtestado = contasProtestadas.reduce(function(s,c){ return s + parseFloat(c.valor||0); }, 0);
+  const totalPendente = contasPendentes.reduce(function(s,c){ return s + parseFloat(c.valor||0); }, 0);
+  const totalEncargos = contasPendentes.reduce(function(s,c){ return s + calcEncargos(c); }, 0);
+  const custoDiario = contasVencidas.reduce(function(s,c) {
+    const valor = parseFloat(c.valor||0);
+    const jurosDiaR = c.jurosTipo === "R$" ? parseFloat(c.jurosDia||0) : valor * (parseFloat(c.jurosDia||0)/100);
+    return s + jurosDiaR;
+  }, 0);
+  const saldoTotal = contasBancarias.reduce(function(s,cb) {
+    const ent = (lancamentos||[]).filter(function(l){return l.contaBancariaId===cb.id&&l.tipo==="recebimento";}).reduce(function(a,l){return a+l.valor;},0);
+    const sai = (lancamentos||[]).filter(function(l){return l.contaBancariaId===cb.id&&l.tipo==="pagamento";}).reduce(function(a,l){return a+l.valor;},0);
+    return s + parseFloat(cb.saldoInicial||0) + ent - sai;
+  }, 0);
+
+  function checkKey() {
+    if (!import.meta.env.VITE_ANTHROPIC_KEY) { setErrorMsg("Chave da API não configurada (VITE_ANTHROPIC_KEY)"); setState("error"); return false; }
+    return true;
+  }
+
+  async function analisarPrioridade() {
+    if (!checkKey()) return;
+    if (contasPendentes.length === 0) { setErrorMsg("Nenhuma conta pendente"); setState("error"); return; }
     setState("loading"); setErrorMsg("");
     try {
       const r = await analisarPrioridadePagamentos(contasPendentes, parseFloat(saldo) || 0);
@@ -3494,131 +3583,279 @@ function PainelIAPagamentos({ contasPagar, contasBancarias }) {
     } catch(e) { setErrorMsg(e.message); setState("error"); }
   }
 
-  const urgenciaCor = u => u==="critica"?"#dc2626":u==="alta"?"#d97706":u==="media"?"#0891b2":"#15803d";
-  const urgenciaBg  = u => u==="critica"?"#fef2f2":u==="alta"?"#fffbeb":u==="media"?"#ecfeff":"#f0fdf4";
-  const urgenciaLabel = u => u==="critica"?"🚨 CRÍTICA":u==="alta"?"⚠️ Alta":u==="media"?"📋 Média":"✓ Baixa";
+  async function analisarEmprestimoFn() {
+    if (!checkKey()) return;
+    const valor = parseFloat(valorEmprestimo) || 0;
+    const taxa = parseFloat(taxaEmprestimo) || 3;
+    const prazo = parseInt(prazoEmprestimo) || 12;
+    if (valor <= 0) { setErrorMsg("Informe o valor do empréstimo"); setState("error"); return; }
+    const parcela = (valor * (taxa/100)) / (1 - Math.pow(1 + taxa/100, -prazo));
+    const custoTotal = parcela * prazo;
+    const contasCriticas = [...contasVencidas, ...contasProtestadas.filter(function(c){ return !contasVencidas.find(function(v){return v.id===c.id;}); })].slice(0,8).map(function(c) {
+      const dueDate = c.vencimento ? new Date(c.vencimento + "T00:00:00") : null;
+      const diasAtraso = dueDate ? Math.max(0, Math.round((hoje - dueDate) / 86400000)) : 0;
+      return Object.assign({}, c, { diasAtraso, encargos: calcEncargos(c) });
+    });
+    setState("loading"); setErrorMsg("");
+    try {
+      const r = await analisarEmprestimo({
+        saldoAtual: saldoTotal, totalVencido, totalProtestado,
+        qtdVencidas: contasVencidas.length, qtdProtestadas: contasProtestadas.length,
+        totalMultasJuros: totalEncargos, totalPendente, custoDiario,
+        valorEmprestimo: valor, taxaEmprestimo: taxa, prazoEmprestimo: prazo,
+        parcelaEstimada: parcela, custoTotalEmprestimo: custoTotal, contasCriticas,
+      });
+      setResult(r); setState("done");
+    } catch(e) { setErrorMsg(e.message); setState("error"); }
+  }
+
+  async function consultarCFO() {
+    if (!checkKey()) return;
+    if (!pergunta.trim()) { setErrorMsg("Digite sua pergunta"); setState("error"); return; }
+    const aReceber = (enrichedOrders||[]).filter(function(o) {
+      const ss = (shipmentStatuses||{})[o.id] ?? o.shipment_status;
+      return ss !== "delivered" && !o.tags?.some(function(t){return t==="delivered";});
+    }).reduce(function(s,o){ return s + ((paymentData||{})[o.id]?.netAmount || o.price*o.qty); }, 0);
+    setState("loading"); setErrorMsg("");
+    try {
+      const r = await analisarDecisaoFinanceira({
+        saldoTotal, totalPendente, totalVencido, totalProtestado, totalEncargos,
+        qtdPendentes: contasPendentes.length, qtdVencidas: contasVencidas.length,
+        totalAReceber: aReceber, pergunta: pergunta.trim(),
+      });
+      setResult(r); setState("done");
+    } catch(e) { setErrorMsg(e.message); setState("error"); }
+  }
+
+  const urgenciaCor = function(u) { return u==="critica"?"#dc2626":u==="alta"?"#d97706":u==="media"?"#0891b2":"#15803d"; };
+  const urgenciaBg  = function(u) { return u==="critica"?"#fef2f2":u==="alta"?"#fffbeb":u==="media"?"#ecfeff":"#f0fdf4"; };
+  const urgenciaLabel = function(u) { return u==="critica"?"🚨 CRÍTICA":u==="alta"?"⚠️ Alta":u==="media"?"📋 Média":"✓ Baixa"; };
+  const situacaoCor = function(s) { return s==="critica"?"#dc2626":s==="atencao"?"#d97706":s==="estavel"?"#0891b2":"#15803d"; };
+  const situacaoBg  = function(s) { return s==="critica"?"#fef2f2":s==="atencao"?"#fffbeb":s==="estavel"?"#ecfeff":"#f0fdf4"; };
+  const statusCor   = function(s) { return s==="critico"?"#dc2626":s==="atencao"?"#d97706":"#15803d"; };
+
+  const ABAS = [
+    { key:"prioridade", label:"📋 Prioridade de Pagamento" },
+    { key:"emprestimo", label:"🏦 Análise de Empréstimo" },
+    { key:"consultor",  label:"🧠 Consultor Financeiro" },
+  ];
 
   return (
     <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"24px 28px", marginBottom:20, boxShadow:"0 1px 3px rgba(0,0,0,.06)" }}>
+      {/* Header */}
       <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:20 }}>
-        <div style={{ width:40, height:40, borderRadius:12, background:"linear-gradient(135deg,#667eea,#764ba2)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>✦</div>
+        <div style={{ width:44, height:44, borderRadius:12, background:"linear-gradient(135deg,#667eea,#764ba2)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>✦</div>
         <div>
-          <div style={{ fontWeight:800, fontSize:16, color:"#0f172a" }}>Análise IA de Prioridade de Pagamentos</div>
-          <div style={{ fontSize:12, color:"#94a3b8" }}>Descubra quais contas custam mais por dia de atraso</div>
+          <div style={{ fontWeight:800, fontSize:16, color:"#0f172a" }}>Consultoria Financeira com IA</div>
+          <div style={{ fontSize:12, color:"#94a3b8" }}>Análise inteligente para tomada de decisões financeiras</div>
         </div>
       </div>
 
-      {state === "idle" && (
+      {/* Cards de situação */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:10, marginBottom:20 }}>
+        {[
+          { label:"Saldo Total", value:"R$ " + saldoTotal.toFixed(2).replace(".",","), color: saldoTotal>=0?"#15803d":"#dc2626", bg: saldoTotal>=0?"#f0fdf4":"#fef2f2" },
+          { label:"Vencidas", value: contasVencidas.length + " contas", sub:"R$ " + totalVencido.toFixed(2).replace(".",","), color:"#dc2626", bg:"#fef2f2" },
+          { label:"Protestadas", value: contasProtestadas.length + " contas", sub:"R$ " + totalProtestado.toFixed(2).replace(".",","), color:"#7c3aed", bg:"#f5f3ff" },
+          { label:"Multas+Juros", value:"R$ " + totalEncargos.toFixed(2).replace(".",","), color:"#d97706", bg:"#fffbeb" },
+          { label:"Custo/Dia", value:"R$ " + custoDiario.toFixed(2).replace(".",","), color:"#0891b2", bg:"#ecfeff" },
+        ].map(function(k) {
+          return (
+            <div key={k.label} style={{ background:k.bg, borderRadius:10, padding:"10px 12px" }}>
+              <div style={{ fontSize:10, color:k.color, fontWeight:700, textTransform:"uppercase", marginBottom:3 }}>{k.label}</div>
+              <div style={{ fontSize:14, fontWeight:800, color:k.color }}>{k.value}</div>
+              {k.sub && <div style={{ fontSize:11, color:k.color, opacity:0.8 }}>{k.sub}</div>}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Abas */}
+      <div style={{ display:"flex", gap:4, marginBottom:20, background:"#f1f5f9", padding:4, borderRadius:10, flexWrap:"wrap" }}>
+        {ABAS.map(function(a) {
+          var active = aba === a.key;
+          return (
+            <button key={a.key} onClick={function(){ setAba(a.key); setState("idle"); setResult(null); setErrorMsg(""); }}
+              style={{ flex:1, padding:"8px 12px", borderRadius:8, border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight: active?700:500,
+                background: active?"#fff":"transparent", color: active?"#0f172a":"#94a3b8",
+                boxShadow: active?"0 1px 3px rgba(0,0,0,.08)":"none", whiteSpace:"nowrap" }}>
+              {a.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Erro */}
+      {state === "error" && (
+        <div style={{ marginBottom:16 }}>
+          <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"12px 16px", color:"#dc2626", fontSize:13, marginBottom:10 }}>⚠ {errorMsg}</div>
+          <button onClick={function(){ setState("idle"); }} style={{ background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", fontWeight:600, padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13 }}>Voltar</button>
+        </div>
+      )}
+
+      {/* Loading */}
+      {state === "loading" && (
+        <div style={{ textAlign:"center", padding:"40px 0" }}>
+          <div style={{ fontSize:36, marginBottom:12, display:"inline-block", animation:"spin 1s linear infinite" }}>✦</div>
+          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+          <div style={{ fontSize:14, color:"#64748b", fontWeight:600 }}>Analisando com IA...</div>
+          <div style={{ fontSize:12, color:"#94a3b8", marginTop:4 }}>
+            {aba==="prioridade" ? "Calculando prioridade de pagamentos" : aba==="emprestimo" ? "Avaliando custo x benefício do empréstimo" : "Consultando CFO virtual"}
+          </div>
+        </div>
+      )}
+
+      {/* ── ABA: PRIORIDADE ── */}
+      {state === "idle" && aba === "prioridade" && (
         <div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
             <div>
               <div style={{ fontSize:11, color:"#94a3b8", marginBottom:6, fontWeight:600, textTransform:"uppercase" }}>Saldo disponível hoje (R$)</div>
-              <input type="number" value={saldo} onChange={e => setSaldo(e.target.value)}
-                placeholder="Ex: 5000,00 — deixe 0 para análise geral"
+              <input type="number" value={saldo} onChange={function(e){ setSaldo(e.target.value); }} placeholder="Ex: 5000,00"
                 style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"10px 14px", borderRadius:10, fontSize:13, outline:"none" }} />
             </div>
             <div>
               <div style={{ fontSize:11, color:"#94a3b8", marginBottom:6, fontWeight:600, textTransform:"uppercase" }}>Conta para pagamento</div>
-              <select value={contaSelecionada} onChange={e => setContaSelecionada(e.target.value)}
+              <select value={contaSelecionada} onChange={function(e){ setContaSelecionada(e.target.value); }}
                 style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", padding:"10px 14px", borderRadius:10, fontSize:13 }}>
-                <option value="">— Selecione (opcional) —</option>
-                {contasBancarias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                <option value="">— Opcional —</option>
+                {contasBancarias.map(function(c){ return <option key={c.id} value={c.id}>{c.nome}</option>; })}
               </select>
             </div>
           </div>
-          <div style={{ background:"#f8fafc", borderRadius:10, padding:"12px 14px", marginBottom:16 }}>
-            <div style={{ fontSize:12, color:"#64748b", marginBottom:8 }}>
-              <strong>{contasPendentes.length}</strong> contas pendentes para análise
-              {contasPendentes.filter(c=>c.multaPct||c.jurosDia).length < contasPendentes.length && (
-                <span style={{ color:"#d97706", marginLeft:8 }}>
-                  ⚠ {contasPendentes.filter(c=>!c.multaPct&&!c.jurosDia).length} sem juros/multa cadastrados — a IA ainda analisa por vencimento e valor
-                </span>
-              )}
-            </div>
-            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-              {contasPendentes.slice(0,5).map(c => (
-                <span key={c.id} style={{ fontSize:11, background:"#e2e8f0", color:"#475569", padding:"3px 8px", borderRadius:20 }}>
-                  {c.descricao?.slice(0,25)} — R$ {parseFloat(c.valor||0).toFixed(2).replace(".",",")}
-                </span>
-              ))}
-              {contasPendentes.length > 5 && <span style={{ fontSize:11, color:"#94a3b8" }}>+{contasPendentes.length-5} mais</span>}
-            </div>
-          </div>
-          <button onClick={analisar}
+          <button onClick={analisarPrioridade}
             style={{ width:"100%", background:"linear-gradient(135deg,#667eea,#764ba2)", border:"none", color:"#fff", fontWeight:700, padding:"13px", borderRadius:12, cursor:"pointer", fontSize:15 }}>
-            ✦ Analisar com Inteligência Artificial
+            ✦ Analisar Prioridade de Pagamentos
           </button>
         </div>
       )}
 
-      {state === "loading" && (
-        <div style={{ textAlign:"center", padding:"32px 0" }}>
-          <div style={{ fontSize:32, marginBottom:12, display:"inline-block", animation:"spin 1s linear infinite" }}>✦</div>
-          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-          <div style={{ fontSize:14, color:"#94a3b8" }}>Analisando suas contas com IA...</div>
-          <div style={{ fontSize:12, color:"#cbd5e1", marginTop:4 }}>Calculando custo de cada dia de atraso</div>
-        </div>
-      )}
-
-      {state === "error" && (
+      {/* ── ABA: EMPRÉSTIMO ── */}
+      {state === "idle" && aba === "emprestimo" && (
         <div>
-          <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"12px 16px", marginBottom:16, color:"#dc2626", fontSize:13 }}>⚠ {errorMsg}</div>
-          <button onClick={() => setState("idle")} style={{ background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", fontWeight:600, padding:"10px 20px", borderRadius:10, cursor:"pointer" }}>Tentar novamente</button>
+          {contasVencidas.length === 0 && contasProtestadas.length === 0 && (
+            <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:10, padding:"12px 16px", marginBottom:16, fontSize:13, color:"#15803d" }}>
+              ✓ Nenhuma conta vencida ou protestada. A análise vai considerar suas contas pendentes.
+            </div>
+          )}
+          {(contasVencidas.length > 0 || contasProtestadas.length > 0) && (
+            <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"12px 16px", marginBottom:16, fontSize:13, color:"#dc2626" }}>
+              🚨 {contasVencidas.length} conta(s) vencida(s) e {contasProtestadas.length} protestada(s) — custo total de encargos: R$ {totalEncargos.toFixed(2).replace(".",",")}
+            </div>
+          )}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:16 }}>
+            <div>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:6, fontWeight:600, textTransform:"uppercase" }}>Valor do Empréstimo (R$)</div>
+              <input type="number" value={valorEmprestimo} onChange={function(e){ setValorEmprestimo(e.target.value); }} placeholder="Ex: 20000"
+                style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"10px 12px", borderRadius:10, fontSize:13, outline:"none" }} />
+            </div>
+            <div>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:6, fontWeight:600, textTransform:"uppercase" }}>Juros ao mês (%)</div>
+              <input type="number" step="0.1" value={taxaEmprestimo} onChange={function(e){ setTaxaEmprestimo(e.target.value); }} placeholder="Ex: 3"
+                style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"10px 12px", borderRadius:10, fontSize:13, outline:"none" }} />
+            </div>
+            <div>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:6, fontWeight:600, textTransform:"uppercase" }}>Prazo (meses)</div>
+              <input type="number" value={prazoEmprestimo} onChange={function(e){ setPrazoEmprestimo(e.target.value); }} placeholder="Ex: 12"
+                style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"10px 12px", borderRadius:10, fontSize:13, outline:"none" }} />
+            </div>
+          </div>
+          {valorEmprestimo && taxaEmprestimo && prazoEmprestimo && (function() {
+            var v = parseFloat(valorEmprestimo)||0, t = parseFloat(taxaEmprestimo)/100, p = parseInt(prazoEmprestimo);
+            var parcela = v * t / (1 - Math.pow(1+t, -p));
+            var custo = parcela * p;
+            return (
+              <div style={{ background:"#f8fafc", borderRadius:10, padding:"12px 14px", marginBottom:16, display:"flex", gap:20 }}>
+                <div>
+                  <div style={{ fontSize:11, color:"#94a3b8" }}>Parcela estimada</div>
+                  <div style={{ fontSize:16, fontWeight:800, color:"#0f172a" }}>R$ {parcela.toFixed(2).replace(".",",")}/mês</div>
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:"#94a3b8" }}>Custo total</div>
+                  <div style={{ fontSize:16, fontWeight:800, color:"#dc2626" }}>R$ {custo.toFixed(2).replace(".",",")}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:"#94a3b8" }}>Juros totais</div>
+                  <div style={{ fontSize:16, fontWeight:800, color:"#d97706" }}>R$ {(custo - v).toFixed(2).replace(".",",")}</div>
+                </div>
+              </div>
+            );
+          })()}
+          <button onClick={analisarEmprestimoFn}
+            style={{ width:"100%", background:"linear-gradient(135deg,#667eea,#764ba2)", border:"none", color:"#fff", fontWeight:700, padding:"13px", borderRadius:12, cursor:"pointer", fontSize:15 }}>
+            ✦ Analisar se Vale o Empréstimo
+          </button>
         </div>
       )}
 
-      {state === "done" && result && (
+      {/* ── ABA: CONSULTOR CFO ── */}
+      {state === "idle" && aba === "consultor" && (
+        <div>
+          <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:10, padding:"12px 16px", marginBottom:16, fontSize:13, color:"#0369a1" }}>
+            🧠 Faça qualquer pergunta sobre sua situação financeira. O CFO virtual analisará seus dados reais e dará orientações práticas.
+          </div>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:12 }}>
+            {[
+              "O que devo pagar primeiro?",
+              "Estou em situação crítica?",
+              "Como melhorar meu fluxo de caixa?",
+              "Vale renegociar minhas dívidas?",
+              "Consigo pagar tudo com meu saldo?",
+              "Qual meu risco de insolvência?",
+            ].map(function(q) {
+              return (
+                <button key={q} onClick={function(){ setPergunta(q); }}
+                  style={{ fontSize:11, background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#475569", padding:"5px 10px", borderRadius:20, cursor:"pointer", fontFamily:"inherit" }}>
+                  {q}
+                </button>
+              );
+            })}
+          </div>
+          <textarea
+            value={pergunta}
+            onChange={function(e){ setPergunta(e.target.value); }}
+            placeholder="Digite sua dúvida financeira... Ex: 'Tenho R$ 10.000 disponíveis, vale a pena quitar as dívidas vencidas ou guardar para o próximo mês?'"
+            rows={3}
+            style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"12px 14px", borderRadius:10, fontSize:13, outline:"none", resize:"vertical", fontFamily:"inherit", marginBottom:12, boxSizing:"border-box" }}
+          />
+          <button onClick={consultarCFO} disabled={!pergunta.trim()}
+            style={{ width:"100%", background: pergunta.trim() ? "linear-gradient(135deg,#667eea,#764ba2)" : "#f1f5f9", border:"none", color: pergunta.trim() ? "#fff" : "#94a3b8", fontWeight:700, padding:"13px", borderRadius:12, cursor: pergunta.trim() ? "pointer" : "not-allowed", fontSize:15 }}>
+            ✦ Consultar CFO Virtual
+          </button>
+        </div>
+      )}
+
+      {/* ── RESULTADO: PRIORIDADE ── */}
+      {state === "done" && result && aba === "prioridade" && (
         <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-          {/* Resumo */}
           <div style={{ background:"linear-gradient(135deg,#667eea22,#764ba222)", border:"1px solid #667eea44", borderRadius:12, padding:"14px 18px" }}>
             <div style={{ fontSize:13, color:"#0f172a", lineHeight:1.6 }}>{result.resumo}</div>
           </div>
-
-          {/* Alerta crítico */}
-          {result.alerta_critico && (
-            <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"12px 16px", display:"flex", gap:10, alignItems:"flex-start" }}>
+          {result.alerta_critico && result.alerta_critico !== "null" && (
+            <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"12px 16px", display:"flex", gap:10 }}>
               <span style={{ fontSize:18 }}>🚨</span>
               <div style={{ fontSize:13, color:"#dc2626", fontWeight:600 }}>{result.alerta_critico}</div>
             </div>
           )}
-
-          {/* Ranking de prioridade */}
           <div>
             <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", marginBottom:12 }}>Ordem de Prioridade</div>
             <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-              {result.prioridade?.map((item, i) => {
-                const conta = contasPagar.find(c => c.id === item.id || String(c.id) === String(item.id));
-                const noCabeSaldo = result.contas_no_saldo?.includes(item.id) || result.contas_no_saldo?.includes(String(item.id));
+              {(result.prioridade||[]).map(function(item, i) {
+                var conta = contasPagar.find(function(c){ return c.id === item.id || String(c.id) === String(item.id); });
                 return (
-                  <div key={i} style={{ background:urgenciaBg(item.urgencia), border:`1px solid ${urgenciaCor(item.urgencia)}33`, borderRadius:12, padding:"14px 16px" }}>
+                  <div key={i} style={{ background:urgenciaBg(item.urgencia), border:"1px solid " + urgenciaCor(item.urgencia) + "33", borderRadius:12, padding:"14px 16px" }}>
                     <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
-                      <div style={{ width:36, height:36, borderRadius:10, background:urgenciaCor(item.urgencia), color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, fontSize:16, flexShrink:0 }}>
-                        {item.posicao}
-                      </div>
+                      <div style={{ width:36, height:36, borderRadius:10, background:urgenciaCor(item.urgencia), color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, fontSize:16, flexShrink:0 }}>{item.posicao}</div>
                       <div style={{ flex:1 }}>
                         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6 }}>
                           <div>
-                            <div style={{ fontWeight:700, fontSize:14, color:"#0f172a" }}>{conta?.descricao || `Conta #${item.id}`}</div>
-                            <span style={{ fontSize:11, fontWeight:600, color:urgenciaCor(item.urgencia), background:urgenciaBg(item.urgencia), padding:"2px 8px", borderRadius:20, border:`1px solid ${urgenciaCor(item.urgencia)}44` }}>
-                              {urgenciaLabel(item.urgencia)}
-                            </span>
+                            <div style={{ fontWeight:700, fontSize:14, color:"#0f172a" }}>{conta?.descricao || "Conta #" + item.id}</div>
+                            <span style={{ fontSize:11, fontWeight:600, color:urgenciaCor(item.urgencia), background:urgenciaBg(item.urgencia), padding:"2px 8px", borderRadius:20, border:"1px solid " + urgenciaCor(item.urgencia) + "44" }}>{urgenciaLabel(item.urgencia)}</span>
                           </div>
-                          <div style={{ textAlign:"right" }}>
-                            {conta?.valor && <div style={{ fontSize:15, fontWeight:800, color:"#0f172a" }}>R$ {parseFloat(conta.valor).toFixed(2).replace(".",",")}</div>}
-                            {item.economia_se_pagar_hoje > 0 && (
-                              <div style={{ fontSize:11, color:"#15803d", fontWeight:600 }}>Economiza R$ {item.economia_se_pagar_hoje.toFixed(2).replace(".",",")} pagando hoje</div>
-                            )}
-                          </div>
+                          {conta?.valor && <div style={{ fontSize:15, fontWeight:800, color:"#0f172a" }}>R$ {parseFloat(conta.valor).toFixed(2).replace(".",",")}</div>}
                         </div>
-                        <div style={{ fontSize:13, color:"#475569", lineHeight:1.5, marginBottom:8 }}>{item.razao}</div>
-                        <div style={{ display:"flex", gap:8 }}>
-                          {item.pagar_hoje && (
-                            <span style={{ fontSize:11, background:"#dc2626", color:"#fff", padding:"3px 10px", borderRadius:20, fontWeight:700 }}>⚡ Pagar hoje</span>
-                          )}
-                          {noCabeSaldo && parseFloat(saldo) > 0 && (
-                            <span style={{ fontSize:11, background:"#15803d", color:"#fff", padding:"3px 10px", borderRadius:20, fontWeight:600 }}>✓ Cabe no saldo</span>
-                          )}
-                        </div>
+                        <div style={{ fontSize:13, color:"#475569", lineHeight:1.5 }}>{item.razao}</div>
+                        {item.pagar_hoje && <span style={{ fontSize:11, background:"#dc2626", color:"#fff", padding:"3px 10px", borderRadius:20, fontWeight:700, display:"inline-block", marginTop:6 }}>⚡ Pagar hoje</span>}
                       </div>
                     </div>
                   </div>
@@ -3626,35 +3863,121 @@ function PainelIAPagamentos({ contasPagar, contasBancarias }) {
               })}
             </div>
           </div>
-
-          {/* Resumo financeiro */}
-          {result.total_se_pagar_prioritarias > 0 && (
-            <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:12, padding:"14px 18px" }}>
-              <div style={{ display:"flex", justifyContent:"space-between" }}>
-                <span style={{ fontSize:13, color:"#64748b" }}>Total das prioritárias:</span>
-                <span style={{ fontSize:14, fontWeight:700, color:"#0f172a" }}>R$ {result.total_se_pagar_prioritarias.toFixed(2).replace(".",",")}</span>
-              </div>
-              {parseFloat(saldo) > 0 && (
-                <div style={{ display:"flex", justifyContent:"space-between", marginTop:6 }}>
-                  <span style={{ fontSize:13, color:"#64748b" }}>Saldo após pagamento:</span>
-                  <span style={{ fontSize:14, fontWeight:700, color:parseFloat(saldo)-result.total_se_pagar_prioritarias>=0?"#15803d":"#dc2626" }}>
-                    R$ {(parseFloat(saldo)-result.total_se_pagar_prioritarias).toFixed(2).replace(".",",")}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Recomendação final */}
           <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:12, padding:"14px 18px" }}>
             <div style={{ fontSize:11, color:"#92400e", fontWeight:700, textTransform:"uppercase", marginBottom:6 }}>✦ Recomendação Final</div>
             <div style={{ fontSize:13, color:"#1c1917", lineHeight:1.6 }}>{result.recomendacao_final}</div>
           </div>
+          <button onClick={function(){ setState("idle"); setResult(null); }} style={{ background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"10px", borderRadius:10, cursor:"pointer" }}>Nova Análise</button>
+        </div>
+      )}
 
-          <button onClick={() => { setState("idle"); setResult(null); }}
-            style={{ background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"10px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
-            Nova Análise
-          </button>
+      {/* ── RESULTADO: EMPRÉSTIMO ── */}
+      {state === "done" && result && aba === "emprestimo" && (
+        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+          <div style={{ background: result.viavel ? "#f0fdf4" : "#fef2f2", border:"1px solid " + (result.viavel ? "#bbf7d0" : "#fecaca"), borderRadius:12, padding:"16px 20px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <div>
+              <div style={{ fontSize:11, color: result.viavel?"#15803d":"#dc2626", fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>Veredito da IA</div>
+              <div style={{ fontSize:20, fontWeight:800, color: result.viavel?"#15803d":"#dc2626" }}>{result.viavel ? "✅ Empréstimo Recomendado" : "⚠️ Cautela — Avalie Alternativas"}</div>
+            </div>
+            <div style={{ textAlign:"right" }}>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:4 }}>Risco</div>
+              <span style={{ fontSize:13, fontWeight:700, color: result.score_risco==="alto"?"#dc2626":result.score_risco==="medio"?"#d97706":"#15803d", background: result.score_risco==="alto"?"#fef2f2":result.score_risco==="medio"?"#fffbeb":"#f0fdf4", padding:"4px 12px", borderRadius:20 }}>
+                {result.score_risco==="alto"?"🔴 Alto":result.score_risco==="medio"?"🟡 Médio":"🟢 Baixo"}
+              </span>
+            </div>
+          </div>
+          {result.economia_estimada > 0 && (
+            <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:10, padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <span style={{ fontSize:13, color:"#15803d", fontWeight:600 }}>💰 Economia estimada pagando as dívidas</span>
+              <span style={{ fontSize:17, fontWeight:800, color:"#15803d" }}>R$ {result.economia_estimada.toFixed(2).replace(".",",")}</span>
+            </div>
+          )}
+          <div style={{ background:"#f8fafc", borderRadius:12, padding:"14px 18px" }}>
+            <div style={{ fontSize:11, color:"#94a3b8", fontWeight:700, textTransform:"uppercase", marginBottom:8 }}>📊 Custo x Benefício</div>
+            <div style={{ fontSize:13, color:"#0f172a", lineHeight:1.7 }}>{result.analise_custo_beneficio}</div>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"12px 14px" }}>
+              <div style={{ fontSize:11, color:"#dc2626", fontWeight:700, textTransform:"uppercase", marginBottom:6 }}>⚠️ Risco sem empréstimo</div>
+              <div style={{ fontSize:12, color:"#7f1d1d", lineHeight:1.6 }}>{result.risco_sem_emprestimo}</div>
+            </div>
+            <div style={{ background:"#f5f3ff", border:"1px solid #c4b5fd", borderRadius:10, padding:"12px 14px" }}>
+              <div style={{ fontSize:11, color:"#7c3aed", fontWeight:700, textTransform:"uppercase", marginBottom:6 }}>⚖️ Impacto do protesto</div>
+              <div style={{ fontSize:12, color:"#4c1d95", lineHeight:1.6 }}>{result.impacto_protesto}</div>
+            </div>
+          </div>
+          <div style={{ background:"#f8fafc", borderRadius:12, padding:"14px 18px" }}>
+            <div style={{ fontSize:11, color:"#94a3b8", fontWeight:700, textTransform:"uppercase", marginBottom:10 }}>🔀 Alternativas ao Empréstimo</div>
+            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+              {(result.alternativas||[]).map(function(a, i) {
+                return <div key={i} style={{ display:"flex", gap:8, alignItems:"flex-start" }}><span style={{ color:"#667eea", fontWeight:700, flexShrink:0 }}>{i+1}.</span><span style={{ fontSize:13, color:"#334155" }}>{a}</span></div>;
+              })}
+            </div>
+          </div>
+          <div style={{ background:"linear-gradient(135deg,#667eea22,#764ba222)", border:"1px solid #667eea44", borderRadius:12, padding:"14px 18px" }}>
+            <div style={{ fontSize:11, color:"#4338ca", fontWeight:700, textTransform:"uppercase", marginBottom:6 }}>✦ Recomendação</div>
+            <div style={{ fontSize:13, color:"#0f172a", lineHeight:1.6 }}>{result.recomendacao}</div>
+          </div>
+          <div style={{ background:"#f8fafc", borderRadius:12, padding:"14px 18px" }}>
+            <div style={{ fontSize:11, color:"#94a3b8", fontWeight:700, textTransform:"uppercase", marginBottom:10 }}>🗒️ Plano de Ação</div>
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              {(result.plano_acao||[]).map(function(p, i) {
+                return (
+                  <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
+                    <div style={{ width:22, height:22, borderRadius:6, background:"#0f172a", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, flexShrink:0 }}>{i+1}</div>
+                    <span style={{ fontSize:13, color:"#0f172a", lineHeight:1.5 }}>{p}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <button onClick={function(){ setState("idle"); setResult(null); }} style={{ background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"10px", borderRadius:10, cursor:"pointer" }}>Nova Análise</button>
+        </div>
+      )}
+
+      {/* ── RESULTADO: CONSULTOR CFO ── */}
+      {state === "done" && result && aba === "consultor" && (
+        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+          <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:10, padding:"10px 14px", fontSize:12, color:"#0369a1" }}>
+            💬 "{pergunta}"
+          </div>
+          <div style={{ background: situacaoBg(result.situacao), border:"1px solid " + situacaoCor(result.situacao) + "44", borderRadius:12, padding:"14px 18px" }}>
+            <div style={{ fontSize:11, color:situacaoCor(result.situacao), fontWeight:700, textTransform:"uppercase", marginBottom:8 }}>
+              {result.situacao==="critica"?"🚨 Situação Crítica":result.situacao==="atencao"?"⚠️ Atenção Necessária":result.situacao==="estavel"?"✅ Situação Estável":"🟢 Situação Ótima"}
+            </div>
+            <div style={{ fontSize:13, color:"#0f172a", lineHeight:1.7, whiteSpace:"pre-line" }}>{result.resposta}</div>
+          </div>
+          {(result.indicadores||[]).length > 0 && (
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:10 }}>
+              {result.indicadores.map(function(ind, i) {
+                return (
+                  <div key={i} style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 12px" }}>
+                    <div style={{ fontSize:10, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:4 }}>{ind.label}</div>
+                    <div style={{ fontSize:15, fontWeight:800, color:statusCor(ind.status) }}>{ind.valor}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {(result.acoes_imediatas||[]).length > 0 && (
+            <div style={{ background:"#f8fafc", borderRadius:12, padding:"14px 18px" }}>
+              <div style={{ fontSize:11, color:"#94a3b8", fontWeight:700, textTransform:"uppercase", marginBottom:10 }}>⚡ Ações Imediatas</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                {result.acoes_imediatas.map(function(a, i) {
+                  return (
+                    <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
+                      <div style={{ width:22, height:22, borderRadius:6, background:"linear-gradient(135deg,#667eea,#764ba2)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, flexShrink:0 }}>{i+1}</div>
+                      <span style={{ fontSize:13, color:"#0f172a", lineHeight:1.5 }}>{a}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={function(){ setState("idle"); setResult(null); setPergunta(""); }} style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"10px", borderRadius:10, cursor:"pointer" }}>Nova Pergunta</button>
+            <button onClick={function(){ setState("idle"); setResult(null); }} style={{ flex:1, background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"10px", borderRadius:10, cursor:"pointer" }}>Refinar Análise</button>
+          </div>
         </div>
       )}
     </div>
@@ -4720,7 +5043,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
             {/* ── CONTAS A PAGAR ── */}
       {finTab === "pagar" && (
         <div>
-          <PainelIAPagamentos contasPagar={contasPagar} contasBancarias={contasBancarias} />
+          <PainelIAPagamentos contasPagar={contasPagar} contasBancarias={contasBancarias} lancamentos={lancamentos} enrichedOrders={enrichedOrders} paymentData={paymentData} shipmentStatuses={shipmentStatuses} />
           <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:10, flexWrap:"wrap" }}>
             <button onClick={() => { setEditingConta(null); setShowModalConta(true); }}
               style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Nova Conta</button>

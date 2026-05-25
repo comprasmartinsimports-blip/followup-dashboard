@@ -1797,6 +1797,7 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
         </div>
       )}
     </div>
+  </div>
   );
 }
 
@@ -4162,8 +4163,6 @@ function ModalConta({ conta, categoriasPagar, fornecedores, onSave, onClose }) {
             )}
           </div>
         </div>
-        </div>
-        </div>
         <div style={{ display:"flex", gap:8 }}>
           <button onClick={onClose} style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
           <button onClick={() => { if (!form.descricao || !form.valor) return; onSave(form); onClose(); }}
@@ -4174,10 +4173,11 @@ function ModalConta({ conta, categoriasPagar, fornecedores, onSave, onClose }) {
         </div>
       </div>
     </div>
+    </div>
+  </div>
   );
 }
 
-// ── FinanceiroTab Principal ──────────────────────────────────
 function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContasBancarias, categoriasPagar, setCategoriasPagar, lancamentos, setLancamentos, enrichedOrders, rawOrders, shipmentStatuses, paymentData, finTab, setFinTab, impostos, setImpostos, custosFixos, setCustosFixos, fornecedores }) {
   const [showModalConta, setShowModalConta] = useState(false);
   const [showModalBancaria, setShowModalBancaria] = useState(false);

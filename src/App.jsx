@@ -3843,6 +3843,67 @@ function ModalBaixaML({ order, paymentInfo, contasBancarias, onConfirm, onClose 
   );
 }
 
+// ── Componente de Upload de Anexos ──────────────────────────
+function AnexosUpload({ anexos, onChange }) {
+  function handleFiles(e) {
+    var files = Array.from(e.target.files);
+    var promises = files.map(function(f) {
+      return new Promise(function(res) {
+        var reader = new FileReader();
+        reader.onload = function(ev) {
+          res({ nome: f.name, tipo: f.type, tamanho: f.size, base64: ev.target.result });
+        };
+        reader.readAsDataURL(f);
+      });
+    });
+    Promise.all(promises).then(function(converted) {
+      onChange([].concat(anexos, converted).slice(0, 5));
+    });
+    e.target.value = "";
+  }
+  function remover(idx) {
+    onChange(anexos.filter(function(_, j) { return j !== idx; }));
+  }
+  return (
+    <div>
+      <label style={{ display:"block", border:"2px dashed #e2e8f0", borderRadius:10, padding:"12px", textAlign:"center", cursor:"pointer", background:"#f8fafc", marginBottom:8 }}>
+        <input
+          type="file"
+          multiple
+          accept=".pdf,.jpg,.jpeg,.png,.webp,.xml,.xlsx,.xls,.doc,.docx"
+          style={{ display:"none" }}
+          onChange={handleFiles}
+        />
+        <div style={{ fontSize:13, color:"#64748b" }}>📎 Clique para anexar arquivos</div>
+        <div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>PDF, imagens, XML, Word, Excel — máx. 5 arquivos</div>
+      </label>
+      {anexos.length > 0 && (
+        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+          {anexos.map(function(a, i) {
+            var isImg = a.tipo && a.tipo.startsWith("image/");
+            var icon = isImg ? "🖼️" : a.tipo === "application/pdf" ? "📄" : "📎";
+            var kb = (a.tamanho / 1024).toFixed(1);
+            return (
+              <div key={i} style={{ display:"flex", alignItems:"center", gap:10, background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:8, padding:"8px 12px" }}>
+                <span style={{ fontSize:18 }}>{icon}</span>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:12, fontWeight:600, color:"#0f172a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{a.nome}</div>
+                  <div style={{ fontSize:10, color:"#94a3b8" }}>{kb} KB</div>
+                </div>
+                {isImg && (
+                  <img src={a.base64} alt={a.nome} style={{ width:36, height:36, objectFit:"cover", borderRadius:6, border:"1px solid #e2e8f0", flexShrink:0 }} />
+                )}
+                <a href={a.base64} download={a.nome} style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", width:26, height:26, borderRadius:6, fontSize:13, display:"flex", alignItems:"center", justifyContent:"center", textDecoration:"none", flexShrink:0 }}>⬇</a>
+                <button onClick={function() { remover(i); }} style={{ background:"#fef2f2", border:"none", color:"#dc2626", width:26, height:26, borderRadius:6, cursor:"pointer", fontSize:11, flexShrink:0 }}>✕</button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Modal de Conta a Pagar ───────────────────────────────────
 function ModalConta({ conta, categoriasPagar, fornecedores, onSave, onClose }) {
   const [form, setForm] = useState(conta || {
@@ -4123,48 +4184,10 @@ function ModalConta({ conta, categoriasPagar, fornecedores, onSave, onClose }) {
           {/* ── ANEXOS ── */}
           <div style={{ gridColumn:"1/-1" }}>
             <div style={{ fontSize:11, color:"#94a3b8", marginBottom:8, fontWeight:600, textTransform:"uppercase" }}>📎 Anexos</div>
-            <label style={{ display:"block", border:"2px dashed #e2e8f0", borderRadius:10, padding:"12px", textAlign:"center", cursor:"pointer", background:"#f8fafc", marginBottom:8 }}>
-              <input
-                type="file"
-                multiple
-                accept=".pdf,.jpg,.jpeg,.png,.webp,.xml,.xlsx,.xls,.doc,.docx"
-                style={{ display:"none" }}
-                onChange={async e => {
-                  const files = Array.from(e.target.files);
-                  const converted = await Promise.all(files.map(f => new Promise((res) => {
-                    const reader = new FileReader();
-                    reader.onload = ev => res({ nome: f.name, tipo: f.type, tamanho: f.size, base64: ev.target.result });
-                    reader.readAsDataURL(f);
-                  })));
-                  set('anexos', [...(form.anexos||[]), ...converted].slice(0,5));
-                  e.target.value = '';
-                }}
-              />
-              <div style={{ fontSize:13, color:"#64748b" }}>📎 Clique para anexar arquivos</div>
-              <div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>PDF, imagens, XML, Word, Excel — máx. 5 arquivos</div>
-            </label>
-            {(form.anexos||[]).length > 0 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                {(form.anexos||[]).map((a, i) => {
-                  const isImg = a.tipo && a.tipo.startsWith("image/");
-                  const icon = isImg ? "🖼️" : a.tipo === "application/pdf" ? "📄" : "📎";
-                  return (
-                    <div key={i} style={{ display:"flex", alignItems:"center", gap:10, background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:8, padding:"8px 12px" }}>
-                      <span style={{ fontSize:18 }}>{icon}</span>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:12, fontWeight:600, color:"#0f172a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{a.nome}</div>
-                        <div style={{ fontSize:10, color:"#94a3b8" }}>{(a.tamanho/1024).toFixed(1)} KB</div>
-                      </div>
-                      {isImg && <img src={a.base64} alt={a.nome} style={{ width:36, height:36, objectFit:"cover", borderRadius:6, border:"1px solid #e2e8f0", flexShrink:0 }} />}
-                      <a href={a.base64} download={a.nome}
-                        style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", width:26, height:26, borderRadius:6, fontSize:13, display:"flex", alignItems:"center", justifyContent:"center", textDecoration:"none", flexShrink:0 }}>⬇</a>
-                      <button onClick={() => { const idx2=i; set("anexos", (form.anexos||[]).filter((_,j)=>j!==idx2)); }}
-                        style={{ background:"#fef2f2", border:"none", color:"#dc2626", width:26, height:26, borderRadius:6, cursor:"pointer", fontSize:11, flexShrink:0 }}>✕</button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <AnexosUpload
+              anexos={form.anexos || []}
+              onChange={(novosAnexos) => set("anexos", novosAnexos)}
+            />
           </div>
         </div>
         <div style={{ display:"flex", gap:8 }}>

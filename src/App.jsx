@@ -3695,27 +3695,19 @@ async function analisarPrioridadePagamentos(contas, saldoDisponivel) {
     };
   });
 
-  const prompt = "Você é um consultor financeiro especialista em fluxo de caixa para pequenas empresas brasileiras.
-
-" +
-    "Saldo disponível: R$ " + saldoDisponivel.toFixed(2) + "
-
-" +
-    "Contas a pagar:
-" +
-    contasData.map(function(c) {
-      return c.num + ". " + c.desc + " | R$ " + c.valor + " | " + c.situacao +
-        " | Multa: R$ " + c.multa + " | Juros: R$ " + c.juros +
-        " | Protesto: " + c.protesto + " | Cat: " + c.cat +
-        " | Prioridade cadastrada: " + c.prioridade + " | ID: " + c.id;
-    }).join("
-") + "
-
-" +
-    "Retorne APENAS este JSON preenchido (sem texto extra, sem markdown):
-" +
-    '{"resumo":"texto","alerta_critico":null,"prioridade":[{"posicao":1,"id":"ID_AQUI","razao":"texto","urgencia":"critica","pagar_hoje":true}],"recomendacao_final":"texto"}';
-
+  var linhasContas = contasData.map(function(c) {
+    return c.num + ". " + c.desc + " | R$ " + c.valor + " | " + c.situacao +
+      " | Multa: R$ " + c.multa + " | Juros: R$ " + c.juros +
+      " | Protesto: " + c.protesto + " | Cat: " + c.cat +
+      " | Prioridade: " + c.prioridade + " | ID: " + c.id;
+  }).join(" | PROX | ");
+  var promptParts = [
+    "Voce e um consultor financeiro especialista em fluxo de caixa para pequenas empresas brasileiras.",
+    "Saldo disponivel: R$ " + saldoDisponivel.toFixed(2),
+    "Contas a pagar: " + linhasContas,
+    "Retorne APENAS este JSON (sem texto extra, sem markdown, em uma linha): {resumo:texto, alerta_critico:null, prioridade:[{posicao:1, id:ID_AQUI, razao:texto, urgencia:critica ou alta ou media ou baixa, pagar_hoje:true}], recomendacao_final:texto}"
+  ];
+  const prompt = promptParts.join(" --- ");
   const text = await chamarIA(prompt, 1400);
   return parseIAJson(text);
 }

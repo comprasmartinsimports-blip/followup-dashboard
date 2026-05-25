@@ -4124,7 +4124,11 @@ function ModalConta({ conta, categoriasPagar, fornecedores, onSave, onClose }) {
           <div style={{ gridColumn:"1/-1" }}>
             <div style={{ fontSize:11, color:"#94a3b8", marginBottom:8, fontWeight:600, textTransform:"uppercase" }}>📎 Anexos</div>
             <label style={{ display:"block", border:"2px dashed #e2e8f0", borderRadius:10, padding:"12px", textAlign:"center", cursor:"pointer", background:"#f8fafc", marginBottom:8 }}>
-              <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.xml,.xlsx,.xls,.doc,.docx" style={{ display:"none" }}
+              <input
+                type="file"
+                multiple
+                accept=".pdf,.jpg,.jpeg,.png,.webp,.xml,.xlsx,.xls,.doc,.docx"
+                style={{ display:"none" }}
                 onChange={async e => {
                   const files = Array.from(e.target.files);
                   const converted = await Promise.all(files.map(f => new Promise((res) => {
@@ -4132,9 +4136,10 @@ function ModalConta({ conta, categoriasPagar, fornecedores, onSave, onClose }) {
                     reader.onload = ev => res({ nome: f.name, tipo: f.type, tamanho: f.size, base64: ev.target.result });
                     reader.readAsDataURL(f);
                   })));
-                  set("anexos", [...(form.anexos||[]), ...converted].slice(0,5));
-                  e.target.value = "";
-                }} />
+                  set('anexos', [...(form.anexos||[]), ...converted].slice(0,5));
+                  e.target.value = '';
+                }}
+              />
               <div style={{ fontSize:13, color:"#64748b" }}>📎 Clique para anexar arquivos</div>
               <div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>PDF, imagens, XML, Word, Excel — máx. 5 arquivos</div>
             </label>

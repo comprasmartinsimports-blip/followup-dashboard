@@ -5492,143 +5492,264 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
       )}
 
       {/* ── CONTAS A RECEBER ── */}
-      {finTab === "receber" && (
+      {finTab === "receber" && (function() {
+        // Calcula taxas ML estimadas quando não tem netAmount da API
+        function calcNetEstimado(o) {
+          var bruto = o.price * o.qty;
+          // Taxa padrão ML: ~12% para normal, ~16% premium + frete grátis
+          // Usa uma estimativa conservadora de 13% se não tiver dado real
+          return bruto * 0.87;
+        }
+
+        // Agrupamento por previsão de recebimento
+        var proximosLiberados = aReceber.filter(function(o) {
+          var pd = paymentData?.[o.id];
+          if (!pd?.releaseDate) return false;
+          var d = getDaysUntil(pd.releaseDate);
+          return d !== null && d >= 0 && d <= 7;
+        });
+        var semPrevisao = aReceber.filter(function(o) { return !paymentData?.[o.id]?.releaseDate; });
+        var totalComDados = aReceber.filter(function(o) { return paymentData?.[o.id]?.netAmount; }).length;
+
+        // Totais reais com fallback estimado
+        var totalBruto = aReceber.reduce(function(s,o){ return s + o.price * o.qty; }, 0);
+        var totalLiq = aReceber.reduce(function(s,o){
+          var pd = paymentData?.[o.id];
+          return s + (pd?.netAmount || calcNetEstimado(o));
+        }, 0);
+        var taxaMedia = totalBruto > 0 ? ((totalBruto - totalLiq) / totalBruto * 100) : 0;
+
+        // Previsão por período
+        var prevProx7 = aReceber.reduce(function(s,o) {
+          var pd = paymentData?.[o.id]; if (!pd?.releaseDate) return s;
+          var d = getDaysUntil(pd.releaseDate);
+          return (d !== null && d >= 0 && d <= 7) ? s + (pd.netAmount || calcNetEstimado(o)) : s;
+        }, 0);
+        var prevProx30 = aReceber.reduce(function(s,o) {
+          var pd = paymentData?.[o.id]; if (!pd?.releaseDate) return s;
+          var d = getDaysUntil(pd.releaseDate);
+          return (d !== null && d >= 0 && d <= 30) ? s + (pd.netAmount || calcNetEstimado(o)) : s;
+        }, 0);
+
+        return (
         <div>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:10, marginBottom:14 }}>
+          {/* Cards de resumo */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:10, marginBottom:16 }}>
             {[
-              { label:"A Receber (líq.)", value:fmt(totalAReceberLiq), color:"#0891b2", bg:"#ecfeff", desc:`${aReceber.length} pedidos` },
-              { label:"Recebido no Mês", value:fmt(totalRecebidoMesLiq), color:"#15803d", bg:"#f0fdf4", desc:`${recebidoMes.length} pedidos` },
-            ].map(k => (
-              <div key={k.label} style={{ background:k.bg, borderRadius:10, padding:"14px 18px" }}>
-                <div style={{ fontSize:11, color:k.color, fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>{k.label}</div>
-                <div style={{ fontSize:20, fontWeight:800, color:k.color }}>{k.value}</div>
-                <div style={{ fontSize:11, color:k.color, opacity:0.7, marginTop:2 }}>{k.desc}</div>
-              </div>
-            ))}
+              { label:"A Receber (líq.)", value:fmt(totalLiq), color:"#0891b2", bg:"#ecfeff",
+                desc: totalComDados < aReceber.length ? (totalComDados + " reais · " + (aReceber.length - totalComDados) + " estimados") : (aReceber.length + " pedidos") },
+              { label:"Valor Bruto Total", value:fmt(totalBruto), color:"#64748b", bg:"#f8fafc", desc:"Antes das taxas ML" },
+              { label:"Previsão 7 dias", value:fmt(prevProx7), color:"#15803d", bg:"#f0fdf4", desc: proximosLiberados.length + " pedido(s)" },
+              { label:"Previsão 30 dias", value:fmt(prevProx30), color:"#7c3aed", bg:"#f5f3ff", desc:"Liberação ML" },
+              { label:"Recebido no Mês", value:fmt(totalRecebidoMesLiq), color:"#15803d", bg:"#f0fdf4", desc: recebidoMes.length + " pedidos entregues" },
+            ].map(function(k) {
+              return (
+                <div key={k.label} style={{ background:k.bg, borderRadius:10, padding:"14px 18px" }}>
+                  <div style={{ fontSize:10, color:k.color, fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>{k.label}</div>
+                  <div style={{ fontSize:18, fontWeight:800, color:k.color }}>{k.value}</div>
+                  <div style={{ fontSize:11, color:k.color, opacity:0.7, marginTop:2 }}>{k.desc}</div>
+                </div>
+              );
+            })}
           </div>
+
+          {/* Aviso sobre dados estimados */}
+          {semPrevisao.length > 0 && (
+            <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:10, padding:"10px 14px", marginBottom:14, fontSize:12, color:"#92400e", display:"flex", alignItems:"center", gap:8 }}>
+              <span style={{ fontSize:16 }}>ℹ️</span>
+              <div>
+                <strong>{semPrevisao.length} pedido(s)</strong> ainda sem dados de pagamento da API do ML — o valor líquido é estimado com ~13% de taxa.
+                {totalComDados > 0 && <span style={{ marginLeft:6, color:"#15803d" }}>✓ {totalComDados} pedidos com dados reais</span>}
+              </div>
+            </div>
+          )}
+
+          {/* Alertas de liberação próxima */}
+          {proximosLiberados.length > 0 && (
+            <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:10, padding:"10px 14px", marginBottom:14, display:"flex", alignItems:"center", gap:10 }}>
+              <span style={{ fontSize:18 }}>💰</span>
+              <div>
+                <div style={{ fontWeight:700, color:"#15803d", fontSize:13 }}>{proximosLiberados.length} pagamento(s) liberando nos próximos 7 dias</div>
+                <div style={{ fontSize:12, color:"#166534" }}>Total: {fmt(prevProx7)} líquido a cair no Mercado Pago</div>
+              </div>
+            </div>
+          )}
+
+          {/* Filtros */}
           <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:10, flexWrap:"wrap" }}>
             <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", whiteSpace:"nowrap" }}>Pedidos a Receber</div>
             <div style={{ position:"relative", flex:1, minWidth:240 }}>
               <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
-              <input value={searchReceber} onChange={e => setSearchReceber(e.target.value)}
+              <input value={searchReceber} onChange={function(e){ setSearchReceber(e.target.value); }}
                 placeholder="Buscar por nº pedido, cliente ou produto..."
                 style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px 8px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
             </div>
             {searchReceber && (
-              <button onClick={() => setSearchReceber("")}
-                style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"7px 12px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
-                ✕ Limpar
-              </button>
+              <button onClick={function(){ setSearchReceber(""); }}
+                style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"7px 12px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕ Limpar</button>
             )}
           </div>
           <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
             <span style={{ fontSize:12, color:"#94a3b8", fontWeight:500 }}>Data da venda:</span>
-            <input type="date" value={receberDe} onChange={e=>setReceberDe(e.target.value)}
-              style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"6px 10px", borderRadius:8, fontSize:12, cursor:"pointer" }} />
+            <input type="date" value={receberDe} onChange={function(e){ setReceberDe(e.target.value); }}
+              style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"6px 10px", borderRadius:8, fontSize:12 }} />
             <span style={{ fontSize:12, color:"#94a3b8" }}>até</span>
-            <input type="date" value={receberAte} onChange={e=>setReceberAte(e.target.value)}
-              style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"6px 10px", borderRadius:8, fontSize:12, cursor:"pointer" }} />
+            <input type="date" value={receberAte} onChange={function(e){ setReceberAte(e.target.value); }}
+              style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"6px 10px", borderRadius:8, fontSize:12 }} />
             {(receberDe||receberAte) && (
-              <button onClick={()=>{setReceberDe("");setReceberAte("");}}
+              <button onClick={function(){ setReceberDe(""); setReceberAte(""); }}
                 style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"5px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕ Limpar</button>
             )}
           </div>
+
+          {/* Tabela */}
           <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto", marginBottom:20 }}>
             <table style={{ borderCollapse:"collapse", width:"100%" }}>
               <thead>
-                <tr>{["Pedido","Cliente","Produto","Data","Valor Bruto","Valor Líquido","Previsão ML","Status","Ação"].map(h=>(
-                  <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>
-                ))}</tr>
+                <tr>
+                  {["Pedido","Cliente","Produto","Data Venda","Bruto","Líquido (MP)","Taxa ML","Previsão Pagamento","Status","Ação"].map(function(h) {
+                    return <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>;
+                  })}
+                </tr>
               </thead>
               <tbody>
-                {(() => {
-                  const q = searchReceber.toLowerCase().trim();
-                  let filtered = aReceber;
-                  if (q) filtered = filtered.filter(o =>
-                    String(o.id).includes(q) ||
-                    o.title?.toLowerCase().includes(q) ||
-                    o.buyerName?.toLowerCase().includes(q)
-                  );
-                  if (receberDe) filtered = filtered.filter(o => o.date && o.date >= receberDe);
-                  if (receberAte) filtered = filtered.filter(o => o.date && o.date <= receberAte);
+                {(function() {
+                  var q = searchReceber.toLowerCase().trim();
+                  var filtered = aReceber.filter(function(o) {
+                    if (q && !(String(o.id).includes(q) || o.title?.toLowerCase().includes(q) || o.buyerName?.toLowerCase().includes(q))) return false;
+                    if (receberDe && o.date && o.date < receberDe) return false;
+                    if (receberAte && o.date && o.date > receberAte) return false;
+                    return true;
+                  });
                   if (filtered.length === 0) return (
-                    <tr><td colSpan={9} style={{ textAlign:"center", color:"#94a3b8", padding:32 }}>
-                      {searchReceber ? "Nenhum pedido encontrado para essa busca" : "Nenhum pedido a receber"}
-                    </td></tr>
-                  );
-                  return filtered.slice(0,100).map((o,i) => {
-                  const ss = shipmentStatuses?.[o.id] ?? o.shipment_status;
-                  const isEnviado = ["shipped","in_transit"].includes(ss);
-                  const label = isEnviado ? "Enviado" : "Ag. Envio";
-                  const color = isEnviado ? "#0891b2" : "#d97706";
-                  const bg = isEnviado ? "#ecfeff" : "#fffbeb";
-                  const pd = paymentData?.[o.id];
-                  const netAmt = pd?.netAmount || null;
-                  const releaseDate = pd?.releaseDate || null;
-                  const relDays = releaseDate ? getDaysUntil(releaseDate) : null;
-                  const jaRegistrado = lancamentos.some(l=>l.tipo==="recebimento"&&l.pedidoId===o.id);
-                  return (
-                    <tr key={o.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
-                      <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", fontFamily:"monospace", fontWeight:600 }}>#{o.id}</td>
-                      <td style={{ padding:"10px 14px", fontSize:12, color:"#334155", maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{o.buyerName||"—"}</td>
-                      <td style={{ padding:"10px 14px", fontSize:13, color:"#0f172a", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{o.title||"—"}</td>
-                      <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{o.date}</td>
-                      <td style={{ padding:"10px 14px", fontSize:13, color:"#64748b" }}>{fmt(o.price*o.qty)}</td>
-                      <td style={{ padding:"10px 14px", fontSize:13, fontWeight:700, color:"#15803d" }}>{netAmt ? fmt(netAmt) : <span style={{ color:"#94a3b8", fontSize:11 }}>Carregando...</span>}</td>
-                      <td style={{ padding:"10px 14px" }}>
-                        {releaseDate ? (
-                          <div>
-                            <div style={{ fontSize:12, fontWeight:700, color:relDays<=0?"#15803d":relDays<=7?"#d97706":"#0891b2" }}>
-                              {relDays<=0 ? "✓ Liberado" : fmtDate(releaseDate)}
-                            </div>
-                            {relDays>0&&<div style={{ fontSize:10, color:"#94a3b8" }}>em {relDays}d</div>}
-                          </div>
-                        ) : <span style={{ fontSize:11, color:"#94a3b8" }}>—</span>}
-                      </td>
-                      <td style={{ padding:"10px 14px" }}><span style={{ fontSize:11, fontWeight:600, color, background:bg, padding:"3px 8px", borderRadius:6 }}>{label}</span></td>
-                      <td style={{ padding:"10px 14px" }}>
-                        {jaRegistrado ? (
-                          <span style={{ fontSize:11, color:"#15803d", fontWeight:600 }}>✓ Registrado</span>
-                        ) : (
-                          <button onClick={() => setModalBaixaML(o)}
-                            style={{ background:"#15803d", border:"none", color:"#fff", padding:"4px 10px", borderRadius:6, cursor:"pointer", fontSize:11, fontWeight:600, whiteSpace:"nowrap" }}>
-                            Registrar
-                          </button>
-                        )}
+                    <tr>
+                      <td colSpan={10} style={{ textAlign:"center", color:"#94a3b8", padding:32 }}>
+                        {searchReceber ? "Nenhum pedido encontrado" : "Nenhum pedido a receber"}
                       </td>
                     </tr>
                   );
-                });
+                  return filtered.slice(0, 100).map(function(o, i) {
+                    var ss = shipmentStatuses?.[o.id] ?? o.shipment_status;
+                    var isEnviado = ["shipped","in_transit"].includes(ss);
+                    var label = isEnviado ? "Enviado" : "Ag. Envio";
+                    var color = isEnviado ? "#0891b2" : "#d97706";
+                    var bg = isEnviado ? "#ecfeff" : "#fffbeb";
+                    var pd = paymentData?.[o.id];
+                    var bruto = o.price * o.qty;
+                    var netAmt = pd?.netAmount || null;
+                    var netEstimado = !netAmt;
+                    var netFinal = netAmt || calcNetEstimado(o);
+                    var taxa = bruto > 0 ? ((bruto - netFinal) / bruto * 100) : 0;
+                    var releaseDate = pd?.releaseDate || null;
+                    var relDays = releaseDate ? getDaysUntil(releaseDate) : null;
+                    var jaRegistrado = lancamentos.some(function(l){ return l.tipo==="recebimento"&&l.pedidoId===o.id; });
+
+                    // Cor da previsão
+                    var relColor = "#94a3b8", relBg = "#f8fafc";
+                    if (releaseDate) {
+                      if (relDays <= 0) { relColor = "#15803d"; relBg = "#f0fdf4"; }
+                      else if (relDays <= 7) { relColor = "#d97706"; relBg = "#fffbeb"; }
+                      else { relColor = "#0891b2"; relBg = "#ecfeff"; }
+                    }
+
+                    return (
+                      <tr key={o.id} style={{ background: i%2===0?"#f8fafc":"#fff" }}>
+                        <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", fontFamily:"monospace", fontWeight:600 }}>#{o.id}</td>
+                        <td style={{ padding:"10px 14px", fontSize:12, color:"#334155", maxWidth:100, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{o.buyerName||"—"}</td>
+                        <td style={{ padding:"10px 14px", fontSize:12, color:"#0f172a", maxWidth:180, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={o.title}>{o.title||"—"}</td>
+                        <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", whiteSpace:"nowrap" }}>{fmtDate(o.date)}</td>
+                        <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", whiteSpace:"nowrap" }}>{fmt(bruto)}</td>
+                        <td style={{ padding:"10px 14px", whiteSpace:"nowrap" }}>
+                          <div style={{ fontSize:13, fontWeight:700, color: netEstimado ? "#d97706" : "#15803d" }}>
+                            {fmt(netFinal)}
+                          </div>
+                          {netEstimado && (
+                            <div style={{ fontSize:9, color:"#94a3b8", fontStyle:"italic" }}>~estimado</div>
+                          )}
+                        </td>
+                        <td style={{ padding:"10px 14px", whiteSpace:"nowrap" }}>
+                          <span style={{ fontSize:12, fontWeight:600, color: taxa > 15 ? "#dc2626" : taxa > 10 ? "#d97706" : "#15803d" }}>
+                            {taxa.toFixed(1)}%
+                          </span>
+                          {netEstimado && <span style={{ fontSize:9, color:"#94a3b8" }}> *</span>}
+                        </td>
+                        <td style={{ padding:"10px 14px", whiteSpace:"nowrap" }}>
+                          {releaseDate ? (
+                            <div style={{ background:relBg, borderRadius:8, padding:"4px 10px", display:"inline-block" }}>
+                              <div style={{ fontSize:12, fontWeight:700, color:relColor }}>
+                                {relDays <= 0 ? "✓ Liberado" : fmtDate(releaseDate)}
+                              </div>
+                              {relDays > 0 && <div style={{ fontSize:10, color:relColor, opacity:0.8 }}>em {relDays} dia(s)</div>}
+                            </div>
+                          ) : (
+                            <span style={{ fontSize:11, color:"#94a3b8", fontStyle:"italic" }}>Aguardando ML</span>
+                          )}
+                        </td>
+                        <td style={{ padding:"10px 14px" }}>
+                          <span style={{ fontSize:11, fontWeight:600, color, background:bg, padding:"3px 8px", borderRadius:6 }}>{label}</span>
+                        </td>
+                        <td style={{ padding:"10px 14px" }}>
+                          {jaRegistrado ? (
+                            <span style={{ fontSize:11, color:"#15803d", fontWeight:600 }}>✓ Registrado</span>
+                          ) : (
+                            <button onClick={function(){ setModalBaixaML(o); }}
+                              style={{ background:"#15803d", border:"none", color:"#fff", padding:"4px 10px", borderRadius:6, cursor:"pointer", fontSize:11, fontWeight:600, whiteSpace:"nowrap" }}>
+                              Registrar
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  });
                 })()}
               </tbody>
             </table>
           </div>
 
+          {/* Recebidos no Mês */}
           <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", marginBottom:10 }}>Recebidos no Mês Atual</div>
           <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
             <table style={{ borderCollapse:"collapse", width:"100%" }}>
               <thead>
-                <tr>{["Pedido","Produto","Data","Valor Bruto","Valor Líquido"].map(h=>(
-                  <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa" }}>{h}</th>
-                ))}</tr>
+                <tr>
+                  {["Pedido","Produto","Data","Bruto","Líquido (MP)","Taxa ML"].map(function(h) {
+                    return <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa" }}>{h}</th>;
+                  })}
+                </tr>
               </thead>
               <tbody>
-                {recebidoMes.length===0 ? (
-                  <tr><td colSpan={5} style={{ textAlign:"center", color:"#94a3b8", padding:32 }}>Nenhum pedido entregue este mês</td></tr>
-                ) : recebidoMes.slice(0,50).map((o,i) => (
-                  <tr key={o.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
-                    <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", fontFamily:"monospace", fontWeight:600 }}>#{o.id}</td>
-                    <td style={{ padding:"10px 14px", fontSize:13, color:"#0f172a", maxWidth:240, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{o.title||"—"}</td>
-                    <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{o.date}</td>
-                    <td style={{ padding:"10px 14px", fontSize:13, color:"#64748b" }}>{fmt(o.price*o.qty)}</td>
-                    <td style={{ padding:"10px 14px", fontSize:13, fontWeight:700, color:"#15803d" }}>{paymentData?.[o.id]?.netAmount ? fmt(paymentData[o.id].netAmount) : fmt(o.price*o.qty)}</td>
-                  </tr>
-                ))}
+                {recebidoMes.length === 0 ? (
+                  <tr><td colSpan={6} style={{ textAlign:"center", color:"#94a3b8", padding:32 }}>Nenhum pedido entregue este mês</td></tr>
+                ) : recebidoMes.slice(0, 50).map(function(o, i) {
+                  var bruto = o.price * o.qty;
+                  var net = paymentData?.[o.id]?.netAmount || null;
+                  var netFinal = net || bruto * 0.87;
+                  var taxa = bruto > 0 ? ((bruto - netFinal) / bruto * 100) : 0;
+                  return (
+                    <tr key={o.id} style={{ background: i%2===0?"#f8fafc":"#fff" }}>
+                      <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", fontFamily:"monospace", fontWeight:600 }}>#{o.id}</td>
+                      <td style={{ padding:"10px 14px", fontSize:12, color:"#0f172a", maxWidth:260, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{o.title||"—"}</td>
+                      <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{fmtDate(o.date)}</td>
+                      <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{fmt(bruto)}</td>
+                      <td style={{ padding:"10px 14px" }}>
+                        <div style={{ fontSize:13, fontWeight:700, color: net ? "#15803d" : "#d97706" }}>{fmt(netFinal)}</div>
+                        {!net && <div style={{ fontSize:9, color:"#94a3b8", fontStyle:"italic" }}>~estimado</div>}
+                      </td>
+                      <td style={{ padding:"10px 14px", fontSize:12, fontWeight:600, color: taxa > 15 ? "#dc2626" : taxa > 10 ? "#d97706" : "#15803d" }}>
+                        {taxa.toFixed(1)}%{!net && <span style={{ fontSize:9, color:"#94a3b8" }}> *</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
+          {(recebidoMes.some(function(o){ return !paymentData?.[o.id]?.netAmount; })) && (
+            <div style={{ fontSize:11, color:"#94a3b8", marginTop:8 }}>* Valores estimados com ~13% de taxa ML. Reconecte para atualizar com dados reais.</div>
+          )}
         </div>
-      )}
+        );
+      })()}
 
       {/* ── CAIXAS E BANCOS ── */}
       {finTab === "contas" && (

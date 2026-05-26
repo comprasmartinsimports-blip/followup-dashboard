@@ -3238,6 +3238,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
   const [showModalForn, setShowModalForn] = useState(false);
   const [editingProd, setEditingProd] = useState(null);
   const [editingForn, setEditingForn] = useState(null);
+  const [prodSel, setProdSel] = useState([]);
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -3365,6 +3366,32 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
             <span style={{ fontSize:12, color:"#854d0e", background:"#fef9c3", padding:"3px 10px", borderRadius:20, fontWeight:600 }}>🟡 {produtos.filter(p=>p.syncML).length} sincronizados com ML</span>
           </div>
 
+          {prodSel.length > 0 && (
+            <div style={{ display:"flex", gap:8, alignItems:"center", background:"#0f172a", borderRadius:10, padding:"10px 16px", marginBottom:10, flexWrap:"wrap" }}>
+              <span style={{ color:"#fff", fontWeight:700, fontSize:13 }}>{prodSel.length} produto(s) selecionado(s)</span>
+              <button onClick={function(){
+                if (!window.confirm("Excluir " + prodSel.length + " produto(s)?")) return;
+                var upd = produtos.filter(function(p){ return !prodSel.includes(p.id); });
+                setProdutos(upd); saveProdutos(upd); setProdSel([]);
+              }} style={{ background:"#dc2626", border:"none", color:"#fff", fontWeight:700, padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+                🗑 Excluir Selecionados
+              </button>
+              <button onClick={function(){
+                var upd = produtos.map(function(p){ return prodSel.includes(p.id) ? Object.assign({},p,{status:"Inativo"}) : p; });
+                setProdutos(upd); saveProdutos(upd); setProdSel([]);
+              }} style={{ background:"#d97706", border:"none", color:"#fff", fontWeight:700, padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+                ⏸ Inativar
+              </button>
+              <button onClick={function(){
+                var upd = produtos.map(function(p){ return prodSel.includes(p.id) ? Object.assign({},p,{status:"Ativo"}) : p; });
+                setProdutos(upd); saveProdutos(upd); setProdSel([]);
+              }} style={{ background:"#15803d", border:"none", color:"#fff", fontWeight:700, padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+                ▶ Ativar
+              </button>
+              <button onClick={function(){ setProdSel([]); }}
+                style={{ background:"#334155", border:"none", color:"#94a3b8", padding:"6px 12px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕ Cancelar</button>
+            </div>
+          )}
           {produtosFiltrados.length === 0 ? (
             <div style={{ background:"#f8fafc", border:"2px dashed #e2e8f0", borderRadius:12, padding:60, textAlign:"center", color:"#94a3b8" }}>
               <div style={{ fontSize:40, marginBottom:12 }}>📦</div>
@@ -3375,9 +3402,17 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
             <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
               <table style={{ borderCollapse:"collapse", width:"100%" }}>
                 <thead>
-                  <tr>{["Foto","Produto","SKU / EAN","Fornecedor","Custo","Venda","Estoque","Status","ML","Ações"].map(h=>(
-                    <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>
-                  ))}</tr>
+                  <tr>
+                    <th style={{ padding:"10px 14px", background:"#fafafa", borderBottom:"1px solid #f1f5f9", width:36 }}>
+                      <input type="checkbox"
+                        checked={produtosFiltrados.length > 0 && produtosFiltrados.every(function(p){ return prodSel.includes(p.id); })}
+                        onChange={function(e){ setProdSel(e.target.checked ? produtosFiltrados.map(function(p){return p.id;}) : []); }}
+                        style={{ cursor:"pointer" }} />
+                    </th>
+                    {["Foto","Produto","SKU / EAN","Fornecedor","Custo","Venda","Estoque","Status","ML","Ações"].map(function(h){
+                      return <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>;
+                    })}
+                  </tr>
                 </thead>
                 <tbody>
                   {produtosFiltrados.map((p, i) => {
@@ -3385,7 +3420,12 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                     const mlListing = listings.find(l => l.id === p.mlbVinculado);
                     const estBaixo = p.estoqueMinimo && p.estoqueAtual && parseFloat(p.estoqueAtual) <= parseFloat(p.estoqueMinimo);
                     return (
-                      <tr key={p.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
+                      <tr key={p.id} style={{ background: prodSel.includes(p.id)?"#eff6ff":i%2===0?"#f8fafc":"#fff" }}>
+                        <td style={{ padding:"10px 14px", textAlign:"center" }}>
+                          <input type="checkbox" checked={prodSel.includes(p.id)}
+                            onChange={function(e){ setProdSel(e.target.checked ? [...prodSel,p.id] : prodSel.filter(function(x){return x!==p.id;})); }}
+                            style={{ cursor:"pointer" }} />
+                        </td>
                         <td style={{ padding:"8px 8px 8px 14px", width:52 }}>
                           {p.imagens?.[0] ? (
                             <img src={p.imagens[0]} alt="" style={{ width:44, height:44, objectFit:"cover", borderRadius:8, border:"1px solid #e2e8f0" }} />
@@ -4944,6 +4984,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
   const [searchReceber, setSearchReceber] = useState("");
   const [receberDe, setReceberDe] = useState("");
   const [receberAte, setReceberAte] = useState("");
+  const [receberSel, setReceberSel] = useState([]);
   const [pagarDe, setPagarDe] = useState("");
   const [pagarAte, setPagarAte] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -4956,6 +4997,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
   const [extratoContaId, setExtratoContaId] = useState(null);
   const [extratoDe, setExtratoDe] = useState("");
   const [extratoAte, setExtratoAte] = useState("");
+  const [extratoSel, setExtratoSel] = useState([]);
   const [selecionadas, setSelecionadas] = useState([]);
   const [showModalMultiBaixa, setShowModalMultiBaixa] = useState(false);
 
@@ -5970,10 +6012,30 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
           </div>
 
           {/* Tabela */}
+          {receberSel.length > 0 && (
+            <div style={{ display:"flex", gap:8, alignItems:"center", background:"#0f172a", borderRadius:10, padding:"10px 16px", marginBottom:10, flexWrap:"wrap" }}>
+              <span style={{ color:"#fff", fontWeight:700, fontSize:13 }}>{receberSel.length} pedido(s) selecionado(s)</span>
+              <button onClick={function(){
+                if (!window.confirm("Excluir lançamentos dos " + receberSel.length + " pedido(s) selecionados?")) return;
+                var upd = lancamentos.filter(function(l){ return !receberSel.some(function(id){ return String(l.pedidoId)===String(id); }); });
+                setLancamentos(upd); saveLS("lancamentos", upd); setReceberSel([]);
+              }} style={{ background:"#dc2626", border:"none", color:"#fff", fontWeight:700, padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+                🗑 Excluir Lançamentos
+              </button>
+              <button onClick={function(){ setReceberSel([]); }}
+                style={{ background:"#334155", border:"none", color:"#94a3b8", padding:"6px 12px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕ Cancelar</button>
+            </div>
+          )}
           <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto", marginBottom:20 }}>
             <table style={{ borderCollapse:"collapse", width:"100%" }}>
               <thead>
                 <tr>
+                  <th style={{ padding:"10px 14px", background:"#fafafa", borderBottom:"1px solid #f1f5f9", width:36 }}>
+                    <input type="checkbox"
+                      checked={filtered.length > 0 && filtered.every(function(o){ return receberSel.includes(o.id); })}
+                      onChange={function(e){ setReceberSel(e.target.checked ? filtered.map(function(o){return o.id;}) : []); }}
+                      style={{ cursor:"pointer" }} />
+                  </th>
                   {["Pedido","Cliente","Produto","Data Venda","Bruto","Líquido (MP)","Taxa ML","Previsão Pagamento","Status","Ação"].map(function(h) {
                     return <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>;
                   })}
@@ -6027,7 +6089,12 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                     }
 
                     return (
-                      <tr key={o.id} style={{ background: i%2===0?"#f8fafc":"#fff" }}>
+                      <tr key={o.id} style={{ background: receberSel.includes(o.id)?"#eff6ff":i%2===0?"#f8fafc":"#fff" }}>
+                        <td style={{ padding:"10px 14px", textAlign:"center" }}>
+                          <input type="checkbox" checked={receberSel.includes(o.id)}
+                            onChange={function(e){ setReceberSel(e.target.checked ? [...receberSel,o.id] : receberSel.filter(function(x){return x!==o.id;})); }}
+                            style={{ cursor:"pointer" }} />
+                        </td>
                         <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", fontFamily:"monospace", fontWeight:600 }}>#{o.id}</td>
                         <td style={{ padding:"10px 14px", fontSize:12, color:"#334155", maxWidth:100, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{o.buyerName||"—"}</td>
                         <td style={{ padding:"10px 14px", fontSize:12, color:"#0f172a", maxWidth:180, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={o.title}>{o.title||"—"}</td>
@@ -6219,20 +6286,34 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                 <div style={{ padding:"12px 16px", borderBottom:"1px solid #f1f5f9", background:"#fafafa" }}>
                   <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", marginBottom:6 }}>
                     <span style={{ fontSize:12, color:"#64748b", fontWeight:600 }}>📅 Período:</span>
-                    <BotoesPeriodo de={extratoDe} ate={extratoAte} onChangeDe={setExtratoDe} onChangeAte={setExtratoAte} />
+                    <BotoesPeriodo de={extratoDe} ate={extratoAte} onChangeDe={function(v){ setExtratoDe(v); setExtratoSel([]); }} onChangeAte={function(v){ setExtratoAte(v); setExtratoSel([]); }} />
                   </div>
                   <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-                    <input type="date" value={extratoDe} onChange={function(e){ setExtratoDe(e.target.value); }}
+                    <input type="date" value={extratoDe} onChange={function(e){ setExtratoDe(e.target.value); setExtratoSel([]); }}
                       style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 10px", borderRadius:8, fontSize:12 }} />
                     <span style={{ fontSize:12, color:"#94a3b8" }}>até</span>
-                    <input type="date" value={extratoAte} onChange={function(e){ setExtratoAte(e.target.value); }}
+                    <input type="date" value={extratoAte} onChange={function(e){ setExtratoAte(e.target.value); setExtratoSel([]); }}
                       style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 10px", borderRadius:8, fontSize:12 }} />
                     {(extratoDe||extratoAte) && (
-                      <button onClick={function(){ setExtratoDe(""); setExtratoAte(""); }}
+                      <button onClick={function(){ setExtratoDe(""); setExtratoAte(""); setExtratoSel([]); }}
                         style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"5px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕ Limpar</button>
                     )}
                     <span style={{ fontSize:12, color:"#94a3b8", marginLeft:"auto" }}>{movs.length} lançamento(s)</span>
                   </div>
+                  {extratoSel.length > 0 && (
+                    <div style={{ display:"flex", gap:8, alignItems:"center", marginTop:8, background:"#0f172a", borderRadius:8, padding:"8px 12px", flexWrap:"wrap" }}>
+                      <span style={{ color:"#fff", fontWeight:700, fontSize:12 }}>{extratoSel.length} selecionado(s)</span>
+                      <button onClick={function(){
+                        if (!window.confirm("Excluir " + extratoSel.length + " lançamento(s)?")) return;
+                        var upd = lancamentos.filter(function(x){ return !extratoSel.includes(x.id); });
+                        setLancamentos(upd); saveLS("lancamentos", upd); setExtratoSel([]);
+                      }} style={{ background:"#dc2626", border:"none", color:"#fff", fontWeight:700, padding:"5px 12px", borderRadius:6, cursor:"pointer", fontSize:12 }}>
+                        🗑 Excluir Selecionados
+                      </button>
+                      <button onClick={function(){ setExtratoSel([]); }}
+                        style={{ background:"#334155", border:"none", color:"#94a3b8", padding:"5px 10px", borderRadius:6, cursor:"pointer", fontSize:12 }}>✕ Cancelar</button>
+                    </div>
+                  )}
                 </div>
                 {movs.length === 0 ? (
                   <div style={{ padding:32, textAlign:"center", color:"#94a3b8", fontSize:13 }}>{movsAll.length > 0 ? "Nenhum lançamento neste período" : "Nenhum lançamento nesta conta"}</div>
@@ -6241,6 +6322,12 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                     <table style={{ borderCollapse:"collapse", width:"100%" }}>
                       <thead>
                         <tr>
+                          <th style={{ padding:"10px 16px", background:"#fafafa", borderBottom:"1px solid #f1f5f9", width:36 }}>
+                            <input type="checkbox"
+                              checked={movs.length > 0 && movs.every(function(l){ return extratoSel.includes(l.id); })}
+                              onChange={function(e){ setExtratoSel(e.target.checked ? movs.map(function(l){return l.id;}) : []); }}
+                              style={{ cursor:"pointer" }} />
+                          </th>
                           {["Data","Descrição","Tipo","Valor",""].map(function(h) {
                             return <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 16px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa" }}>{h}</th>;
                           })}
@@ -6249,7 +6336,12 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                       <tbody>
                         {movs.map(function(l, i) {
                           return (
-                            <tr key={l.id} style={{ background: l.automatico ? "#fffbeb" : i%2===0?"#f8fafc":"#fff" }}>
+                            <tr key={l.id} style={{ background: extratoSel.includes(l.id) ? "#eff6ff" : l.automatico ? "#fffbeb" : i%2===0?"#f8fafc":"#fff" }}>
+                              <td style={{ padding:"10px 16px", textAlign:"center" }}>
+                                <input type="checkbox" checked={extratoSel.includes(l.id)}
+                                  onChange={function(e){ setExtratoSel(e.target.checked ? [...extratoSel,l.id] : extratoSel.filter(function(x){return x!==l.id;})); }}
+                                  style={{ cursor:"pointer" }} />
+                              </td>
                               <td style={{ padding:"10px 16px", fontSize:12, color:"#64748b", whiteSpace:"nowrap" }}>{fmtDate(l.data)}</td>
                               <td style={{ padding:"10px 16px", fontSize:13, color:"#0f172a" }}>
                                 {l.descricao}

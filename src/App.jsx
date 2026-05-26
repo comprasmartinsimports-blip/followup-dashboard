@@ -5148,7 +5148,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
       });
       if (jaReg) return;
 
-      // Encontrar o pedido
+        // Encontrar o pedido
       var order = (enrichedOrders || []).find(function(o) { return String(o.id) === String(orderId); });
       if (!order) return;
 
@@ -6646,61 +6646,48 @@ export default function App() {
             const data = await res.json();
             if (data.error) return;
 
-            // DEBUG: ver o que a API retorna para o pedido
-            if (oid === "2000016417774136" || oid === String(o.id)) {
-              console.log("[ORDER DEBUG] " + oid, JSON.stringify({
-                total_amount: data.total_amount,
-                paid_amount: data.paid_amount,
-                marketplace_fee: data.marketplace_fee,
-                buyer_costs: data.buyer_costs,
-                payments_arr: (data.payments||[]).slice(0,1).map(function(p){return {id:p.id, total_paid:p.total_paid_amount, net:p.net_received_amount, release:p.money_release_date, status:p.status};}),
-                order_items_fee: (data.order_items||[]).slice(0,1).map(function(i){return {sale_fee:i.sale_fee, unit_price:i.unit_price};}),
-              }));
+            // Fórmula correta: total_amount - sale_fee (sale_fee já inclui tarifa ML + custo frete)
+            var bruto = parseFloat(data.total_amount || o.total_amount || 0);
+
+            // sale_fee de cada item (inclui tarifa de venda + custo envio cobrado pelo ML)
+            var saleFeeTotal = 0;
+            if (Array.isArray(data.order_items)) {
+              data.order_items.forEach(function(item) {
+                saleFeeTotal += parseFloat(item.sale_fee || 0);
+              });
             }
 
-            // Extrair valor líquido: buyer_costs.gross_receiver_amount = valor que cai na conta
-            var bruto = parseFloat(data.total_amount || o.total_amount || 0);
-            var taxaML = parseFloat(data.marketplace_fee || 0);
-            var freteCusto = parseFloat(data.shipping?.cost || 0);
+            // Se sale_fee não disponível, usar marketplace_fee como fallback
+            var tarifaFinal = saleFeeTotal > 0 ? saleFeeTotal : parseFloat(data.marketplace_fee || 0);
 
-            // buyer_costs tem o breakdown completo
-            var grossReceiver = parseFloat(data.buyer_costs?.gross_receiver_amount || 0);
-            var netReceiver = parseFloat(data.buyer_costs?.net_receiver_amount || 0);
+            // Valor líquido = bruto - sale_fee (tarifa ML + frete seller)
+            var netAmount = bruto > 0 && tarifaFinal > 0 ? bruto - tarifaFinal : 0;
 
-            // Fallback: calcular pela tarifa ML + frete (já temos do shipments)
-            var fretePago = parseFloat((orderShippingMap || {})[oid] || 0);
-            var netCalc = bruto - taxaML - fretePago;
+            // Calcular frete e tarifa separados para exibição
+            var freteCusto = 0;
+            var tarifaML = tarifaFinal;
+            if (Array.isArray(data.order_items)) {
+              data.order_items.forEach(function(item) {
+                freteCusto += parseFloat(item.shipping_cost || 0);
+              });
+              if (freteCusto > 0) tarifaML = tarifaFinal - freteCusto;
+            }
 
-            // Prioridade: net_receiver > gross_receiver > calculado
-            var netAmount = netReceiver || grossReceiver || (netCalc > 0 ? netCalc : 0);
-
-            // Data de liberação via payments[0].money_release_date se disponível
+            // Data de liberação via payments[0]
             var releaseDate = null;
             if (Array.isArray(data.payments) && data.payments.length > 0) {
-              var pmt = data.payments.find(p => p.status === "approved") || data.payments[0];
-              releaseDate = pmt?.money_release_date?.slice(0, 10) || null;
-              // Se não tiver no pedido, tentar via endpoint de pagamento direto
-              if (!releaseDate && pmt?.id) {
-                try {
-                  const pRes = await fetch(ML(`/collections/notifications/${pmt.id}`), { headers: { Authorization: `Bearer ${validTk}` } });
-                  const pData = await pRes.json();
-                  if (!pData.error) {
-                    releaseDate = pData.collection?.money_release_date?.slice(0, 10) || null;
-                    var netFromCollection = parseFloat(pData.collection?.net_received_amount || 0);
-                    if (netFromCollection > 0) netAmount = netFromCollection;
-                  }
-                } catch {}
-              }
+              var pmt = data.payments.find(function(p) { return p.status === "approved"; }) || data.payments[0];
+              releaseDate = (pmt && pmt.money_release_date) ? pmt.money_release_date.slice(0, 10) : null;
             }
 
             if (netAmount > 0 || releaseDate) {
               paymentMap[oid] = {
                 releaseDate,
-                netAmount: netAmount || bruto * 0.87,
+                netAmount: netAmount > 0 ? netAmount : bruto * 0.87,
                 bruto,
-                tarifaML: taxaML,
-                freteCusto: fretePago || freteCusto,
-                isCalculated: !netReceiver && !grossReceiver,
+                tarifaML: tarifaML,
+                freteCusto: freteCusto,
+                isCalculated: saleFeeTotal <= 0,
               };
             }
           } catch {}

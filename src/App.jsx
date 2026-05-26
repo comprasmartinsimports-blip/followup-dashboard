@@ -4967,13 +4967,13 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
   const allOrders = rawOrders || [];
 
   const aReceber = allOrders.filter(o => {
-    if (o.status !== "paid") return false;
-    const ss = shipmentStatuses?.[o.id] ?? o.shipment_status;
-    const isDelivered = ss === "delivered" || o.tags?.some(t=>t==="delivered");
-    if (isDelivered) return false;
-    // Não registrado ainda
+    // Inclui qualquer pedido pago ainda não registrado (independente de status de entrega)
     const jaRegistrado = lancamentos.some(l => l.tipo === "recebimento" && l.pedidoId === o.id);
-    return !jaRegistrado;
+    if (jaRegistrado) return false;
+    // Precisa estar pago (paid) ou em alguma fase de envio/entrega
+    const ss = shipmentStatuses?.[o.id] ?? o.shipment_status;
+    const statusValido = o.status === "paid" || ["shipped","in_transit","delivered","ready_to_ship"].includes(ss);
+    return statusValido;
   });
 
   const recebidoMes = allOrders.filter(o => {
@@ -5083,6 +5083,71 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
     const updatedLan = [...lancamentos, lan];
     setLancamentos(updatedLan); saveLS("lancamentos", updatedLan);
   }
+
+  // ── Baixa automática: roda sempre que paymentData é atualizado ──────────
+  useEffect(function() {
+    if (!paymentData || Object.keys(paymentData).length === 0) return;
+    if (!contasBancarias || contasBancarias.length === 0) return;
+
+    // Busca a conta "Mercado Pago Filial SP" — fallback para qualquer Mercado Pago — fallback para primeira conta
+    var contaMP = contasBancarias.find(function(c) {
+      return c.nome && c.nome.toLowerCase().includes("mercado pago filial sp");
+    }) || contasBancarias.find(function(c) {
+      return c.nome && c.nome.toLowerCase().includes("mercado pago");
+    }) || contasBancarias[0];
+    if (!contaMP) return;
+
+    var hoje = new Date();
+    hoje.setHours(0,0,0,0);
+    var hojeStr = hoje.toLocaleDateString("sv-SE");
+
+    var novasLow = [];
+    var processados = [];
+
+    Object.entries(paymentData).forEach(function(entry) {
+      var orderId = entry[0];
+      var pd = entry[1];
+
+      // Só processa se tiver valor líquido real da API
+      if (!pd || !pd.netAmount || pd.netAmount <= 0) return;
+      // Só processa se a data de liberação já passou ou é hoje
+      if (!pd.releaseDate || pd.releaseDate > hojeStr) return;
+      // Verificar se já foi registrado
+      var jaReg = lancamentos.some(function(l) {
+        return l.tipo === "recebimento" && (String(l.pedidoId) === String(orderId) || l.pedidoId === parseInt(orderId));
+      });
+      if (jaReg) return;
+
+      // Encontrar o pedido
+      var order = (enrichedOrders || []).find(function(o) { return String(o.id) === String(orderId); });
+      if (!order) return;
+
+      novasLow.push({
+        id: Date.now() + Math.random(),
+        tipo: "recebimento",
+        descricao: "Pedido ML #" + orderId + (order.title ? " — " + order.title.slice(0, 40) : ""),
+        valor: pd.netAmount,
+        data: pd.releaseDate,
+        contaBancariaId: contaMP.id,
+        pedidoId: order.id,
+        automatico: true,
+      });
+      processados.push(orderId);
+    });
+
+    if (novasLow.length === 0) return;
+
+    // Evitar duplicatas: filtrar os que já estão nos lancamentos
+    var idsJaReg = new Set(lancamentos.filter(function(l){ return l.pedidoId; }).map(function(l){ return String(l.pedidoId); }));
+    var reaisNovos = novasLow.filter(function(l) { return !idsJaReg.has(String(l.pedidoId)); });
+    if (reaisNovos.length === 0) return;
+
+    var updated = [...lancamentos, ...reaisNovos];
+    setLancamentos(updated);
+    saveLS("lancamentos", updated);
+
+    console.log("[ML Margem] Baixa automática: " + reaisNovos.length + " recebimento(s) registrado(s) automaticamente na conta " + contaMP.nome);
+  }, [paymentData]);
 
   function saveBancaria(form) {
     const updated = editingBancaria ? contasBancarias.map(c=>c.id===form.id?form:c) : [...contasBancarias, {...form, id:Date.now()}];
@@ -5800,6 +5865,24 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
             })}
           </div>
 
+          {/* Aviso de baixa automática */}
+          {(function() {
+            var autoBaixas = lancamentos.filter(function(l){ return l.automatico && l.tipo==="recebimento"; });
+            if (autoBaixas.length === 0) return null;
+            var contaMP = contasBancarias.find(function(c){ return autoBaixas[0] && c.id === autoBaixas[0].contaBancariaId; });
+            return (
+              <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:10, padding:"10px 16px", marginBottom:12, display:"flex", alignItems:"center", gap:10 }}>
+                <span style={{ fontSize:18 }}>🤖</span>
+                <div>
+                  <div style={{ fontWeight:700, color:"#15803d", fontSize:13 }}>Baixa automática ativa</div>
+                  <div style={{ fontSize:12, color:"#166534" }}>
+                    {autoBaixas.length} recebimento(s) registrado(s) automaticamente na conta <strong>{contaMP ? contaMP.nome : "Mercado Pago"}</strong> com o valor líquido real da API do ML.
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Aviso sobre dados estimados */}
           {semPrevisao.length > 0 && (
             <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:10, padding:"10px 14px", marginBottom:14, fontSize:12, color:"#92400e", display:"flex", alignItems:"center", gap:8 }}>
@@ -5867,8 +5950,14 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
               <tbody>
                 {(function() {
                   var q = searchReceber.toLowerCase().trim();
-                  var filtered = aReceber.filter(function(o) {
-                    if (q && !(String(o.id).includes(q) || o.title?.toLowerCase().includes(q) || o.buyerName?.toLowerCase().includes(q))) return false;
+                  // Quando buscando, pesquisa em TODOS os pedidos (incluindo entregues não registrados)
+                  var pool = q ? allOrders.filter(function(o) {
+                    var jaReg = lancamentos.some(function(l){ return l.tipo==="recebimento" && l.pedidoId===o.id; });
+                    if (jaReg) return false; // já registrado, não precisa
+                    return String(o.id).includes(q) || (o.title||"").toLowerCase().includes(q) || (o.buyerName||"").toLowerCase().includes(q);
+                  }) : aReceber;
+                  var filtered = pool.filter(function(o) {
+                    if (q && !(String(o.id).includes(q) || (o.title||"").toLowerCase().includes(q) || (o.buyerName||"").toLowerCase().includes(q))) return false;
                     if (receberDe && o.date && o.date < receberDe) return false;
                     if (receberAte && o.date && o.date > receberAte) return false;
                     return true;
@@ -5876,16 +5965,17 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                   if (filtered.length === 0) return (
                     <tr>
                       <td colSpan={10} style={{ textAlign:"center", color:"#94a3b8", padding:32 }}>
-                        {searchReceber ? "Nenhum pedido encontrado" : "Nenhum pedido a receber"}
+                        {q ? "Nenhum pedido encontrado — verifique se já foi registrado" : "Nenhum pedido a receber"}
                       </td>
                     </tr>
                   );
                   return filtered.slice(0, 100).map(function(o, i) {
                     var ss = shipmentStatuses?.[o.id] ?? o.shipment_status;
+                    var isDelivered2 = ss === "delivered" || o.tags?.some(function(t){return t==="delivered";});
                     var isEnviado = ["shipped","in_transit"].includes(ss);
-                    var label = isEnviado ? "Enviado" : "Ag. Envio";
-                    var color = isEnviado ? "#0891b2" : "#d97706";
-                    var bg = isEnviado ? "#ecfeff" : "#fffbeb";
+                    var label = isDelivered2 ? "Entregue" : isEnviado ? "Enviado" : "Ag. Envio";
+                    var color = isDelivered2 ? "#7c3aed" : isEnviado ? "#0891b2" : "#d97706";
+                    var bg = isDelivered2 ? "#f5f3ff" : isEnviado ? "#ecfeff" : "#fffbeb";
                     var pd = paymentData?.[o.id];
                     var bruto = o.price * o.qty;
                     var netAmt = pd?.netAmount || null;
@@ -5941,9 +6031,16 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                           <span style={{ fontSize:11, fontWeight:600, color, background:bg, padding:"3px 8px", borderRadius:6 }}>{label}</span>
                         </td>
                         <td style={{ padding:"10px 14px" }}>
-                          {jaRegistrado ? (
-                            <span style={{ fontSize:11, color:"#15803d", fontWeight:600 }}>✓ Registrado</span>
-                          ) : (
+                          {jaRegistrado ? (function() {
+                            var lanc = lancamentos.find(function(l){ return l.tipo==="recebimento" && (String(l.pedidoId)===String(o.id)); });
+                            var isAuto = lanc && lanc.automatico;
+                            return (
+                              <div>
+                                <span style={{ fontSize:11, color:"#15803d", fontWeight:700 }}>✓ {isAuto ? "Auto" : "Registrado"}</span>
+                                {isAuto && <div style={{ fontSize:9, color:"#94a3b8" }}>baixa automática</div>}
+                              </div>
+                            );
+                          })() : (
                             <button onClick={function(){ setModalBaixaML(o); }}
                               style={{ background:"#15803d", border:"none", color:"#fff", padding:"4px 10px", borderRadius:6, cursor:"pointer", fontSize:11, fontWeight:600, whiteSpace:"nowrap" }}>
                               Registrar

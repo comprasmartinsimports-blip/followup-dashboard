@@ -5369,18 +5369,35 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
           });
         });
 
-        // Futuros: recebimentos ML previstos
-        aReceber.forEach(o => {
-          const pd = paymentData?.[o.id];
-          if (!pd?.releaseDate) return;
-          if (!dias[pd.releaseDate]) dias[pd.releaseDate] = { entradas:[], saidas:[] };
-          dias[pd.releaseDate].entradas.push({
-            desc: `[PREVISTO] ${o.title?.slice(0,35) || `Pedido #${o.id}`}`,
-            valor: pd.netAmount || o.price * o.qty,
-            tipo: "ML Previsto",
-            id: `prev_${o.id}`,
-            previsto: true,
-          });
+        // Futuros: recebimentos ML previstos (+14 dias ou releaseDate da API)
+        aReceber.forEach(function(o) {
+          var pd = paymentData?.[o.id];
+          // Data de previsão: API ou +14 dias da data do pedido
+          var previsaoDate = pd?.releaseDate || null;
+          if (!previsaoDate && o.date) {
+            var dp = new Date(o.date + "T00:00:00");
+            dp.setDate(dp.getDate() + 14);
+            previsaoDate = dp.toLocaleDateString("sv-SE");
+          }
+          if (!previsaoDate) return;
+          // Valor líquido: bruto - tarifa - frete (mesma fórmula da tabela)
+          var brutoFluxo = o.price * o.qty;
+          var tarifaFluxo = (o.fee || 0) * (o.qty || 1);
+          var freteFluxo = o.freteSeller || 0;
+          var netFluxo = brutoFluxo - tarifaFluxo - freteFluxo;
+          if (netFluxo <= 0) netFluxo = brutoFluxo * 0.87;
+          if (!dias[previsaoDate]) dias[previsaoDate] = { entradas:[], saidas:[] };
+          // Não adicionar se já tem lançamento registrado para esse pedido
+          var jaLancado = lancamentos.some(function(l){ return l.tipo==="recebimento" && (l.pedidoId===o.id||String(l.pedidoId)===String(o.id)); });
+          if (!jaLancado) {
+            dias[previsaoDate].entradas.push({
+              desc: "[PREVISTO] " + (o.title ? o.title.slice(0,35) : "Pedido #" + o.id),
+              valor: netFluxo,
+              tipo: "ML Previsto",
+              id: "prev_" + o.id,
+              previsto: true,
+            });
+          }
         });
 
         // Filtro por período
@@ -6043,16 +6060,13 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                     if (netFinal <= 0) netFinal = bruto * 0.87; // fallback seguro
                     var netEstimado = tarifaExib === 0 && freteExib === 0;
                     var taxa = bruto > 0 ? ((bruto - netFinal) / bruto * 100) : 0;
-                    // Previsão: data real da API ou 14 dias após a data do pedido
+                    // Previsão: data real da API ou +14 dias da data do pedido
                     var releaseDate = pd?.releaseDate || null;
                     if (!releaseDate && o.date) {
                       var d14 = new Date(o.date + "T00:00:00");
                       d14.setDate(d14.getDate() + 14);
                       releaseDate = d14.toLocaleDateString("sv-SE");
                     }
-                    var relDays = releaseDate ? getDaysUntil(releaseDate) : null;
-                    var jaRegistrado = lancamentos.some(function(l){ return l.tipo==="recebimento"&&l.pedidoId===o.id; });
-                    var releaseDate = pd?.releaseDate || null;
                     var relDays = releaseDate ? getDaysUntil(releaseDate) : null;
                     var jaRegistrado = lancamentos.some(function(l){ return l.tipo==="recebimento"&&l.pedidoId===o.id; });
 

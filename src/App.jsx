@@ -4811,6 +4811,9 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
   const [filterCat, setFilterCat] = useState("all");
   const [filterPrioridade, setFilterPrioridade] = useState("all-pr");
   const [searchPagar, setSearchPagar] = useState("");
+  const [filterDoc, setFilterDoc] = useState("");
+  const [filterValorMin, setFilterValorMin] = useState("");
+  const [filterValorMax, setFilterValorMax] = useState("");
   const [novaCat, setNovaCat] = useState("");
   const [fluxoDe, setFluxoDe] = useState("");
   const [fluxoAte, setFluxoAte] = useState("");
@@ -4818,6 +4821,8 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
   const [extratoDe, setExtratoDe] = useState("");
   const [extratoAte, setExtratoAte] = useState("");
   const [extratoSel, setExtratoSel] = useState([]);
+  const [extratoTipo, setExtratoTipo] = useState("todos"); // todos | recebimento | pagamento
+  const [extratoSearch, setExtratoSearch] = useState("");
   const [selecionadas, setSelecionadas] = useState([]);
   const [showModalMultiBaixa, setShowModalMultiBaixa] = useState(false);
 
@@ -4834,7 +4839,13 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
     if (filterStatus !== "all") r = r.filter(c => c.status === filterStatus);
     if (filterCat !== "all") r = r.filter(c => c.categoria === filterCat);
     if (filterPrioridade !== "all-pr") r = r.filter(c => (c.prioridade||"media") === filterPrioridade);
-    if (searchPagar) r = r.filter(c => c.descricao.toLowerCase().includes(searchPagar.toLowerCase()));
+    if (searchPagar) {
+      var qp = searchPagar.toLowerCase();
+      r = r.filter(c => (c.descricao||"").toLowerCase().includes(qp) || (c.fornecedorNome||"").toLowerCase().includes(qp) || (c.fornecedorCNPJ||"").includes(qp) || (c.observacao||"").toLowerCase().includes(qp));
+    }
+    if (filterDoc) r = r.filter(c => (c.observacao||"").toLowerCase().includes(filterDoc.toLowerCase()) || (c.descricao||"").toLowerCase().includes(filterDoc.toLowerCase()));
+    if (filterValorMin) r = r.filter(c => parseFloat(c.valor||0) >= parseFloat(filterValorMin));
+    if (filterValorMax) r = r.filter(c => parseFloat(c.valor||0) <= parseFloat(filterValorMax));
     if (pagarDe) r = r.filter(c => c.vencimento && c.vencimento >= pagarDe);
     if (pagarAte) r = r.filter(c => c.vencimento && c.vencimento <= pagarAte);
     // Ordenar: alta > media > baixa > sem prioridade, depois por vencimento
@@ -5343,14 +5354,33 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
             </div>
             <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}
               style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 12px", borderRadius:8, fontSize:12 }}>
-              <option value="all">Todos status</option>
-              {["Pendente","Pago","Vencido"].map(s=><option key={s} value={s}>{s}</option>)}
+              <option value="all">Todos</option>
+              <option value="Pendente">📋 Em Aberto</option>
+              <option value="Vencido">🔴 Em Atraso</option>
+              <option value="Protestado">⚖️ Protestado</option>
+              <option value="Pago">✅ Pago</option>
+              <option value="Pago Parcial">⚡ Pago Parcial</option>
             </select>
             <select value={filterCat} onChange={e=>setFilterCat(e.target.value)}
               style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 12px", borderRadius:8, fontSize:12 }}>
               <option value="all">Todas categorias</option>
               {categoriasPagar.map(c=><option key={c} value={c}>{c}</option>)}
             </select>
+          </div>
+          {/* Filtros de valor e documento */}
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center", marginBottom:10 }}>
+            <span style={{ fontSize:12, color:"#64748b", fontWeight:600 }}>Valor:</span>
+            <input type="number" value={filterValorMin} onChange={function(e){setFilterValorMin(e.target.value);}} placeholder="Mín R$"
+              style={{ width:90, background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"6px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
+            <span style={{ fontSize:12, color:"#94a3b8" }}>até</span>
+            <input type="number" value={filterValorMax} onChange={function(e){setFilterValorMax(e.target.value);}} placeholder="Máx R$"
+              style={{ width:90, background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"6px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
+            <input value={filterDoc} onChange={function(e){setFilterDoc(e.target.value);}} placeholder="Nº doc / obs..."
+              style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"6px 10px", borderRadius:8, fontSize:12, outline:"none", width:140 }} />
+            {(filterValorMin||filterValorMax||filterDoc) && (
+              <button onClick={function(){setFilterValorMin("");setFilterValorMax("");setFilterDoc("");}}
+                style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"5px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕</button>
+            )}
           </div>
           {/* Filtro de prioridade */}
           <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:10, flexWrap:"wrap" }}>
@@ -6076,6 +6106,11 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
             var movs = movsAll.filter(function(l) {
               if (extratoDe && l.data && l.data < extratoDe) return false;
               if (extratoAte && l.data && l.data > extratoAte) return false;
+              if (extratoTipo !== "todos" && l.tipo !== extratoTipo) return false;
+              if (extratoSearch) {
+                var qs = extratoSearch.toLowerCase();
+                if (!((l.descricao||"").toLowerCase().includes(qs))) return false;
+              }
               return true;
             }).sort(function(a,b) { return b.data > a.data ? 1 : -1; });
             var saldoInicial = parseFloat(cb.saldoInicial || 0);
@@ -6103,7 +6138,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                     <span style={{ fontSize:12, color:"#64748b", fontWeight:600 }}>📅 Período:</span>
                     <BotoesPeriodo de={extratoDe} ate={extratoAte} onChangeDe={function(v){ setExtratoDe(v); setExtratoSel([]); }} onChangeAte={function(v){ setExtratoAte(v); setExtratoSel([]); }} />
                   </div>
-                  <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+                  <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", marginBottom:8 }}>
                     <input type="date" value={extratoDe} onChange={function(e){ setExtratoDe(e.target.value); setExtratoSel([]); }}
                       style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 10px", borderRadius:8, fontSize:12 }} />
                     <span style={{ fontSize:12, color:"#94a3b8" }}>até</span>
@@ -6111,9 +6146,30 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                       style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 10px", borderRadius:8, fontSize:12 }} />
                     {(extratoDe||extratoAte) && (
                       <button onClick={function(){ setExtratoDe(""); setExtratoAte(""); setExtratoSel([]); }}
-                        style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"5px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕ Limpar</button>
+                        style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"5px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕</button>
                     )}
                     <span style={{ fontSize:12, color:"#94a3b8", marginLeft:"auto" }}>{movs.length} lançamento(s)</span>
+                  </div>
+                  <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
+                    {/* Filtro tipo */}
+                    {[
+                      { k:"todos",        l:"📋 Todos" },
+                      { k:"recebimento",  l:"↑ Entradas" },
+                      { k:"pagamento",    l:"↓ Saídas" },
+                    ].map(function(t){
+                      var active = extratoTipo === t.k;
+                      return <button key={t.k} onClick={function(){ setExtratoTipo(t.k); setExtratoSel([]); }}
+                        style={{ padding:"5px 12px", borderRadius:20, border: active?"2px solid #0f172a":"1px solid #e2e8f0",
+                          background: active?"#0f172a":"#f8fafc", color: active?"#fff":"#64748b",
+                          fontWeight: active?700:500, fontSize:12, cursor:"pointer" }}>{t.l}</button>;
+                    })}
+                    <div style={{ position:"relative", flex:1, minWidth:160 }}>
+                      <span style={{ position:"absolute", left:8, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:12 }}>🔍</span>
+                      <input value={extratoSearch} onChange={function(e){ setExtratoSearch(e.target.value); }}
+                        placeholder="Buscar descrição, fornecedor..."
+                        style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"5px 10px 5px 26px", borderRadius:8, fontSize:12, outline:"none" }} />
+                    </div>
+                    {extratoSearch && <button onClick={function(){ setExtratoSearch(""); }} style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"5px 8px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕</button>}
                   </div>
                   {extratoSel.length > 0 && (
                     <div style={{ display:"flex", gap:8, alignItems:"center", marginTop:8, background:"#0f172a", borderRadius:8, padding:"8px 12px", flexWrap:"wrap" }}>
@@ -6400,6 +6456,9 @@ export default function App() {
   const [orderStatusFilter, setOrderStatusFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [filterSku, setFilterSku] = useState("");
+  const [filterUF, setFilterUF] = useState("");
+  const [showClienteDetalhe, setShowClienteDetalhe] = useState(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const [token, setToken] = useState(() => loadSavedTokens()?.accessToken ?? null);
   const [user, setUser] = useState(() => {
@@ -6770,10 +6829,13 @@ export default function App() {
     const item = o.order_items?.[0];
     const buyerShippingCost = parseFloat(o.payments?.[0]?.shipping_cost) || 0;
     const shipmentCost = shipmentCosts[String(o.id)] ?? 0;
+    var buyer = o.buyer || {};
+    var buyerAddr = o.shipping?.receiver_address || {};
     return {
       id: String(o.id),
       listing_id: item?.item?.id,
       title: item?.item?.title ?? null,
+      sku: item?.item?.seller_sku || item?.item?.attributes?.find(function(a){return a.id==="SELLER_SKU";})?.value_name || null,
       date: o.date_created?.slice(0, 10),
       price: item?.unit_price ?? o.total_amount ?? 0,
       qty: item?.quantity ?? 1,
@@ -6784,6 +6846,19 @@ export default function App() {
       tags: o.tags ?? [],
       fulfilled: o.fulfilled,
       shipment_status: shipmentStatuses[String(o.id)] ?? null,
+      // Dados do comprador
+      buyerName: buyer.nickname || (buyer.first_name ? (buyer.first_name + " " + (buyer.last_name||"")).trim() : null),
+      buyerFirstName: buyer.first_name || null,
+      buyerLastName: buyer.last_name || null,
+      buyerDoc: buyer.identification?.number || null,
+      buyerDocType: buyer.identification?.type || null,
+      buyerEmail: buyer.email || null,
+      buyerPhone: buyer.phone?.number || null,
+      // Endereço de entrega
+      buyerUF: buyerAddr.state?.id || buyerAddr.address_line?.match(/[A-Z]{2}/)?.[0] || null,
+      buyerCity: buyerAddr.city?.name || null,
+      buyerZip: buyerAddr.zip_code || null,
+      shipping: o.shipping || null,
     };
   });
 
@@ -6862,7 +6937,15 @@ export default function App() {
     let results = (dateFrom || dateTo) ? rawOrders : periodOrders;
     if (dateFrom) results = results.filter(o => o.date && o.date >= dateFrom);
     if (dateTo) results = results.filter(o => o.date && o.date <= dateTo);
-    if (q) results = results.filter(o => String(o.id).toLowerCase().includes(q));
+    if (q) results = results.filter(o =>
+      String(o.id).includes(q) ||
+      (o.title||"").toLowerCase().includes(q) ||
+      (o.buyerName||"").toLowerCase().includes(q) ||
+      (o.buyerDoc||"").includes(q) ||
+      (o.buyerEmail||"").toLowerCase().includes(q) ||
+      (o.buyerCity||"").toLowerCase().includes(q) ||
+      (o.sku||"").toLowerCase().includes(q)
+    );
     // Status: cancelado = status cancelled SEM tag de devolução
     // Devolvido = tem tag "not_delivered" + "not_paid" OU mediação com cancelamento
     if (orderStatusFilter === "waiting") {
@@ -6898,7 +6981,17 @@ export default function App() {
     return results;
   }, [rawOrders, periodOrders, searchOrders, orderStatusFilter, dateFrom, dateTo]);
 
-  const enrichedOrders = filteredOrders.map(o => {
+  const enrichedOrdersFiltered = filteredOrders.filter(o => {
+    if (filterSku) {
+      var q = filterSku.toLowerCase().trim();
+      if (!(o.sku||"").toLowerCase().includes(q)) return false;
+    }
+    if (filterUF) {
+      if ((o.buyerUF||"").toUpperCase() !== filterUF.toUpperCase()) return false;
+    }
+    return true;
+  });
+  const enrichedOrders = enrichedOrdersFiltered.map(o => {
     const listing = listings.find(l => l.id === o.listing_id);
     const cost = costs[listing?.id] ?? 0;
     const feeRate = listing ? getRealFeeRate(listing) : 0.12;
@@ -7360,10 +7453,22 @@ export default function App() {
         {tab === "orders" && currentUser?.permissoes?.includes("orders") && (
           <>
             <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
-              <div style={{ position: "relative", width: 220 }}>
+              <div style={{ position: "relative", flex:1, minWidth:260 }}>
                 <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", fontSize: 14 }}>🔍</span>
-                <input className="search-input" value={searchOrders} onChange={e => setSearchOrders(e.target.value)} placeholder="Buscar por nº do pedido..." />
+                <input className="search-input" value={searchOrders} onChange={e => setSearchOrders(e.target.value)}
+                  placeholder="Buscar por nº pedido, cliente, CPF, e-mail..." style={{ width:"100%", paddingLeft:36 }} />
               </div>
+              <input value={filterSku} onChange={e => setFilterSku(e.target.value)} placeholder="SKU do produto..."
+                style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"7px 12px", borderRadius:8, fontSize:12, outline:"none", width:130 }} />
+              <select value={filterUF} onChange={e => setFilterUF(e.target.value)}
+                style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"7px 10px", borderRadius:8, fontSize:12 }}>
+                <option value="">Estado (UF)</option>
+                {["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"].map(function(uf){ return <option key={uf} value={uf}>{uf}</option>; })}
+              </select>
+              {(filterSku || filterUF) && (
+                <button onClick={function(){ setFilterSku(""); setFilterUF(""); }}
+                  style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"7px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕ Limpar</button>
+              )}
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 500 }}>De:</span>
                 <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
@@ -7458,6 +7563,29 @@ export default function App() {
                                 : <span>{title}</span>;
                             })()}
                           </div>
+                        </td>
+                        <td>
+                          {o.buyerName ? (
+                            <div>
+                              <button onClick={function(){ setShowClienteDetalhe(showClienteDetalhe===o.id ? null : o.id); }}
+                                style={{ background:"none", border:"none", color:"#0891b2", cursor:"pointer", fontSize:12, fontWeight:600, padding:0, textAlign:"left" }}>
+                                {o.buyerName}
+                              </button>
+                              {showClienteDetalhe === o.id && (
+                                <div style={{ position:"fixed", zIndex:900, background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"16px 18px", boxShadow:"0 8px 32px rgba(0,0,0,.15)", minWidth:240, marginTop:4 }}>
+                                  <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", marginBottom:10, display:"flex", justifyContent:"space-between" }}>
+                                    👤 {o.buyerName}
+                                    <button onClick={function(){ setShowClienteDetalhe(null); }} style={{ background:"none", border:"none", cursor:"pointer", color:"#94a3b8", fontSize:14 }}>✕</button>
+                                  </div>
+                                  {o.buyerDoc && <div style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>{o.buyerDocType||"Doc"}: {o.buyerDoc}</div>}
+                                  {o.buyerEmail && <div style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>✉️ {o.buyerEmail}</div>}
+                                  {o.buyerPhone && <div style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>📞 {o.buyerPhone}</div>}
+                                  {o.buyerCity && <div style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>📍 {o.buyerCity}{o.buyerUF ? " - " + o.buyerUF : ""}{o.buyerZip ? " (" + o.buyerZip + ")" : ""}</div>}
+                                  {o.sku && <div style={{ fontSize:12, color:"#64748b" }}>SKU: {o.sku}</div>}
+                                </div>
+                              )}
+                            </div>
+                          ) : <span style={{ color:"#94a3b8", fontSize:12 }}>—</span>}
                         </td>
                         <td style={{ color: "#64748b", fontSize: 12 }}>{o.date}</td>
                         <td style={{ fontWeight: 700, color: "#0f172a" }}>{fmt(o.price)}</td>

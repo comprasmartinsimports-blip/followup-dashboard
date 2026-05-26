@@ -4554,9 +4554,9 @@ function ModalBaixaML({ order, paymentInfo, contasBancarias, onConfirm, onClose 
   var brutoModal = order.price * order.qty;
   var tarifaModal = (order.fee || 0) * (order.qty || 1);
   var freteModal = order.freteSeller || 0;
+  // Líquido = Bruto - Tarifa ML - Frete (custo) — mesma fórmula da tabela
   var netPedido = brutoModal - tarifaModal - freteModal;
-  // Prioridade: net real API > calculado pelo pedido > estimativa 87%
-  const valor = paymentInfo?.netAmount || (netPedido > 0 ? netPedido : brutoModal * 0.87);
+  const valor = netPedido > 0 ? netPedido : brutoModal * 0.87;
   const isValorReal = !!(paymentInfo?.netAmount && !paymentInfo?.isCalculated);
   const isValorCalc = !!(paymentInfo?.netAmount && paymentInfo?.isCalculated) || (netPedido > 0 && !paymentInfo?.netAmount);
   return (
@@ -5836,16 +5836,15 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
 
         // Totais reais com fallback estimado
         var totalBruto = aReceber.reduce(function(s,o){ return s + o.price * o.qty; }, 0);
+        var totalTarifas = aReceber.reduce(function(s,o){ return s + (o.fee||0)*(o.qty||1); }, 0);
+        var totalFrete = aReceber.reduce(function(s,o){ return s + (o.freteSeller||0); }, 0);
         var totalLiq = aReceber.reduce(function(s,o){
-          var pd = paymentData?.[o.id];
           var brutoO = o.price * o.qty;
           var tarifaO = (o.fee||0)*(o.qty||1);
           var freteO = o.freteSeller||0;
-          var netCalcO = brutoO - tarifaO - freteO;
-          return s + (pd?.netAmount || (netCalcO > 0 ? netCalcO : brutoO * 0.87));
+          var net = brutoO - tarifaO - freteO;
+          return s + (net > 0 ? net : brutoO * 0.87);
         }, 0);
-        var totalTarifas = aReceber.reduce(function(s,o){ return s + (o.fee||0)*(o.qty||1); }, 0);
-        var totalFrete = aReceber.reduce(function(s,o){ return s + (o.freteSeller||0); }, 0);
         var taxaMedia = totalBruto > 0 ? ((totalBruto - totalLiq) / totalBruto * 100) : 0;
 
         // Previsão por período
@@ -5997,17 +5996,17 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                     var bg = isDelivered2 ? "#f5f3ff" : isEnviado ? "#ecfeff" : "#fffbeb";
                     var pd = paymentData?.[o.id];
                     var bruto = o.price * o.qty;
-                    // Usar fee e freteSeller já calculados no enrichedOrders (mesmos da aba Pedidos)
-                    var tarifaMLPed = (o.fee || 0) * (o.qty || 1);
-                    var fretePed = o.freteSeller || 0;
-                    var netCalcPedido = bruto - tarifaMLPed - fretePed;
-                    // Prioridade: valor real da API > calculado pelos dados do pedido > estimativa 13%
-                    var netAmt = pd?.netAmount || null;
-                    var netFinal = netAmt || (netCalcPedido > 0 ? netCalcPedido : bruto * 0.87);
-                    var netEstimado = !netAmt && netCalcPedido <= 0;
-                    var tarifaExib = tarifaMLPed > 0 ? tarifaMLPed : (pd?.tarifaML || 0);
-                    var freteExib = fretePed > 0 ? fretePed : (pd?.freteCusto || 0);
+                    // Valores já calculados no enrichedOrders (mesmos da aba Pedidos)
+                    var tarifaExib = (o.fee || 0) * (o.qty || 1);
+                    var freteExib = o.freteSeller || 0;
+                    // Líquido = Bruto - Tarifa ML - Frete (custo)
+                    var netFinal = bruto - tarifaExib - freteExib;
+                    if (netFinal <= 0) netFinal = bruto * 0.87; // fallback seguro
+                    var netEstimado = tarifaExib === 0 && freteExib === 0;
                     var taxa = bruto > 0 ? ((bruto - netFinal) / bruto * 100) : 0;
+                    var releaseDate = pd?.releaseDate || null;
+                    var relDays = releaseDate ? getDaysUntil(releaseDate) : null;
+                    var jaRegistrado = lancamentos.some(function(l){ return l.tipo==="recebimento"&&l.pedidoId===o.id; });
                     var releaseDate = pd?.releaseDate || null;
                     var relDays = releaseDate ? getDaysUntil(releaseDate) : null;
                     var jaRegistrado = lancamentos.some(function(l){ return l.tipo==="recebimento"&&l.pedidoId===o.id; });

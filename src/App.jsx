@@ -5152,12 +5152,14 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
       var order = (enrichedOrders || []).find(function(o) { return String(o.id) === String(orderId); });
       if (!order) return;
 
+      // Data: usar releaseDate se disponível, senão data do pedido, senão hoje
+      var dataLanc = pd.releaseDate || order.date || new Date().toLocaleDateString("sv-SE");
       novasLow.push({
         id: Date.now() + Math.random(),
         tipo: "recebimento",
         descricao: "Pedido ML #" + orderId + (order.title ? " — " + order.title.slice(0, 40) : ""),
         valor: pd.netAmount,
-        data: pd.releaseDate,
+        data: dataLanc,
         contaBancariaId: contaMP.id,
         pedidoId: order.id,
         automatico: true,
@@ -6643,6 +6645,18 @@ export default function App() {
             const res = await fetch(ML(`/orders/${o.id}`), { headers: { Authorization: `Bearer ${validTk}` } });
             const data = await res.json();
             if (data.error) return;
+
+            // DEBUG: ver o que a API retorna para o pedido
+            if (oid === "2000016417774136" || oid === String(o.id)) {
+              console.log("[ORDER DEBUG] " + oid, JSON.stringify({
+                total_amount: data.total_amount,
+                paid_amount: data.paid_amount,
+                marketplace_fee: data.marketplace_fee,
+                buyer_costs: data.buyer_costs,
+                payments_arr: (data.payments||[]).slice(0,1).map(function(p){return {id:p.id, total_paid:p.total_paid_amount, net:p.net_received_amount, release:p.money_release_date, status:p.status};}),
+                order_items_fee: (data.order_items||[]).slice(0,1).map(function(i){return {sale_fee:i.sale_fee, unit_price:i.unit_price};}),
+              }));
+            }
 
             // Extrair valor líquido: buyer_costs.gross_receiver_amount = valor que cai na conta
             var bruto = parseFloat(data.total_amount || o.total_amount || 0);

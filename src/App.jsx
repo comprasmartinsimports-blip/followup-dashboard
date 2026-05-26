@@ -4550,10 +4550,15 @@ function ModalBaixaML({ order, paymentInfo, contasBancarias, onConfirm, onClose 
     || contasBancarias.find(c => c.nome.toLowerCase().includes("mercado pago"));
   const [contaBancariaId, setContaBancariaId] = useState(mpConta?.id || contasBancarias[0]?.id || "");
   const [dataRecebimento, setDataRecebimento] = useState(paymentInfo?.releaseDate || new Date().toLocaleDateString("sv-SE"));
-  // Prioridade: net_received_amount real > calculado por fee_details > estimativa 87%
-  const valor = paymentInfo?.netAmount || order.price * order.qty * 0.87;
-  const isValorReal = paymentInfo?.netAmount && !paymentInfo?.isCalculated;
-  const isValorCalc = paymentInfo?.netAmount && paymentInfo?.isCalculated;
+  // Usar fee e freteSeller do pedido (mesmos da aba Pedidos) para cálculo preciso
+  var brutoModal = order.price * order.qty;
+  var tarifaModal = (order.fee || 0) * (order.qty || 1);
+  var freteModal = order.freteSeller || 0;
+  var netPedido = brutoModal - tarifaModal - freteModal;
+  // Prioridade: net real API > calculado pelo pedido > estimativa 87%
+  const valor = paymentInfo?.netAmount || (netPedido > 0 ? netPedido : brutoModal * 0.87);
+  const isValorReal = !!(paymentInfo?.netAmount && !paymentInfo?.isCalculated);
+  const isValorCalc = !!(paymentInfo?.netAmount && paymentInfo?.isCalculated) || (netPedido > 0 && !paymentInfo?.netAmount);
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:500, padding:24 }}>
       <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:400, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
@@ -4567,25 +4572,25 @@ function ModalBaixaML({ order, paymentInfo, contasBancarias, onConfirm, onClose 
           <div style={{ display:"flex", gap:16, alignItems:"flex-end", flexWrap:"wrap" }}>
             <div>
               <div style={{ fontSize:10, color:"#94a3b8", marginBottom:2 }}>Valor bruto</div>
-              <div style={{ fontSize:13, fontWeight:600, color:"#64748b", textDecoration:"line-through" }}>R$ {(order.price * order.qty).toFixed(2).replace(".",",")}</div>
+              <div style={{ fontSize:13, fontWeight:600, color:"#64748b", textDecoration:"line-through" }}>R$ {brutoModal.toFixed(2).replace(".",",")}</div>
             </div>
-            {paymentInfo?.tarifaML > 0 && (
+            {tarifaModal > 0 && (
               <div>
                 <div style={{ fontSize:10, color:"#94a3b8", marginBottom:2 }}>Tarifa ML</div>
-                <div style={{ fontSize:13, fontWeight:600, color:"#dc2626" }}>-R$ {paymentInfo.tarifaML.toFixed(2).replace(".",",")}</div>
+                <div style={{ fontSize:13, fontWeight:600, color:"#d97706" }}>-R$ {tarifaModal.toFixed(2).replace(".",",")}</div>
               </div>
             )}
-            {paymentInfo?.freteCusto > 0 && (
+            {freteModal > 0 && (
               <div>
-                <div style={{ fontSize:10, color:"#94a3b8", marginBottom:2 }}>Frete</div>
-                <div style={{ fontSize:13, fontWeight:600, color:"#dc2626" }}>-R$ {paymentInfo.freteCusto.toFixed(2).replace(".",",")}</div>
+                <div style={{ fontSize:10, color:"#94a3b8", marginBottom:2 }}>Frete (custo)</div>
+                <div style={{ fontSize:13, fontWeight:600, color:"#7c3aed" }}>-R$ {freteModal.toFixed(2).replace(".",",")}</div>
               </div>
             )}
             <div>
-              <div style={{ fontSize:10, color: isValorReal?"#15803d":isValorCalc?"#0891b2":"#d97706", marginBottom:2, fontWeight:600 }}>
-                {isValorReal ? "✓ Líquido real (API ML)" : isValorCalc ? "≈ Calculado (fee_details)" : "~ Estimado (~13%)"}
+              <div style={{ fontSize:10, color: isValorReal?"#15803d":"#0891b2", marginBottom:2, fontWeight:600 }}>
+                {isValorReal ? "✓ Líquido real (API ML)" : "= Líquido calculado"}
               </div>
-              <div style={{ fontSize:20, fontWeight:800, color: isValorReal?"#15803d":isValorCalc?"#0891b2":"#d97706" }}>
+              <div style={{ fontSize:20, fontWeight:800, color: isValorReal?"#15803d":"#0891b2" }}>
                 R$ {valor.toFixed(2).replace(".",",")}
               </div>
             </div>
@@ -5834,8 +5839,14 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
         var totalBruto = aReceber.reduce(function(s,o){ return s + o.price * o.qty; }, 0);
         var totalLiq = aReceber.reduce(function(s,o){
           var pd = paymentData?.[o.id];
-          return s + (pd?.netAmount || calcNetEstimado(o));
+          var brutoO = o.price * o.qty;
+          var tarifaO = (o.fee||0)*(o.qty||1);
+          var freteO = o.freteSeller||0;
+          var netCalcO = brutoO - tarifaO - freteO;
+          return s + (pd?.netAmount || (netCalcO > 0 ? netCalcO : brutoO * 0.87));
         }, 0);
+        var totalTarifas = aReceber.reduce(function(s,o){ return s + (o.fee||0)*(o.qty||1); }, 0);
+        var totalFrete = aReceber.reduce(function(s,o){ return s + (o.freteSeller||0); }, 0);
         var taxaMedia = totalBruto > 0 ? ((totalBruto - totalLiq) / totalBruto * 100) : 0;
 
         // Previsão por período
@@ -5856,11 +5867,11 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:10, marginBottom:16 }}>
             {[
               { label:"A Receber (líq.)", value:fmt(totalLiq), color:"#0891b2", bg:"#ecfeff",
-                desc: totalComDados < aReceber.length ? (totalComDados + " reais · " + (aReceber.length - totalComDados) + " estimados") : (aReceber.length + " pedidos") },
-              { label:"Valor Bruto Total", value:fmt(totalBruto), color:"#64748b", bg:"#f8fafc", desc:"Antes das taxas ML" },
-              { label:"Previsão 7 dias", value:fmt(prevProx7), color:"#15803d", bg:"#f0fdf4", desc: proximosLiberados.length + " pedido(s)" },
-              { label:"Previsão 30 dias", value:fmt(prevProx30), color:"#7c3aed", bg:"#f5f3ff", desc:"Liberação ML" },
-              { label:"Recebido no Mês", value:fmt(totalRecebidoMesLiq), color:"#15803d", bg:"#f0fdf4", desc: recebidoMes.length + " pedidos entregues" },
+                desc: aReceber.length + " pedido(s)" },
+              { label:"Bruto Total", value:fmt(totalBruto), color:"#64748b", bg:"#f8fafc", desc:"Antes das taxas" },
+              { label:"Tarifas ML", value:fmt(totalTarifas), color:"#d97706", bg:"#fffbeb", desc:"Comissão ML" },
+              { label:"Frete (custo)", value:fmt(totalFrete), color:"#7c3aed", bg:"#f5f3ff", desc:"Seu custo de envio" },
+              { label:"Recebido no Mês", value:fmt(totalRecebidoMesLiq), color:"#15803d", bg:"#f0fdf4", desc: recebidoMes.length + " entregues" },
             ].map(function(k) {
               return (
                 <div key={k.label} style={{ background:k.bg, borderRadius:10, padding:"14px 18px" }}>
@@ -5951,7 +5962,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                       onChange={function(e){ setReceberSel(e.target.checked ? aReceber.map(function(o){return o.id;}) : []); }}
                       style={{ cursor:"pointer" }} />
                   </th>
-                  {["Pedido","Cliente","Produto","Data Venda","Bruto","Líquido (MP)","Taxa ML","Previsão Pagamento","Status","Ação"].map(function(h) {
+                  {["Pedido","Cliente","Produto","Data Venda","Bruto","Tarifa ML","Frete (custo)","Líquido (MP)","Previsão Pagamento","Status","Ação"].map(function(h) {
                     return <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>;
                   })}
                 </tr>
@@ -5987,9 +5998,16 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                     var bg = isDelivered2 ? "#f5f3ff" : isEnviado ? "#ecfeff" : "#fffbeb";
                     var pd = paymentData?.[o.id];
                     var bruto = o.price * o.qty;
+                    // Usar fee e freteSeller já calculados no enrichedOrders (mesmos da aba Pedidos)
+                    var tarifaMLPed = (o.fee || 0) * (o.qty || 1);
+                    var fretePed = o.freteSeller || 0;
+                    var netCalcPedido = bruto - tarifaMLPed - fretePed;
+                    // Prioridade: valor real da API > calculado pelos dados do pedido > estimativa 13%
                     var netAmt = pd?.netAmount || null;
-                    var netEstimado = !netAmt;
-                    var netFinal = netAmt || calcNetEstimado(o);
+                    var netFinal = netAmt || (netCalcPedido > 0 ? netCalcPedido : bruto * 0.87);
+                    var netEstimado = !netAmt && netCalcPedido <= 0;
+                    var tarifaExib = tarifaMLPed > 0 ? tarifaMLPed : (pd?.tarifaML || 0);
+                    var freteExib = fretePed > 0 ? fretePed : (pd?.freteCusto || 0);
                     var taxa = bruto > 0 ? ((bruto - netFinal) / bruto * 100) : 0;
                     var releaseDate = pd?.releaseDate || null;
                     var relDays = releaseDate ? getDaysUntil(releaseDate) : null;
@@ -6016,24 +6034,26 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                         <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", whiteSpace:"nowrap" }}>{fmtDate(o.date)}</td>
                         <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", whiteSpace:"nowrap" }}>{fmt(bruto)}</td>
                         <td style={{ padding:"10px 14px", whiteSpace:"nowrap" }}>
-                          <div style={{ fontSize:13, fontWeight:700, color: netEstimado ? "#d97706" : "#15803d" }}>
-                            {fmt(netFinal)}
-                          </div>
-                          {netEstimado && !pd?.isCalculated && (
-                            <div style={{ fontSize:9, color:"#94a3b8", fontStyle:"italic" }}>~estimado</div>
+                          {tarifaExib > 0 ? (
+                            <span style={{ fontSize:13, fontWeight:700, color:"#d97706" }}>{fmt(tarifaExib)}</span>
+                          ) : (
+                            <span style={{ fontSize:12, color:"#94a3b8" }}>—</span>
                           )}
-                          {pd?.isCalculated && (
-                            <div style={{ fontSize:9, color:"#0891b2", fontStyle:"italic" }}>calculado</div>
+                          <div style={{ fontSize:9, color:"#94a3b8" }}>{taxa > 0 ? taxa.toFixed(1)+"%" : ""}</div>
+                        </td>
+                        <td style={{ padding:"10px 14px", whiteSpace:"nowrap" }}>
+                          {freteExib > 0 ? (
+                            <span style={{ fontSize:13, fontWeight:700, color:"#7c3aed" }}>{fmt(freteExib)}</span>
+                          ) : (
+                            <span style={{ fontSize:12, color:"#94a3b8" }}>—</span>
                           )}
                         </td>
                         <td style={{ padding:"10px 14px", whiteSpace:"nowrap" }}>
-                          <div style={{ fontSize:12, fontWeight:600, color: taxa > 15 ? "#dc2626" : taxa > 10 ? "#d97706" : "#15803d" }}>
-                            {taxa.toFixed(1)}%{netEstimado && !pd?.isCalculated && <span style={{ fontSize:9, color:"#94a3b8" }}> *</span>}
+                          <div style={{ fontSize:13, fontWeight:800, color: netEstimado ? "#d97706" : "#15803d" }}>
+                            {fmt(netFinal)}
                           </div>
-                          {pd?.tarifaML > 0 && (
-                            <div style={{ fontSize:9, color:"#94a3b8" }}>
-                              {pd.freteCusto > 0 ? "tarifa+" + fmt(pd.freteCusto) + "frete" : "tarifa: " + fmt(pd.tarifaML)}
-                            </div>
+                          {netEstimado && (
+                            <div style={{ fontSize:9, color:"#94a3b8", fontStyle:"italic" }}>~estimado</div>
                           )}
                         </td>
                         <td style={{ padding:"10px 14px", whiteSpace:"nowrap" }}>

@@ -6373,6 +6373,254 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
 }
 
 
+// ════════════════════════════════════════════════════════════
+//  NOTAS FISCAIS DE SAÍDA (ML)
+// ════════════════════════════════════════════════════════════
+function NfSaidaTab({ enrichedOrders, nfeSaida, setNfeSaida, loadingNfe, setLoadingNfe, token }) {
+  const [search, setSearch] = useState("");
+  const [filtroStatus, setFiltroStatus] = useState("todos"); // todos | com_nf | sem_nf
+  const [filtroDe, setFiltroDe] = useState("");
+  const [filtroAte, setFiltroAte] = useState("");
+  const [expandido, setExpandido] = useState(null);
+
+  async function buscarNFs() {
+    if (!token) { alert("Reconecte ao ML primeiro"); return; }
+    setLoadingNfe(true);
+    var mapa = {};
+    var pedidos = enrichedOrders.filter(function(o){ return o.status === "paid"; }).slice(0, 200);
+    for (var i = 0; i < pedidos.length; i += 5) {
+      var batch = pedidos.slice(i, i + 5);
+      await Promise.all(batch.map(async function(o) {
+        try {
+          // Endpoint 1: billing_info do pedido
+          var r1 = await fetch("/api/ml/orders/" + o.id + "/billing_info", {
+            headers: { Authorization: "Bearer " + token }
+          });
+          var d1 = await r1.json();
+          if (d1 && !d1.error) {
+            var nf = {
+              orderId: o.id,
+              orderTitle: o.title,
+              orderDate: o.date,
+              buyerName: o.buyerName,
+              buyerDoc: o.buyerDoc,
+              buyerUF: o.buyerUF,
+              valor: o.price * o.qty,
+              // Dados da NF
+              serie: d1.serie || d1.invoice?.serie || null,
+              numero: d1.number || d1.invoice?.number || d1.serie_number || null,
+              chave: d1.key || d1.invoice?.key || d1.access_key || null,
+              dataEmissao: d1.emission_date || d1.invoice?.emission_date || null,
+              xmlUrl: d1.xml_url || d1.invoice?.xml_url || null,
+              danfeUrl: d1.danfe_url || d1.invoice?.danfe_url || null,
+              status: d1.status || d1.invoice?.status || null,
+              raw: d1,
+            };
+            if (nf.numero || nf.chave || nf.xmlUrl) {
+              mapa[String(o.id)] = nf;
+            } else {
+              // Tentar endpoint 2: fiscal_documents
+              try {
+                var r2 = await fetch("/api/ml/packs/" + o.id + "/fiscal_documents", {
+                  headers: { Authorization: "Bearer " + token }
+                });
+                var d2 = await r2.json();
+                if (d2 && !d2.error && Array.isArray(d2) && d2.length > 0) {
+                  var doc = d2[0];
+                  nf.numero = doc.number || doc.serie_number || null;
+                  nf.chave = doc.access_key || doc.key || null;
+                  nf.xmlUrl = doc.xml_url || null;
+                  nf.danfeUrl = doc.pdf_url || doc.danfe_url || null;
+                  nf.dataEmissao = doc.date || null;
+                  mapa[String(o.id)] = nf;
+                } else {
+                  mapa[String(o.id)] = Object.assign(nf, { semNF: true });
+                }
+              } catch(e) {
+                mapa[String(o.id)] = Object.assign(nf, { semNF: true });
+              }
+            }
+          }
+        } catch(e) {}
+      }));
+      await new Promise(function(r){ setTimeout(r, 200); });
+    }
+    setNfeSaida(mapa);
+    setLoadingNfe(false);
+  }
+
+  var pedidosFiltrados = enrichedOrders.filter(function(o) {
+    if (o.status !== "paid") return false;
+    if (filtroDe && o.date && o.date < filtroDe) return false;
+    if (filtroAte && o.date && o.date > filtroAte) return false;
+    var nf = nfeSaida[String(o.id)];
+    if (filtroStatus === "com_nf" && (!nf || nf.semNF)) return false;
+    if (filtroStatus === "sem_nf" && (nf && !nf.semNF)) return false;
+    if (search) {
+      var q = search.toLowerCase();
+      return String(o.id).includes(q) ||
+        (o.title||"").toLowerCase().includes(q) ||
+        (o.buyerName||"").toLowerCase().includes(q) ||
+        (nf?.numero||"").includes(q) ||
+        (nf?.chave||"").includes(q);
+    }
+    return true;
+  });
+
+  var comNF = Object.values(nfeSaida).filter(function(n){ return !n.semNF; }).length;
+  var semNF = Object.values(nfeSaida).filter(function(n){ return n.semNF; }).length;
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16, flexWrap:"wrap", gap:10 }}>
+        <div>
+          <div style={{ fontWeight:800, fontSize:18, color:"#0f172a" }}>🧾 Notas Fiscais de Saída</div>
+          <div style={{ fontSize:12, color:"#94a3b8", marginTop:2 }}>Notas fiscais emitidas pelo Mercado Livre para suas vendas</div>
+        </div>
+        <button onClick={buscarNFs} disabled={loadingNfe}
+          style={{ background: loadingNfe?"#f1f5f9":"#0f172a", border:"none", color: loadingNfe?"#94a3b8":"#fff",
+            fontWeight:700, padding:"10px 20px", borderRadius:10, cursor: loadingNfe?"not-allowed":"pointer", fontSize:13,
+            display:"flex", alignItems:"center", gap:8 }}>
+          {loadingNfe ? "⏳ Buscando NFs..." : "🔄 Buscar NFs no ML"}
+        </button>
+      </div>
+
+      {/* Cards resumo */}
+      {Object.keys(nfeSaida).length > 0 && (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10, marginBottom:16 }}>
+          {[
+            { label:"Total buscados", value: Object.keys(nfeSaida).length, color:"#0f172a", bg:"#f8fafc" },
+            { label:"Com NF emitida", value: comNF, color:"#15803d", bg:"#f0fdf4" },
+            { label:"Sem NF / Pendente", value: semNF, color:"#d97706", bg:"#fffbeb" },
+          ].map(function(k) {
+            return (
+              <div key={k.label} style={{ background:k.bg, borderRadius:10, padding:"12px 16px" }}>
+                <div style={{ fontSize:10, color:k.color, fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>{k.label}</div>
+                <div style={{ fontSize:22, fontWeight:800, color:k.color }}>{k.value}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Filtros */}
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center", marginBottom:12 }}>
+        <div style={{ position:"relative", flex:1, minWidth:220 }}>
+          <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
+          <input value={search} onChange={function(e){ setSearch(e.target.value); }} placeholder="Buscar por pedido, cliente, nº NF, chave..."
+            style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px 8px 30px", borderRadius:8, fontSize:13, outline:"none" }} />
+        </div>
+        <div style={{ display:"flex", gap:4 }}>
+          {[
+            { k:"todos",   l:"📋 Todos" },
+            { k:"com_nf",  l:"✅ Com NF" },
+            { k:"sem_nf",  l:"⏳ Sem NF" },
+          ].map(function(f) {
+            var active = filtroStatus === f.k;
+            return <button key={f.k} onClick={function(){ setFiltroStatus(f.k); }}
+              style={{ padding:"7px 14px", borderRadius:8, border: active?"2px solid #0f172a":"1px solid #e2e8f0",
+                background: active?"#0f172a":"#f8fafc", color: active?"#fff":"#64748b",
+                fontWeight: active?700:500, fontSize:12, cursor:"pointer" }}>{f.l}</button>;
+          })}
+        </div>
+        <input type="date" value={filtroDe} onChange={function(e){setFiltroDe(e.target.value);}}
+          style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"7px 10px", borderRadius:8, fontSize:12 }} />
+        <span style={{ fontSize:12, color:"#94a3b8" }}>até</span>
+        <input type="date" value={filtroAte} onChange={function(e){setFiltroAte(e.target.value);}}
+          style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"7px 10px", borderRadius:8, fontSize:12 }} />
+      </div>
+
+      {/* Aviso inicial */}
+      {Object.keys(nfeSaida).length === 0 && (
+        <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:12, padding:"32px", textAlign:"center", marginBottom:20 }}>
+          <div style={{ fontSize:36, marginBottom:12 }}>🧾</div>
+          <div style={{ fontWeight:700, fontSize:16, color:"#0f172a", marginBottom:8 }}>Buscar Notas Fiscais do ML</div>
+          <div style={{ fontSize:13, color:"#64748b", marginBottom:16, maxWidth:500, margin:"0 auto 16px" }}>
+            O Mercado Livre emite notas fiscais para as vendas. Clique em "Buscar NFs no ML" para carregar os dados fiscais de cada pedido.
+          </div>
+          <button onClick={buscarNFs} disabled={loadingNfe}
+            style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"12px 28px", borderRadius:10, cursor:"pointer", fontSize:14 }}>
+            🔄 Buscar Notas Fiscais
+          </button>
+        </div>
+      )}
+
+      {/* Tabela */}
+      {pedidosFiltrados.length > 0 && (
+        <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
+          <table style={{ borderCollapse:"collapse", width:"100%" }}>
+            <thead>
+              <tr>
+                {["Pedido","Data","Cliente","Produto","Valor","Nº NF","Série","Data Emissão","Chave NF-e","Ações"].map(function(h) {
+                  return <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>;
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {pedidosFiltrados.slice(0, 200).map(function(o, i) {
+                var nf = nfeSaida[String(o.id)];
+                var temNF = nf && !nf.semNF && (nf.numero || nf.chave);
+                return (
+                  <tr key={o.id} style={{ background: i%2===0?"#f8fafc":"#fff" }}>
+                    <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", fontFamily:"monospace", fontWeight:600 }}>#{o.id}</td>
+                    <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", whiteSpace:"nowrap" }}>{o.date}</td>
+                    <td style={{ padding:"10px 14px", fontSize:12, color:"#334155", maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                      {o.buyerName || "—"}
+                      {o.buyerUF && <span style={{ marginLeft:4, fontSize:10, background:"#f1f5f9", padding:"1px 5px", borderRadius:4, color:"#64748b" }}>{o.buyerUF}</span>}
+                    </td>
+                    <td style={{ padding:"10px 14px", fontSize:12, color:"#0f172a", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{o.title||"—"}</td>
+                    <td style={{ padding:"10px 14px", fontSize:13, fontWeight:700, color:"#0f172a", whiteSpace:"nowrap" }}>R$ {(o.price*o.qty).toFixed(2).replace(".",",")}</td>
+                    <td style={{ padding:"10px 14px" }}>
+                      {!nf ? (
+                        <span style={{ fontSize:11, color:"#94a3b8" }}>—</span>
+                      ) : temNF ? (
+                        <span style={{ fontSize:13, fontWeight:700, color:"#0f172a" }}>{nf.numero}</span>
+                      ) : (
+                        <span style={{ fontSize:11, color:"#d97706", fontWeight:600 }}>⏳ Pendente</span>
+                      )}
+                    </td>
+                    <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{nf?.serie || "—"}</td>
+                    <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", whiteSpace:"nowrap" }}>{nf?.dataEmissao ? nf.dataEmissao.slice(0,10) : "—"}</td>
+                    <td style={{ padding:"10px 14px" }}>
+                      {nf?.chave ? (
+                        <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                          <span style={{ fontSize:10, fontFamily:"monospace", color:"#334155", maxWidth:140, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", display:"block" }}>{nf.chave}</span>
+                          <button onClick={function(){ navigator.clipboard.writeText(nf.chave); }}
+                            style={{ background:"#f1f5f9", border:"none", color:"#64748b", padding:"2px 6px", borderRadius:4, cursor:"pointer", fontSize:10, flexShrink:0 }}>⎘</button>
+                        </div>
+                      ) : <span style={{ fontSize:11, color:"#94a3b8" }}>—</span>}
+                    </td>
+                    <td style={{ padding:"10px 14px" }}>
+                      <div style={{ display:"flex", gap:4 }}>
+                        {nf?.xmlUrl && (
+                          <a href={nf.xmlUrl} target="_blank" rel="noreferrer"
+                            style={{ background:"#eff6ff", border:"1px solid #bfdbfe", color:"#1d4ed8", padding:"4px 8px", borderRadius:6, fontSize:11, fontWeight:600, textDecoration:"none", whiteSpace:"nowrap" }}>
+                            📄 XML
+                          </a>
+                        )}
+                        {nf?.danfeUrl && (
+                          <a href={nf.danfeUrl} target="_blank" rel="noreferrer"
+                            style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", color:"#15803d", padding:"4px 8px", borderRadius:6, fontSize:11, fontWeight:600, textDecoration:"none", whiteSpace:"nowrap" }}>
+                            🖨️ DANFE
+                          </a>
+                        )}
+                        {!temNF && !nf && (
+                          <span style={{ fontSize:11, color:"#94a3b8" }}>Clique em Buscar</span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Utilitário de períodos rápidos ──────────────────────────
 function getPeriodo(key) {
   var hoje = new Date(); hoje.setHours(0,0,0,0);
@@ -6517,6 +6765,8 @@ export default function App() {
   const [fornecedores, setFornecedores] = useState(() => {
     try { return JSON.parse(localStorage.getItem("fornecedores_cadastro") || "[]"); } catch { return []; }
   });
+  const [nfeSaida, setNfeSaida] = useState({});          // orderId -> dados da NF
+  const [loadingNfe, setLoadingNfe] = useState(false);
   const [notasFiscais, setNotasFiscais] = useState(() => {
     try { return JSON.parse(localStorage.getItem("notas_fiscais_entrada") || "[]"); } catch { return []; }
   });
@@ -7241,7 +7491,8 @@ export default function App() {
           {currentUser?.permissoes?.includes("financeiro") && <button className={`tab-btn ${tab === "financeiro" ? "active" : ""}`} onClick={() => setTab("financeiro")}>💰 Financeiro</button>}
           {currentUser?.admin && <button className={`tab-btn ${tab === "admin" ? "active" : ""}`} onClick={() => setTab("admin")}>⚙️ Usuários</button>}
           {currentUser?.permissoes?.includes("produtos") && <button className={`tab-btn ${tab === "produtos" ? "active" : ""}`} onClick={() => setTab("produtos")}>📦 Produtos</button>}
-          {currentUser?.permissoes?.includes("produtos") && <button className={`tab-btn ${tab === "nf" ? "active" : ""}`} onClick={() => setTab("nf")}>🧾 Notas Fiscais</button>}
+          {currentUser?.permissoes?.includes("produtos") && <button className={`tab-btn ${tab === "nf" ? "active" : ""}`} onClick={() => setTab("nf")}>🧾 NF Entrada</button>}
+          {currentUser?.permissoes?.includes("orders") && <button className={`tab-btn ${tab === "nfe_saida" ? "active" : ""}`} onClick={() => setTab("nfe_saida")}>🧾 NF Saída (ML)</button>}
         </div>
 
         {tab === "overview" && currentUser?.permissoes?.includes("overview") && (
@@ -7657,6 +7908,17 @@ export default function App() {
 
         {tab === "admin" && currentUser?.admin && (
           <AdminTab currentUser={currentUser} />
+        )}
+
+        {tab === "nfe_saida" && currentUser?.permissoes?.includes("orders") && (
+          <NfSaidaTab
+            enrichedOrders={enrichedOrders}
+            nfeSaida={nfeSaida}
+            setNfeSaida={setNfeSaida}
+            loadingNfe={loadingNfe}
+            setLoadingNfe={setLoadingNfe}
+            token={token}
+          />
         )}
 
       {showBackup && <PainelBackup onClose={() => setShowBackup(false)} />}

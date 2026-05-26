@@ -199,10 +199,10 @@ async function fetchAllOrders(userId, tk) {
     const data = await res.json();
     const orders = data.results ?? [];
     if (orders.length === 0) break;
-    // Filtrar apenas pedidos a partir de 01/04/2026
+    // Filtrar apenas pedidos a partir de 01/01/2026
     const filtered = orders.filter(o => o.date_created && o.date_created.slice(0, 10) >= cutoffDate);
     allOrders = [...allOrders, ...filtered];
-    // Se o último pedido da página é antes de 01/04, parar de paginar
+    // Se o último pedido da página é antes do cutoff, parar de paginar
     const lastDate = orders[orders.length - 1]?.date_created?.slice(0, 10);
     if (orders.length < pageSize || (lastDate && lastDate < cutoffDate)) break;
     offset += pageSize;
@@ -4990,6 +4990,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
   const [receberDe, setReceberDe] = useState("");
   const [receberAte, setReceberAte] = useState("");
   const [receberSel, setReceberSel] = useState([]);
+  const [receberVista, setReceberVista] = useState("areceber"); // areceber | recebido | todos
   const [pagarDe, setPagarDe] = useState("");
   const [pagarAte, setPagarAte] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -5046,15 +5047,18 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
   const aReceber = (enrichedOrders||[]).filter(function(o) {
     const jaRegistrado = lancamentos.some(function(l) { return l.tipo === "recebimento" && (l.pedidoId === o.id || String(l.pedidoId) === String(o.id)); });
     if (jaRegistrado) return false;
+    // Incluir pagos, em envio, entregues — qualquer pedido não registrado ainda
     const ss = shipmentStatuses?.[o.id] ?? o.shipment_status;
     const statusValido = o.status === "paid" || ["shipped","in_transit","delivered","ready_to_ship"].includes(ss);
     return statusValido;
   });
 
+  // Entregues já registrados (desde 01/04 — início do período carregado)
   const recebidoMes = (enrichedOrders||[]).filter(function(o) {
     const ss = shipmentStatuses?.[o.id] ?? o.shipment_status;
     const isDelivered = ss === "delivered" || o.tags?.some(function(t){return t==="delivered";});
-    return isDelivered && o.date?.startsWith(mesAtual);
+    const jaRegistrado = lancamentos.some(function(l) { return l.tipo === "recebimento" && (l.pedidoId === o.id || String(l.pedidoId) === String(o.id)); });
+    return isDelivered && jaRegistrado;
   });
 
   const totalAReceberLiq = aReceber.reduce((s,o) => s + (paymentData?.[o.id]?.netAmount || o.price*o.qty), 0);
@@ -5869,7 +5873,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
               { label:"Bruto Total", value:fmt(totalBruto), color:"#64748b", bg:"#f8fafc", desc:"Antes das taxas" },
               { label:"Tarifas ML", value:fmt(totalTarifas), color:"#d97706", bg:"#fffbeb", desc:"Comissão ML" },
               { label:"Frete (custo)", value:fmt(totalFrete), color:"#7c3aed", bg:"#f5f3ff", desc:"Seu custo de envio" },
-              { label:"Recebido no Mês", value:fmt(totalRecebidoMesLiq), color:"#15803d", bg:"#f0fdf4", desc: recebidoMes.length + " entregues" },
+              { label:"Já Registrado", value:fmt(totalRecebidoMesLiq), color:"#15803d", bg:"#f0fdf4", desc: recebidoMes.length + " entregue(s)" },
             ].map(function(k) {
               return (
                 <div key={k.label} style={{ background:k.bg, borderRadius:10, padding:"14px 18px" }}>
@@ -5905,7 +5909,9 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
 
           {/* Filtros */}
           <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:10, flexWrap:"wrap" }}>
-            <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", whiteSpace:"nowrap" }}>Pedidos a Receber</div>
+            <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", whiteSpace:"nowrap" }}>
+              {receberVista === "recebido" ? "✅ Pedidos Registrados" : receberVista === "todos" ? "📋 Todos os Pedidos" : "📥 Pedidos a Receber"}
+            </div>
             <div style={{ position:"relative", flex:1, minWidth:240 }}>
               <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
               <input value={searchReceber} onChange={function(e){ setSearchReceber(e.target.value); }}
@@ -5936,6 +5942,26 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
           </div>
 
           {/* Tabela */}
+          {/* Filtro de visão */}
+          <div style={{ display:"flex", gap:4, marginBottom:14, background:"#f1f5f9", padding:4, borderRadius:10, width:"fit-content" }}>
+            {[
+              { key:"areceber", label:"📥 A Receber",  count: aReceber.length },
+              { key:"recebido", label:"✅ Registrados", count: recebidoMes.length },
+              { key:"todos",    label:"📋 Todos",       count: aReceber.length + recebidoMes.length },
+            ].map(function(v) {
+              var active = receberVista === v.key;
+              return (
+                <button key={v.key} onClick={function(){ setReceberVista(v.key); setReceberSel([]); }}
+                  style={{ background: active?"#fff":"transparent", border:"none", color: active?"#0f172a":"#94a3b8",
+                    padding:"8px 16px", cursor:"pointer", fontFamily:"inherit", fontSize:13,
+                    borderRadius:8, fontWeight: active?700:500,
+                    boxShadow: active?"0 1px 3px rgba(0,0,0,.08)":"none", whiteSpace:"nowrap" }}>
+                  {v.label} <span style={{ fontSize:11, opacity:0.7 }}>({v.count})</span>
+                </button>
+              );
+            })}
+          </div>
+
           {receberSel.length > 0 && (
             <div style={{ display:"flex", gap:8, alignItems:"center", background:"#0f172a", borderRadius:10, padding:"10px 16px", marginBottom:10, flexWrap:"wrap" }}>
               <span style={{ color:"#fff", fontWeight:700, fontSize:13 }}>{receberSel.length} pedido(s) selecionado(s)</span>
@@ -5968,13 +5994,22 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
               <tbody>
                 {(function() {
                   var q = searchReceber.toLowerCase().trim();
-                  // Quando buscando, pesquisa em TODOS os pedidos (incluindo entregues não registrados)
-                  var pool = q ? (enrichedOrders||[]).filter(function(o) {
-                    var jaReg = lancamentos.some(function(l){ return l.tipo==="recebimento" && (l.pedidoId===o.id||String(l.pedidoId)===String(o.id)); });
-                    if (jaReg) return false;
-                    return String(o.id).includes(q) || (o.title||"").toLowerCase().includes(q) || (o.buyerName||"").toLowerCase().includes(q);
-                  }) : aReceber;
-                  var filtered = pool.filter(function(o) {
+
+                  // Pool baseado no filtro de visão selecionado
+                  var poolBase;
+                  if (receberVista === "recebido") {
+                    poolBase = recebidoMes;
+                  } else if (receberVista === "todos") {
+                    // Todos: a receber + já registrados (sem duplicatas)
+                    var idsAReceber = new Set(aReceber.map(function(o){ return o.id; }));
+                    var todosCombinados = [...aReceber];
+                    recebidoMes.forEach(function(o){ if (!idsAReceber.has(o.id)) todosCombinados.push(o); });
+                    poolBase = todosCombinados;
+                  } else {
+                    poolBase = aReceber; // padrão: a receber
+                  }
+
+                  var filtered = poolBase.filter(function(o) {
                     if (q && !(String(o.id).includes(q) || (o.title||"").toLowerCase().includes(q) || (o.buyerName||"").toLowerCase().includes(q))) return false;
                     if (receberDe && o.date && o.date < receberDe) return false;
                     if (receberAte && o.date && o.date > receberAte) return false;
@@ -6094,8 +6129,8 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
             </table>
           </div>
 
-          {/* Recebidos no Mês */}
-          <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", marginBottom:10 }}>Recebidos no Mês Atual</div>
+          {/* Recebidos — seção separada removida, agora integrada no filtro acima */}
+          {false && <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", marginBottom:10 }}>Recebidos no Mês Atual</div>}
           <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
             <table style={{ borderCollapse:"collapse", width:"100%" }}>
               <thead>

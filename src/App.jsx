@@ -5042,19 +5042,18 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
   const mesAtual = hoje.slice(0,7);
   const allOrders = rawOrders || [];
 
-  const aReceber = allOrders.filter(o => {
-    // Inclui qualquer pedido pago ainda não registrado (independente de status de entrega)
-    const jaRegistrado = lancamentos.some(l => l.tipo === "recebimento" && l.pedidoId === o.id);
+  // Usar enrichedOrders — já tem fee e freteSeller calculados (mesmos da aba Pedidos)
+  const aReceber = (enrichedOrders||[]).filter(function(o) {
+    const jaRegistrado = lancamentos.some(function(l) { return l.tipo === "recebimento" && (l.pedidoId === o.id || String(l.pedidoId) === String(o.id)); });
     if (jaRegistrado) return false;
-    // Precisa estar pago (paid) ou em alguma fase de envio/entrega
     const ss = shipmentStatuses?.[o.id] ?? o.shipment_status;
     const statusValido = o.status === "paid" || ["shipped","in_transit","delivered","ready_to_ship"].includes(ss);
     return statusValido;
   });
 
-  const recebidoMes = allOrders.filter(o => {
+  const recebidoMes = (enrichedOrders||[]).filter(function(o) {
     const ss = shipmentStatuses?.[o.id] ?? o.shipment_status;
-    const isDelivered = ss === "delivered" || o.tags?.some(t=>t==="delivered");
+    const isDelivered = ss === "delivered" || o.tags?.some(function(t){return t==="delivered";});
     return isDelivered && o.date?.startsWith(mesAtual);
   });
 
@@ -5971,9 +5970,9 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                 {(function() {
                   var q = searchReceber.toLowerCase().trim();
                   // Quando buscando, pesquisa em TODOS os pedidos (incluindo entregues não registrados)
-                  var pool = q ? allOrders.filter(function(o) {
-                    var jaReg = lancamentos.some(function(l){ return l.tipo==="recebimento" && l.pedidoId===o.id; });
-                    if (jaReg) return false; // já registrado, não precisa
+                  var pool = q ? (enrichedOrders||[]).filter(function(o) {
+                    var jaReg = lancamentos.some(function(l){ return l.tipo==="recebimento" && (l.pedidoId===o.id||String(l.pedidoId)===String(o.id)); });
+                    if (jaReg) return false;
                     return String(o.id).includes(q) || (o.title||"").toLowerCase().includes(q) || (o.buyerName||"").toLowerCase().includes(q);
                   }) : aReceber;
                   var filtered = pool.filter(function(o) {
@@ -6662,8 +6661,34 @@ export default function App() {
             ]);
             const costsData = await costsRes.json();
             const shipData = await shipRes.json();
-            const save = parseFloat(costsData?.senders?.[0]?.save);
-            orderShippingMap[String(o.id)] = isNaN(save) ? 0 : save;
+
+            // Tentar vários campos para obter o custo real do frete para o vendedor
+            var sender = costsData?.senders?.[0] || {};
+            // save = valor subsidiado pelo vendedor, cost = custo total, list_cost = tabela
+            var save    = parseFloat(sender.save    ?? sender.cost ?? sender.list_cost ?? 0);
+            var cost    = parseFloat(sender.cost    ?? sender.list_cost ?? 0);
+            var listCost = parseFloat(sender.list_cost ?? 0);
+
+            // O frete cobrado do vendedor é: cost - (o que o comprador pagou)
+            // Se save > 0 = é o desconto dado ao comprador (frete grátis) = custo do vendedor
+            // Se save == 0 mas cost > 0 = comprador pagou tudo, vendedor não paga
+            var buyerPaidShip = parseFloat(costsData?.receivers?.[0]?.cost ?? 0);
+            var freteVendedor = 0;
+
+            if (save > 0) {
+              freteVendedor = save; // frete grátis: vendedor paga 'save'
+            } else if (cost > 0 && buyerPaidShip === 0) {
+              freteVendedor = cost; // comprador não pagou nada = vendedor paga tudo
+            } else if (cost > 0 && buyerPaidShip < cost) {
+              freteVendedor = cost - buyerPaidShip; // vendedor paga a diferença
+            }
+
+            // Fallback: usar base_cost do shipment se disponível
+            if (freteVendedor === 0 && shipData?.base_cost > 0) {
+              freteVendedor = parseFloat(shipData.base_cost);
+            }
+
+            orderShippingMap[String(o.id)] = freteVendedor;
             // status: "delivered", "shipped", "ready_to_ship", "pending", etc
             shipmentStatusMap[String(o.id)] = shipData?.status ?? null;
           } catch { orderShippingMap[String(o.id)] = 0; }

@@ -199,11 +199,15 @@ async function fetchAllOrders(userId, tk) {
     const data = await res.json();
     const orders = data.results ?? [];
     if (orders.length === 0) break;
-    // Filtrar apenas pedidos a partir de 01/01/2026
-    const filtered = orders.filter(o => o.date_created && o.date_created.slice(0, 10) >= cutoffDate);
+    // Usar date_created OU date_closed para filtrar (API ordena por date_closed)
+    const filtered = orders.filter(o => {
+      const dc = (o.date_created || o.date_closed || "").slice(0, 10);
+      return dc >= cutoffDate;
+    });
     allOrders = [...allOrders, ...filtered];
-    // Se o último pedido da página é antes do cutoff, parar de paginar
-    const lastDate = orders[orders.length - 1]?.date_created?.slice(0, 10);
+    // Continuar paginando baseado em date_closed (campo usado pela ordenação da API)
+    const last = orders[orders.length - 1];
+    const lastDate = (last?.date_closed || last?.date_created || "").slice(0, 10);
     if (orders.length < pageSize || (lastDate && lastDate < cutoffDate)) break;
     offset += pageSize;
   }
@@ -6039,7 +6043,13 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                     if (netFinal <= 0) netFinal = bruto * 0.87; // fallback seguro
                     var netEstimado = tarifaExib === 0 && freteExib === 0;
                     var taxa = bruto > 0 ? ((bruto - netFinal) / bruto * 100) : 0;
+                    // Previsão: data real da API ou 14 dias após a data do pedido
                     var releaseDate = pd?.releaseDate || null;
+                    if (!releaseDate && o.date) {
+                      var d14 = new Date(o.date + "T00:00:00");
+                      d14.setDate(d14.getDate() + 14);
+                      releaseDate = d14.toLocaleDateString("sv-SE");
+                    }
                     var relDays = releaseDate ? getDaysUntil(releaseDate) : null;
                     var jaRegistrado = lancamentos.some(function(l){ return l.tipo==="recebimento"&&l.pedidoId===o.id; });
                     var releaseDate = pd?.releaseDate || null;

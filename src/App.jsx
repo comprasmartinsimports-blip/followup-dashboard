@@ -7369,12 +7369,82 @@ export default function App() {
         @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}.fade-up{animation:fadeUp .3s ease forwards}
       `}</style>
 
-      <header style={{ background: darkMode?"#1e293b":"#fff", borderBottom: `1px solid ${darkMode?"#334155":"#e2e8f0"}`, padding: "14px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: "#0f172a", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 16, color: "#ffe000" }}>M</div>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 15, color: "#0f172a", letterSpacing: -0.3 }}>ML Margem</div>
-            <div style={{ fontSize: 11, color: "#94a3b8", letterSpacing: 0.5 }}>DASHBOARD DE LUCRATIVIDADE</div>
+      <header style={{ background: darkMode?"#1e293b":"#fff", borderBottom: `1px solid ${darkMode?"#334155":"#e2e8f0"}`, padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 1px 3px rgba(0,0,0,.04)", gap:8 }}>
+        {/* Logo + Abas juntos */}
+        <div style={{ display: "flex", alignItems: "center", gap: 0, flex:1, minWidth:0, overflow:"hidden" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 16px 12px 0", borderRight:`1px solid ${darkMode?"#334155":"#f1f5f9"}`, marginRight:12, flexShrink:0 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 8, background: "#0f172a", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 14, color: "#ffe000" }}>M</div>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 13, color: darkMode?"#e2e8f0":"#0f172a", letterSpacing: -0.3, whiteSpace:"nowrap" }}>ML Margem</div>
+              <div style={{ fontSize: 9, color: "#94a3b8", letterSpacing: 0.5, whiteSpace:"nowrap" }}>LUCRATIVIDADE</div>
+            </div>
+          </div>
+          {/* Abas de navegação no header */}
+          <div style={{ display:"flex", gap:1, alignItems:"center", overflowX:"auto", msOverflowStyle:"none", scrollbarWidth:"none" }}>
+            {currentUser?.permissoes?.includes("overview") && (
+              <button onClick={() => setTab("overview")}
+                style={{ padding:"18px 14px", background:"transparent", border:"none", borderBottom: tab==="overview"?"2px solid #0f172a":"2px solid transparent",
+                  color: tab==="overview" ? (darkMode?"#e2e8f0":"#0f172a") : "#94a3b8",
+                  fontWeight: tab==="overview"?700:500, fontSize:12, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap", transition:"all .15s" }}>
+                🏠 Visão Geral
+              </button>
+            )}
+            {currentUser?.permissoes?.includes("listings") && (
+              <button onClick={() => setTab("listings")}
+                style={{ padding:"18px 14px", background:"transparent", border:"none", borderBottom: tab==="listings"?"2px solid #0f172a":"2px solid transparent",
+                  color: tab==="listings" ? (darkMode?"#e2e8f0":"#0f172a") : "#94a3b8",
+                  fontWeight: tab==="listings"?700:500, fontSize:12, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap", transition:"all .15s" }}>
+                Anúncios ({enriched.length})
+              </button>
+            )}
+            {currentUser?.permissoes?.includes("orders") && (
+              <button onClick={() => setTab("orders")}
+                style={{ padding:"18px 14px", background:"transparent", border:"none", borderBottom: tab==="orders"?"2px solid #0f172a":"2px solid transparent",
+                  color: tab==="orders" ? (darkMode?"#e2e8f0":"#0f172a") : "#94a3b8",
+                  fontWeight: tab==="orders"?700:500, fontSize:12, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap", transition:"all .15s" }}>
+                Pedidos ({enrichedOrders.length})
+              </button>
+            )}
+            {currentUser?.permissoes?.includes("financeiro") && (
+              <button onClick={() => setTab("financeiro")}
+                style={{ padding:"18px 14px", background:"transparent", border:"none", borderBottom: tab==="financeiro"?"2px solid #0f172a":"2px solid transparent",
+                  color: tab==="financeiro" ? (darkMode?"#e2e8f0":"#0f172a") : "#94a3b8",
+                  fontWeight: tab==="financeiro"?700:500, fontSize:12, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap", transition:"all .15s" }}>
+                💰 Financeiro
+              </button>
+            )}
+            {currentUser?.admin && (
+              <button onClick={() => setTab("admin")}
+                style={{ padding:"18px 14px", background:"transparent", border:"none", borderBottom: tab==="admin"?"2px solid #0f172a":"2px solid transparent",
+                  color: tab==="admin" ? (darkMode?"#e2e8f0":"#0f172a") : "#94a3b8",
+                  fontWeight: tab==="admin"?700:500, fontSize:12, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap", transition:"all .15s" }}>
+                ⚙️ Usuários
+              </button>
+            )}
+            {currentUser?.permissoes?.includes("produtos") && (
+              <button onClick={() => setTab("produtos")}
+                style={{ padding:"18px 14px", background:"transparent", border:"none", borderBottom: tab==="produtos"?"2px solid #0f172a":"2px solid transparent",
+                  color: tab==="produtos" ? (darkMode?"#e2e8f0":"#0f172a") : "#94a3b8",
+                  fontWeight: tab==="produtos"?700:500, fontSize:12, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap", transition:"all .15s" }}>
+                📦 Produtos
+              </button>
+            )}
+            {currentUser?.permissoes?.includes("produtos") && (
+              <button onClick={() => setTab("nf")}
+                style={{ padding:"18px 14px", background:"transparent", border:"none", borderBottom: tab==="nf"?"2px solid #0f172a":"2px solid transparent",
+                  color: tab==="nf" ? (darkMode?"#e2e8f0":"#0f172a") : "#94a3b8",
+                  fontWeight: tab==="nf"?700:500, fontSize:12, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap", transition:"all .15s" }}>
+                🧾 NF Entrada
+              </button>
+            )}
+            {currentUser?.permissoes?.includes("orders") && (
+              <button onClick={() => setTab("nfe_saida")}
+                style={{ padding:"18px 14px", background:"transparent", border:"none", borderBottom: tab==="nfe_saida"?"2px solid #0f172a":"2px solid transparent",
+                  color: tab==="nfe_saida" ? (darkMode?"#e2e8f0":"#0f172a") : "#94a3b8",
+                  fontWeight: tab==="nfe_saida"?700:500, fontSize:12, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap", transition:"all .15s" }}>
+                🧾 NF Saída
+              </button>
+            )}
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -7432,8 +7502,8 @@ export default function App() {
       </header>
 
       <main style={{ maxWidth: 1440, margin: "0 auto", padding: "24px 32px" }}>
-        {/* ── FILTRO DE PERÍODO ── */}
-        <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:12, flexWrap:"wrap" }}>
+        {/* ── FILTRO DE PERÍODO e CARDS — apenas em Visão Geral, Anúncios e Pedidos ── */}
+        {(tab === "overview" || tab === "listings" || tab === "orders") && <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:12, flexWrap:"wrap" }}>
           <span style={{ fontSize:12, color:"#94a3b8", fontWeight:500 }}>Período:</span>
           {[
             { key:"hoje", label:"Hoje" },
@@ -7460,9 +7530,9 @@ export default function App() {
             </>
           )}
           <span style={{ fontSize:11, color:"#94a3b8", marginLeft:4 }}>{rawOrdersFiltered.length} pedido(s)</span>
-        </div>
+        </div>}
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 24 }} className="fade-up">
+        {(tab === "overview" || tab === "listings" || tab === "orders") && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 24 }} className="fade-up">
           {[
             { label: "Fat. Bruto", value: fmt(fatBruto), color: "#0f172a", desc: `${allOrdersPeriodo.filter(o=>o.status==="paid").length} pedidos` },
             { label: "Fat. Líquido", value: fmt(fatLiquido), color: fatLiquido >= fatBruto ? "#0f172a" : "#dc2626", desc: canceladosDevolvidos.length > 0 ? `-${canceladosDevolvidos.length} cancel./devolv.` : "sem cancelamentos" },
@@ -7482,18 +7552,9 @@ export default function App() {
               {k.desc && <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>{k.desc}</div>}
             </div>
           ))}
-        </div>
+        </div>}
 
-        <div style={{ display: "flex", gap: 2, marginBottom: 20, background: darkMode?"#1e293b":"#f1f5f9", padding: 4, borderRadius: 10, width: "fit-content" }}>
-          {currentUser?.permissoes?.includes("overview") && <button className={`tab-btn ${tab === "overview" ? "active" : ""}`} onClick={() => setTab("overview")}>🏠 Visão Geral</button>}
-          {currentUser?.permissoes?.includes("listings") && <button className={`tab-btn ${tab === "listings" ? "active" : ""}`} onClick={() => setTab("listings")}>Anúncios ({enriched.length})</button>}
-          {currentUser?.permissoes?.includes("orders") && <button className={`tab-btn ${tab === "orders" ? "active" : ""}`} onClick={() => setTab("orders")}>Pedidos ({enrichedOrders.length})</button>}
-          {currentUser?.permissoes?.includes("financeiro") && <button className={`tab-btn ${tab === "financeiro" ? "active" : ""}`} onClick={() => setTab("financeiro")}>💰 Financeiro</button>}
-          {currentUser?.admin && <button className={`tab-btn ${tab === "admin" ? "active" : ""}`} onClick={() => setTab("admin")}>⚙️ Usuários</button>}
-          {currentUser?.permissoes?.includes("produtos") && <button className={`tab-btn ${tab === "produtos" ? "active" : ""}`} onClick={() => setTab("produtos")}>📦 Produtos</button>}
-          {currentUser?.permissoes?.includes("produtos") && <button className={`tab-btn ${tab === "nf" ? "active" : ""}`} onClick={() => setTab("nf")}>🧾 NF Entrada</button>}
-          {currentUser?.permissoes?.includes("orders") && <button className={`tab-btn ${tab === "nfe_saida" ? "active" : ""}`} onClick={() => setTab("nfe_saida")}>🧾 NF Saída (ML)</button>}
-        </div>
+        {/* Abas agora estão no header */}
 
         {tab === "overview" && currentUser?.permissoes?.includes("overview") && (
           <OverviewTab

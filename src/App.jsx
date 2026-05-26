@@ -1391,17 +1391,8 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
   const txt = { color: darkMode?"#e2e8f0":"#0f172a" };
   const txtMuted = { color: darkMode?"#94a3b8":"#64748b" };
 
-  // Calcular dados para o dashboard (últimos 30 dias)
-  var hoje30 = new Date();
-  var ultimos30 = [];
-  var fat30 = [];
-  for (var d30 = 29; d30 >= 0; d30--) {
-    var dd = new Date(hoje30); dd.setDate(dd.getDate() - d30);
-    var ds = dd.toLocaleDateString("sv-SE");
-    ultimos30.push(ds);
-    var dayOrders = (enrichedOrders||[]).filter(function(o){ return o.date === ds && o.status === "paid"; });
-    fat30.push(dayOrders.reduce(function(s,o){ return s + o.price * o.qty; }, 0));
-  }
+  // ── Anúncios com score baixo ─────────────────────────────
+  const lowScoreListings = enriched.filter(l => l.score < 50).sort((a,b) => a.score - b.score).slice(0, 5);
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>

@@ -5947,8 +5947,8 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                 <tr>
                   <th style={{ padding:"10px 14px", background:"#fafafa", borderBottom:"1px solid #f1f5f9", width:36 }}>
                     <input type="checkbox"
-                      checked={filtered.length > 0 && filtered.every(function(o){ return receberSel.includes(o.id); })}
-                      onChange={function(e){ setReceberSel(e.target.checked ? filtered.map(function(o){return o.id;}) : []); }}
+                      checked={receberSel.length > 0 && aReceber.length > 0 && aReceber.every(function(o){ return receberSel.includes(o.id); })}
+                      onChange={function(e){ setReceberSel(e.target.checked ? aReceber.map(function(o){return o.id;}) : []); }}
                       style={{ cursor:"pointer" }} />
                   </th>
                   {["Pedido","Cliente","Produto","Data Venda","Bruto","Líquido (MP)","Taxa ML","Previsão Pagamento","Status","Ação"].map(function(h) {

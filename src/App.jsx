@@ -3699,7 +3699,8 @@ async function analisarPrioridadePagamentos(contas, saldoDisponivel) {
     return c.num + ". [ID:" + c.id + "] " + c.desc + " R$" + c.valor + " " + c.situacao + " multa:R$" + c.multa + " juros:R$" + c.juros + " protesto:" + c.protesto + " cat:" + c.cat + " prior:" + c.prioridade;
   }).join("; ");
 
-  const prompt = "Analise estas contas a pagar e responda em JSON. Saldo: R$" + saldoDisponivel.toFixed(2) + ". Contas: " + contasTexto + ". Responda SOMENTE com JSON valido em uma unica linha sem markdown: {"resumo":"texto breve","alerta_critico":null,"prioridade":[{"posicao":1,"id":"ID_AQUI","razao":"motivo","urgencia":"critica","pagar_hoje":true}],"recomendacao_final":"acao recomendada"}";
+  var exemploJson = '{"resumo":"resumo breve","alerta_critico":null,"prioridade":[{"posicao":1,"id":"ID_DA_CONTA","razao":"motivo","urgencia":"critica","pagar_hoje":true}],"recomendacao_final":"acao"}';
+  const prompt = 'Analise contas a pagar. Saldo: R$' + saldoDisponivel.toFixed(2) + '. Contas: ' + contasTexto + '. Responda SOMENTE com JSON valido em uma linha sem markdown: ' + exemploJson;
   const text = await chamarIA(prompt, 1400);
   return parseIAJson(text);
 }

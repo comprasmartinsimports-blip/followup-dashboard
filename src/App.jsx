@@ -6644,6 +6644,15 @@ export default function App() {
             const res = await fetch(ML(`/payments/${pmtId}`), { headers: { Authorization: `Bearer ${validTk}` } });
             const data = await res.json();
             if (data.error) return;
+            // DEBUG: logar campos chave para diagnóstico
+            console.log("[ML Payment Debug] orderId:", oid, "pmtId:", pmtId, {
+              net_received_amount: data.net_received_amount,
+              transaction_amount: data.transaction_amount,
+              money_release_date: data.money_release_date,
+              status: data.status,
+              fee_details: data.fee_details,
+              money_release_status: data.money_release_status,
+            });
             const releaseDate = data.money_release_date?.slice(0, 10) ?? null;
             // net_received_amount só aparece após liberação efetiva
             // Antes disso, calcular pelo bruto menos todas as tarifas (fee_details)

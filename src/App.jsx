@@ -4506,10 +4506,14 @@ function ModalMultiBaixa({ contas, contasBancarias, onConfirm, onClose }) {
 
 // ── Modal de Baixa de Recebimento ML ────────────────────────
 function ModalBaixaML({ order, paymentInfo, contasBancarias, onConfirm, onClose }) {
-  const mpConta = contasBancarias.find(c => c.nome.toLowerCase().includes("mercado pago"));
+  const mpConta = contasBancarias.find(c => c.nome.toLowerCase().includes("mercado pago filial sp")) 
+    || contasBancarias.find(c => c.nome.toLowerCase().includes("mercado pago"));
   const [contaBancariaId, setContaBancariaId] = useState(mpConta?.id || contasBancarias[0]?.id || "");
   const [dataRecebimento, setDataRecebimento] = useState(paymentInfo?.releaseDate || new Date().toLocaleDateString("sv-SE"));
-  const valor = paymentInfo?.netAmount || order.price * order.qty;
+  // Prioridade: net_received_amount real > calculado por fee_details > estimativa 87%
+  const valor = paymentInfo?.netAmount || order.price * order.qty * 0.87;
+  const isValorReal = paymentInfo?.netAmount && !paymentInfo?.isCalculated;
+  const isValorCalc = paymentInfo?.netAmount && paymentInfo?.isCalculated;
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:500, padding:24 }}>
       <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:400, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
@@ -4517,10 +4521,35 @@ function ModalBaixaML({ order, paymentInfo, contasBancarias, onConfirm, onClose 
           <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>Registrar Recebimento</div>
           <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
         </div>
-        <div style={{ background:"#f0fdf4", borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
+        <div style={{ background: isValorReal?"#f0fdf4":isValorCalc?"#eff6ff":"#fffbeb", borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
           <div style={{ fontSize:12, color:"#94a3b8", marginBottom:2 }}>Pedido #{order.id}</div>
-          <div style={{ fontSize:13, color:"#0f172a", marginBottom:4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{order.title||"—"}</div>
-          <div style={{ fontSize:16, fontWeight:800, color:"#15803d" }}>{`R$ ${valor.toFixed(2).replace(".",",")}`} <span style={{ fontSize:11, fontWeight:400, color:"#94a3b8" }}>líquido</span></div>
+          <div style={{ fontSize:13, color:"#0f172a", marginBottom:6, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{order.title||"—"}</div>
+          <div style={{ display:"flex", gap:16, alignItems:"flex-end", flexWrap:"wrap" }}>
+            <div>
+              <div style={{ fontSize:10, color:"#94a3b8", marginBottom:2 }}>Valor bruto</div>
+              <div style={{ fontSize:13, fontWeight:600, color:"#64748b", textDecoration:"line-through" }}>R$ {(order.price * order.qty).toFixed(2).replace(".",",")}</div>
+            </div>
+            {paymentInfo?.tarifaML > 0 && (
+              <div>
+                <div style={{ fontSize:10, color:"#94a3b8", marginBottom:2 }}>Tarifa ML</div>
+                <div style={{ fontSize:13, fontWeight:600, color:"#dc2626" }}>-R$ {paymentInfo.tarifaML.toFixed(2).replace(".",",")}</div>
+              </div>
+            )}
+            {paymentInfo?.freteCusto > 0 && (
+              <div>
+                <div style={{ fontSize:10, color:"#94a3b8", marginBottom:2 }}>Frete</div>
+                <div style={{ fontSize:13, fontWeight:600, color:"#dc2626" }}>-R$ {paymentInfo.freteCusto.toFixed(2).replace(".",",")}</div>
+              </div>
+            )}
+            <div>
+              <div style={{ fontSize:10, color: isValorReal?"#15803d":isValorCalc?"#0891b2":"#d97706", marginBottom:2, fontWeight:600 }}>
+                {isValorReal ? "✓ Líquido real (API ML)" : isValorCalc ? "≈ Calculado (fee_details)" : "~ Estimado (~13%)"}
+              </div>
+              <div style={{ fontSize:20, fontWeight:800, color: isValorReal?"#15803d":isValorCalc?"#0891b2":"#d97706" }}>
+                R$ {valor.toFixed(2).replace(".",",")}
+              </div>
+            </div>
+          </div>
         </div>
         <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:16 }}>
           <div>
@@ -5108,10 +5137,11 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
       var orderId = entry[0];
       var pd = entry[1];
 
-      // Só processa se tiver valor líquido real da API
+      // Só processa se tiver valor líquido (real ou calculado via fee_details)
       if (!pd || !pd.netAmount || pd.netAmount <= 0) return;
-      // Só processa se a data de liberação já passou ou é hoje
-      if (!pd.releaseDate || pd.releaseDate > hojeStr) return;
+      // Para baixa automática: só quando a data de liberação já passou ou é hoje
+      // Se não tem releaseDate mas tem netAmount calculado, também baixa (pagamento liberado sem data futura)
+      if (pd.releaseDate && pd.releaseDate > hojeStr) return;
       // Verificar se já foi registrado
       var jaReg = lancamentos.some(function(l) {
         return l.tipo === "recebimento" && (String(l.pedidoId) === String(orderId) || l.pedidoId === parseInt(orderId));
@@ -6005,15 +6035,22 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                           <div style={{ fontSize:13, fontWeight:700, color: netEstimado ? "#d97706" : "#15803d" }}>
                             {fmt(netFinal)}
                           </div>
-                          {netEstimado && (
+                          {netEstimado && !pd?.isCalculated && (
                             <div style={{ fontSize:9, color:"#94a3b8", fontStyle:"italic" }}>~estimado</div>
+                          )}
+                          {pd?.isCalculated && (
+                            <div style={{ fontSize:9, color:"#0891b2", fontStyle:"italic" }}>calculado</div>
                           )}
                         </td>
                         <td style={{ padding:"10px 14px", whiteSpace:"nowrap" }}>
-                          <span style={{ fontSize:12, fontWeight:600, color: taxa > 15 ? "#dc2626" : taxa > 10 ? "#d97706" : "#15803d" }}>
-                            {taxa.toFixed(1)}%
-                          </span>
-                          {netEstimado && <span style={{ fontSize:9, color:"#94a3b8" }}> *</span>}
+                          <div style={{ fontSize:12, fontWeight:600, color: taxa > 15 ? "#dc2626" : taxa > 10 ? "#d97706" : "#15803d" }}>
+                            {taxa.toFixed(1)}%{netEstimado && !pd?.isCalculated && <span style={{ fontSize:9, color:"#94a3b8" }}> *</span>}
+                          </div>
+                          {pd?.tarifaML > 0 && (
+                            <div style={{ fontSize:9, color:"#94a3b8" }}>
+                              {pd.freteCusto > 0 ? "tarifa+" + fmt(pd.freteCusto) + "frete" : "tarifa: " + fmt(pd.tarifaML)}
+                            </div>
+                          )}
                         </td>
                         <td style={{ padding:"10px 14px", whiteSpace:"nowrap" }}>
                           {releaseDate ? (
@@ -6608,9 +6645,27 @@ export default function App() {
             const data = await res.json();
             if (data.error) return;
             const releaseDate = data.money_release_date?.slice(0, 10) ?? null;
-            const netAmount = parseFloat(data.net_received_amount ?? data.transaction_amount ?? 0);
+            // net_received_amount só aparece após liberação efetiva
+            // Antes disso, calcular pelo bruto menos todas as tarifas (fee_details)
+            var bruto = parseFloat(data.transaction_amount || 0);
+            var totalTaxas = 0;
+            if (Array.isArray(data.fee_details)) {
+              data.fee_details.forEach(function(f) { totalTaxas += parseFloat(f.amount || 0); });
+            }
+            var netCalc = bruto > 0 ? bruto - totalTaxas : 0;
+            var netAmount = parseFloat(data.net_received_amount || 0) || netCalc || bruto;
+            // Guardar também informações de frete e tarifas para exibição
+            var freteCusto = 0;
+            var tarifaML = 0;
+            if (Array.isArray(data.fee_details)) {
+              data.fee_details.forEach(function(f) {
+                if (f.type === "shipping") freteCusto += parseFloat(f.amount || 0);
+                else if (f.type === "mercadopago_fee" || f.type === "ml_fee") tarifaML += parseFloat(f.amount || 0);
+                else tarifaML += parseFloat(f.amount || 0); // qualquer outra taxa
+              });
+            }
             if (releaseDate || netAmount > 0) {
-              paymentMap[oid] = { releaseDate, netAmount };
+              paymentMap[oid] = { releaseDate, netAmount, bruto, totalTaxas, freteCusto, tarifaML, isCalculated: !data.net_received_amount };
             }
           } catch { /* ignora */ }
         }));

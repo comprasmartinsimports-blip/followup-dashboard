@@ -1569,7 +1569,6 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
     </div>
   );
 }
-}
 
 
 // ════════════════════════════════════════════════════════════

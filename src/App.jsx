@@ -1158,296 +1158,106 @@ function AdminTab({ currentUser }) {
 // ── Versão compacta do painel de Impostos/Custos Fixos ───────
 function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, faturamentoMes }) {
   const [novoImposto, setNovoImposto] = useState({ nome:"", valor:"", tipo:"%" });
-  const [novoCusto, setNovoCusto]     = useState({ nome:"", valor:"", tipo:"%" });
-
-  function addI() {
-    if (!novoImposto.nome || !novoImposto.valor) return;
-    const u = [...impostos, { ...novoImposto, id: Date.now() }];
-    setImpostos(u); saveImpostos(u); setNovoImposto({ nome:"", valor:"", tipo:"%" });
-  }
-  function addC() {
-    if (!novoCusto.nome || !novoCusto.valor) return;
-    const u = [...custosFixos, { ...novoCusto, id: Date.now() }];
-    setCustosFixos(u); saveCustosFixos(u); setNovoCusto({ nome:"", valor:"", tipo:"%" });
-  }
-  function removeI(id) { const u = impostos.filter(i=>i.id!==id); setImpostos(u); saveImpostos(u); }
-  function removeC(id) { const u = custosFixos.filter(c=>c.id!==id); setCustosFixos(u); saveCustosFixos(u); }
-  function updateI(id, f, v) { const u = impostos.map(i=>i.id===id?{...i,[f]:v}:i); setImpostos(u); saveImpostos(u); }
-  function updateC(id, f, v) { const u = custosFixos.map(c=>c.id===id?{...c,[f]:v}:c); setCustosFixos(u); saveCustosFixos(u); }
-
-  const inp = { background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"6px 10px", borderRadius:7, fontSize:12, outline:"none", fontFamily:"inherit" };
-  const tBtn = (item, t, fn) => (
-    <button onClick={()=>fn("tipo",t)} style={{ padding:"3px 8px", borderRadius:5, border:"none", cursor:"pointer", fontSize:11, fontWeight:700, background:item.tipo===t?"#0f172a":"#e2e8f0", color:item.tipo===t?"#fff":"#64748b" }}>{t}</button>
-  );
-
-  const Row = ({ item, onUpdate, onRemove, color }) => (
-    <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:6 }}>
-      <input value={item.nome} onChange={e=>onUpdate(item.id,"nome",e.target.value)} style={{ ...inp, flex:2 }} placeholder="Nome" />
-      <div style={{ display:"flex", gap:2 }}>
-        {tBtn(item,"%",onUpdate.bind(null,item.id))}
-        {tBtn(item,"R$",onUpdate.bind(null,item.id))}
-      </div>
-      <input type="number" value={item.valor} onChange={e=>onUpdate(item.id,"valor",e.target.value)} style={{ ...inp, width:70 }} placeholder="0" />
-      <span style={{ fontSize:11, color:"#94a3b8", minWidth:70, textAlign:"right" }}>
-        = R$ {calcValor(item, faturamentoMes).toFixed(2).replace(".",",")}
-      </span>
-      <button onClick={()=>onRemove(item.id)} style={{ background:"#fef2f2", border:"none", color:"#dc2626", width:24, height:24, borderRadius:5, cursor:"pointer", fontSize:11, flexShrink:0 }}>✕</button>
-    </div>
-  );
-
-  const AddRow = ({ novo, setNovo, onAdd, placeholder }) => (
-    <div style={{ display:"flex", gap:6, alignItems:"center", marginTop:6 }}>
-      <input value={novo.nome} onChange={e=>setNovo(n=>({...n,nome:e.target.value}))}
-        onKeyDown={e=>e.key==="Enter"&&onAdd()}
-        style={{ ...inp, flex:2 }} placeholder={placeholder} />
-      <div style={{ display:"flex", gap:2 }}>
-        {tBtn(novo,"%",(f,v)=>setNovo(n=>({...n,[f]:v})))}
-        {tBtn(novo,"R$",(f,v)=>setNovo(n=>({...n,[f]:v})))}
-      </div>
-      <input type="number" value={novo.valor} onChange={e=>setNovo(n=>({...n,valor:e.target.value}))}
-        onKeyDown={e=>e.key==="Enter"&&onAdd()}
-        style={{ ...inp, width:70 }} placeholder="0" />
-      <span style={{ fontSize:11, color:"#94a3b8", minWidth:70 }} />
-      <button onClick={onAdd} disabled={!novo.nome||!novo.valor}
-        style={{ background:novo.nome&&novo.valor?"#0f172a":"#e2e8f0", border:"none", color:novo.nome&&novo.valor?"#fff":"#94a3b8", width:24, height:24, borderRadius:5, cursor:"pointer", fontSize:14, flexShrink:0 }}>+</button>
-    </div>
-  );
-
-  return (
-    <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:12, padding:"16px 18px" }}>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
-        <div>
-          <div style={{ fontSize:12, fontWeight:700, color:"#dc2626", marginBottom:10, textTransform:"uppercase", letterSpacing:0.5 }}>🧾 Impostos</div>
-          {impostos.map(i => <Row key={i.id} item={i} onUpdate={updateI} onRemove={removeI} color="#dc2626" />)}
-          <AddRow novo={novoImposto} setNovo={setNovoImposto} onAdd={addI} placeholder="Ex: ICMS, Simples..." />
-        </div>
-        <div>
-          <div style={{ fontSize:12, fontWeight:700, color:"#d97706", marginBottom:10, textTransform:"uppercase", letterSpacing:0.5 }}>🏢 Custos Fixos</div>
-          {custosFixos.map(c => <Row key={c.id} item={c} onUpdate={updateC} onRemove={removeC} color="#d97706" />)}
-          <AddRow novo={novoCusto} setNovo={setNovoCusto} onAdd={addC} placeholder="Ex: Aluguel, Salário..." />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
-// ════════════════════════════════════════════════════════════
-//  IMPOSTOS E CUSTOS FIXOS — Painel da Visão Geral
-// ════════════════════════════════════════════════════════════
-
-function saveImpostos(v) { try { localStorage.setItem("impostos_config", JSON.stringify(v)); } catch {} }
-function saveCustosFixos(v) { try { localStorage.setItem("custos_fixos_config", JSON.stringify(v)); } catch {} }
-
-function calcValor(item, base) {
-  if (!item.valor) return 0;
-  const v = parseFloat(item.valor || 0);
-  if (item.tipo === "%") return base * (v / 100);
-  return v; // R$
-}
-
-function ImpostosPanel({ impostos, setImpostos, custosFixos, setCustosFixos, faturamentoMes, darkMode, card, txt, txtMuted }) {
-  const [editando, setEditando] = useState(false);
-  const [novoImposto, setNovoImposto] = useState({ nome: "", valor: "", tipo: "%" });
-  const [novoCusto, setNovoCusto] = useState({ nome: "", valor: "", tipo: "%" });
-
-  const totalImpostos = impostos.reduce((s, i) => s + calcValor(i, faturamentoMes), 0);
-  const totalCustosFixos = custosFixos.reduce((s, c) => s + calcValor(c, faturamentoMes), 0);
-  const totalDeducoes = totalImpostos + totalCustosFixos;
-  const lucroReal = faturamentoMes - totalDeducoes;
+  const [novoCusto, setNovoCusto] = useState({ nome:"", valor:"", tipo:"%" });
 
   function addImposto() {
     if (!novoImposto.nome || !novoImposto.valor) return;
-    const updated = [...impostos, { ...novoImposto, id: Date.now() }];
-    setImpostos(updated); saveImpostos(updated);
-    setNovoImposto({ nome: "", valor: "", tipo: "%" });
+    var upd = [...impostos, Object.assign({}, novoImposto, {id: Date.now()})];
+    setImpostos(upd); saveImpostos(upd);
+    setNovoImposto({ nome:"", valor:"", tipo:"%" });
   }
-
   function addCusto() {
     if (!novoCusto.nome || !novoCusto.valor) return;
-    const updated = [...custosFixos, { ...novoCusto, id: Date.now() }];
-    setCustosFixos(updated); saveCustosFixos(updated);
-    setNovoCusto({ nome: "", valor: "", tipo: "%" });
+    var upd = [...custosFixos, Object.assign({}, novoCusto, {id: Date.now()})];
+    setCustosFixos(upd); saveCustosFixos(upd);
+    setNovoCusto({ nome:"", valor:"", tipo:"%" });
+  }
+  function removeImposto(id) { var upd = impostos.filter(function(i){return i.id!==id;}); setImpostos(upd); saveImpostos(upd); }
+  function removeCusto(id) { var upd = custosFixos.filter(function(c){return c.id!==id;}); setCustosFixos(upd); saveCustosFixos(upd); }
+
+  var totalImp = impostos.reduce(function(s,i){ return s + calcValor(i, faturamentoMes); }, 0);
+  var totalFix = custosFixos.reduce(function(s,c){ return s + calcValor(c, faturamentoMes); }, 0);
+
+  function ItemRow({ item, onRemove }) {
+    return (
+      <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 0", borderBottom:"1px solid #f8fafc" }}>
+        <div style={{ flex:1, fontSize:13, color:"#0f172a", fontWeight:500 }}>{item.nome}</div>
+        <div style={{ fontSize:13, fontWeight:700, color:"#334155" }}>{item.valor}{item.tipo}</div>
+        <div style={{ fontSize:12, color:"#94a3b8" }}>= R$ {calcValor(item, faturamentoMes).toFixed(2).replace(".",",")}</div>
+        <button onClick={function(){ onRemove(item.id); }} style={{ background:"#fef2f2", border:"none", color:"#dc2626", width:24, height:24, borderRadius:6, cursor:"pointer", fontSize:11, flexShrink:0 }}>✕</button>
+      </div>
+    );
   }
 
-  function removeImposto(id) {
-    const updated = impostos.filter(i => i.id !== id);
-    setImpostos(updated); saveImpostos(updated);
+  function AddRow({ state, setState, onAdd, placeholder }) {
+    return (
+      <div style={{ display:"flex", gap:6, marginTop:10, alignItems:"center" }}>
+        <input value={state.nome} onChange={function(e){setState(function(s){return Object.assign({},s,{nome:e.target.value});});}}
+          placeholder={placeholder}
+          style={{ flex:2, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"7px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
+        <div style={{ display:"flex", border:"1px solid #e2e8f0", borderRadius:8, overflow:"hidden", flexShrink:0 }}>
+          {["%","R$"].map(function(t){
+            return <button key={t} onClick={function(){setState(function(s){return Object.assign({},s,{tipo:t});});}}
+              style={{ padding:"7px 10px", border:"none", cursor:"pointer", fontSize:12, fontWeight:700,
+                background: state.tipo===t?"#0f172a":"#fff", color: state.tipo===t?"#fff":"#64748b" }}>{t}</button>;
+          })}
+        </div>
+        <input type="number" value={state.valor} onChange={function(e){setState(function(s){return Object.assign({},s,{valor:e.target.value});});}}
+          placeholder="0"
+          style={{ width:70, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"7px 10px", borderRadius:8, fontSize:12, outline:"none", flexShrink:0 }} />
+        <button onClick={onAdd} disabled={!state.nome||!state.valor}
+          style={{ background: (state.nome&&state.valor)?"#0f172a":"#f1f5f9", border:"none", color:(state.nome&&state.valor)?"#fff":"#94a3b8",
+            fontWeight:700, padding:"7px 14px", borderRadius:8, cursor:(state.nome&&state.valor)?"pointer":"not-allowed", fontSize:12, flexShrink:0 }}>+</button>
+      </div>
+    );
   }
-
-  function removeCusto(id) {
-    const updated = custosFixos.filter(c => c.id !== id);
-    setCustosFixos(updated); saveCustosFixos(updated);
-  }
-
-  function updateImposto(id, field, value) {
-    const updated = impostos.map(i => i.id === id ? { ...i, [field]: value } : i);
-    setImpostos(updated); saveImpostos(updated);
-  }
-
-  function updateCusto(id, field, value) {
-    const updated = custosFixos.map(c => c.id === id ? { ...c, [field]: value } : c);
-    setCustosFixos(updated); saveCustosFixos(updated);
-  }
-
-  const inputStyle = {
-    background: darkMode ? "#0f172a" : "#f8fafc",
-    border: `1px solid ${darkMode ? "#334155" : "#e2e8f0"}`,
-    color: darkMode ? "#e2e8f0" : "#0f172a",
-    padding: "7px 10px", borderRadius: 8, fontSize: 13, outline: "none", fontFamily: "inherit"
-  };
-
-  const tipoBtn = (item, tipo, onChange) => (
-    <button onClick={() => onChange("tipo", tipo)}
-      style={{ padding: "4px 10px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700,
-        background: item.tipo === tipo ? "#0f172a" : darkMode ? "#334155" : "#e2e8f0",
-        color: item.tipo === tipo ? "#fff" : darkMode ? "#94a3b8" : "#64748b" }}>
-      {tipo}
-    </button>
-  );
 
   return (
-    <div style={{ ...card(), padding: "20px 24px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <div>
-          <div style={{ fontWeight: 800, fontSize: 15, ...txt }}>📊 Impostos e Custos Fixos</div>
-          <div style={{ fontSize: 12, ...txtMuted, marginTop: 2 }}>Deduzidos do faturamento para calcular o lucro real</div>
+    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+      {/* Impostos */}
+      <div style={{ background:"#fff", border:"1px solid #fecaca", borderRadius:14, overflow:"hidden" }}>
+        <div style={{ background:"#fef2f2", padding:"14px 18px", borderBottom:"1px solid #fecaca", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div>
+            <div style={{ fontWeight:700, fontSize:14, color:"#dc2626" }}>📋 Impostos</div>
+            <div style={{ fontSize:11, color:"#94a3b8", marginTop:1 }}>ICMS, Simples, DAS...</div>
+          </div>
+          <div style={{ textAlign:"right" }}>
+            <div style={{ fontSize:11, color:"#94a3b8" }}>Total</div>
+            <div style={{ fontSize:17, fontWeight:800, color:"#dc2626" }}>R$ {totalImp.toFixed(2).replace(".",",")}</div>
+          </div>
         </div>
-        <button onClick={() => setEditando(e => !e)}
-          style={{ background: editando ? "#0f172a" : darkMode ? "#334155" : "#f1f5f9", border: "none", color: editando ? "#fff" : darkMode ? "#e2e8f0" : "#64748b", fontWeight: 600, padding: "7px 16px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>
-          {editando ? "✓ Fechar" : "✏️ Editar"}
-        </button>
-      </div>
-
-      {/* Resumo sempre visível */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px,1fr))", gap: 10, marginBottom: editando ? 20 : 0 }}>
-        <div style={{ background: darkMode ? "#1e293b" : "#fef2f2", borderRadius: 10, padding: "12px 16px", border: `1px solid ${darkMode ? "#334155" : "#fecaca"}` }}>
-          <div style={{ fontSize: 11, color: "#dc2626", fontWeight: 700, textTransform: "uppercase", marginBottom: 4 }}>Total Impostos</div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "#dc2626" }}>{`R$ ${totalImpostos.toFixed(2).replace(".", ",")}`}</div>
-          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{impostos.length} item(ns)</div>
-        </div>
-        <div style={{ background: darkMode ? "#1e293b" : "#fef2f2", borderRadius: 10, padding: "12px 16px", border: `1px solid ${darkMode ? "#334155" : "#fecaca"}` }}>
-          <div style={{ fontSize: 11, color: "#d97706", fontWeight: 700, textTransform: "uppercase", marginBottom: 4 }}>Custos Fixos</div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "#d97706" }}>{`R$ ${totalCustosFixos.toFixed(2).replace(".", ",")}`}</div>
-          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{custosFixos.length} item(ns)</div>
-        </div>
-        <div style={{ background: darkMode ? "#1e293b" : "#f0fdf4", borderRadius: 10, padding: "12px 16px", border: `1px solid ${darkMode ? "#334155" : "#bbf7d0"}` }}>
-          <div style={{ fontSize: 11, color: "#15803d", fontWeight: 700, textTransform: "uppercase", marginBottom: 4 }}>Lucro Real do Mês</div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: lucroReal >= 0 ? "#15803d" : "#dc2626" }}>{`R$ ${lucroReal.toFixed(2).replace(".", ",")}`}</div>
-          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>Fat. - Impostos - Fixos</div>
+        <div style={{ padding:"12px 18px" }}>
+          {impostos.length === 0
+            ? <div style={{ fontSize:12, color:"#94a3b8", padding:"8px 0", textAlign:"center" }}>Nenhum imposto cadastrado</div>
+            : impostos.map(function(i){ return <ItemRow key={i.id} item={i} onRemove={removeImposto} />; })
+          }
+          <AddRow state={novoImposto} setState={setNovoImposto} onAdd={addImposto} placeholder="Ex: Simples Nacional" />
         </div>
       </div>
 
-      {/* Edição */}
-      {editando && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-
-          {/* IMPOSTOS */}
+      {/* Custos Fixos */}
+      <div style={{ background:"#fff", border:"1px solid #fde68a", borderRadius:14, overflow:"hidden" }}>
+        <div style={{ background:"#fffbeb", padding:"14px 18px", borderBottom:"1px solid #fde68a", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 13, color: "#dc2626", marginBottom: 12 }}>🧾 Impostos</div>
-            {impostos.map(item => (
-              <div key={item.id} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
-                <input value={item.nome} onChange={e => updateImposto(item.id, "nome", e.target.value)}
-                  style={{ ...inputStyle, flex: 2, padding: "6px 8px" }} placeholder="Nome" />
-                <div style={{ display: "flex", gap: 2 }}>
-                  {tipoBtn(item, "%", (f, v) => updateImposto(item.id, f, v))}
-                  {tipoBtn(item, "R$", (f, v) => updateImposto(item.id, f, v))}
-                </div>
-                <input type="number" value={item.valor} onChange={e => updateImposto(item.id, "valor", e.target.value)}
-                  style={{ ...inputStyle, width: 80, padding: "6px 8px" }} placeholder={item.tipo === "%" ? "0,00" : "0,00"} />
-                <div style={{ fontSize: 11, color: "#94a3b8", minWidth: 60, textAlign: "right" }}>
-                  = {`R$ ${calcValor(item, faturamentoMes).toFixed(2).replace(".", ",")}`}
-                </div>
-                <button onClick={() => removeImposto(item.id)}
-                  style={{ background: "#fef2f2", border: "none", color: "#dc2626", width: 26, height: 26, borderRadius: 6, cursor: "pointer", fontSize: 12, flexShrink: 0 }}>✕</button>
-              </div>
-            ))}
-            {/* Novo imposto */}
-            <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 8 }}>
-              <input value={novoImposto.nome} onChange={e => setNovoImposto(n => ({ ...n, nome: e.target.value }))}
-                onKeyDown={e => e.key === "Enter" && addImposto()}
-                style={{ ...inputStyle, flex: 2, padding: "6px 8px" }} placeholder="Ex: ICMS, ISS..." />
-              <div style={{ display: "flex", gap: 2 }}>
-                {tipoBtn(novoImposto, "%", (f, v) => setNovoImposto(n => ({ ...n, [f]: v })))}
-                {tipoBtn(novoImposto, "R$", (f, v) => setNovoImposto(n => ({ ...n, [f]: v })))}
-              </div>
-              <input type="number" value={novoImposto.valor} onChange={e => setNovoImposto(n => ({ ...n, valor: e.target.value }))}
-                onKeyDown={e => e.key === "Enter" && addImposto()}
-                style={{ ...inputStyle, width: 80, padding: "6px 8px" }} placeholder="0,00" />
-              <button onClick={addImposto} disabled={!novoImposto.nome || !novoImposto.valor}
-                style={{ background: novoImposto.nome && novoImposto.valor ? "#0f172a" : "#e2e8f0", border: "none", color: novoImposto.nome && novoImposto.valor ? "#fff" : "#94a3b8", width: 26, height: 26, borderRadius: 6, cursor: "pointer", fontSize: 14, flexShrink: 0 }}>+</button>
-            </div>
+            <div style={{ fontWeight:700, fontSize:14, color:"#d97706" }}>🏢 Custos Fixos</div>
+            <div style={{ fontSize:11, color:"#94a3b8", marginTop:1 }}>Aluguel, salários, assinaturas...</div>
           </div>
-
-          {/* CUSTOS FIXOS */}
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 13, color: "#d97706", marginBottom: 12 }}>🏢 Custos Fixos</div>
-            {custosFixos.map(item => (
-              <div key={item.id} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
-                <input value={item.nome} onChange={e => updateCusto(item.id, "nome", e.target.value)}
-                  style={{ ...inputStyle, flex: 2, padding: "6px 8px" }} placeholder="Nome" />
-                <div style={{ display: "flex", gap: 2 }}>
-                  {tipoBtn(item, "%", (f, v) => updateCusto(item.id, f, v))}
-                  {tipoBtn(item, "R$", (f, v) => updateCusto(item.id, f, v))}
-                </div>
-                <input type="number" value={item.valor} onChange={e => updateCusto(item.id, "valor", e.target.value)}
-                  style={{ ...inputStyle, width: 80, padding: "6px 8px" }} placeholder="0,00" />
-                <div style={{ fontSize: 11, color: "#94a3b8", minWidth: 60, textAlign: "right" }}>
-                  = {`R$ ${calcValor(item, faturamentoMes).toFixed(2).replace(".", ",")}`}
-                </div>
-                <button onClick={() => removeCusto(item.id)}
-                  style={{ background: "#fef2f2", border: "none", color: "#dc2626", width: 26, height: 26, borderRadius: 6, cursor: "pointer", fontSize: 12, flexShrink: 0 }}>✕</button>
-              </div>
-            ))}
-            {/* Novo custo */}
-            <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 8 }}>
-              <input value={novoCusto.nome} onChange={e => setNovoCusto(n => ({ ...n, nome: e.target.value }))}
-                onKeyDown={e => e.key === "Enter" && addCusto()}
-                style={{ ...inputStyle, flex: 2, padding: "6px 8px" }} placeholder="Ex: Aluguel, Salário..." />
-              <div style={{ display: "flex", gap: 2 }}>
-                {tipoBtn(novoCusto, "%", (f, v) => setNovoCusto(n => ({ ...n, [f]: v })))}
-                {tipoBtn(novoCusto, "R$", (f, v) => setNovoCusto(n => ({ ...n, [f]: v })))}
-              </div>
-              <input type="number" value={novoCusto.valor} onChange={e => setNovoCusto(n => ({ ...n, valor: e.target.value }))}
-                onKeyDown={e => e.key === "Enter" && addCusto()}
-                style={{ ...inputStyle, width: 80, padding: "6px 8px" }} placeholder="0,00" />
-              <button onClick={addCusto} disabled={!novoCusto.nome || !novoCusto.valor}
-                style={{ background: novoCusto.nome && novoCusto.valor ? "#0f172a" : "#e2e8f0", border: "none", color: novoCusto.nome && novoCusto.valor ? "#fff" : "#94a3b8", width: 26, height: 26, borderRadius: 6, cursor: "pointer", fontSize: 14, flexShrink: 0 }}>+</button>
-            </div>
+          <div style={{ textAlign:"right" }}>
+            <div style={{ fontSize:11, color:"#94a3b8" }}>Total</div>
+            <div style={{ fontSize:17, fontWeight:800, color:"#d97706" }}>R$ {totalFix.toFixed(2).replace(".",",")}</div>
           </div>
-
         </div>
-      )}
-
-      {/* Lista resumida quando fechado */}
-      {!editando && (impostos.length > 0 || custosFixos.length > 0) && (
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 12 }}>
-          {impostos.map(i => (
-            <span key={i.id} style={{ fontSize: 11, background: darkMode ? "#1e293b" : "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", padding: "2px 8px", borderRadius: 20, fontWeight: 500 }}>
-              {i.nome}: {i.tipo === "%" ? `${i.valor}%` : `R$ ${parseFloat(i.valor).toFixed(2).replace(".", ",")}`} = R$ {calcValor(i, faturamentoMes).toFixed(2).replace(".", ",")}
-            </span>
-          ))}
-          {custosFixos.map(c => (
-            <span key={c.id} style={{ fontSize: 11, background: darkMode ? "#1e293b" : "#fffbeb", color: "#d97706", border: "1px solid #fde68a", padding: "2px 8px", borderRadius: 20, fontWeight: 500 }}>
-              {c.nome}: {c.tipo === "%" ? `${c.valor}%` : `R$ ${parseFloat(c.valor).toFixed(2).replace(".", ",")}`} = R$ {calcValor(c, faturamentoMes).toFixed(2).replace(".", ",")}
-            </span>
-          ))}
+        <div style={{ padding:"12px 18px" }}>
+          {custosFixos.length === 0
+            ? <div style={{ fontSize:12, color:"#94a3b8", padding:"8px 0", textAlign:"center" }}>Nenhum custo fixo cadastrado</div>
+            : custosFixos.map(function(c){ return <ItemRow key={c.id} item={c} onRemove={removeCusto} />; })
+          }
+          <AddRow state={novoCusto} setState={setNovoCusto} onAdd={addCusto} placeholder="Ex: Aluguel" />
         </div>
-      )}
-
-      {!editando && impostos.length === 0 && custosFixos.length === 0 && (
-        <div style={{ textAlign: "center", padding: "16px 0", ...txtMuted, fontSize: 13 }}>
-          Clique em <strong>✏️ Editar</strong> para adicionar impostos e custos fixos
-        </div>
-      )}
+      </div>
     </div>
   );
 }
-
-
-// ════════════════════════════════════════════════════════════
-//  OVERVIEW — Visão Geral Unificada
-// ════════════════════════════════════════════════════════════
 
 function MiniBar({ value, max, color }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
@@ -6219,25 +6029,38 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                 const entradas = lancamentos.filter(l=>l.contaBancariaId===cb.id&&l.tipo==="recebimento").reduce((s,l)=>s+l.valor,0);
                 const saidas   = lancamentos.filter(l=>l.contaBancariaId===cb.id&&l.tipo==="pagamento").reduce((s,l)=>s+l.valor,0);
                 return (
-                  <div key={cb.id} style={{ background:"#fff", border:`2px solid ${cb.cor}33`, borderRadius:12, padding:"18px 20px", position:"relative" }}>
-                    <div style={{ position:"absolute", top:12, right:12, display:"flex", gap:4 }}>
+                  <div key={cb.id} style={{ background:"#fff", border:`2px solid ${cb.cor}22`, borderRadius:14, overflow:"hidden", boxShadow:"0 1px 4px rgba(0,0,0,.06)" }}>
+                    {/* Header colorido */}
+                    <div style={{ background:`${cb.cor}15`, borderBottom:`1px solid ${cb.cor}22`, padding:"14px 16px", display:"flex", alignItems:"center", gap:8 }}>
+                      <div style={{ width:10, height:10, borderRadius:"50%", background:cb.cor, flexShrink:0 }} />
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontWeight:700, fontSize:13, color:"#0f172a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{cb.nome}</div>
+                        <div style={{ fontSize:11, color:"#94a3b8" }}>{cb.tipo}{cb.banco ? " · " + cb.banco : ""}</div>
+                      </div>
+                    </div>
+                    {/* Saldo */}
+                    <div style={{ padding:"16px", borderBottom:"1px solid #f1f5f9" }}>
+                      <div style={{ fontSize:11, color:"#94a3b8", marginBottom:4, fontWeight:600, textTransform:"uppercase", letterSpacing:0.5 }}>Saldo atual</div>
+                      <div style={{ fontSize:22, fontWeight:800, color:saldo>=0?"#15803d":"#dc2626" }}>{fmt(saldo)}</div>
+                      <div style={{ display:"flex", gap:12, fontSize:11, marginTop:6 }}>
+                        <span style={{ color:"#15803d", fontWeight:600 }}>↑ {fmt(entradas)}</span>
+                        <span style={{ color:"#dc2626", fontWeight:600 }}>↓ {fmt(saidas)}</span>
+                      </div>
+                    </div>
+                    {/* Ações */}
+                    <div style={{ display:"flex", borderTop:"1px solid #f1f5f9" }}>
                       <button onClick={function() { setExtratoContaId(extratoContaId === cb.id ? null : cb.id); }}
-                        title="Ver extrato"
-                        style={{ background: extratoContaId===cb.id ? "#0f172a" : "#f1f5f9", border:"none", color: extratoContaId===cb.id ? "#fff" : "#64748b", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:12 }}>📋</button>
+                        style={{ flex:1, background: extratoContaId===cb.id?"#0f172a":"transparent", border:"none", borderRight:"1px solid #f1f5f9", color: extratoContaId===cb.id?"#fff":"#64748b", padding:"10px 0", cursor:"pointer", fontSize:12, fontWeight:600, display:"flex", flexDirection:"column", alignItems:"center", gap:2 }}>
+                        <span>📋</span><span style={{ fontSize:10 }}>Extrato</span>
+                      </button>
                       <button onClick={function() { setEditingBancaria(cb); setShowModalBancaria(true); }}
-                        style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:12 }}>✏️</button>
+                        style={{ flex:1, background:"transparent", border:"none", borderRight:"1px solid #f1f5f9", color:"#64748b", padding:"10px 0", cursor:"pointer", fontSize:12, fontWeight:600, display:"flex", flexDirection:"column", alignItems:"center", gap:2 }}>
+                        <span>✏️</span><span style={{ fontSize:10 }}>Editar</span>
+                      </button>
                       <button onClick={function() { deleteBancaria(cb.id); }}
-                        style={{ background:"#fef2f2", border:"none", color:"#dc2626", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:12 }}>🗑</button>
-                    </div>
-                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
-                      <div style={{ width:12, height:12, borderRadius:"50%", background:cb.cor }} />
-                      <div style={{ fontWeight:700, fontSize:14, color:"#0f172a" }}>{cb.nome}</div>
-                    </div>
-                    <div style={{ fontSize:11, color:"#94a3b8", marginBottom:12 }}>{cb.tipo}{cb.banco ? ` · ${cb.banco}` : ""}</div>
-                    <div style={{ fontSize:22, fontWeight:800, color:saldo>=0?"#15803d":"#dc2626", marginBottom:8 }}>{fmt(saldo)}</div>
-                    <div style={{ display:"flex", gap:12, fontSize:11, color:"#94a3b8" }}>
-                      <span style={{ color:"#15803d" }}>↑ {fmt(entradas)}</span>
-                      <span style={{ color:"#dc2626" }}>↓ {fmt(saidas)}</span>
+                        style={{ flex:1, background:"transparent", border:"none", color:"#dc2626", padding:"10px 0", cursor:"pointer", fontSize:12, fontWeight:600, display:"flex", flexDirection:"column", alignItems:"center", gap:2 }}>
+                        <span>🗑</span><span style={{ fontSize:10 }}>Excluir</span>
+                      </button>
                     </div>
                   </div>
                 );
@@ -6749,6 +6572,9 @@ export default function App() {
             orderShippingMap[String(o.id)] = freteVendedor;
             // status: "delivered", "shipped", "ready_to_ship", "pending", etc
             shipmentStatusMap[String(o.id)] = shipData?.status ?? null;
+            // Guardar método de envio
+            var lt = shipData?.logistic_type || "";
+            if (lt) shipmentStatusMap[String(o.id) + "_logistic"] = lt;
           } catch { orderShippingMap[String(o.id)] = 0; }
         }));
         if (i % 20 === 0) setShipmentCosts({...orderShippingMap});
@@ -7574,6 +7400,7 @@ export default function App() {
                   <tr>
                     <th>Pedido</th>
                     <th>Status</th>
+                    <th>Envio</th>
                     <th>Produto</th>
                     <th>Data</th>
                     <th>Preço venda</th>
@@ -7597,6 +7424,26 @@ export default function App() {
                           {(() => {
                             const s = getOrderStatusInfo(o.status, o.tags, o.fulfilled, o.shipment_status);
                             return <span style={{ fontSize: 11, fontWeight: 600, color: s.color, background: s.bg, padding: "3px 8px", borderRadius: 6, whiteSpace: "nowrap" }}>{s.label}</span>;
+                          })()}
+                        </td>
+                        <td>
+                          {(() => {
+                            var lt = shipmentStatuses?.[String(o.id) + "_logistic"] || o.shipping?.logistic_type || "";
+                            var cfg = lt.includes("fulfillment") || lt.includes("self_service")
+                              ? { label:"FULL", color:"#1d4ed8", bg:"#eff6ff" }
+                              : lt.includes("flex")
+                              ? { label:"Flex", color:"#7c3aed", bg:"#f5f3ff" }
+                              : lt.includes("drop_off") || lt.includes("xd_")
+                              ? { label:"ME2", color:"#0891b2", bg:"#ecfeff" }
+                              : lt.includes("me1") || lt.includes("mandatory")
+                              ? { label:"ME1", color:"#0369a1", bg:"#e0f2fe" }
+                              : lt.includes("cross")
+                              ? { label:"Cross", color:"#15803d", bg:"#f0fdf4" }
+                              : o.shipping?.free_shipping
+                              ? { label:"Grátis", color:"#15803d", bg:"#f0fdf4" }
+                              : { label:"—", color:"#94a3b8", bg:"transparent" };
+                            if (cfg.label === "—") return <span style={{ color:"#94a3b8", fontSize:11 }}>—</span>;
+                            return <span style={{ fontSize:10, fontWeight:700, color:cfg.color, background:cfg.bg, padding:"2px 7px", borderRadius:5, whiteSpace:"nowrap", letterSpacing:0.3 }}>{cfg.label}</span>;
                           })()}
                         </td>
                         <td>

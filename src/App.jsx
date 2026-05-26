@@ -6241,7 +6241,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                     <table style={{ borderCollapse:"collapse", width:"100%" }}>
                       <thead>
                         <tr>
-                          {["Data","Descrição","Tipo","Valor"].map(function(h) {
+                          {["Data","Descrição","Tipo","Valor",""].map(function(h) {
                             return <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 16px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa" }}>{h}</th>;
                           })}
                         </tr>
@@ -6249,9 +6249,12 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                       <tbody>
                         {movs.map(function(l, i) {
                           return (
-                            <tr key={l.id} style={{ background: i%2===0?"#f8fafc":"#fff" }}>
+                            <tr key={l.id} style={{ background: l.automatico ? "#fffbeb" : i%2===0?"#f8fafc":"#fff" }}>
                               <td style={{ padding:"10px 16px", fontSize:12, color:"#64748b", whiteSpace:"nowrap" }}>{fmtDate(l.data)}</td>
-                              <td style={{ padding:"10px 16px", fontSize:13, color:"#0f172a" }}>{l.descricao}</td>
+                              <td style={{ padding:"10px 16px", fontSize:13, color:"#0f172a" }}>
+                                {l.descricao}
+                                {l.automatico && <span style={{ marginLeft:6, fontSize:10, background:"#fef9c3", color:"#92400e", border:"1px solid #fde68a", borderRadius:4, padding:"1px 5px" }}>🤖 auto</span>}
+                              </td>
                               <td style={{ padding:"10px 16px" }}>
                                 <span style={{ fontSize:11, fontWeight:600, color: l.tipo==="recebimento"?"#15803d":"#dc2626", background: l.tipo==="recebimento"?"#f0fdf4":"#fef2f2", padding:"2px 8px", borderRadius:5 }}>
                                   {l.tipo==="recebimento" ? "↑ Entrada" : "↓ Saída"}
@@ -6259,6 +6262,19 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                               </td>
                               <td style={{ padding:"10px 16px", fontSize:13, fontWeight:700, color: l.tipo==="recebimento"?"#15803d":"#dc2626", textAlign:"right" }}>
                                 {l.tipo==="recebimento" ? "+" : "-"}{fmt(l.valor)}
+                              </td>
+                              <td style={{ padding:"10px 16px", textAlign:"center" }}>
+                                <button
+                                  onClick={function() {
+                                    if (!window.confirm("Excluir lançamento: " + l.descricao + "?")) return;
+                                    var upd = lancamentos.filter(function(x){ return x.id !== l.id; });
+                                    setLancamentos(upd);
+                                    saveLS("lancamentos", upd);
+                                  }}
+                                  title="Excluir lançamento"
+                                  style={{ background:"#fef2f2", border:"none", color:"#dc2626", width:26, height:26, borderRadius:6, cursor:"pointer", fontSize:12 }}>
+                                  🗑
+                                </button>
                               </td>
                             </tr>
                           );

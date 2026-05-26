@@ -6629,54 +6629,67 @@ export default function App() {
       setShipmentCosts({...orderShippingMap});
       setShipmentStatuses({...shipmentStatusMap});
 
-      // Buscar dados de pagamento via /payments/{payment_id}
-      // Este endpoint retorna money_release_date e net_received_amount reais
-      setLoadingMsg("Buscando previsão de pagamento...");
+      // Buscar dados de pagamento usando /orders/{id} com campo completo de payment
+      // Isso retorna os dados reais de valor líquido e data de liberação
+      setLoadingMsg("Buscando dados de pagamento...");
       const paymentMap = {};
-      const paidOrders = orders.filter(o => o.status === "paid" && o.payments?.[0]?.id);
+      const paidOrders = orders.filter(o => o.status === "paid");
       for (let i = 0; i < paidOrders.length; i += 5) {
         const batch = paidOrders.slice(i, i + 5);
         await Promise.all(batch.map(async o => {
           const oid = String(o.id);
-          const pmtId = o.payments?.find(p => p.status === "approved")?.id || o.payments?.[0]?.id;
-          if (!pmtId) return;
           try {
-            const res = await fetch(ML(`/payments/${pmtId}`), { headers: { Authorization: `Bearer ${validTk}` } });
+            // Buscar o pedido completo com todos os campos de pagamento
+            const res = await fetch(ML(`/orders/${o.id}`), { headers: { Authorization: `Bearer ${validTk}` } });
             const data = await res.json();
             if (data.error) return;
-            // DEBUG: logar campos chave para diagnóstico
-            console.log("[ML Payment Debug] orderId:", oid, "pmtId:", pmtId, {
-              net_received_amount: data.net_received_amount,
-              transaction_amount: data.transaction_amount,
-              money_release_date: data.money_release_date,
-              status: data.status,
-              fee_details: data.fee_details,
-              money_release_status: data.money_release_status,
-            });
-            const releaseDate = data.money_release_date?.slice(0, 10) ?? null;
-            // net_received_amount só aparece após liberação efetiva
-            // Antes disso, calcular pelo bruto menos todas as tarifas (fee_details)
-            var bruto = parseFloat(data.transaction_amount || 0);
-            var totalTaxas = 0;
-            if (Array.isArray(data.fee_details)) {
-              data.fee_details.forEach(function(f) { totalTaxas += parseFloat(f.amount || 0); });
+
+            // Extrair valor líquido: buyer_costs.gross_receiver_amount = valor que cai na conta
+            var bruto = parseFloat(data.total_amount || o.total_amount || 0);
+            var taxaML = parseFloat(data.marketplace_fee || 0);
+            var freteCusto = parseFloat(data.shipping?.cost || 0);
+
+            // buyer_costs tem o breakdown completo
+            var grossReceiver = parseFloat(data.buyer_costs?.gross_receiver_amount || 0);
+            var netReceiver = parseFloat(data.buyer_costs?.net_receiver_amount || 0);
+
+            // Fallback: calcular pela tarifa ML + frete (já temos do shipments)
+            var fretePago = parseFloat((orderShippingMap || {})[oid] || 0);
+            var netCalc = bruto - taxaML - fretePago;
+
+            // Prioridade: net_receiver > gross_receiver > calculado
+            var netAmount = netReceiver || grossReceiver || (netCalc > 0 ? netCalc : 0);
+
+            // Data de liberação via payments[0].money_release_date se disponível
+            var releaseDate = null;
+            if (Array.isArray(data.payments) && data.payments.length > 0) {
+              var pmt = data.payments.find(p => p.status === "approved") || data.payments[0];
+              releaseDate = pmt?.money_release_date?.slice(0, 10) || null;
+              // Se não tiver no pedido, tentar via endpoint de pagamento direto
+              if (!releaseDate && pmt?.id) {
+                try {
+                  const pRes = await fetch(ML(`/collections/notifications/${pmt.id}`), { headers: { Authorization: `Bearer ${validTk}` } });
+                  const pData = await pRes.json();
+                  if (!pData.error) {
+                    releaseDate = pData.collection?.money_release_date?.slice(0, 10) || null;
+                    var netFromCollection = parseFloat(pData.collection?.net_received_amount || 0);
+                    if (netFromCollection > 0) netAmount = netFromCollection;
+                  }
+                } catch {}
+              }
             }
-            var netCalc = bruto > 0 ? bruto - totalTaxas : 0;
-            var netAmount = parseFloat(data.net_received_amount || 0) || netCalc || bruto;
-            // Guardar também informações de frete e tarifas para exibição
-            var freteCusto = 0;
-            var tarifaML = 0;
-            if (Array.isArray(data.fee_details)) {
-              data.fee_details.forEach(function(f) {
-                if (f.type === "shipping") freteCusto += parseFloat(f.amount || 0);
-                else if (f.type === "mercadopago_fee" || f.type === "ml_fee") tarifaML += parseFloat(f.amount || 0);
-                else tarifaML += parseFloat(f.amount || 0); // qualquer outra taxa
-              });
+
+            if (netAmount > 0 || releaseDate) {
+              paymentMap[oid] = {
+                releaseDate,
+                netAmount: netAmount || bruto * 0.87,
+                bruto,
+                tarifaML: taxaML,
+                freteCusto: fretePago || freteCusto,
+                isCalculated: !netReceiver && !grossReceiver,
+              };
             }
-            if (releaseDate || netAmount > 0) {
-              paymentMap[oid] = { releaseDate, netAmount, bruto, totalTaxas, freteCusto, tarifaML, isCalculated: !data.net_received_amount };
-            }
-          } catch { /* ignora */ }
+          } catch {}
         }));
         if (i % 20 === 0) setPaymentData({...paymentMap});
         await new Promise(r => setTimeout(r, 150));

@@ -5155,73 +5155,6 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
     setLancamentos(updatedLan); saveLS("lancamentos", updatedLan);
   }
 
-  // ── Baixa automática: roda sempre que paymentData é atualizado ──────────
-  useEffect(function() {
-    if (!paymentData || Object.keys(paymentData).length === 0) return;
-    if (!contasBancarias || contasBancarias.length === 0) return;
-
-    // Busca a conta "Mercado Pago Filial SP" — fallback para qualquer Mercado Pago — fallback para primeira conta
-    var contaMP = contasBancarias.find(function(c) {
-      return c.nome && c.nome.toLowerCase().includes("mercado pago filial sp");
-    }) || contasBancarias.find(function(c) {
-      return c.nome && c.nome.toLowerCase().includes("mercado pago");
-    }) || contasBancarias[0];
-    if (!contaMP) return;
-
-    var hoje = new Date();
-    hoje.setHours(0,0,0,0);
-    var hojeStr = hoje.toLocaleDateString("sv-SE");
-
-    var novasLow = [];
-    var processados = [];
-
-    Object.entries(paymentData).forEach(function(entry) {
-      var orderId = entry[0];
-      var pd = entry[1];
-
-      // Só processa se tiver valor líquido (real ou calculado via fee_details)
-      if (!pd || !pd.netAmount || pd.netAmount <= 0) return;
-      // Para baixa automática: só quando a data de liberação já passou ou é hoje
-      // Se não tem releaseDate mas tem netAmount calculado, também baixa (pagamento liberado sem data futura)
-      if (pd.releaseDate && pd.releaseDate > hojeStr) return;
-      // Verificar se já foi registrado
-      var jaReg = lancamentos.some(function(l) {
-        return l.tipo === "recebimento" && (String(l.pedidoId) === String(orderId) || l.pedidoId === parseInt(orderId));
-      });
-      if (jaReg) return;
-
-        // Encontrar o pedido
-      var order = (enrichedOrders || []).find(function(o) { return String(o.id) === String(orderId); });
-      if (!order) return;
-
-      // Data: usar releaseDate se disponível, senão data do pedido, senão hoje
-      var dataLanc = pd.releaseDate || order.date || new Date().toLocaleDateString("sv-SE");
-      novasLow.push({
-        id: Date.now() + Math.random(),
-        tipo: "recebimento",
-        descricao: "Pedido ML #" + orderId + (order.title ? " — " + order.title.slice(0, 40) : ""),
-        valor: pd.netAmount,
-        data: dataLanc,
-        contaBancariaId: contaMP.id,
-        pedidoId: order.id,
-        automatico: true,
-      });
-      processados.push(orderId);
-    });
-
-    if (novasLow.length === 0) return;
-
-    // Evitar duplicatas: filtrar os que já estão nos lancamentos
-    var idsJaReg = new Set(lancamentos.filter(function(l){ return l.pedidoId; }).map(function(l){ return String(l.pedidoId); }));
-    var reaisNovos = novasLow.filter(function(l) { return !idsJaReg.has(String(l.pedidoId)); });
-    if (reaisNovos.length === 0) return;
-
-    var updated = [...lancamentos, ...reaisNovos];
-    setLancamentos(updated);
-    saveLS("lancamentos", updated);
-
-    console.log("[ML Margem] Baixa automática: " + reaisNovos.length + " recebimento(s) registrado(s) automaticamente na conta " + contaMP.nome);
-  }, [paymentData]);
 
   function saveBancaria(form) {
     const updated = editingBancaria ? contasBancarias.map(c=>c.id===form.id?form:c) : [...contasBancarias, {...form, id:Date.now()}];
@@ -5938,24 +5871,6 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
               );
             })}
           </div>
-
-          {/* Aviso de baixa automática */}
-          {(function() {
-            var autoBaixas = lancamentos.filter(function(l){ return l.automatico && l.tipo==="recebimento"; });
-            if (autoBaixas.length === 0) return null;
-            var contaMP = contasBancarias.find(function(c){ return autoBaixas[0] && c.id === autoBaixas[0].contaBancariaId; });
-            return (
-              <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:10, padding:"10px 16px", marginBottom:12, display:"flex", alignItems:"center", gap:10 }}>
-                <span style={{ fontSize:18 }}>🤖</span>
-                <div>
-                  <div style={{ fontWeight:700, color:"#15803d", fontSize:13 }}>Baixa automática ativa</div>
-                  <div style={{ fontSize:12, color:"#166534" }}>
-                    {autoBaixas.length} recebimento(s) registrado(s) automaticamente na conta <strong>{contaMP ? contaMP.nome : "Mercado Pago"}</strong> com o valor líquido real da API do ML.
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
 
           {/* Aviso sobre dados estimados */}
           {semPrevisao.length > 0 && (

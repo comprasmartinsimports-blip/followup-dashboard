@@ -3695,19 +3695,11 @@ async function analisarPrioridadePagamentos(contas, saldoDisponivel) {
     };
   });
 
-  var linhasContas = contasData.map(function(c) {
-    return c.num + ". " + c.desc + " | R$ " + c.valor + " | " + c.situacao +
-      " | Multa: R$ " + c.multa + " | Juros: R$ " + c.juros +
-      " | Protesto: " + c.protesto + " | Cat: " + c.cat +
-      " | Prioridade: " + c.prioridade + " | ID: " + c.id;
-  }).join(" | PROX | ");
-  var promptParts = [
-    "Voce e um consultor financeiro especialista em fluxo de caixa para pequenas empresas brasileiras.",
-    "Saldo disponivel: R$ " + saldoDisponivel.toFixed(2),
-    "Contas a pagar: " + linhasContas,
-    "Retorne APENAS este JSON (sem texto extra, sem markdown, em uma linha): {resumo:texto, alerta_critico:null, prioridade:[{posicao:1, id:ID_AQUI, razao:texto, urgencia:critica ou alta ou media ou baixa, pagar_hoje:true}], recomendacao_final:texto}"
-  ];
-  const prompt = promptParts.join(" --- ");
+  var contasTexto = contasData.slice(0, 20).map(function(c) {
+    return c.num + ". [ID:" + c.id + "] " + c.desc + " R$" + c.valor + " " + c.situacao + " multa:R$" + c.multa + " juros:R$" + c.juros + " protesto:" + c.protesto + " cat:" + c.cat + " prior:" + c.prioridade;
+  }).join("; ");
+
+  const prompt = "Analise estas contas a pagar e responda em JSON. Saldo: R$" + saldoDisponivel.toFixed(2) + ". Contas: " + contasTexto + ". Responda SOMENTE com JSON valido em uma unica linha sem markdown: {"resumo":"texto breve","alerta_critico":null,"prioridade":[{"posicao":1,"id":"ID_AQUI","razao":"motivo","urgencia":"critica","pagar_hoje":true}],"recomendacao_final":"acao recomendada"}";
   const text = await chamarIA(prompt, 1400);
   return parseIAJson(text);
 }
@@ -4790,6 +4782,72 @@ function ModalConta({ conta, categoriasPagar, fornecedores, onSave, onClose }) {
             </div>
           )}
 
+          {/* Multa e Juros */}
+          <div style={{ gridColumn:"1/-1", background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"14px" }}>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:10, fontWeight:700, textTransform:"uppercase" }}>💰 Multa e Juros por Atraso</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:10 }}>
+              <div>
+                <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Tipo Multa</div>
+                <select value={form.multaTipo || "%"} onChange={function(e){ set("multaTipo", e.target.value); }}
+                  style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 10px", borderRadius:8, fontSize:13 }}>
+                  <option value="%">%</option>
+                  <option value="R$">R$</option>
+                </select>
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Multa ({form.multaTipo||"%"})</div>
+                <input type="number" step="0.01" value={form.multaPct || ""} onChange={function(e){ set("multaPct", e.target.value); }} placeholder={form.multaTipo==="%"?"Ex: 2":"Ex: 10,00"}
+                  style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Tipo Juros</div>
+                <select value={form.jurosTipo || "%"} onChange={function(e){ set("jurosTipo", e.target.value); }}
+                  style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 10px", borderRadius:8, fontSize:13 }}>
+                  <option value="%">% ao dia</option>
+                  <option value="R$">R$ ao dia</option>
+                </select>
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Juros/dia ({form.jurosTipo||"%"})</div>
+                <input type="number" step="0.001" value={form.jurosDia || ""} onChange={function(e){ set("jurosDia", e.target.value); }} placeholder={form.jurosTipo==="%"?"Ex: 0.033":"Ex: 1,50"}
+                  style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
+              </div>
+            </div>
+          </div>
+
+          {/* Protesto */}
+          <div style={{ gridColumn:"1/-1", background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"14px" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom: form.temProtesto ? 10 : 0 }}>
+              <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer" }}>
+                <input type="checkbox" checked={!!form.temProtesto} onChange={function(e){ set("temProtesto", e.target.checked); }} />
+                <span style={{ fontSize:13, fontWeight:700, color:"#7c3aed" }}>⚖️ Sujeito a Protesto</span>
+              </label>
+            </div>
+            {form.temProtesto && (
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginTop:8 }}>
+                <div>
+                  <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Dias para Protesto (após venc.)</div>
+                  <input type="number" min="1" value={form.diasProtesto || ""} onChange={function(e){ set("diasProtesto", e.target.value); }} placeholder="Ex: 5"
+                    style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Cartório</div>
+                  <input value={form.cartorio || ""} onChange={function(e){ set("cartorio", e.target.value); }} placeholder="Nome do cartório (opcional)"
+                    style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
+                </div>
+                {form.vencimento && form.diasProtesto && (
+                  <div style={{ gridColumn:"1/-1", background:"#fef2f2", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#dc2626" }}>
+                    ⚠️ Protesto previsto para: {(function(){
+                      var d = new Date(form.vencimento + "T00:00:00");
+                      d.setDate(d.getDate() + parseInt(form.diasProtesto||0));
+                      return d.toLocaleDateString("pt-BR");
+                    })()}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Prioridade */}
           <div style={{ gridColumn:"1/-1" }}>
             <div style={{ fontSize:11, color:"#94a3b8", marginBottom:8, fontWeight:600, textTransform:"uppercase" }}>Prioridade</div>
@@ -5598,7 +5656,31 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                         })()}
                       </td>
                       <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{c.categoria}</td>
-                      <td style={{ padding:"10px 14px", fontSize:13, fontWeight:700, color:"#0f172a" }}>{fmt(parseFloat(c.valor||0))}</td>
+                      <td style={{ padding:"10px 14px" }}>
+                        {(function() {
+                          var valor = parseFloat(c.valor || 0);
+                          var hoje2 = new Date(); hoje2.setHours(0,0,0,0);
+                          var dueDate2 = c.vencimento ? new Date(c.vencimento + "T00:00:00") : null;
+                          var diasAtr = dueDate2 ? Math.max(0, Math.round((hoje2 - dueDate2) / 86400000)) : 0;
+                          var multaR = c.multaTipo === "R$" ? parseFloat(c.multaPct||0) : valor * (parseFloat(c.multaPct||0)/100);
+                          var jurosR = c.jurosTipo === "R$" ? parseFloat(c.jurosDia||0) : valor * (parseFloat(c.jurosDia||0)/100);
+                          var totalHoje = valor + (diasAtr > 0 ? multaR + jurosR * diasAtr : 0);
+                          var temEncargos = diasAtr > 0 && (multaR > 0 || jurosR > 0);
+                          return (
+                            <div>
+                              <div style={{ fontSize:13, fontWeight:700, color: temEncargos ? "#94a3b8" : "#0f172a", textDecoration: temEncargos ? "line-through" : "none" }}>
+                                {fmt(valor)}
+                              </div>
+                              {temEncargos && (
+                                <div style={{ fontSize:12, fontWeight:800, color:"#dc2626" }}>
+                                  {fmt(totalHoje)}
+                                  <div style={{ fontSize:10, fontWeight:500, color:"#dc2626", opacity:0.8 }}>hoje +{diasAtr}d</div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </td>
                       <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{fmtDate(c.vencimento)}</td>
                       <td style={{ padding:"10px 14px" }}>
                         <div style={{ display:"flex", flexDirection:"column", gap:4 }}>

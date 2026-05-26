@@ -1337,6 +1337,21 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
     .sort((a,b) => b.totalProfit - a.totalProfit)
     .slice(0, 5);
 
+  // ── Dados para o Dashboard (30 dias) ──────────────────────
+  var hoje30base = new Date();
+  var ultimos30dash = [];
+  var fat30dash = [];
+  for (var di30 = 29; di30 >= 0; di30--) {
+    var dd30 = new Date(hoje30base); dd30.setDate(dd30.getDate() - di30);
+    var ds30 = dd30.toLocaleDateString("sv-SE");
+    ultimos30dash.push(ds30);
+    var dayFat = rawOrders.filter(function(o){ return o.date === ds30 && o.status === "paid"; });
+    fat30dash.push(dayFat.reduce(function(s,o){ return s + o.price * o.qty; }, 0));
+  }
+  var maxFat30dash = Math.max.apply(null, fat30dash.concat([1]));
+  var totalFat30dash = fat30dash.reduce(function(s,v){ return s+v; }, 0);
+  var mediaFat30dash = totalFat30dash / 30;
+
   // ── Faturamento por dia (últimos 14 dias) ────────────────
   const ultimos14 = Array.from({length:14}, (_,i) => {
     const d = new Date(); d.setDate(d.getDate()-13+i);
@@ -1542,29 +1557,13 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
       </div>} {/* fim resumo */}
 
       {/* ══ ABA DASHBOARD ══ */}
-      {overviewTab === "dashboard" && (() => {
-        var hoje30 = new Date();
-        var ultimos30 = [];
-        var fat30 = [];
-        for (var d30i = 29; d30i >= 0; d30i--) {
-          var ddi = new Date(hoje30); ddi.setDate(ddi.getDate() - d30i);
-          var dsi = ddi.toLocaleDateString("sv-SE");
-          ultimos30.push(dsi);
-          var dayOrd = (rawOrders||[]).filter(function(o){ return o.date === dsi && o.status === "paid"; });
-          fat30.push(dayOrd.reduce(function(s,o){ return s + o.price * o.qty; }, 0));
-        }
-        var maxFat30 = Math.max.apply(null, fat30.concat([1]));
-        var totalFat30 = fat30.reduce(function(s,v){return s+v;},0);
-        var mediaFat30 = totalFat30 / 30;
-
-        return (
-          <DashboardSubAbas
-            fat30={fat30} ultimos30={ultimos30} maxFat30={maxFat30} totalFat30={totalFat30} mediaFat30={mediaFat30}
-            rankingVendas={rankingVendas} rankingLucro={rankingLucro}
-            fmt={fmt} card={card} txt={txt} txtMuted={txtMuted}
-          />
-        );
-      })()}
+      {overviewTab === "dashboard" && (
+        <DashboardSubAbas
+          fat30={fat30dash} ultimos30={ultimos30dash} maxFat30={maxFat30dash} totalFat30={totalFat30dash} mediaFat30={mediaFat30dash}
+          rankingVendas={rankingVendas} rankingLucro={rankingLucro}
+          fmt={fmt} card={card} txt={txt} txtMuted={txtMuted}
+        />
+      )}
 
     </div>
   );

@@ -1286,6 +1286,7 @@ function SparkLine({ data, color }) {
 function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasBancarias, lancamentos, paymentData, shipmentStatuses, metaMensal, setMetaMensal, darkMode, costs, impostos, setImpostos, custosFixos, setCustosFixos }) {
   const [editMeta, setEditMeta] = useState(false);
   const [metaInput, setMetaInput] = useState(String(metaMensal || ""));
+  const [overviewTab, setOverviewTab] = useState("resumo"); // resumo | dashboard
 
   const hoje = new Date().toLocaleDateString("sv-SE");
   const mesAtual = hoje.slice(0,7);
@@ -1375,245 +1376,316 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
   const txt = { color: darkMode?"#e2e8f0":"#0f172a" };
   const txtMuted = { color: darkMode?"#94a3b8":"#64748b" };
 
+  // Calcular dados para o dashboard (últimos 30 dias)
+  var hoje30 = new Date();
+  var ultimos30 = [];
+  var fat30 = [];
+  for (var d30 = 29; d30 >= 0; d30--) {
+    var dd = new Date(hoje30); dd.setDate(dd.getDate() - d30);
+    var ds = dd.toLocaleDateString("sv-SE");
+    ultimos30.push(ds);
+    var dayOrders = (enrichedOrders||[]).filter(function(o){ return o.date === ds && o.status === "paid"; });
+    fat30.push(dayOrders.reduce(function(s,o){ return s + o.price * o.qty; }, 0));
+  }
+
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
 
-      {/* ── ALERTAS ── */}
-      {(vencidos.length > 0 || vencendo7.length > 0 || agEnvio.length > 5) && (
-        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-          {vencidos.length > 0 && (
-            <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"10px 16px", display:"flex", alignItems:"center", gap:10 }}>
-              <span>🚨</span>
-              <span style={{ fontSize:13, color:"#dc2626", fontWeight:600 }}>{vencidos.length} conta(s) vencida(s) — {fmt(vencidos.reduce((s,c)=>s+parseFloat(c.valor||0),0))}</span>
-            </div>
-          )}
-          {vencendo7.length > 0 && (
-            <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:10, padding:"10px 16px", display:"flex", alignItems:"center", gap:10 }}>
-              <span>⏰</span>
-              <span style={{ fontSize:13, color:"#d97706", fontWeight:600 }}>{vencendo7.length} conta(s) vencendo em 7 dias</span>
-            </div>
-          )}
-          {agEnvio.length > 5 && (
-            <div style={{ background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:10, padding:"10px 16px", display:"flex", alignItems:"center", gap:10 }}>
-              <span>📦</span>
-              <span style={{ fontSize:13, color:"#2563eb", fontWeight:600 }}>{agEnvio.length} pedidos aguardando envio</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── CARDS PRINCIPAIS ── */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12 }}>
-        {/* Hoje */}
-        <div style={card()}>
-          <div style={{ fontSize:11, ...txtMuted, fontWeight:600, textTransform:"uppercase", letterSpacing:0.8, marginBottom:6 }}>Hoje</div>
-          <div style={{ fontSize:22, fontWeight:800, color:"#0891b2" }}>{fmt(faturamentoHoje)}</div>
-          <div style={{ fontSize:12, ...txtMuted, marginTop:4 }}>{pedidosHoje.length} pedido(s)</div>
-        </div>
-
-        {/* Mês atual */}
-        <div style={card()}>
-          <div style={{ fontSize:11, ...txtMuted, fontWeight:600, textTransform:"uppercase", letterSpacing:0.8, marginBottom:6 }}>Este Mês</div>
-          <div style={{ fontSize:22, fontWeight:800, ...txt }}>{fmt(faturamentoMes)}</div>
-          <div style={{ fontSize:12, color:crescimento>=0?"#15803d":"#dc2626", marginTop:4, fontWeight:600 }}>
-            {crescimento>=0?"▲":"▼"} {Math.abs(crescimento).toFixed(1)}% vs mês anterior
-          </div>
-          <SparkLine data={fatPorDia} color={crescimento>=0?"#15803d":"#dc2626"} />
-        </div>
-
-        {/* Previsão */}
-        <div style={card()}>
-          <div style={{ fontSize:11, ...txtMuted, fontWeight:600, textTransform:"uppercase", letterSpacing:0.8, marginBottom:6 }}>Previsão do Mês</div>
-          <div style={{ fontSize:22, fontWeight:800, color:"#7c3aed" }}>{fmt(previsaoMes)}</div>
-          <div style={{ fontSize:12, ...txtMuted, marginTop:4 }}>baseado no ritmo atual</div>
-        </div>
-
-        {/* Ticket médio */}
-        <div style={card()}>
-          <div style={{ fontSize:11, ...txtMuted, fontWeight:600, textTransform:"uppercase", letterSpacing:0.8, marginBottom:6 }}>Ticket Médio</div>
-          <div style={{ fontSize:22, fontWeight:800, ...txt }}>{fmt(ticketMedio)}</div>
-          <div style={{ fontSize:12, ...txtMuted, marginTop:4 }}>{pedidosMes.length} pedidos no mês</div>
-        </div>
-
-        {/* Taxa cancelamento */}
-        <div style={card()}>
-          <div style={{ fontSize:11, ...txtMuted, fontWeight:600, textTransform:"uppercase", letterSpacing:0.8, marginBottom:6 }}>Cancelamentos</div>
-          <div style={{ fontSize:22, fontWeight:800, color:taxaCancel>5?"#dc2626":taxaCancel>2?"#d97706":"#15803d" }}>{taxaCancel.toFixed(1)}%</div>
-          <div style={{ fontSize:12, ...txtMuted, marginTop:4 }}>{canceladosMes} de {totalMes} pedidos</div>
-        </div>
-
-        {/* Score médio */}
-        <div style={card()}>
-          <div style={{ fontSize:11, ...txtMuted, fontWeight:600, textTransform:"uppercase", letterSpacing:0.8, marginBottom:6 }}>Score Médio</div>
-          <div style={{ fontSize:22, fontWeight:800, color:scoreColor(Math.round(enriched.reduce((s,l)=>s+l.score,0)/(enriched.length||1))) }}>
-            {Math.round(enriched.reduce((s,l)=>s+l.score,0)/(enriched.length||1))}/100
-          </div>
-          <div style={{ fontSize:12, ...txtMuted, marginTop:4 }}>{enriched.length} anúncios</div>
-        </div>
+      {/* ── NAVEGAÇÃO ── */}
+      <div style={{ display:"flex", gap:2, background:"#f1f5f9", padding:4, borderRadius:10, width:"fit-content" }}>
+        {[{key:"resumo",label:"📊 Resumo"},{key:"dashboard",label:"📈 Dashboard"}].map(function(t){
+          var active = overviewTab===t.key;
+          return <button key={t.key} onClick={function(){setOverviewTab(t.key);}}
+            style={{background:active?"#fff":"transparent",border:"none",color:active?"#0f172a":"#94a3b8",
+            padding:"8px 20px",cursor:"pointer",fontFamily:"inherit",fontSize:13,
+            borderRadius:8,fontWeight:active?700:500,boxShadow:active?"0 1px 3px rgba(0,0,0,.08)":"none"}}>{t.label}</button>;
+        })}
       </div>
 
-      {/* ── META MENSAL ── */}
-      {(metaMensal > 0 || editMeta) && (
-        <div style={{ ...card(), padding:"20px 24px" }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-            <div style={{ fontWeight:700, fontSize:15, ...txt }}>🎯 Meta do Mês</div>
-            <button onClick={() => setEditMeta(e=>!e)}
-              style={{ background:"#f1f5f9", border:"none", color:"#64748b", padding:"5px 12px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
-              {editMeta ? "Fechar" : "Editar"}
-            </button>
+      {/* ══ ABA RESUMO ══ */}
+      {overviewTab === "resumo" && <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+
+        {/* Alertas */}
+        {(vencidos.length > 0 || vencendo7.length > 0 || agEnvio.length > 5) && (
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            {vencidos.length > 0 && <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"10px 16px", display:"flex", alignItems:"center", gap:10 }}>
+              <span>🚨</span><span style={{ fontSize:13, color:"#dc2626", fontWeight:600 }}>{vencidos.length} conta(s) vencida(s) — {fmt(vencidos.reduce((s,c)=>s+parseFloat(c.valor||0),0))}</span>
+            </div>}
+            {vencendo7.length > 0 && <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:10, padding:"10px 16px", display:"flex", alignItems:"center", gap:10 }}>
+              <span>⏰</span><span style={{ fontSize:13, color:"#d97706", fontWeight:600 }}>{vencendo7.length} conta(s) vencendo em 7 dias</span>
+            </div>}
+            {agEnvio.length > 5 && <div style={{ background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:10, padding:"10px 16px", display:"flex", alignItems:"center", gap:10 }}>
+              <span>📦</span><span style={{ fontSize:13, color:"#2563eb", fontWeight:600 }}>{agEnvio.length} pedidos aguardando envio</span>
+            </div>}
           </div>
-          {editMeta && (
-            <div style={{ display:"flex", gap:8, marginBottom:16 }}>
-              <input type="number" value={metaInput} onChange={e=>setMetaInput(e.target.value)} placeholder="Ex: 50000"
-                style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
-              <button onClick={() => { const v = parseFloat(metaInput)||0; setMetaMensal(v); localStorage.setItem("metaMensal", v); setEditMeta(false); }}
-                style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"8px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>Salvar</button>
+        )}
+
+        {/* Cards KPI */}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:12 }}>
+          <div style={card()}>
+            <div style={{ fontSize:11,...txtMuted,fontWeight:600,textTransform:"uppercase",letterSpacing:0.8,marginBottom:6 }}>Hoje</div>
+            <div style={{ fontSize:22,fontWeight:800,color:"#0891b2" }}>{fmt(faturamentoHoje)}</div>
+            <div style={{ fontSize:12,...txtMuted,marginTop:4 }}>{pedidosHoje.length} pedido(s)</div>
+          </div>
+          <div style={card()}>
+            <div style={{ fontSize:11,...txtMuted,fontWeight:600,textTransform:"uppercase",letterSpacing:0.8,marginBottom:6 }}>Este Mês</div>
+            <div style={{ fontSize:22,fontWeight:800,...txt }}>{fmt(faturamentoMes)}</div>
+            <div style={{ fontSize:12,color:crescimento>=0?"#15803d":"#dc2626",marginTop:4,fontWeight:600 }}>{crescimento>=0?"▲":"▼"} {Math.abs(crescimento).toFixed(1)}% vs mês anterior</div>
+            <SparkLine data={fatPorDia} color={crescimento>=0?"#15803d":"#dc2626"} />
+          </div>
+          <div style={card()}>
+            <div style={{ fontSize:11,...txtMuted,fontWeight:600,textTransform:"uppercase",letterSpacing:0.8,marginBottom:6 }}>Previsão do Mês</div>
+            <div style={{ fontSize:22,fontWeight:800,color:"#7c3aed" }}>{fmt(previsaoMes)}</div>
+            <div style={{ fontSize:12,...txtMuted,marginTop:4 }}>baseado no ritmo atual</div>
+          </div>
+          <div style={card()}>
+            <div style={{ fontSize:11,...txtMuted,fontWeight:600,textTransform:"uppercase",letterSpacing:0.8,marginBottom:6 }}>Ticket Médio</div>
+            <div style={{ fontSize:22,fontWeight:800,...txt }}>{fmt(ticketMedio)}</div>
+            <div style={{ fontSize:12,...txtMuted,marginTop:4 }}>{pedidosMes.length} pedidos no mês</div>
+          </div>
+          <div style={card()}>
+            <div style={{ fontSize:11,...txtMuted,fontWeight:600,textTransform:"uppercase",letterSpacing:0.8,marginBottom:6 }}>Cancelamentos</div>
+            <div style={{ fontSize:22,fontWeight:800,color:taxaCancel>5?"#dc2626":taxaCancel>2?"#d97706":"#15803d" }}>{taxaCancel.toFixed(1)}%</div>
+            <div style={{ fontSize:12,...txtMuted,marginTop:4 }}>{canceladosMes} de {totalMes} pedidos</div>
+          </div>
+          <div style={card()}>
+            <div style={{ fontSize:11,...txtMuted,fontWeight:600,textTransform:"uppercase",letterSpacing:0.8,marginBottom:6 }}>Score Médio</div>
+            <div style={{ fontSize:22,fontWeight:800,color:scoreColor(Math.round(enriched.reduce((s,l)=>s+l.score,0)/(enriched.length||1))) }}>
+              {Math.round(enriched.reduce((s,l)=>s+l.score,0)/(enriched.length||1))}/100
+            </div>
+            <div style={{ fontSize:12,...txtMuted,marginTop:4 }}>{enriched.length} anúncios</div>
+          </div>
+        </div>
+
+        {/* Meta Mensal */}
+        {(metaMensal > 0 || editMeta) && (
+          <div style={{ ...card(), padding:"20px 24px" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+              <div style={{ fontWeight:700, fontSize:15, ...txt }}>🎯 Meta do Mês</div>
+              <button onClick={() => setEditMeta(e=>!e)} style={{ background:"#f1f5f9",border:"none",color:"#64748b",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontSize:12 }}>
+                {editMeta ? "Fechar" : "Editar"}
+              </button>
+            </div>
+            {editMeta && (
+              <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+                <input type="number" value={metaInput} onChange={e=>setMetaInput(e.target.value)} placeholder="Ex: 50000"
+                  style={{ flex:1,background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"8px 12px",borderRadius:8,fontSize:13,outline:"none" }} />
+                <button onClick={() => { const v = parseFloat(metaInput)||0; setMetaMensal(v); localStorage.setItem("metaMensal", v); setEditMeta(false); }}
+                  style={{ background:"#0f172a",border:"none",color:"#fff",fontWeight:700,padding:"8px 20px",borderRadius:8,cursor:"pointer",fontSize:13 }}>Salvar</button>
+              </div>
+            )}
+            {metaMensal > 0 && <>
+              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+                <span style={{ fontSize:13,...txtMuted }}>{fmt(faturamentoMes)} de {fmt(metaMensal)}</span>
+                <span style={{ fontSize:13,fontWeight:700,color:progressoMeta>=100?"#15803d":progressoMeta>=70?"#d97706":"#dc2626" }}>{progressoMeta.toFixed(1)}%</span>
+              </div>
+              <div style={{ height:12,background:darkMode?"#334155":"#e2e8f0",borderRadius:99,overflow:"hidden" }}>
+                <div style={{ width:`${progressoMeta}%`,height:"100%",background:progressoMeta>=100?"#15803d":progressoMeta>=70?"#d97706":"#dc2626",borderRadius:99,transition:"width .5s" }} />
+              </div>
+              {progressoMeta<100 && <div style={{ fontSize:12,...txtMuted,marginTop:8 }}>Faltam {fmt(metaMensal-faturamentoMes)} • {diasNoMes-diaDoMes} dias restantes</div>}
+              {progressoMeta>=100 && <div style={{ fontSize:13,color:"#15803d",fontWeight:700,marginTop:8 }}>🎉 Meta atingida!</div>}
+            </>}
+          </div>
+        )}
+        {metaMensal === 0 && !editMeta && (
+          <button onClick={() => setEditMeta(true)} style={{ background:"transparent",border:`2px dashed ${darkMode?"#334155":"#e2e8f0"}`,color:darkMode?"#64748b":"#94a3b8",padding:"14px",borderRadius:12,cursor:"pointer",fontSize:13,width:"100%",fontFamily:"inherit" }}>
+            + Definir Meta Mensal de Faturamento
+          </button>
+        )}
+
+        {/* Status dos Pedidos + Anúncios com score baixo */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+          <div style={{ ...card(), padding:"20px 24px" }}>
+            <div style={{ fontWeight:700, fontSize:14, ...txt, marginBottom:16 }}>Status dos Pedidos (mês)</div>
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              {[
+                { label:"Ag. Envio", value:statusCount.agEnvio, color:"#d97706", total:totalMes },
+                { label:"Enviados",  value:statusCount.enviado,  color:"#0891b2", total:totalMes },
+                { label:"Entregues", value:statusCount.entregue, color:"#15803d", total:totalMes },
+                { label:"Cancelados",value:statusCount.cancelado,color:"#dc2626", total:totalMes },
+              ].map(s => (
+                <div key={s.label}>
+                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                    <span style={{ fontSize:12,...txtMuted }}>{s.label}</span>
+                    <span style={{ fontSize:12,fontWeight:700,color:s.color }}>{s.value}</span>
+                  </div>
+                  <MiniBar value={s.value} max={s.total} color={s.color} />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {lowScoreListings.length > 0 && (
+            <div style={{ ...card(), padding:"20px 24px" }}>
+              <div style={{ fontWeight:700, fontSize:14, ...txt, marginBottom:16 }}>⚠️ Anúncios com Score Baixo</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                {lowScoreListings.map(l => (
+                  <div key={l.id} style={{ display:"flex", alignItems:"center", gap:10, paddingBottom:10, borderBottom:"1px solid #f1f5f9" }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:12,fontWeight:600,...txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{l.title||l.id}</div>
+                    </div>
+                    <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                      <span style={{ fontSize:18,fontWeight:800,color:scoreColor(l.score) }}>{l.score}</span>
+                      <div style={{ flex:1 }}>
+                        {l.checks.filter(c=>!c.pass).slice(0,2).map(c => (
+                          <div key={c.key} style={{ fontSize:10,color:"#b91c1c" }}>✗ {c.label}</div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
-          {metaMensal > 0 && (
-            <>
-              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-                <span style={{ fontSize:13, ...txtMuted }}>{fmt(faturamentoMes)} de {fmt(metaMensal)}</span>
-                <span style={{ fontSize:13, fontWeight:700, color:progressoMeta>=100?"#15803d":progressoMeta>=70?"#d97706":"#dc2626" }}>{progressoMeta.toFixed(1)}%</span>
-              </div>
-              <div style={{ height:12, background:darkMode?"#334155":"#e2e8f0", borderRadius:99, overflow:"hidden" }}>
-                <div style={{ width:`${progressoMeta}%`, height:"100%", background:progressoMeta>=100?"#15803d":progressoMeta>=70?"#d97706":"#dc2626", borderRadius:99, transition:"width .5s" }} />
-              </div>
-              {progressoMeta < 100 && (
-                <div style={{ fontSize:12, ...txtMuted, marginTop:8 }}>
-                  Faltam {fmt(metaMensal-faturamentoMes)} para atingir a meta • {diasNoMes-diaDoMes} dias restantes
-                </div>
-              )}
-              {progressoMeta >= 100 && <div style={{ fontSize:13, color:"#15803d", fontWeight:700, marginTop:8 }}>🎉 Meta atingida!</div>}
-            </>
-          )}
         </div>
-      )}
-      {metaMensal === 0 && !editMeta && (
-        <button onClick={() => setEditMeta(true)}
-          style={{ background:"transparent", border:`2px dashed ${darkMode?"#334155":"#e2e8f0"}`, color:darkMode?"#64748b":"#94a3b8", padding:"14px", borderRadius:12, cursor:"pointer", fontSize:13, width:"100%", fontFamily:"inherit" }}>
-          + Definir Meta Mensal de Faturamento
-        </button>
-      )}
 
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-        {/* ── DISTRIBUIÇÃO DE STATUS ── */}
-        <div style={{ ...card(), padding:"20px 24px" }}>
-          <div style={{ fontWeight:700, fontSize:14, ...txt, marginBottom:16 }}>Status dos Pedidos (mês)</div>
-          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-            {[
-              { label:"Ag. Envio", value:statusCount.agEnvio, color:"#d97706", total:totalMes },
-              { label:"Enviados",  value:statusCount.enviado,  color:"#0891b2", total:totalMes },
-              { label:"Entregues", value:statusCount.entregue, color:"#15803d", total:totalMes },
-              { label:"Cancelados",value:statusCount.cancelado,color:"#dc2626", total:totalMes },
-            ].map(s => (
-              <div key={s.label}>
-                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-                  <span style={{ fontSize:12, ...txtMuted }}>{s.label}</span>
-                  <span style={{ fontSize:12, fontWeight:700, color:s.color }}>{s.value}</span>
-                </div>
-                <MiniBar value={s.value} max={s.total} color={s.color} />
-              </div>
-            ))}
+      </div>} {/* fim resumo */}
+
+      {/* ══ ABA DASHBOARD ══ */}
+      {overviewTab === "dashboard" && (() => {
+        var hoje30 = new Date();
+        var ultimos30 = [];
+        var fat30 = [];
+        for (var d30i = 29; d30i >= 0; d30i--) {
+          var ddi = new Date(hoje30); ddi.setDate(ddi.getDate() - d30i);
+          var dsi = ddi.toLocaleDateString("sv-SE");
+          ultimos30.push(dsi);
+          var dayOrd = (rawOrders||[]).filter(function(o){ return o.date === dsi && o.status === "paid"; });
+          fat30.push(dayOrd.reduce(function(s,o){ return s + o.price * o.qty; }, 0));
+        }
+        var maxFat30 = Math.max.apply(null, fat30.concat([1]));
+        var totalFat30 = fat30.reduce(function(s,v){return s+v;},0);
+        var mediaFat30 = totalFat30 / 30;
+
+        return (
+          <DashboardSubAbas
+            fat30={fat30} ultimos30={ultimos30} maxFat30={maxFat30} totalFat30={totalFat30} mediaFat30={mediaFat30}
+            rankingVendas={rankingVendas} rankingLucro={rankingLucro}
+            fmt={fmt} card={card} txt={txt} txtMuted={txtMuted}
+          />
+        );
+      })()}
+
+    </div>
+  );
+}
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  DASHBOARD SUB-ABAS
+// ════════════════════════════════════════════════════════════
+function DashboardSubAbas({ fat30, ultimos30, maxFat30, totalFat30, mediaFat30, rankingVendas, rankingLucro, fmt, card, txt, txtMuted }) {
+  const [dashTab, setDashTab] = useState("fat30");
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+      <div style={{ display:"flex", gap:2, background:"#f1f5f9", padding:4, borderRadius:10, width:"fit-content" }}>
+        {[{key:"fat30",label:"📅 Faturamento 30 dias"},{key:"vendidos",label:"🏆 Mais Vendidos"},{key:"lucro",label:"💰 Mais Lucrativos"}].map(function(t){
+          var active = dashTab===t.key;
+          return <button key={t.key} onClick={function(){setDashTab(t.key);}}
+            style={{background:active?"#fff":"transparent",border:"none",color:active?"#0f172a":"#94a3b8",
+            padding:"7px 16px",cursor:"pointer",fontFamily:"inherit",fontSize:12,
+            borderRadius:8,fontWeight:active?700:500,boxShadow:active?"0 1px 3px rgba(0,0,0,.08)":"none"}}>{t.label}</button>;
+        })}
+      </div>
+
+      {/* Faturamento 30 dias */}
+      {dashTab === "fat30" && (
+        <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:14, padding:"20px 24px" }}>
+          <div style={{ fontWeight:700, fontSize:15, color:"#0f172a", marginBottom:4 }}>📅 Faturamento — Últimos 30 dias</div>
+          <div style={{ fontSize:12, color:"#94a3b8", marginBottom:20 }}>Faturamento bruto diário</div>
+          <div style={{ display:"flex", gap:16, marginBottom:16, flexWrap:"wrap" }}>
+            <div style={{ background:"#f0fdf4", borderRadius:10, padding:"12px 16px" }}>
+              <div style={{ fontSize:10, color:"#15803d", fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>Total 30 dias</div>
+              <div style={{ fontSize:20, fontWeight:800, color:"#15803d" }}>{fmt(totalFat30)}</div>
+            </div>
+            <div style={{ background:"#eff6ff", borderRadius:10, padding:"12px 16px" }}>
+              <div style={{ fontSize:10, color:"#1d4ed8", fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>Média diária</div>
+              <div style={{ fontSize:20, fontWeight:800, color:"#1d4ed8" }}>{fmt(mediaFat30)}</div>
+            </div>
+            <div style={{ background:"#f5f3ff", borderRadius:10, padding:"12px 16px" }}>
+              <div style={{ fontSize:10, color:"#7c3aed", fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>Melhor dia</div>
+              <div style={{ fontSize:20, fontWeight:800, color:"#7c3aed" }}>{fmt(maxFat30)}</div>
+            </div>
           </div>
-        </div>
-
-        {/* ── FATURAMENTO 14 DIAS ── */}
-        <div style={{ ...card(), padding:"20px 24px" }}>
-          <div style={{ fontWeight:700, fontSize:14, ...txt, marginBottom:16 }}>Faturamento — Últimos 14 dias</div>
-          <div style={{ display:"flex", gap:3, alignItems:"flex-end", height:80 }}>
-            {fatPorDia.map((v,i) => {
-              const max = Math.max(...fatPorDia, 1);
-              const isHoje = i === 13;
+          <div style={{ display:"flex", gap:2, alignItems:"flex-end", height:140, marginBottom:8 }}>
+            {fat30.map(function(v, i) {
+              var isHoje = i === 29;
+              var pct = maxFat30 > 0 ? (v / maxFat30) : 0;
+              var barH = Math.max(4, pct * 120);
+              var dataStr = ultimos30[i] ? ultimos30[i].slice(5).replace("-","/") : "";
               return (
                 <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:2 }}>
-                  <div style={{ width:"100%", background:isHoje?"#0f172a":darkMode?"#334155":"#e2e8f0", borderRadius:"3px 3px 0 0", height:`${Math.max(4,(v/max)*70)}px`, transition:"height .3s", cursor:"pointer", position:"relative" }}
-                    title={`${ultimos14[i]}: ${fmt(v)}`}>
-                    {v > 0 && <div style={{ position:"absolute", bottom:"100%", left:"50%", transform:"translateX(-50%)", background:"#0f172a", color:"#fff", fontSize:9, padding:"2px 4px", borderRadius:3, whiteSpace:"nowrap", display:"none" }}>{fmt(v)}</div>}
-                  </div>
+                  <div title={dataStr + ": " + fmt(v)}
+                    style={{ width:"100%", borderRadius:"3px 3px 0 0", cursor:"pointer",
+                      background: isHoje ? "#0f172a" : v === maxFat30 && v > 0 ? "#15803d" : v > mediaFat30 ? "#0891b2" : "#e2e8f0",
+                      height: barH + "px", transition:"height .3s" }} />
+                  {i % 5 === 0 && <div style={{ fontSize:8, color:"#94a3b8", whiteSpace:"nowrap" }}>{dataStr}</div>}
                 </div>
               );
             })}
           </div>
-          <div style={{ display:"flex", justifyContent:"space-between", marginTop:6 }}>
-            <span style={{ fontSize:10, ...txtMuted }}>{ultimos14[0]?.slice(5)}</span>
-            <span style={{ fontSize:10, ...txtMuted }}>hoje</span>
+          <div style={{ display:"flex", gap:12, fontSize:11, color:"#94a3b8", flexWrap:"wrap" }}>
+            <span>⬛ Hoje</span>
+            <span style={{ color:"#15803d" }}>■ Melhor dia</span>
+            <span style={{ color:"#0891b2" }}>■ Acima da média</span>
+            <span>□ Abaixo da média</span>
           </div>
         </div>
-      </div>
+      )}
 
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-        {/* ── RANKING MAIS VENDIDOS ── */}
-        <div style={{ ...card(), padding:"20px 24px" }}>
-          <div style={{ fontWeight:700, fontSize:14, ...txt, marginBottom:16 }}>🏆 Mais Vendidos (mês)</div>
-          {rankingVendas.length === 0 ? (
-            <div style={{ fontSize:13, ...txtMuted, textAlign:"center", padding:"20px 0" }}>Sem dados do mês atual</div>
-          ) : rankingVendas.map((p,i) => (
-            <div key={p.id} style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12, paddingBottom:12, borderBottom:i<rankingVendas.length-1?`1px solid ${darkMode?"#334155":"#f1f5f9"}`:"none" }}>
-              <div style={{ width:28, height:28, borderRadius:8, background:i===0?"#fde68a":i===1?"#e2e8f0":i===2?"#fed7aa":"#f8fafc", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, fontSize:13, color:"#0f172a", flexShrink:0 }}>
-                {i+1}
-              </div>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:12, fontWeight:600, ...txt, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.title||p.id}</div>
-                <div style={{ display:"flex", gap:10, marginTop:3 }}>
-                  <span style={{ fontSize:11, color:"#0891b2", fontWeight:600 }}>{p.qty} vendas</span>
-                  <span style={{ fontSize:11, ...txtMuted }}>{fmt(p.revenue)}</span>
-                </div>
-                <MiniBar value={p.qty} max={maxQty} color="#0891b2" />
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* ── RANKING MAIS LUCRATIVOS ── */}
-        <div style={{ ...card(), padding:"20px 24px" }}>
-          <div style={{ fontWeight:700, fontSize:14, ...txt, marginBottom:16 }}>💰 Mais Lucrativos (total)</div>
-          {rankingLucro.length === 0 ? (
-            <div style={{ fontSize:13, ...txtMuted, textAlign:"center", padding:"20px 0" }}>Insira custos nos anúncios para ver ranking</div>
-          ) : rankingLucro.map((l,i) => (
-            <div key={l.id} style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12, paddingBottom:12, borderBottom:i<rankingLucro.length-1?`1px solid ${darkMode?"#334155":"#f1f5f9"}`:"none" }}>
-              <div style={{ width:28, height:28, borderRadius:8, background:i===0?"#fde68a":i===1?"#e2e8f0":i===2?"#fed7aa":"#f8fafc", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, fontSize:13, color:"#0f172a", flexShrink:0 }}>
-                {i+1}
-              </div>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:12, fontWeight:600, ...txt, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{l.title}</div>
-                <div style={{ display:"flex", gap:10, marginTop:3 }}>
-                  <span style={{ fontSize:11, color:"#15803d", fontWeight:600 }}>{fmt(l.totalProfit)}</span>
-                  <span style={{ fontSize:11, ...txtMuted }}>{l.sold_quantity} vendas</span>
-                  {l.margin && <span style={{ fontSize:11, color:l.margin>=0.25?"#15803d":l.margin>=0.15?"#d97706":"#dc2626" }}>{fmtPct(l.margin)}</span>}
-                </div>
-                <MiniBar value={l.totalProfit} max={rankingLucro[0]?.totalProfit||1} color="#15803d" />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── ANÚNCIOS COM PROBLEMA ── */}
-      {enriched.filter(l=>l.score<50).length > 0 && (
-        <div style={{ ...card(), padding:"20px 24px" }}>
-          <div style={{ fontWeight:700, fontSize:14, ...txt, marginBottom:14 }}>⚠️ Anúncios com Score Baixo ({enriched.filter(l=>l.score<50).length})</div>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:10 }}>
-            {enriched.filter(l=>l.score<50).slice(0,6).map(l => (
-              <div key={l.id} style={{ background:darkMode?"#1e293b":"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"12px 14px" }}>
-                <div style={{ fontSize:12, fontWeight:600, color:"#dc2626", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:4 }}>{l.title}</div>
-                <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-                  <span style={{ fontSize:18, fontWeight:800, color:scoreColor(l.score) }}>{l.score}</span>
-                  <div style={{ flex:1 }}>
-                    {l.checks.filter(c=>!c.pass).slice(0,2).map(c => (
-                      <div key={c.key} style={{ fontSize:10, color:"#b91c1c" }}>✗ {c.label}</div>
-                    ))}
+      {/* Mais Vendidos */}
+      {dashTab === "vendidos" && (
+        <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:14, padding:"20px 24px" }}>
+          <div style={{ fontWeight:700, fontSize:15, color:"#0f172a", marginBottom:16 }}>🏆 Mais Vendidos</div>
+          {!rankingVendas || rankingVendas.length === 0 ? (
+            <div style={{ fontSize:13, color:"#94a3b8", textAlign:"center", padding:"20px 0" }}>Sem dados de vendas</div>
+          ) : rankingVendas.slice(0,15).map(function(p,i) {
+            return (
+              <div key={p.id} style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12, paddingBottom:12, borderBottom: i<rankingVendas.slice(0,15).length-1?"1px solid #f1f5f9":"none" }}>
+                <div style={{ width:28,height:28,borderRadius:8,background:i===0?"#fde68a":i===1?"#e2e8f0":i===2?"#fed7aa":"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:13,color:"#0f172a",flexShrink:0 }}>{i+1}</div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:12,fontWeight:600,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{p.title||p.id}</div>
+                  <div style={{ display:"flex", gap:10, marginTop:3 }}>
+                    <span style={{ fontSize:11,color:"#0891b2",fontWeight:600 }}>{p.qty} vendas</span>
+                    <span style={{ fontSize:11,color:"#94a3b8" }}>{fmt(p.revenue)}</span>
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Mais Lucrativos */}
+      {dashTab === "lucro" && (
+        <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:14, padding:"20px 24px" }}>
+          <div style={{ fontWeight:700, fontSize:15, color:"#0f172a", marginBottom:16 }}>💰 Mais Lucrativos</div>
+          {!rankingLucro || rankingLucro.length === 0 ? (
+            <div style={{ fontSize:13, color:"#94a3b8", textAlign:"center", padding:"20px 0" }}>Cadastre custos nos anúncios para ver ranking de lucro</div>
+          ) : rankingLucro.slice(0,15).map(function(p,i) {
+            return (
+              <div key={p.id} style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12, paddingBottom:12, borderBottom: i<rankingLucro.slice(0,15).length-1?"1px solid #f1f5f9":"none" }}>
+                <div style={{ width:28,height:28,borderRadius:8,background:i===0?"#fde68a":i===1?"#e2e8f0":i===2?"#fed7aa":"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:13,color:"#0f172a",flexShrink:0 }}>{i+1}</div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:12,fontWeight:600,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{p.title||p.id}</div>
+                  <div style={{ display:"flex", gap:10, marginTop:3 }}>
+                    <span style={{ fontSize:11,color:"#15803d",fontWeight:600 }}>{fmt(p.profit)}</span>
+                    <span style={{ fontSize:11,color:"#94a3b8" }}>{p.qty} venda(s)</span>
+                  </div>
+                </div>
+                <div style={{ textAlign:"right", flexShrink:0 }}>
+                  <div style={{ fontSize:12,fontWeight:700,color:"#15803d" }}>{(p.margin*100).toFixed(1)}%</div>
+                  <div style={{ fontSize:10,color:"#94a3b8" }}>margem</div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
-
 
 // ════════════════════════════════════════════════════════════
 //  NOTAS FISCAIS DE ENTRADA

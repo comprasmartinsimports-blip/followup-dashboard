@@ -2636,7 +2636,8 @@ function ModalFornecedor({ fornecedor, tipoPadrao, onSave, onClose }) {
     id: Date.now(), tipo: tipoPadrao || "Fornecedor", nome: "", cnpj: "", cpf: "",
     ie: "", telefone: "", celular: "", email: "", contato: "", site: "",
     cep: "", endereco: "", numero: "", complemento: "", bairro: "", cidade: "", estado: "",
-    obs: "", ativo: true,
+    obs: "", ativo: true, prioridade: "media",
+    multaTipo: "%", multaPct: "", jurosTipo: "%", jurosDia: "", temProtesto: false, diasProtesto: "", cartorio: "",
   });
   const set = (k, v) => setForm(function(f) { return Object.assign({}, f, { [k]: v }); });
   var tipoInfo = TIPOS_CADASTRO.find(function(t) { return t.key === form.tipo; }) || TIPOS_CADASTRO[0];
@@ -2768,6 +2769,88 @@ function ModalFornecedor({ fornecedor, tipoPadrao, onSave, onClose }) {
                 {["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"].map(function(uf){ return <option key={uf} value={uf}>{uf}</option>; })}
               </select>
             </div>
+          </div>
+        </div>
+
+        {/* ── Prioridade de Pagamento ── */}
+        <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:12, padding:"16px 18px", marginBottom:16 }}>
+          <div style={{ fontSize:12, color:"#0f172a", fontWeight:700, marginBottom:12 }}>💰 Prioridade e Condições de Cobrança</div>
+
+          {/* Prioridade */}
+          <div style={{ marginBottom:14 }}>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:8, fontWeight:600, textTransform:"uppercase" }}>Nível de Prioridade</div>
+            <div style={{ display:"flex", gap:8 }}>
+              {[
+                { key:"baixa", label:"! Baixa",  cor:"#15803d", bg:"#f0fdf4", border:"#bbf7d0", desc:"Sem urgência" },
+                { key:"media", label:"!! Média",  cor:"#d97706", bg:"#fffbeb", border:"#fde68a", desc:"Normal" },
+                { key:"alta",  label:"!!! Alta",  cor:"#dc2626", bg:"#fef2f2", border:"#fecaca", desc:"Prioritário" },
+              ].map(function(p) {
+                var active = (form.prioridade || "media") === p.key;
+                return (
+                  <button key={p.key} onClick={function(){ set("prioridade", p.key); }}
+                    style={{ flex:1, padding:"10px 8px", borderRadius:10,
+                      border: active ? "2px solid " + p.cor : "2px solid " + p.border,
+                      background: active ? p.bg : "#fff",
+                      color: active ? p.cor : "#94a3b8",
+                      fontWeight: active ? 800 : 500, fontSize:13, cursor:"pointer",
+                      boxShadow: active ? "0 0 0 3px " + p.cor + "18" : "none",
+                      textAlign:"center" }}>
+                    <div>{p.label}</div>
+                    <div style={{ fontSize:10, marginTop:2, fontWeight:400 }}>{p.desc}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Multa e juros */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:10, marginBottom:12 }}>
+            <div>
+              <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4, fontWeight:600, textTransform:"uppercase" }}>Tipo Multa</div>
+              <select value={form.multaTipo||"%"} onChange={function(e){ set("multaTipo",e.target.value); }}
+                style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"7px 8px", borderRadius:7, fontSize:12 }}>
+                <option value="%">%</option>
+                <option value="R$">R$</option>
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4, fontWeight:600, textTransform:"uppercase" }}>Multa ({form.multaTipo||"%"})</div>
+              <input type="number" step="0.01" value={form.multaPct||""} onChange={function(e){ set("multaPct",e.target.value); }} placeholder={form.multaTipo==="%"?"Ex: 2":"Ex: 10"}
+                style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"7px 8px", borderRadius:7, fontSize:12, outline:"none" }} />
+            </div>
+            <div>
+              <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4, fontWeight:600, textTransform:"uppercase" }}>Tipo Juros</div>
+              <select value={form.jurosTipo||"%"} onChange={function(e){ set("jurosTipo",e.target.value); }}
+                style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"7px 8px", borderRadius:7, fontSize:12 }}>
+                <option value="%">% ao dia</option>
+                <option value="R$">R$/dia</option>
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4, fontWeight:600, textTransform:"uppercase" }}>Juros/dia</div>
+              <input type="number" step="0.001" value={form.jurosDia||""} onChange={function(e){ set("jurosDia",e.target.value); }} placeholder="Ex: 0.033"
+                style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"7px 8px", borderRadius:7, fontSize:12, outline:"none" }} />
+            </div>
+          </div>
+
+          {/* Protesto */}
+          <div style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+            <label style={{ display:"flex", alignItems:"center", gap:7, cursor:"pointer" }}>
+              <input type="checkbox" checked={!!form.temProtesto} onChange={function(e){ set("temProtesto",e.target.checked); }} />
+              <span style={{ fontSize:12, fontWeight:600, color:"#7c3aed" }}>⚖️ Protesta boletos</span>
+            </label>
+            {form.temProtesto && (
+              <>
+                <div>
+                  <input type="number" min="1" value={form.diasProtesto||""} onChange={function(e){ set("diasProtesto",e.target.value); }} placeholder="Dias p/ protesto"
+                    style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"6px 10px", borderRadius:7, fontSize:12, outline:"none", width:140 }} />
+                </div>
+                <div>
+                  <input value={form.cartorio||""} onChange={function(e){ set("cartorio",e.target.value); }} placeholder="Cartório (opcional)"
+                    style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"6px 10px", borderRadius:7, fontSize:12, outline:"none", width:160 }} />
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -3471,6 +3554,15 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                       <span style={{ position:"absolute", top:12, left:16, fontSize:10, fontWeight:700, color:cfg.cor, background:cfg.bg, padding:"2px 8px", borderRadius:20, border:"1px solid " + cfg.cor + "33" }}>
                         {cfg.icon} {f.tipo || "Fornecedor"}
                       </span>
+                      {f.prioridade && (
+                        <span style={{ position:"absolute", top:12, right:46, fontSize:10, fontWeight:800,
+                          color: f.prioridade==="alta"?"#dc2626":f.prioridade==="baixa"?"#15803d":"#d97706",
+                          background: f.prioridade==="alta"?"#fef2f2":f.prioridade==="baixa"?"#f0fdf4":"#fffbeb",
+                          padding:"2px 7px", borderRadius:6,
+                          border: "1px solid " + (f.prioridade==="alta"?"#fecaca":f.prioridade==="baixa"?"#bbf7d0":"#fde68a") }}>
+                          {f.prioridade==="alta"?"!!!":f.prioridade==="baixa"?"!":"!!"}
+                        </span>
+                      )}
                       {/* Ações */}
                       <div style={{ position:"absolute", top:10, right:12, display:"flex", gap:4 }}>
                         <button onClick={function(){ setEditingForn(f); setShowModalForn(true); }}
@@ -3495,6 +3587,13 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                       {qtdProdutos > 0 && (
                         <div style={{ marginTop:10, paddingTop:10, borderTop:"1px solid #f1f5f9", fontSize:12, color:"#94a3b8" }}>
                           📦 {qtdProdutos} produto(s) vinculado(s)
+                        </div>
+                      )}
+                      {(f.multaPct || f.jurosDia || f.temProtesto) && (
+                        <div style={{ marginTop:8, paddingTop:8, borderTop:"1px solid #f1f5f9", display:"flex", gap:8, flexWrap:"wrap" }}>
+                          {f.multaPct && <span style={{ fontSize:10, color:"#d97706", background:"#fffbeb", padding:"1px 6px", borderRadius:4, fontWeight:600 }}>Multa {f.multaPct}{f.multaTipo||"%"}</span>}
+                          {f.jurosDia && <span style={{ fontSize:10, color:"#d97706", background:"#fffbeb", padding:"1px 6px", borderRadius:4, fontWeight:600 }}>Juros {f.jurosDia}{f.jurosTipo||"%"}/dia</span>}
+                          {f.temProtesto && <span style={{ fontSize:10, color:"#7c3aed", background:"#f5f3ff", padding:"1px 6px", borderRadius:4, fontWeight:600 }}>⚖️ Protesta {f.diasProtesto ? "em "+f.diasProtesto+"d" : ""}</span>}
                         </div>
                       )}
                       {f.obs && (
@@ -4222,6 +4321,134 @@ function getDaysUntil(dateStr) {
 }
 
 // ── Modal de Conta Bancária ──────────────────────────────────
+function ModalTransferencia({ contasBancarias, onConfirm, onClose }) {
+  var hoje = new Date().toLocaleDateString("sv-SE");
+  const [origem, setOrigem] = useState(contasBancarias[0]?.id || "");
+  const [destino, setDestino] = useState(contasBancarias[1]?.id || "");
+  const [valor, setValor] = useState("");
+  const [descricao, setDescricao] = useState("");
+  const [data, setData] = useState(hoje);
+  const [erro, setErro] = useState("");
+
+  var contaOrigem = contasBancarias.find(function(c){ return c.id === origem; });
+  var contaDestino = contasBancarias.find(function(c){ return c.id === destino; });
+
+  function handleSubmit() {
+    if (!origem || !destino) { setErro("Selecione as contas de origem e destino"); return; }
+    if (origem === destino) { setErro("Origem e destino não podem ser a mesma conta"); return; }
+    var v = parseFloat(valor);
+    if (!v || v <= 0) { setErro("Informe um valor válido"); return; }
+    if (!data) { setErro("Informe a data da transferência"); return; }
+    setErro("");
+    onConfirm(origem, destino, v, descricao, data);
+  }
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:24 }}>
+      <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:480, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
+        {/* Header */}
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
+          <div>
+            <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>⇄ Transferência entre Contas</div>
+            <div style={{ fontSize:12, color:"#94a3b8", marginTop:3 }}>Mova valores entre suas contas bancárias</div>
+          </div>
+          <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
+        </div>
+
+        {/* Seleção visual de contas */}
+        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:6 }}>De (Origem)</div>
+            <select value={origem} onChange={function(e){ setOrigem(e.target.value); setErro(""); }}
+              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"10px 12px", borderRadius:10, fontSize:13 }}>
+              {contasBancarias.map(function(c){
+                return <option key={c.id} value={c.id}>{c.nome}</option>;
+              })}
+            </select>
+          </div>
+
+          <div style={{ marginTop:18, fontSize:20, color:"#0891b2", fontWeight:700 }}>→</div>
+
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:6 }}>Para (Destino)</div>
+            <select value={destino} onChange={function(e){ setDestino(e.target.value); setErro(""); }}
+              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"10px 12px", borderRadius:10, fontSize:13 }}>
+              {contasBancarias.filter(function(c){ return c.id !== origem; }).map(function(c){
+                return <option key={c.id} value={c.id}>{c.nome}</option>;
+              })}
+            </select>
+          </div>
+        </div>
+
+        {/* Resumo visual */}
+        {contaOrigem && contaDestino && origem !== destino && (
+          <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:10, padding:"12px 16px", marginBottom:16, display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ flex:1, textAlign:"center" }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6, marginBottom:4 }}>
+                <div style={{ width:8, height:8, borderRadius:"50%", background:contaOrigem.cor||"#64748b" }} />
+                <span style={{ fontSize:12, fontWeight:600, color:"#0f172a" }}>{contaOrigem.nome}</span>
+              </div>
+              <div style={{ fontSize:11, color:"#64748b" }}>{contaOrigem.tipo||"Conta"}</div>
+            </div>
+            <div style={{ fontSize:18, color:"#0891b2" }}>⇄</div>
+            <div style={{ flex:1, textAlign:"center" }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6, marginBottom:4 }}>
+                <div style={{ width:8, height:8, borderRadius:"50%", background:contaDestino.cor||"#64748b" }} />
+                <span style={{ fontSize:12, fontWeight:600, color:"#0f172a" }}>{contaDestino.nome}</span>
+              </div>
+              <div style={{ fontSize:11, color:"#64748b" }}>{contaDestino.tipo||"Conta"}</div>
+            </div>
+          </div>
+        )}
+
+        {/* Campos */}
+        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+          <div>
+            <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:6 }}>Valor (R$) *</div>
+            <input type="number" step="0.01" value={valor} onChange={function(e){ setValor(e.target.value); setErro(""); }}
+              placeholder="0,00" autoFocus
+              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"10px 14px", borderRadius:10, fontSize:16, fontWeight:700, outline:"none" }} />
+          </div>
+
+          <div>
+            <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:6 }}>Data *</div>
+            <input type="date" value={data} onChange={function(e){ setData(e.target.value); setErro(""); }}
+              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"10px 14px", borderRadius:10, fontSize:13, outline:"none" }} />
+          </div>
+
+          <div>
+            <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:6 }}>Descrição (opcional)</div>
+            <input value={descricao} onChange={function(e){ setDescricao(e.target.value); }}
+              placeholder={"Transferência de " + (contaOrigem?.nome||"") + " para " + (contaDestino?.nome||"")}
+              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"10px 14px", borderRadius:10, fontSize:13, outline:"none" }} />
+          </div>
+        </div>
+
+        {erro && (
+          <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:8, padding:"10px 14px", marginTop:14, fontSize:12, color:"#dc2626", fontWeight:600 }}>
+            ⚠️ {erro}
+          </div>
+        )}
+
+        {/* Ações */}
+        <div style={{ display:"flex", gap:10, marginTop:22 }}>
+          <button onClick={onClose}
+            style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"12px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
+            Cancelar
+          </button>
+          <button onClick={handleSubmit} disabled={!valor || !origem || !destino || origem===destino}
+            style={{ flex:2, background: (!valor||!origem||!destino||origem===destino) ? "#f1f5f9" : "#0891b2",
+              border:"none", color: (!valor||!origem||!destino||origem===destino) ? "#94a3b8" : "#fff",
+              fontWeight:700, padding:"12px", borderRadius:10, cursor: (!valor||!origem||!destino||origem===destino) ? "not-allowed" : "pointer", fontSize:14 }}>
+            ⇄ Confirmar Transferência
+            {valor && parseFloat(valor) > 0 && <span style={{ marginLeft:6, fontSize:13, opacity:0.9 }}>de R$ {parseFloat(valor).toFixed(2).replace(".",",")}</span>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ModalContaBancaria({ conta, onSave, onClose }) {
   const [form, setForm] = useState(conta || { id: Date.now(), nome: "", tipo: "Conta Corrente", banco: "", saldoInicial: "0", cor: "#0891b2" });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -4593,7 +4820,7 @@ function AnexosUpload({ anexos, onChange }) {
 }
 
 // ── Modal de Conta a Pagar ───────────────────────────────────
-function ModalConta({ conta, categoriasPagar, fornecedores, onSave, onClose }) {
+function ModalConta({ conta, categoriasPagar, fornecedores, contasPagar, onSave, onClose }) {
   const initForm = {
     id: Date.now(), descricao: "", fornecedorId: "", fornecedorNome: "", fornecedorCNPJ: "",
     categoria: categoriasPagar[0] || "Outros", recorrencia: "unica", totalParcelas: "",
@@ -4621,10 +4848,53 @@ function ModalConta({ conta, categoriasPagar, fornecedores, onSave, onClose }) {
   }
 
   function selecionarForn(forn) {
+    // Buscar histórico de contas desse fornecedor para extrair padrões
+    var historico = (contasPagar || []).filter(function(c) {
+      return c.fornecedorId === forn.id || c.fornecedorNome === forn.nome;
+    });
+
+    // Calcular valores mais frequentes/recentes do histórico
+    var ultimaConta = historico.sort(function(a,b){ return (b.id||0)-(a.id||0); })[0];
+
+    // Valores padrão do fornecedor baseados no histórico
+    var multaTipo   = ultimaConta?.multaTipo   || "%";
+    var multaPct    = ultimaConta?.multaPct    || "";
+    var jurosTipo   = ultimaConta?.jurosTipo   || "%";
+    var jurosDia    = ultimaConta?.jurosDia    || "";
+    var temProtesto = ultimaConta?.temProtesto || false;
+    var diasProtesto = ultimaConta?.diasProtesto || "";
+    var cartorio    = ultimaConta?.cartorio    || "";
+    var categoria   = ultimaConta?.categoria   || "";
+    // Prioridade: usar do próprio cadastro do fornecedor se disponível, senão histórico de contas
+    var fornCadastrado = (fornecedores||[]).find(function(f){ return f.id === forn.id; });
+    var prioridade  = fornCadastrado?.prioridade || ultimaConta?.prioridade || "media";
+    // Condições do fornecedor (cadastro tem precedência sobre histórico)
+    if (fornCadastrado?.multaPct)     multaPct     = fornCadastrado.multaPct;
+    if (fornCadastrado?.multaTipo)    multaTipo    = fornCadastrado.multaTipo;
+    if (fornCadastrado?.jurosDia)     jurosDia     = fornCadastrado.jurosDia;
+    if (fornCadastrado?.jurosTipo)    jurosTipo    = fornCadastrado.jurosTipo;
+    if (fornCadastrado?.temProtesto)  temProtesto  = fornCadastrado.temProtesto;
+    if (fornCadastrado?.diasProtesto) diasProtesto = fornCadastrado.diasProtesto;
+    if (fornCadastrado?.cartorio)     cartorio     = fornCadastrado.cartorio;
+
     setForm(function(f) {
       return Object.assign({}, f, {
-        descricao: forn.nome, fornecedorId: forn.id,
-        fornecedorNome: forn.nome, fornecedorCNPJ: forn.cnpj || ""
+        descricao: forn.nome,
+        fornecedorId: forn.id,
+        fornecedorNome: forn.nome,
+        fornecedorCNPJ: forn.cnpj || "",
+        // Preencher com histórico
+        multaTipo:    multaTipo,
+        multaPct:     multaPct,
+        jurosTipo:    jurosTipo,
+        jurosDia:     jurosDia,
+        temProtesto:  temProtesto,
+        diasProtesto: diasProtesto,
+        cartorio:     cartorio,
+        categoria:    categoria || f.categoria,
+        prioridade:   prioridade,
+        _historicoPreenchido: historico.length > 0,
+        _qtdHistorico: historico.length,
       });
     });
     setShowSug(false);
@@ -4663,22 +4933,47 @@ function ModalConta({ conta, categoriasPagar, fornecedores, onSave, onClose }) {
             {showSug && sugestoes.length > 0 && (
               <div style={{ position:"absolute", top:"100%", left:0, right:0, background:"#fff", border:"1px solid #e2e8f0", borderRadius:10, boxShadow:"0 8px 24px rgba(0,0,0,.12)", zIndex:50, overflow:"hidden" }}>
                 {sugestoes.map(function(f) {
+                  var hist = (contasPagar||[]).filter(function(c){ return c.fornecedorId===f.id||c.fornecedorNome===f.nome; });
+                  var ultima = hist.sort(function(a,b){return (b.id||0)-(a.id||0);})[0];
                   return (
-                    <div key={f.id} onClick={function() { selecionarForn(f); }} style={{ padding:"10px 14px", cursor:"pointer", borderBottom:"1px solid #f1f5f9", fontSize:13 }}>
-                      <div style={{ fontWeight:600, color:"#0f172a" }}>{f.nome}</div>
+                    <div key={f.id} onClick={function() { selecionarForn(f); }}
+                      style={{ padding:"10px 14px", cursor:"pointer", borderBottom:"1px solid #f1f5f9", fontSize:13, transition:"background .1s" }}
+                      onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";}}
+                      onMouseLeave={function(e){e.currentTarget.style.background="";}}
+                    >
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                        <div style={{ fontWeight:600, color:"#0f172a" }}>{f.nome}</div>
+                        {hist.length > 0 && <span style={{ fontSize:10, background:"#eff6ff", color:"#1d4ed8", padding:"1px 6px", borderRadius:4, fontWeight:600 }}>{hist.length} conta(s)</span>}
+                      </div>
                       {f.cnpj && <div style={{ fontSize:11, color:"#94a3b8" }}>{f.cnpj}</div>}
+                      {ultima && (
+                        <div style={{ display:"flex", gap:8, marginTop:4, flexWrap:"wrap" }}>
+                          {ultima.multaPct && <span style={{ fontSize:10, color:"#d97706" }}>Multa: {ultima.multaPct}{ultima.multaTipo}</span>}
+                          {ultima.jurosDia && <span style={{ fontSize:10, color:"#d97706" }}>Juros: {ultima.jurosDia}{ultima.jurosTipo}/dia</span>}
+                          {ultima.temProtesto && <span style={{ fontSize:10, color:"#7c3aed" }}>⚖️ Protesta em {ultima.diasProtesto}d</span>}
+                          {ultima.categoria && <span style={{ fontSize:10, color:"#64748b" }}>{ultima.categoria}</span>}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
                 <div style={{ padding:"6px 14px", background:"#f8fafc", borderTop:"1px solid #f1f5f9", fontSize:11, color:"#94a3b8" }}>
-                  Fornecedor cadastrado
+                  🤖 Selecione para preencher multa, juros e protesto automaticamente
                 </div>
               </div>
             )}
             {form.fornecedorNome && (
-              <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:6 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:6, flexWrap:"wrap" }}>
                 <span style={{ fontSize:11, background:"#f0fdf4", color:"#15803d", border:"1px solid #bbf7d0", borderRadius:6, padding:"2px 8px", fontWeight:600 }}>✓ {form.fornecedorNome}</span>
                 {form.fornecedorCNPJ && <span style={{ fontSize:11, color:"#94a3b8" }}>CNPJ: {form.fornecedorCNPJ}</span>}
+                {form._historicoPreenchido && (
+                  <span style={{ fontSize:11, background:"#eff6ff", color:"#1d4ed8", border:"1px solid #bfdbfe", borderRadius:6, padding:"2px 8px", fontWeight:600 }}>
+                    🤖 {form._qtdHistorico} histórico(s) — multa, juros e protesto preenchidos automaticamente
+                  </span>
+                )}
+                {form.fornecedorNome && !form._historicoPreenchido && (contasPagar||[]).length > 0 && (
+                  <span style={{ fontSize:11, color:"#94a3b8" }}>Primeiro cadastro deste fornecedor</span>
+                )}
               </div>
             )}
           </div>
@@ -4886,6 +5181,7 @@ function ModalConta({ conta, categoriasPagar, fornecedores, onSave, onClose }) {
 function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContasBancarias, categoriasPagar, setCategoriasPagar, lancamentos, setLancamentos, enrichedOrders, rawOrders, shipmentStatuses, paymentData, finTab, setFinTab, impostos, setImpostos, custosFixos, setCustosFixos, fornecedores }) {
   const [showModalConta, setShowModalConta] = useState(false);
   const [showModalBancaria, setShowModalBancaria] = useState(false);
+  const [showModalTransf, setShowModalTransf] = useState(false);
   const [editingConta, setEditingConta] = useState(null);
   const [editingBancaria, setEditingBancaria] = useState(null);
   const [modalBaixa, setModalBaixa] = useState(null); // conta a pagar para dar baixa
@@ -5482,6 +5778,14 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
               { key:"baixa",  label:"! Baixa",    cor:"#15803d", bg:"#f0fdf4", activeBg:"#15803d" },
             ].map(function(p) {
               var isActive = filterPrioridade === p.key;
+              var qtd = p.key === "all-pr" ? 0 : contasPagar.filter(function(c){
+                // Considera prioridade da conta OU do fornecedor cadastrado
+                var priorConta = c.prioridade || "media";
+                var forn = fornecedores.find(function(f){ return f.id === c.fornecedorId; });
+                var priorForn = forn?.prioridade || priorConta;
+                var priorFinal = priorConta !== "media" ? priorConta : priorForn;
+                return priorFinal === p.key && c.status !== "Pago";
+              }).length;
               return (
                 <button key={p.key} onClick={function(){ setFilterPrioridade(p.key); }}
                   style={{ padding:"5px 14px", borderRadius:20,
@@ -5490,11 +5794,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                     color: isActive ? "#fff" : p.cor,
                     fontWeight: isActive ? 700 : 500, fontSize:12, cursor:"pointer" }}>
                   {p.label}
-                  {p.key !== "all-pr" && (
-                    <span style={{ marginLeft:5, fontSize:10, opacity:0.8 }}>
-                      ({contasPagar.filter(function(c){ return (c.prioridade||"media")===p.key && c.status!=="Pago"; }).length})
-                    </span>
-                  )}
+                  {p.key !== "all-pr" && <span style={{ marginLeft:5, fontSize:10, opacity:0.8 }}>({qtd})</span>}
                 </button>
               );
             })}
@@ -5657,16 +5957,26 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                       </td>
                       <td style={{ padding:"10px 6px", textAlign:"center", width:70 }}>
                         {(function() {
-                          var pr = c.prioridade || "media";
+                          var prConta = c.prioridade || "media";
+                          // Verificar se fornecedor tem prioridade cadastrada
+                          var forn = fornecedores.find(function(f){ return f.id === c.fornecedorId; });
+                          var prForn = forn?.prioridade;
+                          // Usar prioridade da conta; se for padrão (media), considerar a do fornecedor
+                          var pr = (prConta !== "media") ? prConta : (prForn || prConta);
                           var cfg = pr === "alta"
                             ? { label:"!!!", title:"Alta Prioridade", cor:"#dc2626", bg:"#fef2f2", border:"#fecaca" }
                             : pr === "baixa"
                             ? { label:"!", title:"Baixa Prioridade", cor:"#15803d", bg:"#f0fdf4", border:"#bbf7d0" }
                             : { label:"!!", title:"Média Prioridade", cor:"#d97706", bg:"#fffbeb", border:"#fde68a" };
                           return (
-                            <span title={cfg.title} style={{ fontSize:13, fontWeight:800, color:cfg.cor, background:cfg.bg, border:"1px solid " + cfg.border, padding:"3px 8px", borderRadius:6, display:"inline-block", cursor:"default", letterSpacing:1 }}>
-                              {cfg.label}
-                            </span>
+                            <div>
+                              <span title={cfg.title + (prForn ? " (do fornecedor)" : "")} style={{ fontSize:13, fontWeight:800, color:cfg.cor, background:cfg.bg, border:"1px solid " + cfg.border, padding:"3px 8px", borderRadius:6, display:"inline-block", cursor:"default", letterSpacing:1 }}>
+                                {cfg.label}
+                              </span>
+                              {prForn && prConta === "media" && (
+                                <div style={{ fontSize:9, color:"#94a3b8", marginTop:2 }}>fornecedor</div>
+                              )}
+                            </div>
                           );
                         })()}
                       </td>
@@ -6133,8 +6443,16 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
         <div>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
             <div style={{ fontWeight:700, fontSize:15, color:"#0f172a" }}>Contas Cadastradas</div>
-            <button onClick={() => { setEditingBancaria(null); setShowModalBancaria(true); }}
-              style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Nova Conta</button>
+            <div style={{ display:"flex", gap:8 }}>
+              {contasBancarias.length >= 2 && (
+                <button onClick={function(){ setShowModalTransf(true); }}
+                  style={{ background:"#0891b2", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13, display:"flex", alignItems:"center", gap:6 }}>
+                  ⇄ Transferir entre Contas
+                </button>
+              )}
+              <button onClick={() => { setEditingBancaria(null); setShowModalBancaria(true); }}
+                style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Nova Conta</button>
+            </div>
           </div>
           {contasBancarias.length === 0 ? (
             <div style={{ background:"#f8fafc", border:"2px dashed #e2e8f0", borderRadius:12, padding:40, textAlign:"center", color:"#94a3b8" }}>
@@ -6307,6 +6625,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                               <td style={{ padding:"10px 16px", fontSize:13, color:"#0f172a" }}>
                                 {l.descricao}
                                 {l.automatico && <span style={{ marginLeft:6, fontSize:10, background:"#fef9c3", color:"#92400e", border:"1px solid #fde68a", borderRadius:4, padding:"1px 5px" }}>🤖 auto</span>}
+                              {l.transferencia && <span style={{ marginLeft:6, fontSize:10, background:"#eff6ff", color:"#1d4ed8", border:"1px solid #bfdbfe", borderRadius:4, padding:"1px 5px" }}>⇄ transf.</span>}
                               </td>
                               <td style={{ padding:"10px 16px" }}>
                                 <span style={{ fontSize:11, fontWeight:600, color: l.tipo==="recebimento"?"#15803d":"#dc2626", background: l.tipo==="recebimento"?"#f0fdf4":"#fef2f2", padding:"2px 8px", borderRadius:5 }}>
@@ -6446,8 +6765,27 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
       )}
 
       {/* Modais */}
-      {showModalConta && <ModalConta conta={editingConta} categoriasPagar={categoriasPagar} fornecedores={fornecedores} onSave={saveConta} onClose={()=>{ setShowModalConta(false); setEditingConta(null); }} />}
+      {showModalConta && <ModalConta conta={editingConta} categoriasPagar={categoriasPagar} fornecedores={fornecedores} contasPagar={contasPagar} onSave={saveConta} onClose={()=>{ setShowModalConta(false); setEditingConta(null); }} />}
       {showModalBancaria && <ModalContaBancaria conta={editingBancaria} onSave={saveBancaria} onClose={()=>{ setShowModalBancaria(false); setEditingBancaria(null); }} />}
+      {showModalTransf && (
+        <ModalTransferencia
+          contasBancarias={contasBancarias}
+          onConfirm={function(origem, destino, valor, descricao, data) {
+            // Criar dois lançamentos: saída da origem + entrada no destino
+            var id1 = Date.now();
+            var id2 = Date.now() + 1;
+            var desc = descricao || ("Transferência: " + (contasBancarias.find(function(c){return c.id===origem;})||{}).nome + " → " + (contasBancarias.find(function(c){return c.id===destino;})||{}).nome);
+            var novos = [
+              { id:id1, tipo:"pagamento",    descricao:desc, valor:valor, data:data, contaBancariaId:origem,  transferencia:true, parId:id2 },
+              { id:id2, tipo:"recebimento",  descricao:desc, valor:valor, data:data, contaBancariaId:destino, transferencia:true, parId:id1 },
+            ];
+            var upd = [...lancamentos, ...novos];
+            setLancamentos(upd); saveLS("lancamentos", upd);
+            setShowModalTransf(false);
+          }}
+          onClose={function(){ setShowModalTransf(false); }}
+        />
+      )}
       {modalBaixa && <ModalBaixa conta={modalBaixa} contasBancarias={contasBancarias} onConfirm={(data)=>confirmarBaixa(modalBaixa,data)} onClose={()=>setModalBaixa(null)} />}
       {modalBaixaML && <ModalBaixaML order={modalBaixaML} paymentInfo={paymentData?.[modalBaixaML.id]} contasBancarias={contasBancarias} onConfirm={(data)=>confirmarBaixaML(modalBaixaML,data)} onClose={()=>setModalBaixaML(null)} />}
       {showModalMultiBaixa && selecionadas.length > 0 && (

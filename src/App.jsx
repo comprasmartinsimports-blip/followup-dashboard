@@ -863,12 +863,19 @@ const SESSION_KEY = "ml_auth_session";
 
 // Permissões disponíveis por aba
 const PERMISSOES_DISPONIVEIS = [
-  { key: "overview",   label: "🏠 Visão Geral" },
-  { key: "listings",   label: "📢 Anúncios" },
-  { key: "orders",     label: "📦 Pedidos" },
-  { key: "financeiro", label: "💰 Financeiro" },
-  { key: "produtos",   label: "🛍️ Produtos" },
-  { key: "admin",      label: "⚙️ Administração" },
+  { key: "overview",        label: "🏠 Visão Geral" },
+  { key: "listings",        label: "📢 Anúncios" },
+  { key: "orders",          label: "📦 Pedidos" },
+  { key: "financeiro",      label: "💰 Financeiro", sub: [
+    { key: "fin_resumo",    label: "📊 Resumo" },
+    { key: "fin_fluxo",     label: "📈 Fluxo de Caixa" },
+    { key: "fin_pagar",     label: "📤 Contas a Pagar" },
+    { key: "fin_receber",   label: "📥 Contas a Receber" },
+    { key: "fin_bancos",    label: "🏦 Caixas e Bancos" },
+    { key: "fin_config",    label: "⚙️ Configurações" },
+  ]},
+  { key: "produtos",        label: "🛍️ Produtos" },
+  { key: "admin",           label: "⚙️ Administração" },
 ];
 
 function hashSenha(senha) {
@@ -1084,15 +1091,90 @@ function ModalUsuario({ usuario, onSave, onClose }) {
 
           {/* Permissões */}
           <div style={{ background:"#f8fafc", borderRadius:12, padding:"14px 16px" }}>
-            <div style={{ fontWeight:700, fontSize:13, color:"#0f172a", marginBottom:12 }}>Permissões de Acesso</div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-              {PERMISSOES_DISPONIVEIS.map(p => (
-                <label key={p.key} style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", padding:"8px 10px", borderRadius:8, background:form.permissoes?.includes(p.key)?"#eff6ff":"#fff", border:`1px solid ${form.permissoes?.includes(p.key)?"#2563eb":"#e2e8f0"}`, transition:"all .15s" }}>
-                  <input type="checkbox" checked={form.permissoes?.includes(p.key)||false} onChange={()=>togglePerm(p.key)}
-                    style={{ width:14, height:14, cursor:"pointer" }} />
-                  <span style={{ fontSize:13, color:form.permissoes?.includes(p.key)?"#1d4ed8":"#334155", fontWeight:form.permissoes?.includes(p.key)?600:400 }}>{p.label}</span>
-                </label>
-              ))}
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+              <div style={{ fontWeight:700, fontSize:13, color:"#0f172a" }}>Permissões de Acesso</div>
+              <button onClick={function(){
+                  var todasKeys = [];
+                  PERMISSOES_DISPONIVEIS.forEach(function(p){ todasKeys.push(p.key); if(p.sub) p.sub.forEach(function(s){ todasKeys.push(s.key); }); });
+                  var temTudo = todasKeys.every(function(k){ return (form.permissoes||[]).includes(k); });
+                  set("permissoes", temTudo ? [] : todasKeys);
+                }}
+                style={{ fontSize:11, color:"#2563eb", background:"transparent", border:"none", cursor:"pointer", fontWeight:600 }}>
+                {(function(){
+                  var total = 0;
+                  PERMISSOES_DISPONIVEIS.forEach(function(p){ total++; if(p.sub) total+=p.sub.length; });
+                  return (form.permissoes||[]).length >= total ? "Desmarcar tudo" : "Selecionar tudo";
+                })()}
+              </button>
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+              {PERMISSOES_DISPONIVEIS.map(function(p) {
+                var isChecked = (form.permissoes||[]).includes(p.key);
+                // Sub-permissões: algumas marcadas?
+                var subChecked = p.sub ? p.sub.filter(function(s){ return (form.permissoes||[]).includes(s.key); }).length : 0;
+                var subTotal = p.sub ? p.sub.length : 0;
+                var isIndeterminate = !isChecked && subChecked > 0 && subChecked < subTotal;
+                return (
+                  <div key={p.key}>
+                    {/* Item pai */}
+                    <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", padding:"8px 10px", borderRadius:8,
+                      background: isChecked || subChecked > 0 ? "#eff6ff" : "#fff",
+                      border: "1px solid " + (isChecked || subChecked > 0 ? "#2563eb" : "#e2e8f0"),
+                      transition:"all .15s" }}>
+                      <input type="checkbox" checked={isChecked} ref={function(el){ if (el) el.indeterminate = isIndeterminate; }}
+                        onChange={function() {
+                          var perms = form.permissoes || [];
+                          if (isChecked) {
+                            // Desmarcar pai e todos os filhos
+                            var remove = [p.key].concat(p.sub ? p.sub.map(function(s){return s.key;}) : []);
+                            set("permissoes", perms.filter(function(k){ return !remove.includes(k); }));
+                          } else {
+                            // Marcar pai e todos os filhos
+                            var add = [p.key].concat(p.sub ? p.sub.map(function(s){return s.key;}) : []);
+                            var newPerms = perms.slice();
+                            add.forEach(function(k){ if(!newPerms.includes(k)) newPerms.push(k); });
+                            set("permissoes", newPerms);
+                          }
+                        }}
+                        style={{ width:14, height:14, cursor:"pointer" }} />
+                      <span style={{ fontSize:13, fontWeight:600, color: isChecked || subChecked > 0 ? "#1d4ed8" : "#334155", flex:1 }}>{p.label}</span>
+                      {p.sub && <span style={{ fontSize:10, color:"#94a3b8" }}>{subChecked}/{subTotal}</span>}
+                    </label>
+                    {/* Sub-permissões */}
+                    {p.sub && (isChecked || subChecked > 0 || true) && (
+                      <div style={{ marginLeft:24, marginTop:4, display:"grid", gridTemplateColumns:"1fr 1fr", gap:4 }}>
+                        {p.sub.map(function(s) {
+                          var sChecked = (form.permissoes||[]).includes(s.key);
+                          return (
+                            <label key={s.key} style={{ display:"flex", alignItems:"center", gap:6, cursor:"pointer", padding:"6px 10px", borderRadius:7,
+                              background: sChecked ? "#f0f9ff" : "#fafafa",
+                              border: "1px solid " + (sChecked ? "#bae6fd" : "#f1f5f9"),
+                              transition:"all .15s" }}>
+                              <input type="checkbox" checked={sChecked}
+                                onChange={function() {
+                                  var perms = form.permissoes || [];
+                                  var newPerms = sChecked
+                                    ? perms.filter(function(k){ return k !== s.key; })
+                                    : [...perms, s.key];
+                                  // Auto-marcar pai se qualquer filho estiver marcado
+                                  if (!sChecked && !newPerms.includes(p.key)) newPerms = [...newPerms, p.key];
+                                  // Desmarcar pai se nenhum filho estiver marcado
+                                  if (sChecked) {
+                                    var filhosAtivos = (p.sub||[]).filter(function(fs){ return newPerms.includes(fs.key); });
+                                    if (filhosAtivos.length === 0) newPerms = newPerms.filter(function(k){ return k !== p.key; });
+                                  }
+                                  set("permissoes", newPerms);
+                                }}
+                                style={{ width:12, height:12, cursor:"pointer" }} />
+                              <span style={{ fontSize:12, color: sChecked ? "#0369a1" : "#64748b", fontWeight: sChecked ? 600 : 400 }}>{s.label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -2940,6 +3022,160 @@ function ModalFornecedor({ fornecedor, tipoPadrao, onSave, onClose }) {
 }
 
 // ── Modal de Produto ─────────────────────────────────────────
+function ModalMovEstoque({ produto, movEstoque, onRegistrar, onClose }) {
+  var hoje = new Date().toLocaleDateString("sv-SE");
+  const [tipo, setTipo] = useState("entrada");
+  const [qtd, setQtd] = useState("");
+  const [motivo, setMotivo] = useState("");
+  const [preco, setPreco] = useState("");
+  const [abaView, setAbaView] = useState("historico"); // historico | registrar
+
+  var movsProd = (movEstoque||[]).filter(function(m){ return m.produtoId===produto.id || m.sku===produto.sku; })
+    .sort(function(a,b){ return b.id - a.id; });
+
+  var estoqueAtual = parseInt(produto.estoqueAtual||0);
+  var totalEntradas = movsProd.filter(function(m){return m.tipo==="entrada";}).reduce(function(s,m){return s+m.qtd;},0);
+  var totalSaidas = movsProd.filter(function(m){return m.tipo==="saida";}).reduce(function(s,m){return s+m.qtd;},0);
+
+  function handleRegistrar() {
+    if (!qtd || parseInt(qtd) <= 0) return;
+    onRegistrar(produto.id, produto.sku, tipo, qtd, motivo, preco);
+    setQtd(""); setMotivo(""); setPreco(""); setAbaView("historico");
+  }
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:24 }}>
+      <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:580, maxHeight:"90vh", display:"flex", flexDirection:"column", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
+        {/* Header */}
+        <div style={{ padding:"20px 24px", borderBottom:"1px solid #f1f5f9", display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+          <div>
+            <div style={{ fontWeight:800, fontSize:16, color:"#0f172a" }}>📦 Movimentação de Estoque</div>
+            <div style={{ fontSize:12, color:"#64748b", marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:420 }}>{produto.titulo}</div>
+            {produto.sku && <div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>SKU: {produto.sku}</div>}
+          </div>
+          <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
+        </div>
+
+        {/* Cards resumo */}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, padding:"14px 24px", borderBottom:"1px solid #f1f5f9" }}>
+          {[
+            { label:"Estoque Atual", value:estoqueAtual, color:"#0f172a" },
+            { label:"Total Entradas", value:totalEntradas, color:"#15803d" },
+            { label:"Total Saídas", value:totalSaidas, color:"#dc2626" },
+            { label:"Movimentações", value:movsProd.length, color:"#7c3aed" },
+          ].map(function(k){
+            return (
+              <div key={k.label} style={{ background:"#f8fafc", borderRadius:8, padding:"10px 12px" }}>
+                <div style={{ fontSize:10, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:4 }}>{k.label}</div>
+                <div style={{ fontSize:20, fontWeight:800, color:k.color }}>{k.value}</div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Sub-abas */}
+        <div style={{ display:"flex", gap:2, padding:"12px 24px 0", borderBottom:"1px solid #f1f5f9" }}>
+          {[{k:"historico",l:"📋 Histórico"},{k:"registrar",l:"+ Registrar Movimento"}].map(function(t){
+            var active = abaView===t.k;
+            return <button key={t.k} onClick={function(){setAbaView(t.k);}}
+              style={{ padding:"8px 16px", border:"none", borderBottom: active?"2px solid #0f172a":"2px solid transparent",
+                background:"transparent", color:active?"#0f172a":"#94a3b8", fontWeight:active?600:400, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>{t.l}</button>;
+          })}
+        </div>
+
+        <div style={{ flex:1, overflowY:"auto", padding:"16px 24px" }}>
+          {/* Histórico */}
+          {abaView === "historico" && (
+            movsProd.length === 0 ? (
+              <div style={{ textAlign:"center", color:"#94a3b8", padding:"40px 0" }}>
+                <div style={{ fontSize:32, marginBottom:8 }}>📦</div>
+                <div>Nenhuma movimentação registrada ainda</div>
+                <button onClick={function(){setAbaView("registrar");}} style={{ marginTop:12, background:"#0f172a", border:"none", color:"#fff", padding:"8px 20px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:600 }}>Registrar primeiro movimento</button>
+              </div>
+            ) : (
+              <div>
+                {movsProd.map(function(m) {
+                  var isEntrada = m.tipo === "entrada";
+                  return (
+                    <div key={m.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderBottom:"1px solid #f8fafc" }}>
+                      <div style={{ width:36, height:36, borderRadius:10, background:isEntrada?"#f0fdf4":"#fef2f2", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>
+                        {isEntrada ? "↑" : "↓"}
+                      </div>
+                      <div style={{ flex:1 }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                          <span style={{ fontWeight:700, fontSize:14, color:isEntrada?"#15803d":"#dc2626" }}>
+                            {isEntrada ? "+" : "-"}{m.qtd} un
+                          </span>
+                          <span style={{ fontSize:11, background:isEntrada?"#f0fdf4":"#fef2f2", color:isEntrada?"#15803d":"#dc2626", padding:"1px 6px", borderRadius:4, fontWeight:600 }}>
+                            {isEntrada ? "ENTRADA" : "SAÍDA"}
+                          </span>
+                          {m.preco && <span style={{ fontSize:11, color:"#94a3b8" }}>R$ {m.preco.toFixed(2).replace(".",",")}/un</span>}
+                        </div>
+                        {m.motivo && <div style={{ fontSize:12, color:"#64748b", marginTop:2 }}>{m.motivo}</div>}
+                      </div>
+                      <div style={{ textAlign:"right", flexShrink:0 }}>
+                        <div style={{ fontSize:12, color:"#64748b" }}>{m.data}</div>
+                        <div style={{ fontSize:10, color:"#94a3b8" }}>{m.hora}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          )}
+
+          {/* Registrar */}
+          {abaView === "registrar" && (
+            <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+              <div>
+                <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:8 }}>Tipo de Movimento</div>
+                <div style={{ display:"flex", gap:8 }}>
+                  {[{k:"entrada",l:"↑ Entrada",cor:"#15803d",bg:"#f0fdf4"},{k:"saida",l:"↓ Saída",cor:"#dc2626",bg:"#fef2f2"}].map(function(t){
+                    var active = tipo===t.k;
+                    return <button key={t.k} onClick={function(){setTipo(t.k);}}
+                      style={{ flex:1, padding:"12px", borderRadius:10, border: active ? "2px solid "+t.cor : "2px solid #e2e8f0",
+                        background: active ? t.bg : "#fff", color: active ? t.cor : "#94a3b8",
+                        fontWeight: active ? 700 : 500, fontSize:14, cursor:"pointer", fontFamily:"inherit" }}>{t.l}</button>;
+                  })}
+                </div>
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                <div>
+                  <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:6 }}>Quantidade *</div>
+                  <input type="number" min="1" value={qtd} onChange={function(e){setQtd(e.target.value);}} placeholder="Ex: 10" autoFocus
+                    style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"10px 12px", borderRadius:8, fontSize:14, fontWeight:700, outline:"none" }} />
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:6 }}>Preço unit. (R$) — opcional</div>
+                  <input type="number" step="0.01" value={preco} onChange={function(e){setPreco(e.target.value);}} placeholder="Ex: 45.90"
+                    style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"10px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:6 }}>Motivo / Observação</div>
+                <input value={motivo} onChange={function(e){setMotivo(e.target.value);}}
+                  placeholder={tipo==="entrada" ? "Ex: Compra fornecedor, ajuste inventário..." : "Ex: Venda, devolução, avaria..."}
+                  style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"10px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+              </div>
+              {qtd && parseInt(qtd) > 0 && (
+                <div style={{ background: tipo==="entrada"?"#f0fdf4":"#fef2f2", border:"1px solid "+(tipo==="entrada"?"#bbf7d0":"#fecaca"), borderRadius:10, padding:"12px 16px", fontSize:13, color:tipo==="entrada"?"#15803d":"#dc2626", fontWeight:600 }}>
+                  Estoque: {estoqueAtual} {tipo==="entrada"?"+":"−"} {qtd} = {tipo==="entrada"?estoqueAtual+parseInt(qtd):Math.max(0,estoqueAtual-parseInt(qtd))} un
+                </div>
+              )}
+              <button onClick={handleRegistrar} disabled={!qtd||parseInt(qtd)<=0}
+                style={{ background:(!qtd||parseInt(qtd)<=0)?"#f1f5f9":tipo==="entrada"?"#15803d":"#dc2626",
+                  border:"none", color:(!qtd||parseInt(qtd)<=0)?"#94a3b8":"#fff",
+                  fontWeight:700, padding:"13px", borderRadius:10, cursor:(!qtd||parseInt(qtd)<=0)?"not-allowed":"pointer", fontSize:14 }}>
+                {tipo==="entrada"?"↑ Registrar Entrada":"↓ Registrar Saída"}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ModalProduto({ produto, fornecedores, listings, onSave, onClose }) {
   const emptyForm = {
     id: Date.now(), titulo: "", sku: "", ean: "", codigoFornecedor: "",
@@ -3255,12 +3491,28 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
   const [editingProd, setEditingProd] = useState(null);
   const [editingForn, setEditingForn] = useState(null);
   const [prodSel, setProdSel] = useState([]);
+  const [showMovEstoque, setShowMovEstoque] = useState(null); // produto para ver movimentação
+  const [movEstoque, setMovEstoque] = useState(function(){ try { return JSON.parse(localStorage.getItem("mov_estoque")||"[]"); } catch(e){ return []; } });
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filtroTipo, setFiltroTipo] = useState("todos");
   const [searchCad, setSearchCad] = useState("");
   const [tipoPadraoCad, setTipoPadraoCad] = useState("Fornecedor");
+
+  function saveMovEstoque2(movs) {
+    setMovEstoque(movs);
+    localStorage.setItem("mov_estoque", JSON.stringify(movs));
+  }
+  function registrarMovEstoque(produtoId, sku, tipo, qtd, motivo, preco) {
+    var mov = { id: Date.now(), produtoId, sku, tipo, qtd: parseInt(qtd), motivo: motivo||"", preco: parseFloat(preco||0)||null, data: new Date().toLocaleDateString("sv-SE"), hora: new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) };
+    var novas = [...movEstoque, mov];
+    saveMovEstoque2(novas);
+    // Atualizar estoque do produto
+    var upd = produtos.map(function(p){ if (p.id===produtoId || p.sku===sku) { var atual = parseInt(p.estoqueAtual||0); return Object.assign({},p,{estoqueAtual:String(tipo==="entrada"?atual+mov.qtd:Math.max(0,atual-mov.qtd))}); } return p; });
+    setProdutos(upd); localStorage.setItem("produtos", JSON.stringify(upd));
+    return mov;
+  }
 
   function saveProd(form) {
     const updated = editingProd ? produtos.map(p => p.id===form.id?form:p) : [...produtos, {...form, id:Date.now()}];
@@ -3523,6 +3775,9 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                         </td>
                         <td style={{ padding:"10px 14px" }}>
                           <div style={{ display:"flex", gap:4 }}>
+                            <button onClick={function(){ setShowMovEstoque(p); }}
+                              title="Movimentação de estoque"
+                              style={{ background:"#eff6ff", border:"1px solid #bfdbfe", color:"#1d4ed8", padding:"4px 8px", borderRadius:6, cursor:"pointer", fontSize:11 }}>📦</button>
                             <button onClick={() => { setEditingProd(p); setShowModalProd(true); }}
                               style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"4px 8px", borderRadius:6, cursor:"pointer", fontSize:11 }}>✏️</button>
                             <button onClick={() => deleteProd(p.id)}
@@ -3698,6 +3953,35 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
       )}
 
       {showModalProd && <ModalProduto produto={editingProd} fornecedores={fornecedores} listings={listings} onSave={saveProd} onClose={() => { setShowModalProd(false); setEditingProd(null); }} />}
+      {showMovEstoque && (
+        <ModalMovEstoque
+          produto={showMovEstoque}
+          movEstoque={movEstoque}
+          onRegistrar={function(prodId, sku, tipo, qtd, motivo, preco) {
+            var mov = { id: Date.now(), produtoId: prodId, sku: sku, tipo: tipo, qtd: parseInt(qtd),
+              motivo: motivo||"", preco: parseFloat(preco||0)||null,
+              data: new Date().toLocaleDateString("sv-SE"),
+              hora: new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) };
+            var novas = [...movEstoque, mov];
+            setMovEstoque(novas);
+            localStorage.setItem("mov_estoque", JSON.stringify(novas));
+            // Atualizar estoque do produto
+            var upd = produtos.map(function(p) {
+              if (p.id===prodId || (sku && p.sku===sku)) {
+                var atual = parseInt(p.estoqueAtual||0);
+                var novo = tipo==="entrada" ? atual+mov.qtd : Math.max(0,atual-mov.qtd);
+                return Object.assign({},p,{estoqueAtual:String(novo)});
+              }
+              return p;
+            });
+            setProdutos(upd); localStorage.setItem("produtos", JSON.stringify(upd));
+            // Atualizar produto mostrado no modal
+            var prodAtualizado = upd.find(function(p){ return p.id===prodId; });
+            if (prodAtualizado) setShowMovEstoque(prodAtualizado);
+          }}
+          onClose={function(){ setShowMovEstoque(null); }}
+        />
+      )}
       {showModalForn && <ModalFornecedor fornecedor={editingForn} tipoPadrao={tipoPadraoCad} onSave={saveForn} onClose={function(){ setShowModalForn(false); setEditingForn(null); }} />}
     </div>
   );
@@ -5506,18 +5790,26 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
       {/* Sub-tabs */}
       <div style={{ display:"flex", gap:2, marginBottom:20, background:"#f1f5f9", padding:4, borderRadius:10, width:"fit-content", flexWrap:"wrap" }}>
         {[
-          { key:"resumo",   label:"📊 Resumo" },
-          { key:"fluxo",    label:"📈 Fluxo de Caixa" },
-          { key:"pagar",    label:"📤 Contas a Pagar" },
-          { key:"receber",  label:"📥 Contas a Receber" },
-          { key:"contas",   label:"🏦 Caixas e Bancos" },
-          { key:"config",   label:"⚙️ Configurações" },
-        ].map(t => (
-          <button key={t.key} onClick={() => setFinTab(t.key)}
-            style={{ background:finTab===t.key?"#fff":"transparent", border:"none", color:finTab===t.key?"#0f172a":"#94a3b8", padding:"8px 16px", cursor:"pointer", fontFamily:"inherit", fontSize:13, borderRadius:8, fontWeight:finTab===t.key?700:500, boxShadow:finTab===t.key?"0 1px 3px rgba(0,0,0,.08)":"none", whiteSpace:"nowrap" }}>
-            {t.label}
-          </button>
-        ))}
+          { key:"resumo",  label:"📊 Resumo",           perm:"fin_resumo" },
+          { key:"fluxo",   label:"📈 Fluxo de Caixa",   perm:"fin_fluxo" },
+          { key:"pagar",   label:"📤 Contas a Pagar",   perm:"fin_pagar" },
+          { key:"receber", label:"📥 Contas a Receber", perm:"fin_receber" },
+          { key:"contas",  label:"🏦 Caixas e Bancos",  perm:"fin_bancos" },
+          { key:"config",  label:"⚙️ Configurações",    perm:"fin_config" },
+        ].filter(function(t) {
+          if (currentUser?.admin) return true;
+          var perms = currentUser?.permissoes || [];
+          var temSubPerm = perms.some(function(p){ return p.startsWith("fin_"); });
+          if (!temSubPerm) return true;
+          return perms.includes(t.perm);
+        }).map(function(t) {
+          return (
+            <button key={t.key} onClick={function(){ setFinTab(t.key); }}
+              style={{ background:finTab===t.key?"#fff":"transparent", border:"none", color:finTab===t.key?"#0f172a":"#94a3b8", padding:"8px 16px", cursor:"pointer", fontFamily:"inherit", fontSize:13, borderRadius:8, fontWeight:finTab===t.key?700:500, boxShadow:finTab===t.key?"0 1px 3px rgba(0,0,0,.08)":"none", whiteSpace:"nowrap" }}>
+              {t.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* ── RESUMO ── */}
@@ -7275,7 +7567,28 @@ function BotoesPeriodo({ de, ate, onChangeDe, onChangeAte }) {
 
 export default function App() {
   // ── Auth do dashboard ─────────────────────────────────────
-  const [tab, setTab] = useState("listings");
+  const [tab, setTab] = useState("overview");
+  const [openTabs, setOpenTabs] = useState(["overview"]); // abas abertas em paralelo
+
+  function abrirAba(key) {
+    setTab(key);
+    setOpenTabs(function(prev) {
+      if (prev.includes(key)) return prev;
+      return [...prev, key];
+    });
+  }
+  function fecharAba(key) {
+    setOpenTabs(function(prev) {
+      var next = prev.filter(function(k){ return k !== key; });
+      if (next.length === 0) next = ["overview"];
+      return next;
+    });
+    setTab(function(cur) {
+      if (cur !== key) return cur;
+      var prev2 = openTabs.filter(function(k){ return k !== key; });
+      return prev2.length > 0 ? prev2[prev2.length - 1] : "overview";
+    });
+  }
   const [costs, setCosts] = useState({});
   const [minStock, setMinStock] = useState({});
   const [selectedListing, setSelectedListing] = useState(null);
@@ -7989,41 +8302,102 @@ export default function App() {
               <div style={{ fontSize:9, color:"#94a3b8", letterSpacing:1.2, textTransform:"uppercase", lineHeight:1 }}>Lucratividade</div>
             </div>
           </div>
-          {/* Abas */}
+          {/* Abas abertas com suporte a múltiplas janelas */}
           <div style={{ display:"flex", gap:0, alignItems:"stretch", overflowX:"auto", msOverflowStyle:"none", scrollbarWidth:"none" }}>
             {(function() {
-              var navTabs = [
-                currentUser?.permissoes?.includes("overview") && { key:"overview", label:"Visão Geral", badge:null },
-                currentUser?.permissoes?.includes("listings") && { key:"listings", label:"Anúncios", badge:enriched.length },
-                currentUser?.permissoes?.includes("orders") && { key:"orders", label:"Pedidos", badge:enrichedOrders.length },
-                currentUser?.permissoes?.includes("financeiro") && { key:"financeiro", label:"Financeiro", badge:null },
-                currentUser?.admin && { key:"admin", label:"Usuários", badge:null },
-                currentUser?.permissoes?.includes("produtos") && { key:"produtos", label:"Produtos", badge:null },
-                currentUser?.permissoes?.includes("produtos") && { key:"nf", label:"NF Entrada", badge:null },
-                currentUser?.permissoes?.includes("orders") && { key:"nfe_saida", label:"NF Saída", badge:null },
+              var TODAS_ABAS = [
+                currentUser?.permissoes?.includes("overview")   && { key:"overview",   label:"Visão Geral", badge:null },
+                currentUser?.permissoes?.includes("listings")   && { key:"listings",   label:"Anúncios",    badge:enriched.length },
+                currentUser?.permissoes?.includes("orders")     && { key:"orders",     label:"Pedidos",     badge:enrichedOrders.length },
+                currentUser?.permissoes?.includes("financeiro") && { key:"financeiro", label:"Financeiro",  badge:null },
+                currentUser?.admin                              && { key:"admin",       label:"Usuários",    badge:null },
+                currentUser?.permissoes?.includes("produtos")   && { key:"produtos",   label:"Produtos",    badge:null },
+                currentUser?.permissoes?.includes("produtos")   && { key:"nf",         label:"NF Entrada",  badge:null },
+                currentUser?.permissoes?.includes("orders")     && { key:"nfe_saida",  label:"NF Saída",    badge:null },
               ].filter(Boolean);
-              return navTabs.map(function(t) {
-                var isActive = tab === t.key;
-                return (
-                  <button key={t.key} onClick={function(){ setTab(t.key); }}
-                    style={{ display:"flex", alignItems:"center", gap:6, padding:"0 16px", height:62, background:"transparent", border:"none",
-                      borderBottom: isActive ? "2px solid #0f172a" : "2px solid transparent",
-                      color: isActive ? (darkMode?"#f1f5f9":"#0f172a") : "#94a3b8",
-                      fontWeight: isActive ? 600 : 400, fontSize:13, cursor:"pointer",
-                      fontFamily:"inherit", whiteSpace:"nowrap", transition:"color .15s,border-color .15s",
-                      borderTop: "2px solid transparent" }}>
-                    {t.label}
-                    {t.badge !== null && (
-                      <span style={{ fontSize:10, fontWeight:600, padding:"1px 6px", borderRadius:10,
-                        background: isActive ? "#0f172a" : "#f1f5f9",
-                        color: isActive ? "#fff" : "#94a3b8",
-                        transition:"all .15s", lineHeight:1.6 }}>
-                        {t.badge}
-                      </span>
-                    )}
-                  </button>
-                );
-              });
+
+              var abasNaoAbertas = TODAS_ABAS.filter(function(t){ return !openTabs.includes(t.key); });
+
+              return (
+                <>
+                  {/* Abas abertas */}
+                  {openTabs.map(function(key) {
+                    var t = TODAS_ABAS.find(function(x){ return x.key === key; });
+                    if (!t) return null;
+                    var isActive = tab === key;
+                    return (
+                      <div key={key} style={{ display:"flex", alignItems:"stretch", position:"relative" }}>
+                        <button onClick={function(){ setTab(key); }}
+                          style={{ display:"flex", alignItems:"center", gap:5, padding:"0 14px 0 16px", height:62, background:"transparent", border:"none",
+                            borderBottom: isActive ? "2px solid #0f172a" : "2px solid transparent",
+                            borderTop: "2px solid transparent",
+                            color: isActive ? (darkMode?"#f1f5f9":"#0f172a") : "#94a3b8",
+                            fontWeight: isActive ? 600 : 400, fontSize:13, cursor:"pointer",
+                            fontFamily:"inherit", whiteSpace:"nowrap", transition:"color .15s,border-color .15s" }}>
+                          {t.label}
+                          {t.badge !== null && (
+                            <span style={{ fontSize:10, fontWeight:600, padding:"1px 6px", borderRadius:10,
+                              background: isActive ? "#0f172a" : "#f1f5f9",
+                              color: isActive ? "#fff" : "#94a3b8", lineHeight:1.6 }}>
+                              {t.badge}
+                            </span>
+                          )}
+                        </button>
+                        {openTabs.length > 1 && (
+                          <button onClick={function(e){ e.stopPropagation(); fecharAba(key); }}
+                            title="Fechar aba"
+                            style={{ width:18, height:18, borderRadius:"50%", border:"none", background:"transparent",
+                              color:"#94a3b8", cursor:"pointer", fontSize:11, display:"flex", alignItems:"center",
+                              justifyContent:"center", alignSelf:"center", marginRight:4, flexShrink:0,
+                              transition:"all .15s" }}
+                            onMouseEnter={function(e){ e.currentTarget.style.background="#fee2e2"; e.currentTarget.style.color="#dc2626"; }}
+                            onMouseLeave={function(e){ e.currentTarget.style.background="transparent"; e.currentTarget.style.color="#94a3b8"; }}>
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {/* Botão + para abrir nova aba */}
+                  {abasNaoAbertas.length > 0 && (
+                    <div style={{ position:"relative", alignSelf:"center", marginLeft:4 }}>
+                      <button
+                        onClick={function(e){
+                          e.stopPropagation();
+                          var el = document.getElementById("ml-new-tab-menu");
+                          if (el) el.style.display = el.style.display === "none" ? "block" : "none";
+                        }}
+                        style={{ width:26, height:26, borderRadius:7, border:"1px solid #e2e8f0",
+                          background:"#f8fafc", color:"#64748b", cursor:"pointer", fontSize:14,
+                          display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}
+                        title="Abrir nova aba">
+                        +
+                      </button>
+                      <div id="ml-new-tab-menu" style={{ display:"none", position:"absolute", top:36, left:0, background:"#fff",
+                        border:"1px solid #e2e8f0", borderRadius:10, boxShadow:"0 8px 24px rgba(0,0,0,.12)",
+                        zIndex:200, minWidth:160, overflow:"hidden" }}
+                        onMouseLeave={function(){ document.getElementById("ml-new-tab-menu").style.display="none"; }}>
+                        {abasNaoAbertas.map(function(t) {
+                          return (
+                            <button key={t.key} onClick={function(){
+                                abrirAba(t.key);
+                                document.getElementById("ml-new-tab-menu").style.display="none";
+                              }}
+                              style={{ width:"100%", background:"transparent", border:"none", borderBottom:"1px solid #f1f5f9",
+                                color:"#334155", padding:"10px 16px", cursor:"pointer", fontFamily:"inherit",
+                                fontSize:13, textAlign:"left", display:"flex", alignItems:"center", gap:8 }}
+                              onMouseEnter={function(e){ e.currentTarget.style.background="#f8fafc"; }}
+                              onMouseLeave={function(e){ e.currentTarget.style.background="transparent"; }}>
+                              + {t.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
             })()}
           </div>
         </div>

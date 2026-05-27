@@ -134,61 +134,119 @@ async function fetchAllListings(userId, tk) {
 
 // Importa/sincroniza anúncios ML para o cadastro de produtos
 function syncListingsToProdutos(listings, produtosExistentes) {
-  const produtosMap = {};
-  produtosExistentes.forEach(p => {
-    if (p.mlbVinculado) produtosMap[p.mlbVinculado] = p;
-    if (p.sku) produtosMap[`sku_${p.sku}`] = p;
+  var hoje = new Date().toLocaleDateString("sv-SE");
+
+  // ── PASSO 1: Agrupar anúncios por SKU ────────────────────────────────
+  // Chave: SKU se disponível, senão MLB (produto sem SKU = produto único)
+  var gruposPorSku = {}; // chave -> [listing, ...]
+  listings.forEach(function(l) {
+    var sku = l.seller_sku || l.attributes?.find(function(a){return a.id==="SELLER_SKU";})?.value_name || "";
+    var chave = sku ? ("sku_" + sku) : ("mlb_" + l.id);
+    if (!gruposPorSku[chave]) gruposPorSku[chave] = { sku: sku, listings: [] };
+    gruposPorSku[chave].listings.push(l);
   });
 
-  const novos = [];
-  const atualizados = [];
+  // ── PASSO 2: Mapear produtos existentes por SKU e MLB ─────────────────
+  var mapSku = {}; // sku -> produto existente
+  var mapMlb = {}; // mlb -> produto existente
+  produtosExistentes.forEach(function(p) {
+    if (p.sku) mapSku[p.sku] = p;
+    if (p.mlbVinculado) mapMlb[p.mlbVinculado] = p;
+    // mlbs extras (array de MLBs vinculados)
+    if (Array.isArray(p.mlbsVinculados)) {
+      p.mlbsVinculados.forEach(function(m){ mapMlb[m] = p; });
+    }
+  });
 
-  listings.forEach(l => {
-    const sku = l.seller_sku || l.attributes?.find(a => a.id==="SELLER_SKU")?.value_name || "";
-    const existente = produtosMap[l.id] || (sku ? produtosMap[`sku_${sku}`] : null);
+  // ── PASSO 3: Montar produtos agrupados ────────────────────────────────
+  var resultado = [];
+  var produtosProcessados = new Set();
 
-    const dadosML = {
-      mlbVinculado: l.id,
-      titulo: l.title || "",
+  Object.keys(gruposPorSku).forEach(function(chave) {
+    var grupo = gruposPorSku[chave];
+    var ls = grupo.listings;
+    var sku = grupo.sku;
+
+    // Encontrar produto existente para esse SKU
+    var existente = (sku && mapSku[sku]) || mapMlb[ls[0].id] || null;
+    // Se tem mais de um MLB, verificar se algum já tem produto
+    if (!existente && ls.length > 1) {
+      for (var i = 0; i < ls.length; i++) {
+        if (mapMlb[ls[i].id]) { existente = mapMlb[ls[i].id]; break; }
+      }
+    }
+
+    if (existente && produtosProcessados.has(existente.id)) return; // já processou
+    if (existente) produtosProcessados.add(existente.id);
+
+    // Dados do primeiro anúncio ativo, ou o primeiro da lista
+    var lPrincipal = ls.find(function(l){return l.status==="active";}) || ls[0];
+
+    // Consolidar estoque: soma de todos
+    var estoqueTotal = ls.reduce(function(s,l){ return s + (parseInt(l.available_quantity)||0); }, 0);
+
+    // Coletar todos os MLBs
+    var mlbsVinculados = ls.map(function(l){ return l.id; });
+
+    // Coletar todas as imagens (sem duplicatas)
+    var todasImagens = [];
+    var imgSet = new Set();
+    ls.forEach(function(l){
+      (l.pictures||[]).slice(0,5).forEach(function(p){
+        if (p.url && !imgSet.has(p.url)) { imgSet.add(p.url); todasImagens.push(p.url); }
+      });
+    });
+
+    // Status: Ativo se qualquer anúncio ativo
+    var temAtivo = ls.some(function(l){ return l.status==="active"; });
+    var statusProd = temAtivo ? "Ativo" : "Inativo";
+
+    // Preço de venda: do anúncio principal
+    var precoVenda = String(lPrincipal.price || "");
+
+    var dadosML = {
+      titulo: lPrincipal.title || "",
       sku: sku,
-      precoVenda: String(l.price || ""),
-      estoqueAtual: String(l.available_quantity || 0),
-      status: l.status === "active" ? "Ativo" : "Inativo",
-      imagens: l.pictures?.slice(0,10).map(p => p.url).filter(Boolean) || [],
-      peso: l.shipping?.dimensions?.weight ? String(l.shipping.dimensions.weight/1000) : "",
-      comprimento: l.shipping?.dimensions?.length ? String(l.shipping.dimensions.length) : "",
-      largura: l.shipping?.dimensions?.width ? String(l.shipping.dimensions.width) : "",
-      altura: l.shipping?.dimensions?.height ? String(l.shipping.dimensions.height) : "",
-      descricao: l.description?.plain_text?.slice(0, 500) || "",
-      categoria: "Outros",
+      precoVenda: precoVenda,
+      estoqueAtual: String(estoqueTotal),
+      status: statusProd,
+      imagens: todasImagens.slice(0, 10),
+      mlbVinculado: lPrincipal.id,       // MLB principal (retrocompatibilidade)
+      mlbsVinculados: mlbsVinculados,    // TODOS os MLBs desse SKU
       syncML: true,
-      ultimoSyncML: new Date().toLocaleDateString("sv-SE"),
+      ultimoSyncML: hoje,
+      categoria: "Outros",
     };
 
     if (existente) {
-      // Atualiza apenas campos do ML, preserva custo e dados manuais
-      const atualizado = {
-        ...existente,
+      resultado.push(Object.assign({}, existente, {
         titulo: dadosML.titulo,
         precoVenda: dadosML.precoVenda,
         estoqueAtual: dadosML.estoqueAtual,
         status: dadosML.status,
-        mlbVinculado: l.id,
         sku: dadosML.sku || existente.sku,
+        mlbVinculado: dadosML.mlbVinculado,
+        mlbsVinculados: dadosML.mlbsVinculados,
         imagens: dadosML.imagens.length > 0 ? dadosML.imagens : existente.imagens,
         syncML: true,
-        ultimoSyncML: dadosML.ultimoSyncML,
-      };
-      atualizados.push(atualizado);
+        ultimoSyncML: hoje,
+      }));
     } else {
-      novos.push({ ...dadosML, id: `ml_${l.id}`, criadoViaML: true });
+      resultado.push(Object.assign({}, dadosML, {
+        id: sku ? ("sku_prod_" + sku) : ("ml_" + lPrincipal.id),
+        criadoViaML: true,
+      }));
     }
   });
 
-  // Monta lista final: atualizados + não-sincronizados + novos
-  const idsAtualizados = new Set(atualizados.map(p => p.id));
-  const naoSincronizados = produtosExistentes.filter(p => !idsAtualizados.has(p.id));
-  return [...atualizados, ...naoSincronizados, ...novos];
+  // ── PASSO 4: Manter produtos manuais não-sincronizados ────────────────
+  produtosExistentes.forEach(function(p) {
+    if (!produtosProcessados.has(p.id) && !p.criadoViaML) {
+      resultado.push(p);
+    }
+  });
+
+  return resultado;
 }
 
 async function fetchAllOrders(userId, tk) {
@@ -3296,7 +3354,14 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                 setProdutos(sincronizados); saveProdutos(sincronizados);
                 // Sync custos
                 const newCosts = {};
-                sincronizados.forEach(p => { if (p.mlbVinculado && p.precoCusto) newCosts[p.mlbVinculado] = parseFloat(p.precoCusto); });
+                sincronizados.forEach(p => {
+      if (p.precoCusto) {
+        var custo = parseFloat(p.precoCusto);
+        // Aplicar custo a todos os MLBs desse produto
+        var mlbs = p.mlbsVinculados || (p.mlbVinculado ? [p.mlbVinculado] : []);
+        mlbs.forEach(function(mlb){ newCosts[mlb] = custo; });
+      }
+    });
                 if (Object.keys(newCosts).length > 0) setCosts(c => ({...c, ...newCosts}));
                 alert(`✅ ${sincronizados.length} produtos sincronizados com o ML!`);
               }}
@@ -3375,6 +3440,8 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                 <tbody>
                   {produtosFiltrados.map((p, i) => {
                     const forn = fornecedores.find(f => f.id === p.fornecedorId);
+                    // mlbsVinculados: array com todos os MLBs; mlbVinculado: retrocompatibilidade
+                    var todosMLBs = p.mlbsVinculados || (p.mlbVinculado ? [p.mlbVinculado] : []);
                     const mlListing = listings.find(l => l.id === p.mlbVinculado);
                     const estBaixo = p.estoqueMinimo && p.estoqueAtual && parseFloat(p.estoqueAtual) <= parseFloat(p.estoqueMinimo);
                     return (
@@ -3430,8 +3497,28 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                           <span style={{ fontSize:11, fontWeight:600, color:p.status==="Ativo"?"#15803d":"#94a3b8", background:p.status==="Ativo"?"#f0fdf4":"#f8fafc", padding:"3px 8px", borderRadius:6 }}>{p.status}</span>
                         </td>
                         <td style={{ padding:"10px 14px" }}>
-                          {mlListing ? (
-                            <div style={{ fontSize:11, color:"#15803d" }}>✓ {mlListing.id}</div>
+                          {todosMLBs.length > 0 ? (
+                            <div>
+                              {todosMLBs.map(function(mlb) {
+                                var lst = listings.find(function(l){ return l.id === mlb; });
+                                return (
+                                  <div key={mlb} style={{ display:"flex", alignItems:"center", gap:4, marginBottom:2 }}>
+                                    <span style={{ fontSize:10, fontWeight:600, color:lst?.status==="active"?"#15803d":"#94a3b8" }}>
+                                      {lst?.status==="active"?"✓":"○"}
+                                    </span>
+                                    <span style={{ fontSize:10, fontFamily:"monospace", color:"#334155" }}>{mlb}</span>
+                                    {lst && <span style={{ fontSize:9, color:lst.status==="active"?"#15803d":"#94a3b8" }}>
+                                      {lst.status==="active"?"Ativo":"Inativo"}
+                                    </span>}
+                                  </div>
+                                );
+                              })}
+                              {todosMLBs.length > 1 && (
+                                <span style={{ fontSize:9, background:"#eff6ff", color:"#1d4ed8", padding:"1px 5px", borderRadius:4, fontWeight:600 }}>
+                                  {todosMLBs.length} anúncios
+                                </span>
+                              )}
+                            </div>
                           ) : <span style={{ fontSize:11, color:"#94a3b8" }}>—</span>}
                         </td>
                         <td style={{ padding:"10px 14px" }}>
@@ -6285,8 +6372,12 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                   );
                   return filtered.slice(0, 100).map(function(o, i) {
                     var ss = shipmentStatuses?.[o.id] ?? o.shipment_status;
-                    var isDelivered2 = ss === "delivered" || o.tags?.some(function(t){return t==="delivered";});
+                    var ltR = (shipmentStatuses?.[String(o.id) + "_logistic"]) || o.shipping?.logistic_type || "";
+                    var isFullR = o.fulfilled === true || (o.orderTags||o.tags||[]).some(function(t){return String(t).includes("fulfillment");});
+                    var isFlexR = !isFullR && (ltR === "fulfillment" || ltR.includes("flex"));
+                    var isDelivered2 = ss === "delivered" || (o.tags||[]).some(function(t){return t==="delivered";});
                     var isEnviado = ["shipped","in_transit"].includes(ss);
+                    var envLabel = isFullR ? "FULL" : isFlexR ? "Flex" : ltR.includes("drop_off")||ltR.includes("xd_") ? "ME2" : null;
                     var label = isDelivered2 ? "Entregue" : isEnviado ? "Enviado" : "Ag. Envio";
                     var color = isDelivered2 ? "#7c3aed" : isEnviado ? "#0891b2" : "#d97706";
                     var bg = isDelivered2 ? "#f5f3ff" : isEnviado ? "#ecfeff" : "#fffbeb";
@@ -6299,7 +6390,9 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                     var netFinal = bruto - tarifaExib - freteExib;
                     if (netFinal <= 0) netFinal = bruto * 0.87; // fallback seguro
                     var netEstimado = tarifaExib === 0 && freteExib === 0;
-                    var taxa = bruto > 0 ? ((bruto - netFinal) / bruto * 100) : 0;
+                    var taxaTarifa = bruto > 0 ? (tarifaExib / bruto * 100) : 0;
+                    var taxaFrete  = bruto > 0 ? (freteExib  / bruto * 100) : 0;
+                    var taxa = taxaTarifa + taxaFrete; // total (para compatibilidade)
                     // Previsão: data real da API ou +14 dias da data do pedido
                     var releaseDate = pd?.releaseDate || null;
                     if (!releaseDate && o.date) {
@@ -6336,7 +6429,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                           ) : (
                             <span style={{ fontSize:12, color:"#94a3b8" }}>—</span>
                           )}
-                          <div style={{ fontSize:9, color:"#94a3b8" }}>{taxa > 0 ? taxa.toFixed(1)+"%" : ""}</div>
+                          {taxaTarifa > 0 && <div style={{ fontSize:9, color:"#d97706", opacity:0.8 }}>{taxaTarifa.toFixed(1)}%</div>}
                         </td>
                         <td style={{ padding:"10px 14px", whiteSpace:"nowrap" }}>
                           {freteExib > 0 ? (
@@ -6344,6 +6437,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                           ) : (
                             <span style={{ fontSize:12, color:"#94a3b8" }}>—</span>
                           )}
+                          {taxaFrete > 0 && <div style={{ fontSize:9, color:"#7c3aed", opacity:0.8 }}>{taxaFrete.toFixed(1)}%</div>}
                         </td>
                         <td style={{ padding:"10px 14px", whiteSpace:"nowrap" }}>
                           <div style={{ fontSize:13, fontWeight:800, color: netEstimado ? "#d97706" : "#15803d" }}>
@@ -6359,7 +6453,10 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                               <div style={{ fontSize:12, fontWeight:700, color:relColor }}>
                                 {relDays <= 0 ? "✓ Liberado" : fmtDate(releaseDate)}
                               </div>
-                              {relDays > 0 && <div style={{ fontSize:10, color:relColor, opacity:0.8 }}>em {relDays} dia(s)</div>}
+                              {relDays <= 0
+                                ? <div style={{ fontSize:10, color:relColor, opacity:0.8 }}>{fmtDate(releaseDate)}</div>
+                                : <div style={{ fontSize:10, color:relColor, opacity:0.8 }}>em {relDays} dia(s)</div>
+                              }
                             </div>
                           ) : (
                             <span style={{ fontSize:11, color:"#94a3b8", fontStyle:"italic" }}>Aguardando ML</span>
@@ -6816,62 +6913,109 @@ function NfSaidaTab({ enrichedOrders, nfeSaida, setNfeSaida, loadingNfe, setLoad
     setLoadingNfe(true);
     var mapa = {};
     var pedidos = enrichedOrders.filter(function(o){ return o.status === "paid"; }).slice(0, 200);
-    for (var i = 0; i < pedidos.length; i += 5) {
-      var batch = pedidos.slice(i, i + 5);
+    setNfeSaida({}); // limpar resultado anterior
+
+    // Helper: extrair dados de NF de qualquer formato de resposta do ML
+    function extrairNF(d) {
+      if (!d || d.error || d.status === 404) return null;
+      // Formato 1: objeto direto com campos de NF
+      var docs = null;
+      if (Array.isArray(d)) docs = d;
+      else if (Array.isArray(d.fiscal_documents)) docs = d.fiscal_documents;
+      else if (Array.isArray(d.results)) docs = d.results;
+      else if (d.number || d.access_key || d.key || d.serie_number || d.xml_url) docs = [d];
+      else if (d.invoice && (d.invoice.number || d.invoice.key)) docs = [d.invoice];
+
+      if (!docs || docs.length === 0) return null;
+
+      var doc = docs[0];
+      var numero = doc.number || doc.serie_number || doc.invoice_number || null;
+      var chave  = doc.access_key || doc.key || doc.nfe_access_key || null;
+      var serie  = doc.serie || doc.series || null;
+      var dataEm = doc.emission_date || doc.date_created || doc.date || null;
+      var xmlUrl  = doc.xml_url || doc.xml || null;
+      var danfeUrl = doc.pdf_url || doc.danfe_url || doc.danfe || null;
+
+      if (!numero && !chave && !xmlUrl) return null;
+      return { numero, chave, serie, dataEmissao: dataEm, xmlUrl, danfeUrl, raw: doc };
+    }
+
+    for (var i = 0; i < pedidos.length; i += 3) {
+      var batch = pedidos.slice(i, i + 3);
       await Promise.all(batch.map(async function(o) {
-        try {
-          // Endpoint 1: billing_info do pedido
-          var r1 = await fetch("/api/ml/orders/" + o.id + "/billing_info", {
-            headers: { Authorization: "Bearer " + token }
-          });
-          var d1 = await r1.json();
-          if (d1 && !d1.error) {
-            var nf = {
-              orderId: o.id,
-              orderTitle: o.title,
-              orderDate: o.date,
-              buyerName: o.buyerName,
-              buyerDoc: o.buyerDoc,
-              buyerUF: o.buyerUF,
-              valor: o.price * o.qty,
-              // Dados da NF
-              serie: d1.serie || d1.invoice?.serie || null,
-              numero: d1.number || d1.invoice?.number || d1.serie_number || null,
-              chave: d1.key || d1.invoice?.key || d1.access_key || null,
-              dataEmissao: d1.emission_date || d1.invoice?.emission_date || null,
-              xmlUrl: d1.xml_url || d1.invoice?.xml_url || null,
-              danfeUrl: d1.danfe_url || d1.invoice?.danfe_url || null,
-              status: d1.status || d1.invoice?.status || null,
-              raw: d1,
-            };
-            if (nf.numero || nf.chave || nf.xmlUrl) {
-              mapa[String(o.id)] = nf;
-            } else {
-              // Tentar endpoint 2: fiscal_documents
-              try {
-                var r2 = await fetch("/api/ml/packs/" + o.id + "/fiscal_documents", {
-                  headers: { Authorization: "Bearer " + token }
-                });
-                var d2 = await r2.json();
-                if (d2 && !d2.error && Array.isArray(d2) && d2.length > 0) {
-                  var doc = d2[0];
-                  nf.numero = doc.number || doc.serie_number || null;
-                  nf.chave = doc.access_key || doc.key || null;
-                  nf.xmlUrl = doc.xml_url || null;
-                  nf.danfeUrl = doc.pdf_url || doc.danfe_url || null;
-                  nf.dataEmissao = doc.date || null;
-                  mapa[String(o.id)] = nf;
-                } else {
-                  mapa[String(o.id)] = Object.assign(nf, { semNF: true });
-                }
-              } catch(e) {
-                mapa[String(o.id)] = Object.assign(nf, { semNF: true });
-              }
-            }
-          }
-        } catch(e) {}
+        var base = {
+          orderId: o.id, orderTitle: o.title, orderDate: o.date,
+          buyerName: o.buyerName, buyerDoc: o.buyerDoc, buyerUF: o.buyerUF,
+          valor: o.price * o.qty,
+        };
+
+        // Obter shipment_id do pedido (necessário para buscar NF)
+        var shipmentId = o.shipping?.id || null;
+        var nfDados = null;
+
+        // ── Endpoint 1: shipments/{shipmentId}/fiscal_documents (principal) ──
+        if (shipmentId && !nfDados) {
+          try {
+            var r1 = await fetch("/api/ml/shipments/" + shipmentId + "/fiscal_documents", {
+              headers: { Authorization: "Bearer " + token }
+            });
+            var d1raw = await r1.json();
+            if (i < 3) console.log("[NF DEBUG] shipment", shipmentId, "->", JSON.stringify(d1raw).slice(0,200));
+            if (r1.ok) nfDados = extrairNF(d1raw);
+          } catch(e) { if (i < 3) console.log("[NF DEBUG] shipment err", e.message); }
+        }
+
+        // ── Endpoint 2: orders/{id}/fiscal_documents ──
+        if (!nfDados) {
+          try {
+            var r2 = await fetch("/api/ml/orders/" + o.id + "/fiscal_documents", {
+              headers: { Authorization: "Bearer " + token }
+            });
+            var d2raw = await r2.json();
+            if (i < 3) console.log("[NF DEBUG] order/fiscal", o.id, "->", JSON.stringify(d2raw).slice(0,200));
+            if (r2.ok) nfDados = extrairNF(d2raw);
+          } catch(e) {}
+        }
+
+        // ── Endpoint 2b: orders/{id}/billing ──
+        if (!nfDados) {
+          try {
+            var r2b = await fetch("/api/ml/orders/" + o.id + "/billing", {
+              headers: { Authorization: "Bearer " + token }
+            });
+            var d2braw = await r2b.json();
+            if (i < 3) console.log("[NF DEBUG] order/billing", o.id, "->", JSON.stringify(d2braw).slice(0,200));
+            if (r2b.ok) nfDados = extrairNF(d2braw);
+          } catch(e) {}
+        }
+
+        // ── Endpoint 3: orders/{id}/billing_info ──
+        if (!nfDados) {
+          try {
+            var r3 = await fetch("/api/ml/orders/" + o.id + "/billing_info", {
+              headers: { Authorization: "Bearer " + token }
+            });
+            if (r3.ok) nfDados = extrairNF(await r3.json());
+          } catch(e) {}
+        }
+
+        // ── Endpoint 4: packs/{packId}/fiscal_documents (para pedidos com pack) ──
+        if (!nfDados && o.packId) {
+          try {
+            var r4 = await fetch("/api/ml/packs/" + o.packId + "/fiscal_documents", {
+              headers: { Authorization: "Bearer " + token }
+            });
+            if (r4.ok) nfDados = extrairNF(await r4.json());
+          } catch(e) {}
+        }
+
+        if (nfDados) {
+          mapa[String(o.id)] = Object.assign(base, nfDados);
+        } else {
+          mapa[String(o.id)] = Object.assign(base, { semNF: true });
+        }
       }));
-      await new Promise(function(r){ setTimeout(r, 200); });
+      await new Promise(function(r){ setTimeout(r, 300); });
     }
     setNfeSaida(mapa);
     setLoadingNfe(false);
@@ -7537,6 +7681,9 @@ export default function App() {
       buyerCity: buyerAddr.city?.name || null,
       buyerZip: buyerAddr.zip_code || null,
       shipping: o.shipping || null,
+      fulfilled: o.fulfilled || false,
+      orderTags: o.tags || [],
+      packId: o.pack_id ? String(o.pack_id) : null,
     };
   });
 
@@ -8265,8 +8412,13 @@ export default function App() {
                     var youReceive = o.price - o.fee - o.freteSeller;
                     var sInfo = getOrderStatusInfo(o.status, o.tags, o.fulfilled, o.shipment_status);
                     var lt = (shipmentStatuses?.[String(o.id) + "_logistic"]) || o.shipping?.logistic_type || "";
-                    var envCfg = lt.includes("fulfillment")||lt.includes("self_service") ? {label:"FULL",color:"#1d4ed8",bg:"#eff6ff"}
-                      : lt.includes("flex") ? {label:"Flex",color:"#7c3aed",bg:"#f5f3ff"}
+                    // FULL = fulfilled===true OU tags tem "fulfillment"
+                    // Flex = logistic_type==="fulfillment" COM fulfilled===false (entrega pelo vendedor com rota ML)
+                    var isFull = o.fulfilled === true || (o.orderTags||o.tags||[]).some(function(t){return String(t).includes("fulfillment");});
+                    var isFlex = !isFull && (lt === "fulfillment" || lt.includes("flex"));
+                    var envCfg = isFull ? {label:"FULL",color:"#1d4ed8",bg:"#eff6ff"}
+                      : isFlex ? {label:"Flex",color:"#7c3aed",bg:"#f5f3ff"}
+                      : lt.includes("self_service") ? {label:"FULL",color:"#1d4ed8",bg:"#eff6ff"}
                       : lt.includes("drop_off")||lt.includes("xd_") ? {label:"ME2",color:"#0891b2",bg:"#ecfeff"}
                       : lt.includes("me1")||lt.includes("mandatory") ? {label:"ME1",color:"#0369a1",bg:"#e0f2fe"}
                       : lt.includes("cross") ? {label:"Cross",color:"#15803d",bg:"#f0fdf4"}

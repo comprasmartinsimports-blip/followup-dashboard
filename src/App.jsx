@@ -6911,113 +6911,124 @@ function NfSaidaTab({ enrichedOrders, nfeSaida, setNfeSaida, loadingNfe, setLoad
   async function buscarNFs() {
     if (!token) { alert("Reconecte ao ML primeiro"); return; }
     setLoadingNfe(true);
+    setNfeSaida({});
     var mapa = {};
     var pedidos = enrichedOrders.filter(function(o){ return o.status === "paid"; }).slice(0, 200);
-    setNfeSaida({}); // limpar resultado anterior
 
-    // Helper: extrair dados de NF de qualquer formato de resposta do ML
+    // Helper robusto para extrair NF de qualquer formato ML
     function extrairNF(d) {
-      if (!d || d.error || d.status === 404) return null;
-      // Formato 1: objeto direto com campos de NF
-      var docs = null;
-      if (Array.isArray(d)) docs = d;
-      else if (Array.isArray(d.fiscal_documents)) docs = d.fiscal_documents;
-      else if (Array.isArray(d.results)) docs = d.results;
-      else if (d.number || d.access_key || d.key || d.serie_number || d.xml_url) docs = [d];
-      else if (d.invoice && (d.invoice.number || d.invoice.key)) docs = [d.invoice];
+      if (!d || d.error || d.status === 404 || d.status === 400) return null;
+      // Tentar todos os formatos conhecidos do ML
+      var candidatos = [];
+      if (Array.isArray(d)) candidatos = d;
+      else if (Array.isArray(d.results)) candidatos = d.results;
+      else if (Array.isArray(d.fiscal_documents)) candidatos = d.fiscal_documents;
+      else if (Array.isArray(d.invoices)) candidatos = d.invoices;
+      else if (d.invoice_data) candidatos = [d.invoice_data];
+      else if (d.billing_info) candidatos = [d.billing_info];
+      else if (d.nfe || d.nfce || d.nfs) candidatos = [d.nfe || d.nfce || d.nfs];
+      else candidatos = [d];
 
-      if (!docs || docs.length === 0) return null;
-
-      var doc = docs[0];
-      var numero = doc.number || doc.serie_number || doc.invoice_number || null;
-      var chave  = doc.access_key || doc.key || doc.nfe_access_key || null;
-      var serie  = doc.serie || doc.series || null;
-      var dataEm = doc.emission_date || doc.date_created || doc.date || null;
-      var xmlUrl  = doc.xml_url || doc.xml || null;
-      var danfeUrl = doc.pdf_url || doc.danfe_url || doc.danfe || null;
-
-      if (!numero && !chave && !xmlUrl) return null;
-      return { numero, chave, serie, dataEmissao: dataEm, xmlUrl, danfeUrl, raw: doc };
+      for (var ci = 0; ci < candidatos.length; ci++) {
+        var doc = candidatos[ci];
+        if (!doc) continue;
+        var numero = doc.number || doc.serie_number || doc.invoice_number || doc.nota_fiscal_number || null;
+        var chave  = doc.access_key || doc.key || doc.nfe_access_key || doc.chave_acesso || doc.access_code || null;
+        // Chave NF-e tem 44 dígitos
+        if (chave && chave.length !== 44) { var m = String(chave).match(/\d{44}/); chave = m ? m[0] : null; }
+        var serie  = doc.serie || doc.series || null;
+        var dataEm = doc.emission_date || doc.date_created || doc.issued_date || doc.date || null;
+        var xmlUrl  = doc.xml_url || doc.xml || null;
+        var danfeUrl = doc.pdf_url || doc.danfe_url || doc.danfe || doc.document_url || null;
+        if (numero || chave || xmlUrl) {
+          return { numero: numero, chave: chave, serie: serie, dataEmissao: dataEm, xmlUrl: xmlUrl, danfeUrl: danfeUrl, raw: doc };
+        }
+      }
+      return null;
     }
 
-    for (var i = 0; i < pedidos.length; i += 3) {
-      var batch = pedidos.slice(i, i + 3);
-      await Promise.all(batch.map(async function(o) {
-        var base = {
-          orderId: o.id, orderTitle: o.title, orderDate: o.date,
-          buyerName: o.buyerName, buyerDoc: o.buyerDoc, buyerUF: o.buyerUF,
-          valor: o.price * o.qty,
-        };
+    // Buscar dados completos do pedido para pegar invoice_data e pack_id
+    async function buscarNFPedido(o) {
+      var nfDados = null;
+      var base = {
+        orderId: o.id, orderTitle: o.title, orderDate: o.date,
+        buyerName: o.buyerName, buyerDoc: o.buyerDoc, buyerUF: o.buyerUF,
+        valor: o.price * o.qty,
+      };
 
-        // Obter shipment_id do pedido (necessário para buscar NF)
-        var shipmentId = o.shipping?.id || null;
-        var nfDados = null;
-
-        // ── Endpoint 1: shipments/{shipmentId}/fiscal_documents (principal) ──
-        if (shipmentId && !nfDados) {
-          try {
-            var r1 = await fetch("/api/ml/shipments/" + shipmentId + "/fiscal_documents", {
-              headers: { Authorization: "Bearer " + token }
-            });
-            var d1raw = await r1.json();
-            if (i < 3) console.log("[NF DEBUG] shipment", shipmentId, "->", JSON.stringify(d1raw).slice(0,200));
-            if (r1.ok) nfDados = extrairNF(d1raw);
-          } catch(e) { if (i < 3) console.log("[NF DEBUG] shipment err", e.message); }
+      // ── Endpoint principal: GET /orders/{id} com invoice_data ──────────
+      // O ML retorna invoice_data dentro do próprio pedido quando NF foi emitida
+      try {
+        var rOrder = await fetch("/api/ml/orders/" + o.id, {
+          headers: { Authorization: "Bearer " + token }
+        });
+        if (rOrder.ok) {
+          var dOrder = await rOrder.json();
+          // invoice_data dentro do pedido
+          if (dOrder.invoice_data) {
+            nfDados = extrairNF(dOrder.invoice_data);
+          }
+          // fiscal_documents dentro do pedido
+          if (!nfDados && dOrder.fiscal_documents) {
+            nfDados = extrairNF(dOrder.fiscal_documents);
+          }
+          // Atualizar packId se disponível
+          if (dOrder.pack_id) o.packId = String(dOrder.pack_id);
         }
+      } catch(e) {}
 
-        // ── Endpoint 2: orders/{id}/fiscal_documents ──
-        if (!nfDados) {
-          try {
-            var r2 = await fetch("/api/ml/orders/" + o.id + "/fiscal_documents", {
-              headers: { Authorization: "Bearer " + token }
-            });
-            var d2raw = await r2.json();
-            if (i < 3) console.log("[NF DEBUG] order/fiscal", o.id, "->", JSON.stringify(d2raw).slice(0,200));
-            if (r2.ok) nfDados = extrairNF(d2raw);
-          } catch(e) {}
-        }
+      // ── Endpoint 2: orders/{id}/billing_info ──────────────────────────
+      if (!nfDados) {
+        try {
+          var r2 = await fetch("/api/ml/orders/" + o.id + "/billing_info", {
+            headers: { Authorization: "Bearer " + token }
+          });
+          if (r2.ok) {
+            var d2 = await r2.json();
+            nfDados = extrairNF(d2);
+            // Às vezes vem dentro de invoice_data
+            if (!nfDados && d2.invoice_data) nfDados = extrairNF(d2.invoice_data);
+          }
+        } catch(e) {}
+      }
 
-        // ── Endpoint 2b: orders/{id}/billing ──
-        if (!nfDados) {
-          try {
-            var r2b = await fetch("/api/ml/orders/" + o.id + "/billing", {
-              headers: { Authorization: "Bearer " + token }
-            });
-            var d2braw = await r2b.json();
-            if (i < 3) console.log("[NF DEBUG] order/billing", o.id, "->", JSON.stringify(d2braw).slice(0,200));
-            if (r2b.ok) nfDados = extrairNF(d2braw);
-          } catch(e) {}
-        }
+      // ── Endpoint 3: packs/{packId}/billing_info ───────────────────────
+      if (!nfDados && o.packId) {
+        try {
+          var r3 = await fetch("/api/ml/packs/" + o.packId + "/billing_info", {
+            headers: { Authorization: "Bearer " + token }
+          });
+          if (r3.ok) {
+            var d3 = await r3.json();
+            nfDados = extrairNF(d3);
+            if (!nfDados && d3.invoice_data) nfDados = extrairNF(d3.invoice_data);
+          }
+        } catch(e) {}
+      }
 
-        // ── Endpoint 3: orders/{id}/billing_info ──
-        if (!nfDados) {
-          try {
-            var r3 = await fetch("/api/ml/orders/" + o.id + "/billing_info", {
-              headers: { Authorization: "Bearer " + token }
-            });
-            if (r3.ok) nfDados = extrairNF(await r3.json());
-          } catch(e) {}
-        }
+      // ── Endpoint 4: packs/{packId}/fiscal_documents ───────────────────
+      if (!nfDados && o.packId) {
+        try {
+          var r4 = await fetch("/api/ml/packs/" + o.packId + "/fiscal_documents", {
+            headers: { Authorization: "Bearer " + token }
+          });
+          if (r4.ok) nfDados = extrairNF(await r4.json());
+        } catch(e) {}
+      }
 
-        // ── Endpoint 4: packs/{packId}/fiscal_documents (para pedidos com pack) ──
-        if (!nfDados && o.packId) {
-          try {
-            var r4 = await fetch("/api/ml/packs/" + o.packId + "/fiscal_documents", {
-              headers: { Authorization: "Bearer " + token }
-            });
-            if (r4.ok) nfDados = extrairNF(await r4.json());
-          } catch(e) {}
-        }
-
-        if (nfDados) {
-          mapa[String(o.id)] = Object.assign(base, nfDados);
-        } else {
-          mapa[String(o.id)] = Object.assign(base, { semNF: true });
-        }
-      }));
-      await new Promise(function(r){ setTimeout(r, 300); });
+      if (nfDados) {
+        mapa[String(o.id)] = Object.assign(base, nfDados);
+      } else {
+        mapa[String(o.id)] = Object.assign(base, { semNF: true });
+      }
     }
-    setNfeSaida(mapa);
+
+    for (var i = 0; i < pedidos.length; i += 2) {
+      await Promise.all(pedidos.slice(i, i + 2).map(buscarNFPedido));
+      setNfeSaida(Object.assign({}, mapa)); // atualizar UI progressivamente
+      await new Promise(function(r){ setTimeout(r, 400); });
+    }
+    setNfeSaida(Object.assign({}, mapa));
     setLoadingNfe(false);
   }
 

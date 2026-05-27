@@ -7567,28 +7567,11 @@ function BotoesPeriodo({ de, ate, onChangeDe, onChangeAte }) {
 
 export default function App() {
   // ── Auth do dashboard ─────────────────────────────────────
-  const [tab, setTab] = useState("overview");
-  const [openTabs, setOpenTabs] = useState(["overview"]); // abas abertas em paralelo
-
-  function abrirAba(key) {
-    setTab(key);
-    setOpenTabs(function(prev) {
-      if (prev.includes(key)) return prev;
-      return [...prev, key];
-    });
-  }
-  function fecharAba(key) {
-    setOpenTabs(function(prev) {
-      var next = prev.filter(function(k){ return k !== key; });
-      if (next.length === 0) next = ["overview"];
-      return next;
-    });
-    setTab(function(cur) {
-      if (cur !== key) return cur;
-      var prev2 = openTabs.filter(function(k){ return k !== key; });
-      return prev2.length > 0 ? prev2[prev2.length - 1] : "overview";
-    });
-  }
+  const [tab, setTab] = useState(() => {
+    // Suporte a ?tab=financeiro na URL para abrir seção diretamente
+    var urlTab = new URLSearchParams(window.location.search).get("tab");
+    return urlTab || "overview";
+  });
   const [costs, setCosts] = useState({});
   const [minStock, setMinStock] = useState({});
   const [selectedListing, setSelectedListing] = useState(null);
@@ -8302,10 +8285,10 @@ export default function App() {
               <div style={{ fontSize:9, color:"#94a3b8", letterSpacing:1.2, textTransform:"uppercase", lineHeight:1 }}>Lucratividade</div>
             </div>
           </div>
-          {/* Abas abertas com suporte a múltiplas janelas */}
+          {/* Abas de navegação no header */}
           <div style={{ display:"flex", gap:0, alignItems:"stretch", overflowX:"auto", msOverflowStyle:"none", scrollbarWidth:"none" }}>
             {(function() {
-              var TODAS_ABAS = [
+              var navTabs = [
                 currentUser?.permissoes?.includes("overview")   && { key:"overview",   label:"Visão Geral", badge:null },
                 currentUser?.permissoes?.includes("listings")   && { key:"listings",   label:"Anúncios",    badge:enriched.length },
                 currentUser?.permissoes?.includes("orders")     && { key:"orders",     label:"Pedidos",     badge:enrichedOrders.length },
@@ -8315,89 +8298,46 @@ export default function App() {
                 currentUser?.permissoes?.includes("produtos")   && { key:"nf",         label:"NF Entrada",  badge:null },
                 currentUser?.permissoes?.includes("orders")     && { key:"nfe_saida",  label:"NF Saída",    badge:null },
               ].filter(Boolean);
-
-              var abasNaoAbertas = TODAS_ABAS.filter(function(t){ return !openTabs.includes(t.key); });
-
-              return (
-                <>
-                  {/* Abas abertas */}
-                  {openTabs.map(function(key) {
-                    var t = TODAS_ABAS.find(function(x){ return x.key === key; });
-                    if (!t) return null;
-                    var isActive = tab === key;
-                    return (
-                      <div key={key} style={{ display:"flex", alignItems:"stretch", position:"relative" }}>
-                        <button onClick={function(){ setTab(key); }}
-                          style={{ display:"flex", alignItems:"center", gap:5, padding:"0 14px 0 16px", height:62, background:"transparent", border:"none",
-                            borderBottom: isActive ? "2px solid #0f172a" : "2px solid transparent",
-                            borderTop: "2px solid transparent",
-                            color: isActive ? (darkMode?"#f1f5f9":"#0f172a") : "#94a3b8",
-                            fontWeight: isActive ? 600 : 400, fontSize:13, cursor:"pointer",
-                            fontFamily:"inherit", whiteSpace:"nowrap", transition:"color .15s,border-color .15s" }}>
-                          {t.label}
-                          {t.badge !== null && (
-                            <span style={{ fontSize:10, fontWeight:600, padding:"1px 6px", borderRadius:10,
-                              background: isActive ? "#0f172a" : "#f1f5f9",
-                              color: isActive ? "#fff" : "#94a3b8", lineHeight:1.6 }}>
-                              {t.badge}
-                            </span>
-                          )}
-                        </button>
-                        {openTabs.length > 1 && (
-                          <button onClick={function(e){ e.stopPropagation(); fecharAba(key); }}
-                            title="Fechar aba"
-                            style={{ width:18, height:18, borderRadius:"50%", border:"none", background:"transparent",
-                              color:"#94a3b8", cursor:"pointer", fontSize:11, display:"flex", alignItems:"center",
-                              justifyContent:"center", alignSelf:"center", marginRight:4, flexShrink:0,
-                              transition:"all .15s" }}
-                            onMouseEnter={function(e){ e.currentTarget.style.background="#fee2e2"; e.currentTarget.style.color="#dc2626"; }}
-                            onMouseLeave={function(e){ e.currentTarget.style.background="transparent"; e.currentTarget.style.color="#94a3b8"; }}>
-                            ✕
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-
-                  {/* Botão + para abrir nova aba */}
-                  {abasNaoAbertas.length > 0 && (
-                    <div style={{ position:"relative", alignSelf:"center", marginLeft:4 }}>
-                      <button
-                        onClick={function(e){
-                          e.stopPropagation();
-                          var el = document.getElementById("ml-new-tab-menu");
-                          if (el) el.style.display = el.style.display === "none" ? "block" : "none";
-                        }}
-                        style={{ width:26, height:26, borderRadius:7, border:"1px solid #e2e8f0",
-                          background:"#f8fafc", color:"#64748b", cursor:"pointer", fontSize:14,
-                          display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}
-                        title="Abrir nova aba">
-                        +
-                      </button>
-                      <div id="ml-new-tab-menu" style={{ display:"none", position:"absolute", top:36, left:0, background:"#fff",
-                        border:"1px solid #e2e8f0", borderRadius:10, boxShadow:"0 8px 24px rgba(0,0,0,.12)",
-                        zIndex:200, minWidth:160, overflow:"hidden" }}
-                        onMouseLeave={function(){ document.getElementById("ml-new-tab-menu").style.display="none"; }}>
-                        {abasNaoAbertas.map(function(t) {
-                          return (
-                            <button key={t.key} onClick={function(){
-                                abrirAba(t.key);
-                                document.getElementById("ml-new-tab-menu").style.display="none";
-                              }}
-                              style={{ width:"100%", background:"transparent", border:"none", borderBottom:"1px solid #f1f5f9",
-                                color:"#334155", padding:"10px 16px", cursor:"pointer", fontFamily:"inherit",
-                                fontSize:13, textAlign:"left", display:"flex", alignItems:"center", gap:8 }}
-                              onMouseEnter={function(e){ e.currentTarget.style.background="#f8fafc"; }}
-                              onMouseLeave={function(e){ e.currentTarget.style.background="transparent"; }}>
-                              + {t.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </>
-              );
+              return navTabs.map(function(t) {
+                var isActive = tab === t.key;
+                return (
+                  <div key={t.key} style={{ display:"flex", alignItems:"stretch", position:"relative" }}
+                    onMouseEnter={function(e){ e.currentTarget.querySelector(".open-tab-btn").style.opacity="1"; }}
+                    onMouseLeave={function(e){ e.currentTarget.querySelector(".open-tab-btn").style.opacity="0"; }}>
+                    <button onClick={function(){ setTab(t.key); }}
+                      style={{ display:"flex", alignItems:"center", gap:6, padding:"0 16px", height:62, background:"transparent", border:"none",
+                        borderBottom: isActive ? "2px solid #0f172a" : "2px solid transparent",
+                        color: isActive ? (darkMode?"#f1f5f9":"#0f172a") : "#94a3b8",
+                        fontWeight: isActive ? 600 : 400, fontSize:13, cursor:"pointer",
+                        fontFamily:"inherit", whiteSpace:"nowrap", transition:"color .15s,border-color .15s",
+                        borderTop: "2px solid transparent" }}>
+                      {t.label}
+                      {t.badge !== null && (
+                        <span style={{ fontSize:10, fontWeight:600, padding:"1px 6px", borderRadius:10,
+                          background: isActive ? "#0f172a" : "#f1f5f9",
+                          color: isActive ? "#fff" : "#94a3b8", lineHeight:1.6 }}>
+                          {t.badge}
+                        </span>
+                      )}
+                    </button>
+                    {/* Botão abrir em nova guia — aparece no hover */}
+                    <button className="open-tab-btn"
+                      title={"Abrir " + t.label + " em nova guia"}
+                      onClick={function(e){
+                        e.stopPropagation();
+                        window.open(window.location.pathname + "?tab=" + t.key, "_blank");
+                      }}
+                      style={{ opacity:0, position:"absolute", top:8, right:2, width:18, height:18,
+                        borderRadius:4, border:"1px solid #e2e8f0", background:"#fff",
+                        color:"#94a3b8", cursor:"pointer", fontSize:9, display:"flex", alignItems:"center",
+                        justifyContent:"center", transition:"opacity .15s", zIndex:10 }}
+                      onMouseEnter={function(e){ e.currentTarget.style.background="#eff6ff"; e.currentTarget.style.color="#2563eb"; e.currentTarget.style.borderColor="#bfdbfe"; }}
+                      onMouseLeave={function(e){ e.currentTarget.style.background="#fff"; e.currentTarget.style.color="#94a3b8"; e.currentTarget.style.borderColor="#e2e8f0"; }}>
+                      ↗
+                    </button>
+                  </div>
+                );
+              });
             })()}
           </div>
         </div>

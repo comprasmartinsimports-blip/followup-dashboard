@@ -4318,7 +4318,7 @@ Retorne APENAS JSON:
   return parseIAJson(text);
 }
 
-function PainelIAPagamentos({ contasPagar, contasBancarias, lancamentos, enrichedOrders, paymentData, shipmentStatuses }) {
+function PainelIAPagamentos({ contasPagar=[], contasBancarias=[], lancamentos=[], enrichedOrders=[], paymentData, shipmentStatuses }) {
   const [aba, setAba] = useState("prioridade");
   const [state, setState] = useState("idle");
   const [result, setResult] = useState(null);
@@ -5706,7 +5706,7 @@ function ModalConta({ conta, categoriasPagar, fornecedores, contasPagar, onSave,
 }
 
 
-function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContasBancarias, categoriasPagar, setCategoriasPagar, lancamentos, setLancamentos, enrichedOrders, rawOrders, shipmentStatuses, paymentData, finTab, setFinTab, impostos, setImpostos, custosFixos, setCustosFixos, fornecedores }) {
+function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], setContasBancarias, categoriasPagar=[], setCategoriasPagar, lancamentos=[], setLancamentos, enrichedOrders=[], rawOrders=[], shipmentStatuses, paymentData, finTab, setFinTab, impostos=[], setImpostos, custosFixos=[], setCustosFixos, fornecedores=[], currentUser=null }) {
   const [showModalConta, setShowModalConta] = useState(false);
   const [showModalBancaria, setShowModalBancaria] = useState(false);
   const [showModalTransf, setShowModalTransf] = useState(false);
@@ -9114,6 +9114,7 @@ export default function App() {
             custosFixos={custosFixos}
             setCustosFixos={setCustosFixos}
             fornecedores={fornecedores}
+            currentUser={currentUser}
           />
         )}
 

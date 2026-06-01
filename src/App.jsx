@@ -3521,11 +3521,14 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
     var rows = [header.join(";")];
     prods.forEach(function(p) {
       var mlbs = (p.mlbsVinculados||[]).join("|") || (p.mlbVinculado||"");
+      var descLimpa = (p.descricao||"").split(";").join(" ").split("
+").join(" ");
+      var tituloLimpo = (p.titulo||"").split(";").join(" ");
+      var fornLimpo = (p.fornecedorNome||"").split(";").join(" ");
       var row = [
-        p.sku||"", (p.titulo||"").replace(/;/g," "), p.categoria||"", p.precoCusto||"", p.precoVenda||"",
-        p.estoqueAtual||"0", p.minStock||"0", (p.fornecedorNome||"").replace(/;/g," "),
-        mlbs, p.status||"Ativo", p.peso||"", (p.descricao||"").replace(/;/g," ").replace(/
-/g," ")
+        p.sku||"", tituloLimpo, p.categoria||"", p.precoCusto||"", p.precoVenda||"",
+        p.estoqueAtual||"0", p.minStock||"0", fornLimpo,
+        mlbs, p.status||"Ativo", p.peso||"", descLimpa
       ];
       rows.push(row.join(";"));
     });

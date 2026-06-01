@@ -1121,7 +1121,7 @@ function ModalUsuario({ usuario, onSave, onClose }) {
                       background: isChecked || subChecked > 0 ? "#eff6ff" : "#fff",
                       border: "1px solid " + (isChecked || subChecked > 0 ? "#2563eb" : "#e2e8f0"),
                       transition:"all .15s" }}>
-                      <input type="checkbox" checked={isChecked} ref={function(el){ if (el) el.indeterminate = isIndeterminate; }}
+                      <input type="checkbox" checked={isChecked} ref={function(el){ try { if (el) el.indeterminate = isIndeterminate; } catch(e){} }}
                         onChange={function() {
                           var perms = form.permissoes || [];
                           if (isChecked) {
@@ -1916,7 +1916,7 @@ function ModalNF({ nf, fornecedores, produtos, categoriasPagar, onSave, onClose 
     reader.onload = (e) => {
       try {
         const parsed = parseNFeXML(e.target.result);
-        const forn = fornecedores.find(f => f.cnpj?.replace(/\D/g,"") === parsed.emitente.cnpj?.replace(/\D/g,""));
+        const forn = (fornecedores||[]).find(f => f.cnpj?.replace(/\D/g,"") === parsed.emitente.cnpj?.replace(/\D/g,""));
         setForm(prev => ({
           ...prev,
           numero: parsed.numero,
@@ -2024,7 +2024,7 @@ function ModalNF({ nf, fornecedores, produtos, categoriasPagar, onSave, onClose 
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                 <div><div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Fornecedor</div>
                   <select style={{ ...inp }} value={form.fornecedorId} onChange={e => {
-                    const f = fornecedores.find(f=>f.id===e.target.value);
+                    const f = (fornecedores||[]).find(f=>f.id===e.target.value);
                     set("fornecedorId", e.target.value);
                     if (f) { set("fornecedorNome", f.nome); set("fornecedorCNPJ", f.cnpj||""); }
                   }}>
@@ -2612,7 +2612,7 @@ function NotasFiscaisTab({ notasFiscais, setNotasFiscais, fornecedores, produtos
             reader.onload = ev => {
               try {
                 const parsed = parseNFeXML(ev.target.result);
-                const forn = fornecedores.find(f => f.cnpj?.replace(/\D/g,"") === parsed.emitente.cnpj?.replace(/\D/g,""));
+                const forn = (fornecedores||[]).find(f => f.cnpj?.replace(/\D/g,"") === parsed.emitente.cnpj?.replace(/\D/g,""));
                 setEditingNF({
                   id: Date.now().toString(),
                   numero: parsed.numero, serie: parsed.serie, chave: parsed.chave,
@@ -3838,7 +3838,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                 </thead>
                 <tbody>
                   {produtosFiltrados.map((p, i) => {
-                    const forn = fornecedores.find(f => f.id === p.fornecedorId);
+                    const forn = (fornecedores||[]).find(f => f.id === p.fornecedorId);
                     // mlbsVinculados: array com todos os MLBs; mlbVinculado: retrocompatibilidade
                     var todosMLBs = p.mlbsVinculados || (p.mlbVinculado ? [p.mlbVinculado] : []);
                     const mlListing = listings.find(l => l.id === p.mlbVinculado);
@@ -5807,7 +5807,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
 
   // ── Saldo por conta bancária ─────────────────────────────
   function getSaldoConta(contaId) {
-    const inicial = parseFloat(contasBancarias.find(c=>c.id===contaId)?.saldoInicial || 0);
+    const inicial = parseFloat((contasBancarias||[]).find(function(c){return c.id===contaId;})?.saldoInicial || 0);
     const entradas = lancamentos.filter(l=>l.contaBancariaId===contaId&&l.tipo==="recebimento").reduce((s,l)=>s+l.valor,0);
     const saidas   = lancamentos.filter(l=>l.contaBancariaId===contaId&&l.tipo==="pagamento").reduce((s,l)=>s+l.valor,0);
     return inicial + entradas - saidas;
@@ -6317,7 +6317,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
               var qtd = p.key === "all-pr" ? 0 : contasPagar.filter(function(c){
                 // Considera prioridade da conta OU do fornecedor cadastrado
                 var priorConta = c.prioridade || "media";
-                var forn = fornecedores.find(function(f){ return f.id === c.fornecedorId; });
+                var forn = (fornecedores||[]).find(function(f){ return f.id === c.fornecedorId; });
                 var priorForn = forn?.prioridade || priorConta;
                 var priorFinal = priorConta !== "media" ? priorConta : priorForn;
                 return priorFinal === p.key && c.status !== "Pago";
@@ -6495,7 +6495,7 @@ function FinanceiroTab({ contasPagar, setContasPagar, contasBancarias, setContas
                         {(function() {
                           var prConta = c.prioridade || "media";
                           // Verificar se fornecedor tem prioridade cadastrada
-                          var forn = fornecedores.find(function(f){ return f.id === c.fornecedorId; });
+                          var forn = (fornecedores||[]).find(function(f){ return f.id === c.fornecedorId; });
                           var prForn = forn?.prioridade;
                           // Usar prioridade da conta; se for padrão (media), considerar a do fornecedor
                           var pr = (prConta !== "media") ? prConta : (prForn || prConta);

@@ -3493,6 +3493,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
   const [prodSel, setProdSel] = useState([]);
   const [showMovEstoque, setShowMovEstoque] = useState(null); // produto para ver movimentação
   const [movEstoque, setMovEstoque] = useState(function(){ try { return JSON.parse(localStorage.getItem("mov_estoque")||"[]"); } catch(e){ return []; } });
+  const [importMsg, setImportMsg] = useState(null); // {tipo:"ok"|"erro", texto:"..."}
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -3512,6 +3513,135 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
     var upd = produtos.map(function(p){ if (p.id===produtoId || p.sku===sku) { var atual = parseInt(p.estoqueAtual||0); return Object.assign({},p,{estoqueAtual:String(tipo==="entrada"?atual+mov.qtd:Math.max(0,atual-mov.qtd))}); } return p; });
     setProdutos(upd); localStorage.setItem("produtos", JSON.stringify(upd));
     return mov;
+  }
+
+  // ── EXPORTAR PLANILHA ─────────────────────────────────────────────────
+  function exportarPlanilhaProdutos(prods) {
+    var header = ["SKU","Nome do Produto","Categoria","Custo (R$)","Preco Venda (R$)","Estoque Atual","Estoque Minimo","Fornecedor","MLB Vinculado","Status","Peso kg","Observacao"];
+    var rows = [header.join(";")];
+    prods.forEach(function(p) {
+      var mlbs = (p.mlbsVinculados||[]).join("|") || (p.mlbVinculado||"");
+      var row = [
+        p.sku||"", (p.titulo||"").replace(/;/g," "), p.categoria||"", p.precoCusto||"", p.precoVenda||"",
+        p.estoqueAtual||"0", p.minStock||"0", (p.fornecedorNome||"").replace(/;/g," "),
+        mlbs, p.status||"Ativo", p.peso||"", (p.descricao||"").replace(/;/g," ").replace(/
+/g," ")
+      ];
+      rows.push(row.join(";"));
+    });
+    var csvContent = rows.join(String.fromCharCode(10));
+    var blob = new Blob([csvContent], { type:"text/csv;charset=utf-8;" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = "produtos_ml_margem.csv";
+    a.click(); URL.revokeObjectURL(url);
+    setImportMsg({ tipo:"ok", texto:"Planilha exportada com " + prods.length + " produto(s)!" });
+    setTimeout(function(){ setImportMsg(null); }, 4000);
+  }
+
+  // ── IMPORTAR PLANILHA ──────────────────────────────────────────────────
+  function importarPlanilhaProdutos(file) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        var text = e.target.result;
+        // Remover BOM se existir
+        if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+        // Detectar separador (ponto-vírgula ou vírgula)
+        var sep = text.indexOf(";") > -1 ? ";" : ",";
+        var lines = text.split(/
+?
+/).filter(function(l){ return l.trim(); });
+        if (lines.length < 2) { setImportMsg({ tipo:"erro", texto:"❌ Planilha vazia ou inválida" }); return; }
+
+        function parseLine(line) {
+          var result = [], cur = "", inQ = false;
+          for (var i = 0; i < line.length; i++) {
+            var c = line[i];
+            if (c === '"') { inQ = !inQ; }
+            else if (c === sep && !inQ) { result.push(cur.trim()); cur = String(); }
+            else { cur += c; }
+          }
+          result.push(cur.trim());
+          return result;
+        }
+
+        var headers = parseLine(lines[0]).map(function(h){ return h.toLowerCase().replace(/[^a-z0-9]/g,""); });
+        var idx = {
+          sku:        headers.indexOf("sku"),
+          titulo:     headers.findIndex(function(h){ return h.includes("nome"); }),
+          categoria:  headers.findIndex(function(h){ return h.includes("categoria"); }),
+          custo:      headers.findIndex(function(h){ return h.includes("custo"); }),
+          preco:      headers.findIndex(function(h){ return h.includes("preo") || h.includes("preco") || h.includes("venda"); }),
+          estoque:    headers.findIndex(function(h){ return h.includes("estoqueatu") || (h.includes("estoque") && !h.includes("min")); }),
+          minstock:   headers.findIndex(function(h){ return h.includes("min"); }),
+          fornecedor: headers.findIndex(function(h){ return h.includes("fornecedor"); }),
+          mlb:        headers.findIndex(function(h){ return h.includes("mlb") || h.includes("vinculado"); }),
+          status:     headers.findIndex(function(h){ return h.includes("status"); }),
+          peso:       headers.findIndex(function(h){ return h.includes("peso"); }),
+          obs:        headers.findIndex(function(h){ return h.includes("obs") || h.includes("servao"); }),
+        };
+
+        var importados = 0, atualizados = 0, erros = [];
+        var novosProdutos = [...produtos];
+
+        lines.slice(1).forEach(function(line, li) {
+          var cols = parseLine(line);
+          var sku = idx.sku >= 0 ? cols[idx.sku] : "";
+          var titulo = idx.titulo >= 0 ? cols[idx.titulo] : "";
+          if (!titulo && !sku) return; // linha vazia
+
+          var dadosPlanilha = {
+            sku: sku,
+            titulo: titulo,
+            categoria: idx.categoria >= 0 ? cols[idx.categoria] : "Outros",
+            precoCusto: idx.custo >= 0 ? String(cols[idx.custo]).replace(/[R$\s.]/g,"").replace(",",".") : "",
+            precoVenda: idx.preco >= 0 ? String(cols[idx.preco]).replace(/[R$\s.]/g,"").replace(",",".") : "",
+            estoqueAtual: idx.estoque >= 0 ? String(parseInt(cols[idx.estoque])||0) : "0",
+            minStock: idx.minstock >= 0 ? String(parseInt(cols[idx.minstock])||0) : "0",
+            fornecedorNome: idx.fornecedor >= 0 ? cols[idx.fornecedor] : "",
+            mlbVinculado: idx.mlb >= 0 ? cols[idx.mlb].split(";")[0] : "",
+            mlbsVinculados: idx.mlb >= 0 ? cols[idx.mlb].split(";").filter(Boolean) : [],
+            status: idx.status >= 0 && cols[idx.status] ? cols[idx.status] : "Ativo",
+            peso: idx.peso >= 0 ? cols[idx.peso] : "",
+            descricao: idx.obs >= 0 ? cols[idx.obs] : "",
+            syncML: false,
+          };
+
+          // Verificar se produto já existe (por SKU ou MLB)
+          var existIdx = novosProdutos.findIndex(function(p){
+            return (sku && p.sku === sku) || (dadosPlanilha.mlbVinculado && p.mlbVinculado === dadosPlanilha.mlbVinculado);
+          });
+
+          if (existIdx >= 0) {
+            novosProdutos[existIdx] = Object.assign({}, novosProdutos[existIdx], dadosPlanilha);
+            atualizados++;
+          } else {
+            novosProdutos.push(Object.assign({ id: "imp_" + Date.now() + "_" + li, criadoViaImport: true }, dadosPlanilha));
+            importados++;
+          }
+        });
+
+        setProdutos(novosProdutos);
+        saveProdutos(novosProdutos);
+
+        // Atualizar custos se tiver precoCusto
+        var newCosts = {};
+        novosProdutos.forEach(function(p) {
+          if (p.precoCusto) {
+            var mlbs = p.mlbsVinculados || (p.mlbVinculado ? [p.mlbVinculado] : []);
+            mlbs.forEach(function(m){ newCosts[m] = parseFloat(p.precoCusto); });
+          }
+        });
+        if (Object.keys(newCosts).length > 0) setCosts(function(c){ return Object.assign({},c,newCosts); });
+
+        setImportMsg({ tipo:"ok", texto:"✅ Importação concluída! " + importados + " adicionado(s), " + atualizados + " atualizado(s)." });
+        setTimeout(function(){ setImportMsg(null); }, 6000);
+      } catch(err) {
+        setImportMsg({ tipo:"erro", texto:"❌ Erro ao importar: " + err.message });
+      }
+    };
+    reader.readAsText(file, "utf-8");
   }
 
   function saveProd(form) {
@@ -3600,6 +3730,15 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
           <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
             <button onClick={() => { setEditingProd(null); setShowModalProd(true); }}
               style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Novo Produto</button>
+            <button onClick={function(){ exportarPlanilhaProdutos(filteredProdutos.length > 0 ? filteredProdutos : produtos); }}
+              style={{ background:"#15803d", border:"none", color:"#fff", fontWeight:700, padding:"9px 18px", borderRadius:8, cursor:"pointer", fontSize:13, display:"flex", alignItems:"center", gap:6 }}>
+              ⬇️ Exportar Planilha
+            </button>
+            <label style={{ background:"#7c3aed", border:"none", color:"#fff", fontWeight:700, padding:"9px 18px", borderRadius:8, cursor:"pointer", fontSize:13, display:"inline-flex", alignItems:"center", gap:6 }}>
+              ⬆️ Importar Planilha
+              <input type="file" accept=".xlsx,.csv" style={{ display:"none" }}
+                onChange={function(e){ if(e.target.files[0]) importarPlanilhaProdutos(e.target.files[0]); e.target.value=""; }} />
+            </label>
             {listings.length > 0 && (
               <button onClick={() => {
                 const sincronizados = syncListingsToProdutos(listings, produtos);
@@ -3621,6 +3760,14 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                 🔄 Sincronizar com ML
               </button>
             )}
+          </div>
+          {importMsg && (
+            <div style={{ background:importMsg.tipo==="ok"?"#f0fdf4":"#fef2f2", border:"1px solid "+(importMsg.tipo==="ok"?"#bbf7d0":"#fecaca"), borderRadius:10, padding:"10px 16px", marginBottom:10, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <span style={{ fontSize:13, color:importMsg.tipo==="ok"?"#15803d":"#dc2626", fontWeight:600 }}>{importMsg.texto}</span>
+              <button onClick={function(){ setImportMsg(null); }} style={{ background:"none", border:"none", cursor:"pointer", color:"#94a3b8", fontSize:15 }}>✕</button>
+            </div>
+          )}
+          <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
             <div style={{ position:"relative", flex:1, minWidth:200 }}>
               <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por título, SKU, EAN..."
@@ -4028,8 +4175,9 @@ function sanitize(str) {
 
 function parseIAJson(text) {
   // Tenta extrair JSON de forma robusta
-  var clean = text.replace(/```json[\s\S]*?```/g, function(m) { return m.slice(7, -3); });
-  clean = clean.replace(/```/g, "").trim();
+  var BT3 = "```";
+  var clean = text.replace(/\`\`\`json[\s\S]*?\`\`\`/g, function(m) { return m.slice(7, -3); });
+  clean = clean.replace(/\`\`\`/g, "").trim();
   var start = clean.indexOf("{");
   var end = clean.lastIndexOf("}");
   if (start === -1 || end === -1) throw new Error("IA não retornou JSON válido");
@@ -4224,20 +4372,29 @@ function PainelIAPagamentos({ contasPagar, contasBancarias, lancamentos, enriche
   }, 0);
 
   function checkKey() {
-    if (!import.meta.env.VITE_ANTHROPIC_KEY) { setErrorMsg("Chave da API não configurada (VITE_ANTHROPIC_KEY)"); setState("error"); return false; }
-    return true;
+    try {
+      if (!import.meta.env.VITE_ANTHROPIC_KEY) { setErrorMsg("Configure VITE_ANTHROPIC_KEY nas variáveis de ambiente do Vercel"); setState("error"); return false; }
+      return true;
+    } catch(e) {
+      setErrorMsg("Chave da API não configurada"); setState("error"); return false;
+    }
   }
 
   // Análise automática ao abrir o painel — usa saldo real das contas
   useEffect(function() {
-    if (autoAnalise) return; // já rodou
-    if (contasPendentes.length === 0) return;
-    setAutoAnalise(true);
-    // Pequeno delay para não bloquear o render
-    var t = setTimeout(function() {
-      analisarPrioridade(true);
-    }, 800);
-    return function() { clearTimeout(t); };
+    try {
+      if (autoAnalise) return; // já rodou
+      if (contasPendentes.length === 0) return;
+      // Só roda automaticamente se tiver chave configurada
+      var temChave = false;
+      try { temChave = !!import.meta.env.VITE_ANTHROPIC_KEY; } catch(e) {}
+      if (!temChave) return;
+      setAutoAnalise(true);
+      var t = setTimeout(function() {
+        try { analisarPrioridade(true); } catch(e) {}
+      }, 800);
+      return function() { clearTimeout(t); };
+    } catch(e) {}
   }, []); // eslint-disable-line
 
   async function analisarPrioridade(auto) {
@@ -7532,18 +7689,37 @@ var PERIODOS = [
 ];
 
 function BotoesPeriodo({ de, ate, onChangeDe, onChangeAte }) {
-  // Detecta qual botão está ativo comparando com os períodos
+  const [showPicker, setShowPicker] = useState(false);
+  const [mesPick, setMesPick] = useState(() => {
+    var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0");
+  });
+
   function getAtivo() {
     if (!de && !ate) return "todos";
     for (var i = 0; i < PERIODOS.length - 1; i++) {
       var p = getPeriodo(PERIODOS[i].key);
       if (p.de === de && p.ate === ate) return PERIODOS[i].key;
     }
-    return null; // custom
+    // Verificar se é mês específico
+    if (de && ate && de.slice(0,7) === ate.slice(0,7) && de.endsWith("-01")) return "mesSel";
+    return null;
   }
   var ativo = getAtivo();
+
+  function aplicarMes(mesKey) {
+    var ultimo = new Date(parseInt(mesKey.slice(0,4)), parseInt(mesKey.slice(5,7)), 0).toLocaleDateString("sv-SE");
+    onChangeDe(mesKey + "-01");
+    onChangeAte(ultimo);
+    setMesPick(mesKey);
+    setShowPicker(false);
+  }
+
+  var nomeMes = ativo === "mesSel" && de
+    ? new Date(de).toLocaleDateString("pt-BR",{month:"short",year:"numeric"}).replace(".","")
+    : "Mês";
+
   return (
-    <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+    <div style={{ display:"flex", gap:4, flexWrap:"wrap", alignItems:"center" }}>
       {PERIODOS.map(function(p) {
         var isAtivo = ativo === p.key;
         return (
@@ -7552,6 +7728,7 @@ function BotoesPeriodo({ de, ate, onChangeDe, onChangeAte }) {
               var per = getPeriodo(p.key);
               onChangeDe(per.de);
               onChangeAte(per.ate);
+              setShowPicker(false);
             }}
             style={{ padding:"5px 12px", borderRadius:20, border: isAtivo ? "2px solid #0f172a" : "1px solid #e2e8f0",
               background: isAtivo ? "#0f172a" : "#f8fafc",
@@ -7561,6 +7738,50 @@ function BotoesPeriodo({ de, ate, onChangeDe, onChangeAte }) {
           </button>
         );
       })}
+
+      {/* Seletor de mês específico */}
+      <div style={{ position:"relative" }}>
+        <button onClick={function(){ setShowPicker(function(v){return !v;}); }}
+          style={{ padding:"5px 12px", borderRadius:20, fontSize:12, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap",
+            border: ativo==="mesSel" ? "2px solid #0891b2" : "1px solid #e2e8f0",
+            background: ativo==="mesSel" ? "#0891b2" : "#f8fafc",
+            color: ativo==="mesSel" ? "#fff" : "#64748b",
+            fontWeight: ativo==="mesSel" ? 700 : 500,
+            display:"flex", alignItems:"center", gap:4 }}>
+          📅 {nomeMes} <span style={{ fontSize:9, opacity:0.7 }}>▼</span>
+        </button>
+        {showPicker && (
+          <div style={{ position:"absolute", top:34, left:0, background:"#fff", border:"1px solid #e2e8f0",
+            borderRadius:12, boxShadow:"0 8px 24px rgba(0,0,0,.12)", zIndex:300, padding:10, minWidth:200 }}>
+            <div style={{ fontSize:10, color:"#94a3b8", fontWeight:700, textTransform:"uppercase", marginBottom:6 }}>Selecionar mês</div>
+            <div style={{ maxHeight:220, overflowY:"auto" }}>
+              {(function() {
+                var meses = [];
+                var agora = new Date();
+                for (var i = 0; i < 24; i++) {
+                  var d = new Date(agora.getFullYear(), agora.getMonth() - i, 1);
+                  var k = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0");
+                  var nome = d.toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
+                  meses.push({ k, nome });
+                }
+                return meses.map(function(m) {
+                  var sel = mesPick === m.k && ativo === "mesSel";
+                  return (
+                    <button key={m.k} onClick={function(){ aplicarMes(m.k); }}
+                      style={{ width:"100%", textAlign:"left", background:sel?"#0891b2":"transparent",
+                        border:"none", color:sel?"#fff":"#334155", padding:"6px 10px",
+                        borderRadius:6, cursor:"pointer", fontSize:12, fontWeight:sel?700:400 }}
+                      onMouseEnter={function(e){ if(!sel) e.currentTarget.style.background="#f8fafc"; }}
+                      onMouseLeave={function(e){ if(!sel) e.currentTarget.style.background="transparent"; }}>
+                      {m.nome.charAt(0).toUpperCase() + m.nome.slice(1)}
+                    </button>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -7568,9 +7789,11 @@ function BotoesPeriodo({ de, ate, onChangeDe, onChangeAte }) {
 export default function App() {
   // ── Auth do dashboard ─────────────────────────────────────
   const [tab, setTab] = useState(() => {
-    // Suporte a ?tab=financeiro na URL para abrir seção diretamente
-    var urlTab = new URLSearchParams(window.location.search).get("tab");
-    return urlTab || "overview";
+    try {
+      var urlTab = new URLSearchParams(window.location.search).get("tab");
+      if (urlTab) return urlTab;
+    } catch(e) {}
+    return "overview";
   });
   const [costs, setCosts] = useState({});
   const [minStock, setMinStock] = useState({});
@@ -7621,9 +7844,13 @@ export default function App() {
   const [ultimosPedidosIds, setUltimosPedidosIds] = useState(() => {
     try { return JSON.parse(localStorage.getItem("ml_ultimos_pedidos") || "[]"); } catch { return []; }
   });
-  const [periodoFiltro, setPeriodoFiltro] = useState("mes"); // hoje | semana | mes | ano | custom
+  const [periodoFiltro, setPeriodoFiltro] = useState("mes"); // hoje | semana | mes | mesSel | ano | custom
   const [periodoCustomDe, setPeriodoCustomDe] = useState("");
   const [periodoCustomAte, setPeriodoCustomAte] = useState("");
+  const [showMesPicker, setShowMesPicker] = useState(false); // dropdown seletor de mês
+  const [mesSelecionado, setMesSelecionado] = useState(() => {
+    var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0");
+  });
   // ── Financeiro ────────────────────────────────────────────
   const [contasPagar, setContasPagar] = useState(() => {
     try { return JSON.parse(localStorage.getItem("contas_pagar") || "[]"); } catch { return []; }
@@ -8145,6 +8372,11 @@ export default function App() {
       return [d.toLocaleDateString("sv-SE"), hoje];
     }
     if (periodoFiltro === "mes") return [hoje.slice(0,7) + "-01", hoje];
+    if (periodoFiltro === "mesSel") {
+      var lastDay = new Date(parseInt(mesSelecionado.slice(0,4)), parseInt(mesSelecionado.slice(5,7)), 0);
+      var fim = lastDay.toLocaleDateString("sv-SE");
+      return [mesSelecionado + "-01", fim];
+    }
     if (periodoFiltro === "ano") return [hoje.slice(0,4) + "-01-01", hoje];
     if (periodoFiltro === "custom") return [periodoCustomDe || "2000-01-01", periodoCustomAte || hoje];
     return ["2000-01-01", hoje];
@@ -8407,13 +8639,62 @@ export default function App() {
             { key:"tudo", label:"Tudo" },
             { key:"custom", label:"Personalizado" },
           ].map(p => (
-            <button key={p.key} onClick={() => setPeriodoFiltro(p.key)}
+            <button key={p.key} onClick={() => { setPeriodoFiltro(p.key); setShowMesPicker(false); }}
               style={{ padding:"5px 14px", borderRadius:20, border:"none", cursor:"pointer", fontSize:12, fontWeight:periodoFiltro===p.key?700:500,
                 background:periodoFiltro===p.key?"#0f172a":"#f1f5f9",
                 color:periodoFiltro===p.key?"#fff":"#64748b" }}>
               {p.label}
             </button>
           ))}
+          {/* Seletor de mês específico */}
+          <div style={{ position:"relative" }}>
+            <button onClick={function(){ setShowMesPicker(function(v){return !v;}); }}
+              style={{ padding:"5px 14px", borderRadius:20, border:"none", cursor:"pointer", fontSize:12,
+                fontWeight: periodoFiltro==="mesSel" ? 700 : 500,
+                background: periodoFiltro==="mesSel" ? "#0891b2" : "#f1f5f9",
+                color: periodoFiltro==="mesSel" ? "#fff" : "#64748b",
+                display:"flex", alignItems:"center", gap:4 }}>
+              📅 {periodoFiltro==="mesSel"
+                ? new Date(mesSelecionado+"-15").toLocaleDateString("pt-BR",{month:"short",year:"numeric"}).replace(".","")
+                : "Mês"}
+              <span style={{ fontSize:9, opacity:0.7 }}>▼</span>
+            </button>
+            {showMesPicker && (
+              <div style={{ position:"absolute", top:36, left:0, background:"#fff", border:"1px solid #e2e8f0", borderRadius:12,
+                boxShadow:"0 8px 24px rgba(0,0,0,.12)", zIndex:200, padding:12, minWidth:220 }}
+                onMouseLeave={function(){ setShowMesPicker(false); }}>
+                <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, marginBottom:8, textTransform:"uppercase" }}>Selecionar mês</div>
+                {(function() {
+                  var meses = [];
+                  var agora = new Date();
+                  for (var i = 0; i < 18; i++) {
+                    var d = new Date(agora.getFullYear(), agora.getMonth() - i, 1);
+                    var key = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0");
+                    meses.push({ key, label: d.toLocaleDateString("pt-BR",{month:"long",year:"numeric"}) });
+                  }
+                  return meses.map(function(m) {
+                    var ativo = mesSelecionado === m.key && periodoFiltro === "mesSel";
+                    return (
+                      <button key={m.key} onClick={function(){
+                          setMesSelecionado(m.key);
+                          setPeriodoFiltro("mesSel");
+                          setShowMesPicker(false);
+                        }}
+                        style={{ width:"100%", textAlign:"left", background: ativo?"#0891b2":"transparent",
+                          border:"none", color: ativo?"#fff":"#334155", padding:"7px 10px",
+                          borderRadius:7, cursor:"pointer", fontSize:13, fontWeight: ativo?600:400,
+                          display:"block" }}
+                        onMouseEnter={function(e){ if(!ativo) e.currentTarget.style.background="#f8fafc"; }}
+                        onMouseLeave={function(e){ if(!ativo) e.currentTarget.style.background="transparent"; }}>
+                        {m.label.charAt(0).toUpperCase() + m.label.slice(1)}
+                      </button>
+                    );
+                  });
+                })()}
+              </div>
+            )}
+          </div>
+          {periodoFiltro === "mesSel" && <span style={{ fontSize:12, color:"#0891b2", fontWeight:600 }}>{String(parseInt(mesSelecionado.slice(5))).padStart(2,"0")}/{mesSelecionado.slice(0,4)}</span>}
           {periodoFiltro === "custom" && (
             <>
               <input type="date" value={periodoCustomDe} onChange={e=>setPeriodoCustomDe(e.target.value)}

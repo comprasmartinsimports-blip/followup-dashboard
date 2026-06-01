@@ -3551,9 +3551,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
         if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
         // Detectar separador (ponto-vírgula ou vírgula)
         var sep = text.indexOf(";") > -1 ? ";" : ",";
-        var lines = text.split(/
-?
-/).filter(function(l){ return l.trim(); });
+        var lines = text.split(String.fromCharCode(10)).filter(function(l){ return l.trim(); });
         if (lines.length < 2) { setImportMsg({ tipo:"erro", texto:"❌ Planilha vazia ou inválida" }); return; }
 
         function parseLine(line) {

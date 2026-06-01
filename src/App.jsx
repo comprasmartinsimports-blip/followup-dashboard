@@ -3521,8 +3521,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
     var rows = [header.join(";")];
     prods.forEach(function(p) {
       var mlbs = (p.mlbsVinculados||[]).join("|") || (p.mlbVinculado||"");
-      var descLimpa = (p.descricao||"").split(";").join(" ").split("
-").join(" ");
+      var descLimpa = (p.descricao||"").split(";").join(" ");
       var tituloLimpo = (p.titulo||"").split(";").join(" ");
       var fornLimpo = (p.fornecedorNome||"").split(";").join(" ");
       var row = [

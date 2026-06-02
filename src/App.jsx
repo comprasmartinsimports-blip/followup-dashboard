@@ -5909,6 +5909,17 @@ function ModalConta({ conta, categoriasPagar, fornecedores, contasPagar, onSave,
 
 
 function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], setContasBancarias, categoriasPagar=[], setCategoriasPagar, lancamentos=[], setLancamentos, enrichedOrders=[], rawOrders=[], shipmentStatuses, paymentData, finTab, setFinTab, impostos=[], setImpostos, custosFixos=[], setCustosFixos, fornecedores=[], currentUser=null }) {
+  // Badge de quantos pagamentos liberados ainda não foram baixados
+  var qtdLiberadosNaoRegistrados = (enrichedOrders||[]).filter(function(o) {
+    var pd = paymentData?.[o.id];
+    if (!pd?.releaseDate) return false;
+    var daysUntil = (function(dateStr) {
+      var d = new Date(dateStr+"T12:00:00"); var hoje = new Date(); hoje.setHours(0,0,0,0);
+      return Math.ceil((d-hoje)/(1000*60*60*24));
+    })(pd.releaseDate);
+    if (daysUntil > 0) return false;
+    return !(lancamentos||[]).some(function(l){ return l.tipo==="recebimento" && String(l.pedidoId)===String(o.id); });
+  }).length;
   const [showModalConta, setShowModalConta] = useState(false);
   const [showModalBancaria, setShowModalBancaria] = useState(false);
   const [showModalTransf, setShowModalTransf] = useState(false);
@@ -6099,9 +6110,69 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
   }
 
   function confirmarBaixaML(order, { contaBancariaId, dataRecebimento, valor }) {
-    const lan = { id:Date.now(), tipo:"recebimento", descricao:`Pedido ML #${order.id}`, valor, data:dataRecebimento, contaBancariaId, pedidoId:order.id };
+    const lan = { id:Date.now(), tipo:"recebimento", descricao:"Pedido ML #"+order.id, valor, data:dataRecebimento, contaBancariaId, pedidoId:order.id, automatico:true };
     const updatedLan = [...lancamentos, lan];
     setLancamentos(updatedLan); saveLS("lancamentos", updatedLan);
+  }
+
+  // ── Baixa automática de pedidos liberados ───────────────
+  function baixaAutomaticaLiberados() {
+    // Encontrar conta Mercado Pago automaticamente
+    var contaMP = contasBancarias.find(function(c) {
+      var nome = (c.nome||"").toLowerCase();
+      return nome.includes("mercado pago") || nome.includes("mercadopago") || c.tipo === "Mercado Pago";
+    });
+    if (!contaMP) {
+      alert("Nenhuma conta do tipo Mercado Pago encontrada. Cadastre a conta 'Mercado Pago Filial SP' em Caixas e Bancos.");
+      return;
+    }
+
+    var hoje = new Date().toLocaleDateString("sv-SE");
+    var novosLanc = [];
+    var qtdBaixados = 0;
+
+    enrichedOrders.forEach(function(o) {
+      var pd = paymentData?.[o.id];
+      if (!pd?.releaseDate) return;
+      var relDays = getDaysUntil(pd.releaseDate);
+      // Só baixar se o pagamento já foi liberado (releaseDate <= hoje)
+      if (relDays > 0) return;
+      // Verificar se já foi registrado
+      var jaReg = lancamentos.some(function(l) {
+        return l.tipo === "recebimento" && (String(l.pedidoId) === String(o.id));
+      });
+      if (jaReg) return;
+
+      // Calcular valor líquido a receber
+      var bruto = o.price * o.qty;
+      var taxa = pd.feeAmount || (bruto * 0.13);
+      var frete = pd.shippingAmount || 0;
+      var liquido = pd.netAmount || (bruto - taxa - frete);
+      if (liquido <= 0) liquido = bruto;
+
+      novosLanc.push({
+        id: Date.now() + Math.random(),
+        tipo: "recebimento",
+        descricao: "Pedido ML #"+o.id+" — "+(o.title||"").slice(0,40),
+        valor: parseFloat(liquido.toFixed(2)),
+        data: pd.releaseDate,
+        contaBancariaId: contaMP.id,
+        pedidoId: o.id,
+        automatico: true,
+        origem: "ml_auto",
+      });
+      qtdBaixados++;
+    });
+
+    if (novosLanc.length === 0) {
+      alert("Nenhum pagamento novo para baixar. Todos os pagamentos liberados já estão registrados.");
+      return;
+    }
+
+    var updatedLan = [...lancamentos, ...novosLanc];
+    setLancamentos(updatedLan);
+    saveLS("lancamentos", updatedLan);
+    alert("✅ "+qtdBaixados+" pagamento(s) baixado(s) automaticamente na conta '"+contaMP.nome+"'!");
   }
 
 
@@ -6906,6 +6977,18 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
             </div>
           )}
 
+          {/* Header + Botão de Baixa Automática */}
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10, flexWrap:"wrap", gap:10 }}>
+            <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", whiteSpace:"nowrap" }}>
+              {receberVista === "recebido" ? "✅ Pedidos Registrados" : receberVista === "todos" ? "📋 Todos os Pedidos" : "📥 Pedidos a Receber"}
+            </div>
+            {receberVista !== "recebido" && (
+              <button onClick={baixaAutomaticaLiberados}
+                style={{ background:"#15803d", border:"none", color:"#fff", fontWeight:700, padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:12, display:"flex", alignItems:"center", gap:6, whiteSpace:"nowrap" }}>
+                ⚡ Baixar Liberados Automaticamente
+              </button>
+            )}
+          </div>
           {/* Filtros */}
           <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:10, flexWrap:"wrap" }}>
             <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", whiteSpace:"nowrap" }}>

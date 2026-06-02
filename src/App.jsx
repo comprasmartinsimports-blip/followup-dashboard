@@ -8190,6 +8190,10 @@ export default function App() {
   const [paginaPedidos, setPaginaPedidos] = useState(1);
   const POR_PAG_PEDIDOS = 50;
   const [filterEnvio, setFilterEnvio] = useState("todos"); // todos | FULL | Flex | ME2 | ME1
+
+  // Reset paginação quando filtros mudam
+  useEffect(function() { setPaginaAnuncios(1); }, [searchListings, searchType, orderFilter]);
+  useEffect(function() { setPaginaPedidos(1); }, [searchOrders, orderStatusFilter, filterEnvio, dateFrom, dateTo]);
   const [orderStatusFilter, setOrderStatusFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -8631,7 +8635,7 @@ export default function App() {
     return { ...l, ...margin, cost, sku, salePrice, originalPrice, hasPromo, freteSeller, youReceive, totalProfit: margin.profit * (l.sold_quantity ?? 0), score, checks };
   });
 
-  const filteredListings = useMemo(() => { setPaginaAnuncios(1);
+  const filteredListings = useMemo(() => {
     const q = searchListings.toLowerCase().trim();
     let results = enriched;
     if (q) {
@@ -8684,7 +8688,7 @@ export default function App() {
     });
   }, [rawOrders, orderFilter]);
 
-  const filteredOrders = useMemo(() => { setPaginaPedidos(1);
+  const filteredOrders = useMemo(() => {
     const q = searchOrders.toLowerCase().trim();
     // Se tem data customizada, usa rawOrders direto; senão usa periodOrders
     let results = (dateFrom || dateTo) ? rawOrders : periodOrders;

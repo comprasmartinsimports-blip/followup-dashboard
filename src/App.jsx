@@ -342,23 +342,59 @@ async function fetchShipmentCost(shipmentId, tk) {
 
 async function fetchPromoPrice(itemId, tk) {
   try {
-    const res = await fetch(`/api/ml/items/${itemId}/prices`, {
+    // Tentar primeiro: seller-promotions (desconto individual PRICE_DISCOUNT)
+    const r1 = await fetch(`/api/ml/seller-promotions/items/${itemId}?app_version=v2`, {
       headers: { Authorization: `Bearer ${tk}` }
     });
-    const data = await res.json();
-    // Log sempre para diagnóstico (remover depois)
-    console.log("[PRICE]", itemId, res.status, JSON.stringify(data).slice(0,200));
-    if (!res.ok || data.error) return null;
-    const amount = parseFloat(data.amount || 0);
-    const regular = parseFloat(data.regular_amount || 0);
-    if (amount > 0 && regular > 0 && regular > amount) {
-      return { salePrice: amount, originalPrice: regular };
+    if (r1.ok) {
+      const d1 = await r1.json();
+      if (!d1.error && d1.deal_price && parseFloat(d1.deal_price) > 0) {
+        const sale = parseFloat(d1.deal_price);
+        const orig = parseFloat(d1.original_price || d1.price || 0);
+        if (orig > sale) return { salePrice: sale, originalPrice: orig };
+      }
     }
+
+    // Tentar: /items/{id}/prices — retorna array prices[]
+    const r2 = await fetch(`/api/ml/items/${itemId}/prices`, {
+      headers: { Authorization: `Bearer ${tk}` }
+    });
+    if (r2.ok) {
+      const d2 = await r2.json();
+      if (!d2.error) {
+        const list = d2.prices || (Array.isArray(d2) ? d2 : []);
+        // Procurar preço promocional (não-standard)
+        const promo = list.find(function(p){ return p.type !== "standard" && parseFloat(p.amount||0) > 0; });
+        const std   = list.find(function(p){ return p.type === "standard"  && parseFloat(p.amount||0) > 0; });
+        if (promo && std) {
+          const s = parseFloat(promo.amount), o = parseFloat(std.amount);
+          if (s < o) return { salePrice: s, originalPrice: o };
+        }
+        // regular_amount dentro de qualquer item
+        for (const p of list) {
+          const a = parseFloat(p.amount||0), r = parseFloat(p.regular_amount||0);
+          if (a > 0 && r > a) return { salePrice: a, originalPrice: r };
+        }
+      }
+    }
+
+    // Tentar: /items/{id}/promotions
+    const r3 = await fetch(`/api/ml/items/${itemId}/promotions`, {
+      headers: { Authorization: `Bearer ${tk}` }
+    });
+    if (r3.ok) {
+      const d3 = await r3.json();
+      const list3 = Array.isArray(d3) ? d3 : (d3.results || []);
+      const ativa = list3.find(function(p){ return p.status === "started"; });
+      if (ativa) {
+        const s = parseFloat(ativa.new_price || ativa.price || 0);
+        const o = parseFloat(ativa.original_price || 0);
+        if (s > 0 && o > s) return { salePrice: s, originalPrice: o };
+      }
+    }
+
     return null;
-  } catch(e) {
-    console.log("[PRICE ERR]", itemId, e.message);
-    return null;
-  }
+  } catch(e) { return null; }
 }
 
 

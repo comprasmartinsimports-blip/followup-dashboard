@@ -8390,7 +8390,23 @@ export default function App() {
             shipmentStatusMap[String(o.id)] = shipData?.status ?? null;
             // Guardar método de envio
             var lt = shipData?.logistic_type || "";
+            // Log diagnóstico para pedidos específicos
+            if (String(o.id) === "2000016732869978" || String(o.id) === "2000016645535844") {
+              console.log("[SHIPDATA]", o.id, {
+                logistic_type: shipData?.logistic_type,
+                mode: shipData?.mode,
+                substatus: shipData?.substatus,
+                type: shipData?.type,
+                service_id: shipData?.service_id,
+                tags: shipData?.tags,
+                order_fulfilled: o.fulfilled,
+                order_tags: o.tags,
+              });
+            }
             if (lt) shipmentStatusMap[String(o.id) + "_logistic"] = lt;
+            // Salvar mode e type do shipment para distinguir FULL de Flex
+            if (shipData?.mode) shipmentStatusMap[String(o.id) + "_mode"] = shipData.mode;
+            if (shipData?.type) shipmentStatusMap[String(o.id) + "_type"] = shipData.type;
           } catch { orderShippingMap[String(o.id)] = 0; }
         }));
         if (i % 20 === 0) setShipmentCosts({...orderShippingMap});
@@ -8771,8 +8787,10 @@ export default function App() {
     if (filterEnvio === "todos") return enrichedOrders;
     return enrichedOrders.filter(function(o) {
       var lt = ((shipmentStatuses?.[String(o.id)+"_logistic"]) || o.shipping?.logistic_type || "").toLowerCase();
-      var isFull = (lt === "fulfillment" || lt.includes("fulfillment")) && o.fulfilled === true;
-      var isFlex = (lt === "fulfillment" || lt.includes("fulfillment")) && o.fulfilled !== true;
+      var allTags = [].concat(o.tags||[], o.orderTags||[]).map(function(t){return String(t).toLowerCase();});
+      var hasFulfillmentTag = allTags.some(function(t){ return t === "fulfillment" || t === "fbm_flow"; });
+      var isFull = lt.includes("fulfillment") && (o.fulfilled === true || hasFulfillmentTag);
+      var isFlex = lt.includes("fulfillment") && o.fulfilled !== true && !hasFulfillmentTag;
       if (!isFull && !isFlex && o.fulfilled === true) isFull = true;
       var isME2  = lt.includes("xd_drop_off") || lt.includes("drop_off");
       var isME1  = lt.includes("me1") || lt.includes("mandatory");
@@ -9474,20 +9492,14 @@ export default function App() {
                     // FULL = o.fulfilled true (estoque no galpão ML)
                     // Flex = logistic_type "fulfillment" mas fulfilled=false (rota ML, estoque do seller)
                     // ME2 = xd_drop_off / drop_off
-                    // Log temporário para diagnóstico
-                    if (String(o.id) === "2000016732869978" || String(o.id) === "2000016645535844") {
-                      console.log("[ENVIO DEBUG]", o.id, {
-                        fulfilled: o.fulfilled,
-                        logistic_type: lt,
-                        shipping: o.shipping,
-                        tags: o.tags,
-                        orderTags: o.orderTags,
-                        shipmentStatus_logistic: shipmentStatuses?.[String(o.id)+"_logistic"],
-                      });
-                    }
+                    // Distinção FULL vs Flex:
+                    // FULL: logistic_type="fulfillment" + tags contém "fulfillment" OU fulfilled=true
+                    // Flex: logistic_type="fulfillment" + tags NÃO contém "fulfillment" E fulfilled=false
                     var ltNorm = lt.toLowerCase();
-                    var isFull = (ltNorm === "fulfillment" || ltNorm.includes("fulfillment")) && o.fulfilled === true;
-                    var isFlex = (ltNorm === "fulfillment" || ltNorm.includes("fulfillment")) && o.fulfilled !== true;
+                    var allTags = [].concat(o.tags||[], o.orderTags||[]).map(function(t){return String(t).toLowerCase();});
+                    var hasFulfillmentTag = allTags.some(function(t){ return t === "fulfillment" || t === "fbm_flow"; });
+                    var isFull = ltNorm.includes("fulfillment") && (o.fulfilled === true || hasFulfillmentTag);
+                    var isFlex = ltNorm.includes("fulfillment") && o.fulfilled !== true && !hasFulfillmentTag;
                     var isME2  = ltNorm.includes("xd_drop_off") || ltNorm.includes("drop_off");
                     var isME1  = ltNorm.includes("me1") || ltNorm.includes("mandatory");
                     if (!isFull && !isFlex && o.fulfilled === true) isFull = true;

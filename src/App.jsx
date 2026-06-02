@@ -8390,18 +8390,13 @@ export default function App() {
             shipmentStatusMap[String(o.id)] = shipData?.status ?? null;
             // Guardar método de envio
             var lt = shipData?.logistic_type || "";
-            // Log diagnóstico para pedidos específicos
+            // Log para os 2 pedidos de referência
             if (String(o.id) === "2000016732869978" || String(o.id) === "2000016645535844") {
-              console.log("[SHIPDATA]", o.id, {
-                logistic_type: shipData?.logistic_type,
-                mode: shipData?.mode,
-                substatus: shipData?.substatus,
-                type: shipData?.type,
-                service_id: shipData?.service_id,
-                tags: shipData?.tags,
-                order_fulfilled: o.fulfilled,
-                order_tags: o.tags,
-              });
+              console.log("[SHIP_REF] id="+o.id);
+              console.log("  shipData:", JSON.stringify(shipData));
+              console.log("  order.fulfilled:", o.fulfilled);
+              console.log("  order.tags:", JSON.stringify(o.tags));
+              console.log("  order.orderTags:", JSON.stringify(o.orderTags));
             }
             if (lt) shipmentStatusMap[String(o.id) + "_logistic"] = lt;
             // Salvar mode e type do shipment para distinguir FULL de Flex

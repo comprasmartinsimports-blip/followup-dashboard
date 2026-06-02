@@ -342,26 +342,21 @@ async function fetchShipmentCost(shipmentId, tk) {
 
 async function fetchPromoPrice(itemId, tk) {
   try {
-    // Endpoint oficial ML para preço de venda com promoção
     const res = await fetch(`/api/ml/items/${itemId}/prices`, {
       headers: { Authorization: `Bearer ${tk}` }
     });
     const data = await res.json();
-    // Log para os primeiros itens
-    if (itemId === "MLB6691103238" || itemId === "MLB6699949882") {
-      console.log("[PRICES API]", itemId, "status:", res.status, "data:", JSON.stringify(data).slice(0,400));
-    }
+    // Log sempre para diagnóstico (remover depois)
+    console.log("[PRICE]", itemId, res.status, JSON.stringify(data).slice(0,200));
     if (!res.ok || data.error) return null;
-    // amount = preço com desconto, regular_amount = preço original
     const amount = parseFloat(data.amount || 0);
     const regular = parseFloat(data.regular_amount || 0);
     if (amount > 0 && regular > 0 && regular > amount) {
       return { salePrice: amount, originalPrice: regular };
     }
-    if (amount > 0) return { salePrice: amount, originalPrice: amount };
     return null;
   } catch(e) {
-    if (itemId === "MLB6691103238") console.log("[PRICES ERR]", itemId, e.message);
+    console.log("[PRICE ERR]", itemId, e.message);
     return null;
   }
 }

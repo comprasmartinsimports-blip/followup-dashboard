@@ -9474,17 +9474,22 @@ export default function App() {
                     // FULL = o.fulfilled true (estoque no galpão ML)
                     // Flex = logistic_type "fulfillment" mas fulfilled=false (rota ML, estoque do seller)
                     // ME2 = xd_drop_off / drop_off
-                    // Lógica oficial ML:
-                    // FULL = logistic_type "fulfillment" + fulfilled true (estoque no CD do ML)
-                    // Flex = logistic_type "fulfillment" + fulfilled false (seller entrega com rota ML)
-                    // ME2  = xd_drop_off (seller leva à agência)
-                    // ME1  = mandatory (coleta no seller)
+                    // Log temporário para diagnóstico
+                    if (String(o.id) === "2000016732869978" || String(o.id) === "2000016645535844") {
+                      console.log("[ENVIO DEBUG]", o.id, {
+                        fulfilled: o.fulfilled,
+                        logistic_type: lt,
+                        shipping: o.shipping,
+                        tags: o.tags,
+                        orderTags: o.orderTags,
+                        shipmentStatus_logistic: shipmentStatuses?.[String(o.id)+"_logistic"],
+                      });
+                    }
                     var ltNorm = lt.toLowerCase();
                     var isFull = (ltNorm === "fulfillment" || ltNorm.includes("fulfillment")) && o.fulfilled === true;
                     var isFlex = (ltNorm === "fulfillment" || ltNorm.includes("fulfillment")) && o.fulfilled !== true;
                     var isME2  = ltNorm.includes("xd_drop_off") || ltNorm.includes("drop_off");
                     var isME1  = ltNorm.includes("me1") || ltNorm.includes("mandatory");
-                    // Se fulfilled=true mas logistic não é fulfillment, ainda pode ser FULL via self_service
                     if (!isFull && !isFlex && o.fulfilled === true) isFull = true;
                     var envCfg = isFull ? {label:"FULL", color:"#1d4ed8", bg:"#eff6ff"}
                       : isFlex ? {label:"Flex", color:"#7c3aed", bg:"#f5f3ff"}

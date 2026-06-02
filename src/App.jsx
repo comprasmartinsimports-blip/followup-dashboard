@@ -429,6 +429,58 @@ function getOrderStatusInfo(status, tags, fulfilled, shipmentStatus) {
   return { label: status ?? "—", color: "#64748b", bg: "#f8fafc" };
 }
 
+// ── Componente de Paginação ─────────────────────────────────────────────
+function Paginacao({ total, porPagina, paginaAtual, onMudar }) {
+  var totalPags = Math.ceil(total / porPagina);
+  if (totalPags <= 1) return null;
+
+  var inicio = (paginaAtual - 1) * porPagina + 1;
+  var fim = Math.min(paginaAtual * porPagina, total);
+
+  // Gerar páginas visíveis (máx 7 botões)
+  function paginasVisiveis() {
+    var pages = [];
+    if (totalPags <= 7) {
+      for (var i = 1; i <= totalPags; i++) pages.push(i);
+      return pages;
+    }
+    pages.push(1);
+    if (paginaAtual > 3) pages.push("...");
+    for (var i = Math.max(2, paginaAtual-1); i <= Math.min(totalPags-1, paginaAtual+1); i++) pages.push(i);
+    if (paginaAtual < totalPags - 2) pages.push("...");
+    pages.push(totalPags);
+    return pages;
+  }
+
+  var btnStyle = function(ativo) { return {
+    padding:"6px 11px", borderRadius:7, border: ativo ? "2px solid #0f172a" : "1px solid #e2e8f0",
+    background: ativo ? "#0f172a" : "#fff", color: ativo ? "#fff" : "#64748b",
+    fontWeight: ativo ? 700 : 400, fontSize:13, cursor:"pointer", fontFamily:"inherit", minWidth:34
+  }; };
+
+  return (
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 0", borderTop:"1px solid #f1f5f9", marginTop:4, flexWrap:"wrap", gap:8 }}>
+      <span style={{ fontSize:12, color:"#94a3b8" }}>
+        Mostrando {inicio}–{fim} de <strong>{total}</strong> registros
+      </span>
+      <div style={{ display:"flex", gap:4, alignItems:"center" }}>
+        <button onClick={function(){ onMudar(1); }} disabled={paginaAtual===1}
+          style={Object.assign({},btnStyle(false),{opacity:paginaAtual===1?0.4:1})}>«</button>
+        <button onClick={function(){ onMudar(paginaAtual-1); }} disabled={paginaAtual===1}
+          style={Object.assign({},btnStyle(false),{opacity:paginaAtual===1?0.4:1})}>‹</button>
+        {paginasVisiveis().map(function(p, i) {
+          if (p === "...") return <span key={"e"+i} style={{ color:"#94a3b8", padding:"0 4px" }}>…</span>;
+          return <button key={p} onClick={function(){ onMudar(p); }} style={btnStyle(p===paginaAtual)}>{p}</button>;
+        })}
+        <button onClick={function(){ onMudar(paginaAtual+1); }} disabled={paginaAtual===totalPags}
+          style={Object.assign({},btnStyle(false),{opacity:paginaAtual===totalPags?0.4:1})}>›</button>
+        <button onClick={function(){ onMudar(totalPags); }} disabled={paginaAtual===totalPags}
+          style={Object.assign({},btnStyle(false),{opacity:paginaAtual===totalPags?0.4:1})}>»</button>
+      </div>
+    </div>
+  );
+}
+
 function MarginBar({ value }) {
   if (value === null) return <span style={{ fontSize: 12, color: "#94a3b8" }}>— insira custo</span>;
   const pct = Math.max(0, Math.min(1, value));
@@ -1719,35 +1771,184 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
         </div>
 
         {/* Meta Mensal */}
-        {(metaMensal > 0 || editMeta) && (
-          <div style={{ ...card(), padding:"20px 24px" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-              <div style={{ fontWeight:700, fontSize:15, ...txt }}>🎯 Meta do Mês</div>
-              <button onClick={() => setEditMeta(e=>!e)} style={{ background:"#f1f5f9",border:"none",color:"#64748b",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontSize:12 }}>
-                {editMeta ? "Fechar" : "Editar"}
-              </button>
+        {(metaMensal > 0 || editMeta) && (function() {
+          // ── Gráfico diário da meta ──────────────────────────────
+          var metaDiaria = metaMensal / diasNoMes;
+          var diasGraf = [];
+          var fatDiario = [];
+          var metaAcum = [];
+          var fatAcum = [];
+          for (var d = 1; d <= diasNoMes; d++) {
+            var ds = new Date(new Date().getFullYear(), new Date().getMonth(), d).toLocaleDateString("sv-SE");
+            var dayVal = rawOrders.filter(function(o){ return o.date === ds && o.status === "paid"; })
+              .reduce(function(s,o){ return s + o.price*o.qty; }, 0);
+            diasGraf.push(d);
+            fatDiario.push(d <= diaDoMes ? dayVal : null);
+            metaAcum.push(metaDiaria * d);
+            fatAcum.push(d <= diaDoMes ? rawOrders.filter(function(o){
+              return o.status==="paid" && o.date >= mesAtual+"-01" && o.date <= ds;
+            }).reduce(function(s,o){ return s+o.price*o.qty; },0) : null);
+          }
+          var maxGraf = Math.max(metaMensal, faturamentoMes, 1);
+
+          // ── Últimos 12 meses ─────────────────────────────────────
+          var meses12 = [];
+          var agora = new Date();
+          for (var m = 11; m >= 0; m--) {
+            var md = new Date(agora.getFullYear(), agora.getMonth()-m, 1);
+            var mk = md.getFullYear()+"-"+String(md.getMonth()+1).padStart(2,"0");
+            var mLabel = md.toLocaleDateString("pt-BR",{month:"short"}).replace(".","");
+            var mFat = rawOrders.filter(function(o){ return o.status==="paid" && o.date && o.date.startsWith(mk); })
+              .reduce(function(s,o){ return s+o.price*o.qty; },0);
+            var mPedidos = rawOrders.filter(function(o){ return o.status==="paid" && o.date && o.date.startsWith(mk); }).length;
+            meses12.push({ mk, label: mLabel, fat: mFat, pedidos: mPedidos, isCurrent: mk === mesAtual });
+          }
+          var maxMes12 = Math.max.apply(null, meses12.map(function(m){return m.fat;}).concat([metaMensal,1]));
+
+          return (
+            <div style={{ ...card(), padding:"20px 24px" }}>
+              {/* Header */}
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+                <div style={{ fontWeight:700, fontSize:15, ...txt }}>🎯 Meta do Mês</div>
+                <button onClick={() => setEditMeta(function(e){return !e;})}
+                  style={{ background:"#f1f5f9",border:"none",color:"#64748b",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontSize:12 }}>
+                  {editMeta ? "Fechar" : "Editar Meta"}
+                </button>
+              </div>
+
+              {/* Input edição */}
+              {editMeta && (
+                <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+                  <input type="number" value={metaInput} onChange={function(e){setMetaInput(e.target.value);}} placeholder="Ex: 50000"
+                    style={{ flex:1,background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"8px 12px",borderRadius:8,fontSize:13,outline:"none" }} />
+                  <button onClick={function(){ var v=parseFloat(metaInput)||0; setMetaMensal(v); localStorage.setItem("metaMensal",v); setEditMeta(false); }}
+                    style={{ background:"#0f172a",border:"none",color:"#fff",fontWeight:700,padding:"8px 20px",borderRadius:8,cursor:"pointer",fontSize:13 }}>Salvar</button>
+                </div>
+              )}
+
+              {metaMensal > 0 && (
+                <>
+                  {/* KPIs da meta */}
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:16 }}>
+                    {[
+                      { label:"Realizado", value:fmt(faturamentoMes), color:progressoMeta>=100?"#15803d":progressoMeta>=70?"#d97706":"#dc2626" },
+                      { label:"Meta", value:fmt(metaMensal), color:"#0f172a" },
+                      { label:"Progresso", value:progressoMeta.toFixed(1)+"%", color:progressoMeta>=100?"#15803d":progressoMeta>=70?"#d97706":"#dc2626" },
+                      { label:"Faltam", value: progressoMeta>=100?"✅ Atingida!":fmt(metaMensal-faturamentoMes), color:progressoMeta>=100?"#15803d":"#dc2626" },
+                    ].map(function(k){return(
+                      <div key={k.label} style={{ background:"#f8fafc",borderRadius:8,padding:"10px 12px" }}>
+                        <div style={{ fontSize:10,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",marginBottom:4 }}>{k.label}</div>
+                        <div style={{ fontSize:15,fontWeight:800,color:k.color }}>{k.value}</div>
+                      </div>
+                    );})}
+                  </div>
+
+                  {/* Barra de progresso */}
+                  <div style={{ height:10,background:darkMode?"#334155":"#e2e8f0",borderRadius:99,overflow:"hidden",marginBottom:6 }}>
+                    <div style={{ width:progressoMeta+"%",height:"100%",background:progressoMeta>=100?"#15803d":progressoMeta>=70?"#d97706":"#dc2626",borderRadius:99,transition:"width .5s" }} />
+                  </div>
+                  <div style={{ fontSize:11,color:"#94a3b8",marginBottom:20 }}>
+                    Meta diária: {fmt(metaDiaria)} · Ritmo atual: {fmt(diaDoMes>0?(faturamentoMes/diaDoMes):0)}/dia · {diasNoMes-diaDoMes} dias restantes
+                  </div>
+
+                  {/* Gráfico diário: realizado vs meta acumulada */}
+                  <div style={{ marginBottom:20 }}>
+                    <div style={{ fontSize:12,fontWeight:700,color:"#64748b",marginBottom:8,textTransform:"uppercase",letterSpacing:0.5 }}>
+                      Evolução Diária vs Meta — {new Date().toLocaleDateString("pt-BR",{month:"long",year:"numeric"})}
+                    </div>
+                    <div style={{ position:"relative", height:90 }}>
+                      {/* Linha de meta acumulada */}
+                      <svg viewBox={"0 0 "+diasNoMes+" 90"} style={{ position:"absolute",inset:0,width:"100%",height:"100%",overflow:"visible" }} preserveAspectRatio="none">
+                        {/* Linha da meta */}
+                        <polyline
+                          points={diasGraf.map(function(d,i){ return (d-0.5)+","+(90 - (metaAcum[i]/maxGraf)*85); }).join(" ")}
+                          fill="none" stroke="#94a3b8" strokeWidth="1" strokeDasharray="4,3" />
+                        {/* Área do realizado */}
+                        <polygon
+                          points={"0.5,90 "+fatAcum.filter(function(v){return v!==null;}).map(function(v,i){ return (i+0.5)+","+(90-(v/maxGraf)*85); }).join(" ")+" "+(fatAcum.filter(function(v){return v!==null;}).length-0.5)+",90"}
+                          fill={progressoMeta>=100?"#15803d22":"#0891b222"} />
+                        {/* Linha do realizado */}
+                        <polyline
+                          points={fatAcum.map(function(v,i){ return v!==null?(i+0.5)+","+(90-(v/maxGraf)*85):null; }).filter(Boolean).join(" ")}
+                          fill="none" stroke={progressoMeta>=100?"#15803d":"#0891b2"} strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                      {/* Labels eixo X */}
+                      <div style={{ position:"absolute",bottom:-16,left:0,right:0,display:"flex",justifyContent:"space-between" }}>
+                        {[1,8,15,22,diasNoMes].map(function(d){
+                          return <span key={d} style={{ fontSize:9,color:"#94a3b8" }}>{d}</span>;
+                        })}
+                      </div>
+                    </div>
+                    <div style={{ display:"flex",gap:16,marginTop:20,justifyContent:"center" }}>
+                      <div style={{ display:"flex",alignItems:"center",gap:4 }}>
+                        <div style={{ width:20,height:2,background:"#0891b2",borderRadius:1 }}/>
+                        <span style={{ fontSize:11,color:"#64748b" }}>Realizado acum.</span>
+                      </div>
+                      <div style={{ display:"flex",alignItems:"center",gap:4 }}>
+                        <div style={{ width:20,height:2,background:"#94a3b8",borderRadius:1,borderTop:"1px dashed #94a3b8" }}/>
+                        <span style={{ fontSize:11,color:"#64748b" }}>Meta acum.</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Comparativo 12 meses */}
+                  <div>
+                    <div style={{ fontSize:12,fontWeight:700,color:"#64748b",marginBottom:10,textTransform:"uppercase",letterSpacing:0.5 }}>
+                      Comparativo — Últimos 12 Meses
+                    </div>
+                    <div style={{ display:"flex", alignItems:"flex-end", gap:3, height:80, marginBottom:4 }}>
+                      {meses12.map(function(m) {
+                        var pct = maxMes12 > 0 ? (m.fat/maxMes12)*100 : 0;
+                        var metaPct = metaMensal > 0 ? Math.min(100,(m.fat/metaMensal)*100) : 0;
+                        var barColor = m.isCurrent
+                          ? (progressoMeta>=100?"#15803d":progressoMeta>=70?"#d97706":"#0891b2")
+                          : (metaPct>=100?"#15803d44":metaPct>=70?"#d97706":"#cbd5e1");
+                        return (
+                          <div key={m.mk} style={{ flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2 }}
+                            title={m.label+" "+m.mk.slice(0,4)+": "+fmt(m.fat)+" ("+m.pedidos+" pedidos)"}>
+                            {/* Linha da meta */}
+                            {metaMensal>0 && (
+                              <div style={{ width:"100%",position:"relative",flex:1,display:"flex",alignItems:"flex-end" }}>
+                                <div style={{ width:"100%",height:Math.max(2,pct*0.7)+"%",background:barColor,borderRadius:"3px 3px 0 0",
+                                  outline: m.isCurrent?"2px solid #0f172a":"none", transition:"height .3s" }} />
+                                {/* Linha da meta */}
+                                {m.isCurrent && <div style={{ position:"absolute",bottom:(metaMensal/maxMes12*70)+"%",left:0,right:0,height:1,background:"#dc2626",borderTop:"2px dashed #dc2626" }} />}
+                              </div>
+                            )}
+                            {!metaMensal && (
+                              <div style={{ width:"100%",height:Math.max(2,pct*0.7)+"%",background:barColor,borderRadius:"3px 3px 0 0",alignSelf:"flex-end",transition:"height .3s" }} />
+                            )}
+                            <span style={{ fontSize:8,color:m.isCurrent?"#0f172a":"#94a3b8",fontWeight:m.isCurrent?700:400,whiteSpace:"nowrap" }}>
+                              {m.label}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {/* Legenda valores */}
+                    <div style={{ display:"flex",justifyContent:"space-between",marginTop:6 }}>
+                      <span style={{ fontSize:10,color:"#94a3b8" }}>Mês mais fraco: {fmt(Math.min.apply(null,meses12.map(function(m){return m.fat;}).filter(function(v){return v>0;})))}</span>
+                      <span style={{ fontSize:10,color:"#94a3b8" }}>Melhor mês: {fmt(Math.max.apply(null,meses12.map(function(m){return m.fat;})))}</span>
+                    </div>
+                    {/* Tabela rápida */}
+                    <div style={{ marginTop:12,display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4 }}>
+                      {meses12.slice(-4).map(function(m){
+                        var ok = metaMensal>0 && m.fat>=metaMensal;
+                        return(
+                          <div key={m.mk} style={{ background:ok?"#f0fdf4":"#f8fafc",border:"1px solid "+(ok?"#bbf7d0":"#e2e8f0"),borderRadius:8,padding:"8px 10px",textAlign:"center" }}>
+                            <div style={{ fontSize:10,color:"#64748b",fontWeight:600 }}>{m.label+" "+m.mk.slice(0,4)}</div>
+                            <div style={{ fontSize:13,fontWeight:700,color:ok?"#15803d":"#0f172a",marginTop:2 }}>{fmt(m.fat)}</div>
+                            {metaMensal>0 && <div style={{ fontSize:10,color:ok?"#15803d":"#94a3b8" }}>{((m.fat/metaMensal)*100).toFixed(0)}% da meta</div>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
-            {editMeta && (
-              <div style={{ display:"flex", gap:8, marginBottom:16 }}>
-                <input type="number" value={metaInput} onChange={e=>setMetaInput(e.target.value)} placeholder="Ex: 50000"
-                  style={{ flex:1,background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"8px 12px",borderRadius:8,fontSize:13,outline:"none" }} />
-                <button onClick={() => { const v = parseFloat(metaInput)||0; setMetaMensal(v); localStorage.setItem("metaMensal", v); setEditMeta(false); }}
-                  style={{ background:"#0f172a",border:"none",color:"#fff",fontWeight:700,padding:"8px 20px",borderRadius:8,cursor:"pointer",fontSize:13 }}>Salvar</button>
-              </div>
-            )}
-            {metaMensal > 0 && <>
-              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-                <span style={{ fontSize:13,...txtMuted }}>{fmt(faturamentoMes)} de {fmt(metaMensal)}</span>
-                <span style={{ fontSize:13,fontWeight:700,color:progressoMeta>=100?"#15803d":progressoMeta>=70?"#d97706":"#dc2626" }}>{progressoMeta.toFixed(1)}%</span>
-              </div>
-              <div style={{ height:12,background:darkMode?"#334155":"#e2e8f0",borderRadius:99,overflow:"hidden" }}>
-                <div style={{ width:`${progressoMeta}%`,height:"100%",background:progressoMeta>=100?"#15803d":progressoMeta>=70?"#d97706":"#dc2626",borderRadius:99,transition:"width .5s" }} />
-              </div>
-              {progressoMeta<100 && <div style={{ fontSize:12,...txtMuted,marginTop:8 }}>Faltam {fmt(metaMensal-faturamentoMes)} • {diasNoMes-diaDoMes} dias restantes</div>}
-              {progressoMeta>=100 && <div style={{ fontSize:13,color:"#15803d",fontWeight:700,marginTop:8 }}>🎉 Meta atingida!</div>}
-            </>}
-          </div>
-        )}
+          );
+        })()}
         {metaMensal === 0 && !editMeta && (
           <button onClick={() => setEditMeta(true)} style={{ background:"transparent",border:`2px dashed ${darkMode?"#334155":"#e2e8f0"}`,color:darkMode?"#64748b":"#94a3b8",padding:"14px",borderRadius:12,cursor:"pointer",fontSize:13,width:"100%",fontFamily:"inherit" }}>
             + Definir Meta Mensal de Faturamento
@@ -4037,7 +4238,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                   </tr>
                 </thead>
                 <tbody>
-                  {produtosFiltrados.map((p, i) => {
+                  {produtosFiltrados.slice((paginaProdutos-1)*POR_PAG_PROD, paginaProdutos*POR_PAG_PROD).map((p, i) => {
                     const forn = (fornecedores||[]).find(f => f.id === p.fornecedorId);
                     // mlbsVinculados: array com todos os MLBs; mlbVinculado: retrocompatibilidade
                     var todosMLBs = p.mlbsVinculados || (p.mlbVinculado ? [p.mlbVinculado] : []);
@@ -4296,6 +4497,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
               </div>
             );
           })()}
+        <Paginacao total={produtosFiltrados.length} porPagina={POR_PAG_PROD} paginaAtual={paginaProdutos} onMudar={function(p){setPaginaProdutos(p);window.scrollTo({top:0,behavior:"smooth"});}} />
         </div>
       )}
 
@@ -6747,7 +6949,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
               <tbody>
                 {contasFiltradas.length===0 ? (
                   <tr><td colSpan={7} style={{ textAlign:"center", color:"#94a3b8", padding:40 }}>Nenhuma conta encontrada</td></tr>
-                ) : contasFiltradas.map((c,i) => {
+                ) : contasFiltradas.slice((paginaPagar-1)*POR_PAG_FIN, paginaPagar*POR_PAG_FIN).map((c,i) => {
                   const days = getDaysUntil(c.vencimento);
                   const isVencendo = c.status==="Pendente"&&days!==null&&days>=0&&days<=7;
                   const contaBanc = contasBancarias.find(cb=>cb.id===c.contaBancariaId);
@@ -7104,7 +7306,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
                       </td>
                     </tr>
                   );
-                  return filtered.slice(0, 100).map(function(o, i) {
+                  return filtered.slice((paginaReceber-1)*POR_PAG_FIN, paginaReceber*POR_PAG_FIN).map(function(o, i) {
                     var ss = shipmentStatuses?.[o.id] ?? o.shipment_status;
                     var ltR = (shipmentStatuses?.[String(o.id) + "_logistic"]) || o.shipping?.logistic_type || "";
                     var isFullR = o.fulfilled === true || (o.orderTags||o.tags||[]).some(function(t){return String(t).includes("fulfillment");});
@@ -7222,6 +7424,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
                 })()}
               </tbody>
             </table>
+            <div style={{padding:"4px 0"}}><Paginacao total={receberVista==="recebido"?recebidoMes.length:aReceber.length} porPagina={POR_PAG_FIN} paginaAtual={paginaReceber} onMudar={function(p){setPaginaReceber(p);window.scrollTo({top:0,behavior:"smooth"});}} /></div>
           </div>
 
           {/* Recebidos — seção separada removida, agora integrada no filtro acima */}
@@ -8129,8 +8332,13 @@ export default function App() {
   const [sortBy, setSortBy] = useState("score");
   const [orderFilter, setOrderFilter] = useState("all");
   const [searchListings, setSearchListings] = useState("");
+  const [paginaAnuncios, setPaginaAnuncios] = useState(1);
+  const POR_PAG_ANUNCIOS = 50;
   const [searchType, setSearchType] = useState("all");
   const [searchOrders, setSearchOrders] = useState("");
+  const [paginaPedidos, setPaginaPedidos] = useState(1);
+  const POR_PAG_PEDIDOS = 50;
+  const [filterEnvio, setFilterEnvio] = useState("todos"); // todos | FULL | Flex | ME2 | ME1
   const [orderStatusFilter, setOrderStatusFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -8193,6 +8401,11 @@ export default function App() {
     try { return JSON.parse(localStorage.getItem("lancamentos") || "[]"); } catch { return []; }
   });
   const [finTab, setFinTab] = useState("resumo");
+  const [paginaPagar, setPaginaPagar] = useState(1);
+  const [paginaReceber, setPaginaReceber] = useState(1);
+  const [paginaProdutos, setPaginaProdutos] = useState(1);
+  const POR_PAG_FIN = 30;
+  const POR_PAG_PROD = 30;
   const [produtos, setProdutos] = useState(() => {
     try { return JSON.parse(localStorage.getItem("produtos_cadastro") || "[]"); } catch { return []; }
   });
@@ -8567,7 +8780,7 @@ export default function App() {
     return { ...l, ...margin, cost, sku, salePrice, originalPrice, hasPromo, freteSeller, youReceive, totalProfit: margin.profit * (l.sold_quantity ?? 0), score, checks };
   });
 
-  const filteredListings = useMemo(() => {
+  const filteredListings = useMemo(() => { setPaginaAnuncios(1);
     const q = searchListings.toLowerCase().trim();
     let results = enriched;
     if (q) {
@@ -8620,7 +8833,7 @@ export default function App() {
     });
   }, [rawOrders, orderFilter]);
 
-  const filteredOrders = useMemo(() => {
+  const filteredOrders = useMemo(() => { setPaginaPedidos(1);
     const q = searchOrders.toLowerCase().trim();
     // Se tem data customizada, usa rawOrders direto; senão usa periodOrders
     let results = (dateFrom || dateTo) ? rawOrders : periodOrders;
@@ -8669,6 +8882,23 @@ export default function App() {
     }
     return results;
   }, [rawOrders, periodOrders, searchOrders, orderStatusFilter, dateFrom, dateTo]);
+
+  // Aplicar filtro de envio no enrichedOrders
+  const enrichedOrdersComEnvio = useMemo(function() {
+    if (filterEnvio === "todos") return enrichedOrders;
+    return enrichedOrders.filter(function(o) {
+      var lt = (shipmentStatuses?.[String(o.id)+"_logistic"]) || o.shipping?.logistic_type || "";
+      var isFull = o.fulfilled === true;
+      var isFlex = !isFull && (lt.includes("fulfillment") || lt.includes("flex"));
+      var isME2  = lt.includes("drop_off") || lt.includes("xd_");
+      var isME1  = lt.includes("me1") || lt.includes("mandatory");
+      if (filterEnvio === "FULL") return isFull;
+      if (filterEnvio === "Flex") return isFlex;
+      if (filterEnvio === "ME2")  return isME2;
+      if (filterEnvio === "ME1")  return isME1;
+      return true;
+    });
+  }, [enrichedOrders, filterEnvio, shipmentStatuses]);
 
   const enrichedOrdersFiltered = filteredOrders.filter(o => {
     if (filterSku) {
@@ -9148,7 +9378,7 @@ export default function App() {
                 <tbody>
                   {sorted.length === 0 ? (
                     <tr><td colSpan={15} style={{ textAlign: "center", color: "#94a3b8", padding: 40 }}>Nenhum anúncio encontrado</td></tr>
-                  ) : sorted.map(l => {
+                  ) : sorted.slice((paginaAnuncios-1)*POR_PAG_ANUNCIOS, paginaAnuncios*POR_PAG_ANUNCIOS).map(l => {
                     const frete = getFreteDisplay(l);
                     const typeInfo = getListingTypeLabel(l.listing_type_id);
                     return (
@@ -9265,6 +9495,12 @@ export default function App() {
                 </tbody>
               </table>
             </div>
+            <Paginacao
+              total={sorted.length}
+              porPagina={POR_PAG_ANUNCIOS}
+              paginaAtual={paginaAnuncios}
+              onMudar={function(p){ setPaginaAnuncios(p); window.scrollTo({top:0,behavior:"smooth"}); }}
+            />
           </>
         )}
 
@@ -9275,6 +9511,28 @@ export default function App() {
                 <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", fontSize: 14 }}>🔍</span>
                 <input className="search-input" value={searchOrders} onChange={e => setSearchOrders(e.target.value)}
                   placeholder="Buscar por nº pedido, cliente, CPF, e-mail..." style={{ width:"100%", paddingLeft:36 }} />
+              </div>
+              {/* Filtro por tipo de envio */}
+              <div style={{ display:"flex", gap:4, alignItems:"center", flexWrap:"wrap" }}>
+                {[
+                  { key:"todos", label:"Todos" },
+                  { key:"FULL",  label:"FULL",  color:"#1d4ed8", bg:"#eff6ff" },
+                  { key:"Flex",  label:"Flex",  color:"#7c3aed", bg:"#f5f3ff" },
+                  { key:"ME2",   label:"ME2",   color:"#0891b2", bg:"#ecfeff" },
+                  { key:"ME1",   label:"ME1",   color:"#0369a1", bg:"#e0f2fe" },
+                ].map(function(e) {
+                  var isActive = filterEnvio === e.key;
+                  return (
+                    <button key={e.key} onClick={function(){ setFilterEnvio(e.key); setPaginaPedidos(1); }}
+                      style={{ padding:"5px 12px", borderRadius:20, border:"none", cursor:"pointer", fontSize:12,
+                        fontWeight: isActive ? 700 : 500,
+                        background: isActive ? (e.bg || "#0f172a") : "#f1f5f9",
+                        color: isActive ? (e.color || "#fff") : "#64748b",
+                        boxShadow: isActive ? "0 0 0 2px "+(e.color||"#0f172a")+"44" : "none" }}>
+                      {e.label}
+                    </button>
+                  );
+                })}
               </div>
               <input value={filterSku} onChange={e => setFilterSku(e.target.value)} placeholder="SKU do produto..."
                 style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"7px 12px", borderRadius:8, fontSize:12, outline:"none", width:130 }} />
@@ -9343,24 +9601,29 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {enrichedOrders.length === 0 ? (
+                  {enrichedOrdersComEnvio.length === 0 ? (
                     <tr><td colSpan={13} style={{ textAlign:"center", color:"#94a3b8", padding:40 }}>Nenhum pedido encontrado</td></tr>
-                  ) : enrichedOrders.map(function(o) {
+                  ) : enrichedOrdersComEnvio.slice((paginaPedidos-1)*POR_PAG_PEDIDOS, paginaPedidos*POR_PAG_PEDIDOS).map(function(o) {
                     var youReceive = o.price - o.fee - o.freteSeller;
                     var sInfo = getOrderStatusInfo(o.status, o.tags, o.fulfilled, o.shipment_status);
                     var lt = (shipmentStatuses?.[String(o.id) + "_logistic"]) || o.shipping?.logistic_type || "";
                     // FULL = fulfilled===true OU tags tem "fulfillment"
                     // Flex = logistic_type==="fulfillment" COM fulfilled===false (entrega pelo vendedor com rota ML)
-                    var isFull = o.fulfilled === true || (o.orderTags||o.tags||[]).some(function(t){return String(t).includes("fulfillment");});
-                    var isFlex = !isFull && (lt === "fulfillment" || lt.includes("flex"));
-                    var envCfg = isFull ? {label:"FULL",color:"#1d4ed8",bg:"#eff6ff"}
-                      : isFlex ? {label:"Flex",color:"#7c3aed",bg:"#f5f3ff"}
-                      : lt.includes("self_service") ? {label:"FULL",color:"#1d4ed8",bg:"#eff6ff"}
-                      : lt.includes("drop_off")||lt.includes("xd_") ? {label:"ME2",color:"#0891b2",bg:"#ecfeff"}
-                      : lt.includes("me1")||lt.includes("mandatory") ? {label:"ME1",color:"#0369a1",bg:"#e0f2fe"}
-                      : lt.includes("cross") ? {label:"Cross",color:"#15803d",bg:"#f0fdf4"}
-                      : o.shipping?.free_shipping ? {label:"Grátis",color:"#15803d",bg:"#f0fdf4"}
+                    // FULL = o.fulfilled true (estoque no galpão ML)
+                    // Flex = logistic_type "fulfillment" mas fulfilled=false (rota ML, estoque do seller)
+                    // ME2 = xd_drop_off / drop_off
+                    var isFull = o.fulfilled === true;
+                    var isFlex = !isFull && (lt.includes("fulfillment") || lt.includes("flex"));
+                    var isME2  = lt.includes("drop_off") || lt.includes("xd_");
+                    var isME1  = lt.includes("me1") || lt.includes("mandatory");
+                    var envCfg = isFull ? {label:"FULL", color:"#1d4ed8", bg:"#eff6ff"}
+                      : isFlex ? {label:"Flex", color:"#7c3aed", bg:"#f5f3ff"}
+                      : isME2  ? {label:"ME2",  color:"#0891b2", bg:"#ecfeff"}
+                      : isME1  ? {label:"ME1",  color:"#0369a1", bg:"#e0f2fe"}
+                      : lt.includes("cross") ? {label:"Cross", color:"#15803d", bg:"#f0fdf4"}
+                      : lt.includes("self_service") ? {label:"FULL", color:"#1d4ed8", bg:"#eff6ff"}
                       : null;
+                    var envLabel = envCfg ? envCfg.label : "";
                     return (
                       <tr key={o.id} style={{ borderBottom:"1px solid #f8fafc" }}>
                         <td style={{ padding:"10px 12px", fontSize:11, color:"#64748b", fontFamily:"monospace", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>#{o.id}</td>
@@ -9398,9 +9661,17 @@ export default function App() {
                           <div style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                             {(function(){
                               var title = o.title ?? o.listing?.title;
-                              var link = o.permalink ?? o.listing?.permalink;
+                              // Montar link do ML: listing_id existe no rawOrder
+                              var listingId = o.listing_id;
+                              var link = listingId
+                                ? "https://www.mercadolivre.com.br/p/" + listingId
+                                : (o.permalink ?? o.listing?.permalink ?? null);
+                              // Fallback: buscar o anúncio nos listings para pegar o permalink real
+                              var listingObj = listings && listingId ? listings.find(function(l){ return l.id === listingId; }) : null;
+                              if (listingObj && listingObj.permalink) link = listingObj.permalink;
                               if (!title) return <span style={{ color:"#94a3b8", fontSize:12 }}>—</span>;
-                              return link ? <a href={link} target="_blank" rel="noreferrer" className="title-link" style={{ fontSize:12 }}>{title}</a>
+                              return link
+                                ? <a href={link} target="_blank" rel="noreferrer" className="title-link" style={{ fontSize:12 }}>{title}</a>
                                 : <span style={{ fontSize:12 }}>{title}</span>;
                             })()}
                           </div>
@@ -9418,6 +9689,12 @@ export default function App() {
                   })}
                 </tbody>
               </table>
+              <Paginacao
+                total={enrichedOrdersComEnvio.length}
+                porPagina={POR_PAG_PEDIDOS}
+                paginaAtual={paginaPedidos}
+                onMudar={function(p){ setPaginaPedidos(p); window.scrollTo({top:0,behavior:"smooth"}); }}
+              />
             </div>
           </>
         )}

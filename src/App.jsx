@@ -7805,35 +7805,33 @@ export default function App() {
       if (authStatus === "success") {
         // Limpar parâmetro da URL
         window.history.replaceState({}, "", window.location.pathname + (params.get("tab") ? "?tab=" + params.get("tab") : ""));
-        // Buscar dados da sessão
+        // Buscar dados da sessão e conectar automaticamente
         fetch("/api/auth/session")
           .then(function(r){ return r.json(); })
           .then(function(session) {
             if (session.authenticated) {
-              setToken(session.accessToken);
-              setUserId(session.userId);
-              setConnected(true);
+              handleConnect(session.accessToken, session.userId);
             }
           }).catch(function(){});
       } else if (authStatus === "error") {
         console.warn("Erro na autenticação ML:", params.get("msg"));
         window.history.replaceState({}, "", window.location.pathname);
       } else {
-        // Verificar sessão existente silenciosamente
+        // Verificar sessão existente silenciosamente ao abrir o dashboard
         fetch("/api/auth/session")
           .then(function(r){ return r.json(); })
           .then(function(session) {
             if (session.authenticated) {
-              setToken(session.accessToken);
-              setUserId(session.userId);
-              setConnected(true);
-              // Se quase expirando, renovar
+              // Renovar se quase expirando
               if (session.almostExpired) {
                 fetch("/api/auth/refresh", { method: "POST" })
                   .then(function(r){ return r.json(); })
                   .then(function(d){
-                    if (d.access_token) setToken(d.access_token);
-                  }).catch(function(){});
+                    var tk = d.access_token || session.accessToken;
+                    handleConnect(tk, session.userId);
+                  }).catch(function(){ handleConnect(session.accessToken, session.userId); });
+              } else {
+                handleConnect(session.accessToken, session.userId);
               }
             }
           }).catch(function(){});

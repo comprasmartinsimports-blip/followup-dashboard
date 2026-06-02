@@ -25,18 +25,7 @@ function getListingTypeLabel(type) {
 function getPrices(listing) {
   var price = parseFloat(listing.price) || 0;
   var origPrice = parseFloat(listing.original_price) || 0;
-  // DEBUG temporário - remover depois
-  if (listing.id === "MLB6691103238" || listing.id === "MLB6699949882") {
-    console.log("[PRECO DEBUG]", listing.id, {
-      price: listing.price,
-      original_price: listing.original_price,
-      sale_price: listing.sale_price,
-      deals: listing.deals,
-      promotion_type: listing.promotion_type,
-      base_price: listing.base_price,
-      discount: listing.discount,
-    });
-  }
+
 
   // Caso 1: original_price > price → price é o preço com desconto
   if (origPrice > 0 && origPrice > price) {
@@ -156,13 +145,10 @@ async function fetchAllListings(userId, tk) {
     const batchDetails = await Promise.all(
       batch.map(async function(id) {
         var item = await fetch(ML("/items/" + id), { headers: { Authorization: "Bearer " + tk } }).then(function(r){ return r.json(); });
-        // Buscar promoções ativas para ter preço correto
-        try {
-          var promo = await fetch(ML("/items/" + id + "/deals"), { headers: { Authorization: "Bearer " + tk } }).then(function(r){ return r.json(); });
-          if (promo && !promo.error && Array.isArray(promo) && promo.length > 0) {
-            item.deals = promo;
-          }
-        } catch(e) {}
+        // Log diagnóstico de preço (primeiros 3 itens)
+        if (details.length < 3) {
+          console.log("[ITEM]", id, {price: item.price, original_price: item.original_price, sale_price: item.sale_price, base_price: item.base_price});
+        }
         return item;
       })
     );
@@ -8204,7 +8190,8 @@ export default function App() {
     localStorage.setItem("ml_notif_estoque", JSON.stringify(jaNotifEstoque));
 
     // Salva todos os IDs de pedidos vistos
-    const todosIds = [...new Set([...savedIds, ...orders.map(o => String(o.id))])];
+    const ordersForNotif = (typeof orders !== "undefined" ? orders : []);
+    const todosIds = [...new Set([...savedIds, ...ordersForNotif.map(o => String(o.id))])];
     localStorage.setItem("ml_ultimos_pedidos", JSON.stringify(todosIds));
     setUltimosPedidosIds(todosIds);
 

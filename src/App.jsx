@@ -7795,6 +7795,51 @@ export default function App() {
     } catch(e) {}
     return "overview";
   });
+
+  // ── Verificar autenticação OAuth ao carregar ──────────────
+  useEffect(function() {
+    // Verificar se veio do callback OAuth
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var authStatus = params.get("auth");
+      if (authStatus === "success") {
+        // Limpar parâmetro da URL
+        window.history.replaceState({}, "", window.location.pathname + (params.get("tab") ? "?tab=" + params.get("tab") : ""));
+        // Buscar dados da sessão
+        fetch("/api/auth/session")
+          .then(function(r){ return r.json(); })
+          .then(function(session) {
+            if (session.authenticated) {
+              setToken(session.accessToken);
+              setUserId(session.userId);
+              setConnected(true);
+            }
+          }).catch(function(){});
+      } else if (authStatus === "error") {
+        console.warn("Erro na autenticação ML:", params.get("msg"));
+        window.history.replaceState({}, "", window.location.pathname);
+      } else {
+        // Verificar sessão existente silenciosamente
+        fetch("/api/auth/session")
+          .then(function(r){ return r.json(); })
+          .then(function(session) {
+            if (session.authenticated) {
+              setToken(session.accessToken);
+              setUserId(session.userId);
+              setConnected(true);
+              // Se quase expirando, renovar
+              if (session.almostExpired) {
+                fetch("/api/auth/refresh", { method: "POST" })
+                  .then(function(r){ return r.json(); })
+                  .then(function(d){
+                    if (d.access_token) setToken(d.access_token);
+                  }).catch(function(){});
+              }
+            }
+          }).catch(function(){});
+      }
+    } catch(e) {}
+  }, []);
   const [costs, setCosts] = useState({});
   const [minStock, setMinStock] = useState({});
   const [selectedListing, setSelectedListing] = useState(null);
@@ -8594,7 +8639,8 @@ export default function App() {
               </div>
             );
           })()}
-          <button onClick={() => setShowMLModal(true)} style={{ background: "#0f172a", border: "none", color: "#fff", fontWeight: 700, padding: "8px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>
+          <button onClick={function(){ window.location.href = "/api/auth/login"; }}
+            style={{ background: "#0f172a", border: "none", color: "#fff", fontWeight: 700, padding: "8px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>
             {token ? "Reconectar" : "Conectar ML"}
           </button>
           <SinoNotificacoes

@@ -348,10 +348,22 @@ async function fetchPromoPrice(itemId, tk) {
     });
     if (r1.ok) {
       const d1 = await r1.json();
-      if (!d1.error && d1.deal_price && parseFloat(d1.deal_price) > 0) {
-        const sale = parseFloat(d1.deal_price);
-        const orig = parseFloat(d1.original_price || d1.price || 0);
-        if (orig > sale) return { salePrice: sale, originalPrice: orig };
+      if (itemId === "MLB6690949118" || itemId === "MLB6691103238") {
+        console.log("[SELLER-PROMO]", itemId, JSON.stringify(d1).slice(0,500));
+      }
+      if (!d1.error) {
+        // Tentar todos os campos possíveis de preço com desconto
+        const sale = parseFloat(d1.deal_price || d1.new_price || d1.price_discount || 0);
+        const orig = parseFloat(d1.original_price || d1.price || d1.base_price || 0);
+        if (sale > 0 && orig > sale) return { salePrice: sale, originalPrice: orig };
+        // Se tem array de prices dentro
+        if (Array.isArray(d1.prices)) {
+          const p = d1.prices.find(function(x){ return x.type !== "standard" && x.amount > 0; });
+          const s = d1.prices.find(function(x){ return x.type === "standard" && x.amount > 0; });
+          if (p && s && parseFloat(p.amount) < parseFloat(s.amount)) {
+            return { salePrice: parseFloat(p.amount), originalPrice: parseFloat(s.amount) };
+          }
+        }
       }
     }
 

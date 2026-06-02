@@ -1,12 +1,11 @@
 {
   "rewrites": [
-    {
-      "source": "/api/ml/:path*",
-      "destination": "https://api.mercadolibre.com/:path*"
-    },
-    {
-      "source": "/api/promo/:path*",
-      "destination": "https://api.mercadolibre.com/seller-promotions/:path*"
-    }
+    { "source": "/api/ml/:path*", "destination": "/api/ml" },
+    { "source": "/api/auth/login", "destination": "/api/auth/login" },
+    { "source": "/api/auth/callback", "destination": "/api/auth/callback" },
+    { "source": "/api/auth/refresh", "destination": "/api/auth/refresh" },
+    { "source": "/api/auth/logout", "destination": "/api/auth/logout" },
+    { "source": "/api/auth/session", "destination": "/api/auth/session" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

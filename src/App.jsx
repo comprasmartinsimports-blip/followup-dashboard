@@ -4350,7 +4350,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
               </div>
             );
           })()}
-        <Paginacao total={produtosFiltrados.length} porPagina={POR_PAG_PROD} paginaAtual={paginaProdutos} onMudar={function(p){setPaginaProdutos(p);window.scrollTo({top:0,behavior:"smooth"});}} />
+          <Paginacao total={produtosFiltrados.length} porPagina={POR_PAG_PROD} paginaAtual={paginaProdutos} onMudar={function(p){setPaginaProdutos(p);window.scrollTo({top:0,behavior:"smooth"});}} />
         </div>
       )}
 
@@ -6943,6 +6943,12 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
                 })}
               </tbody>
             </table>
+            <Paginacao
+              total={contasFiltradas.length}
+              porPagina={POR_PAG_FIN}
+              paginaAtual={paginaPagar}
+              onMudar={function(p){ setPaginaPagar(p); window.scrollTo({top:0,behavior:"smooth"}); }}
+            />
           </div>
         </div>
       )}

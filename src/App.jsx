@@ -23,21 +23,38 @@ function getListingTypeLabel(type) {
 }
 
 function getPrices(listing) {
-  if (listing.original_price && parseFloat(listing.original_price) > parseFloat(listing.price)) {
-    return {
-      salePrice: parseFloat(listing.price),
-      originalPrice: parseFloat(listing.original_price),
-      hasPromo: true
-    };
+  var price = parseFloat(listing.price) || 0;
+  var origPrice = parseFloat(listing.original_price) || 0;
+
+  // Caso 1: original_price > price → price é o preço com desconto
+  if (origPrice > 0 && origPrice > price) {
+    return { salePrice: price, originalPrice: origPrice, hasPromo: true };
   }
-  if (listing.sale_price && listing.sale_price.amount && parseFloat(listing.sale_price.amount) < parseFloat(listing.price)) {
-    return {
-      salePrice: parseFloat(listing.sale_price.amount),
-      originalPrice: parseFloat(listing.price),
-      hasPromo: true
-    };
+
+  // Caso 2: sale_price no objeto (promoções do ML)
+  if (listing.sale_price && listing.sale_price.amount) {
+    var saleAmt = parseFloat(listing.sale_price.amount);
+    if (saleAmt > 0 && saleAmt < price) {
+      return { salePrice: saleAmt, originalPrice: price, hasPromo: true };
+    }
   }
-  return { salePrice: parseFloat(listing.price), originalPrice: parseFloat(listing.price), hasPromo: false };
+
+  // Caso 3: deals array (Central de Promoções ML)
+  if (Array.isArray(listing.deals) && listing.deals.length > 0) {
+    var deal = listing.deals[0];
+    var dealPrice = parseFloat(deal.price || deal.deal_price || 0);
+    if (dealPrice > 0 && dealPrice < price) {
+      return { salePrice: dealPrice, originalPrice: price, hasPromo: true };
+    }
+  }
+
+  // Caso 4: promotion_type indica que está em promoção mas preço já é o final
+  // Neste caso price JÁ É o preço com desconto e original_price é o original
+  if (listing.promotion_type && origPrice > 0) {
+    return { salePrice: price, originalPrice: origPrice, hasPromo: true };
+  }
+
+  return { salePrice: price, originalPrice: price, hasPromo: false };
 }
 
 function calcMargin(salePrice, cost, feeRate = 0.12, freteSeller = 0) {
@@ -125,7 +142,17 @@ async function fetchAllListings(userId, tk) {
   for (let i = 0; i < allIds.length; i += 20) {
     const batch = allIds.slice(i, i + 20);
     const batchDetails = await Promise.all(
-      batch.map(id => fetch(ML(`/items/${id}`), { headers: { Authorization: `Bearer ${tk}` } }).then(r => r.json()))
+      batch.map(async function(id) {
+        var item = await fetch(ML("/items/" + id), { headers: { Authorization: "Bearer " + tk } }).then(function(r){ return r.json(); });
+        // Buscar promoções ativas para ter preço correto
+        try {
+          var promo = await fetch(ML("/items/" + id + "/deals"), { headers: { Authorization: "Bearer " + tk } }).then(function(r){ return r.json(); });
+          if (promo && !promo.error && Array.isArray(promo) && promo.length > 0) {
+            item.deals = promo;
+          }
+        } catch(e) {}
+        return item;
+      })
     );
     details.push(...batchDetails);
   }

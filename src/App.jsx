@@ -8632,10 +8632,6 @@ export default function App() {
     return { ...l, ...margin, cost, sku, salePrice, originalPrice, hasPromo, freteSeller, youReceive, totalProfit: margin.profit * (l.sold_quantity ?? 0), score, checks };
   });
 
-  // Reset paginação quando filtros mudam (APÓS todas as declarações de estado)
-  useEffect(function() { setPaginaAnuncios(1); }, [searchListings, searchType, orderFilter]);
-  useEffect(function() { setPaginaPedidos(1); }, [searchOrders, orderStatusFilter, filterEnvio, dateFrom, dateTo]);
-
   const filteredListings = useMemo(() => {
     const q = searchListings.toLowerCase().trim();
     let results = enriched;
@@ -8740,21 +8736,6 @@ export default function App() {
   }, [rawOrders, periodOrders, searchOrders, orderStatusFilter, dateFrom, dateTo]);
 
   // Aplicar filtro de envio no enrichedOrders
-  const enrichedOrdersComEnvio = useMemo(function() {
-    if (filterEnvio === "todos") return enrichedOrders;
-    return enrichedOrders.filter(function(o) {
-      var lt = (shipmentStatuses?.[String(o.id)+"_logistic"]) || o.shipping?.logistic_type || "";
-      var isFull = o.fulfilled === true;
-      var isFlex = !isFull && (lt.includes("fulfillment") || lt.includes("flex"));
-      var isME2  = lt.includes("drop_off") || lt.includes("xd_");
-      var isME1  = lt.includes("me1") || lt.includes("mandatory");
-      if (filterEnvio === "FULL") return isFull;
-      if (filterEnvio === "Flex") return isFlex;
-      if (filterEnvio === "ME2")  return isME2;
-      if (filterEnvio === "ME1")  return isME1;
-      return true;
-    });
-  }, [enrichedOrders, filterEnvio, shipmentStatuses]);
 
   const enrichedOrdersFiltered = filteredOrders.filter(o => {
     if (filterSku) {
@@ -8776,7 +8757,23 @@ export default function App() {
       ?? shippingData[listing?.id]
       ?? 0;
     return { ...o, listing, ...calcMargin(o.price, cost, feeRate, freteSeller), cost, freteSeller };
-  });
+  })
+
+  const enrichedOrdersComEnvio = useMemo(function() {
+    if (filterEnvio === "todos") return enrichedOrders;
+    return enrichedOrders.filter(function(o) {
+      var lt = (shipmentStatuses?.[String(o.id)+"_logistic"]) || o.shipping?.logistic_type || "";
+      var isFull = o.fulfilled === true;
+      var isFlex = !isFull && (lt.includes("fulfillment") || lt.includes("flex"));
+      var isME2  = lt.includes("drop_off") || lt.includes("xd_");
+      var isME1  = lt.includes("me1") || lt.includes("mandatory");
+      if (filterEnvio === "FULL") return isFull;
+      if (filterEnvio === "Flex") return isFlex;
+      if (filterEnvio === "ME2")  return isME2;
+      if (filterEnvio === "ME1")  return isME1;
+      return true;
+    });
+  }, [enrichedOrders, filterEnvio, shipmentStatuses]);;
 
   // ── Filtro de período ────────────────────────────────────
   const hoje = new Date().toLocaleDateString("sv-SE");

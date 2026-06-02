@@ -1560,174 +1560,6 @@ function SparkLine({ data, color }) {
   );
 }
 
-function MetaMensalCard({ metaMensal, faturamentoMes, progressoMeta, diasNoMes, diaDoMes, mesAtual, rawOrders, fmt }) {
-  var rOrders = rawOrders || [];
-  var metaDiaria = metaMensal > 0 ? metaMensal / diasNoMes : 0;
-
-  // Gráfico diário
-  var fatAcum = [];
-  var metaAcum = [];
-  for (var d = 1; d <= diasNoMes; d++) {
-    var ds = new Date(new Date().getFullYear(), new Date().getMonth(), d).toLocaleDateString("sv-SE");
-    metaAcum.push(metaDiaria * d);
-    if (d <= diaDoMes) {
-      var acum = 0;
-      rOrders.forEach(function(o) {
-        if (o.status === "paid" && o.date && o.date >= mesAtual + "-01" && o.date <= ds) {
-          acum += o.price * o.qty;
-        }
-      });
-      fatAcum.push(acum);
-    } else {
-      fatAcum.push(null);
-    }
-  }
-  var maxGraf = Math.max(metaMensal, faturamentoMes, 1);
-
-  // 12 meses
-  var meses12 = [];
-  var agora = new Date();
-  for (var mi = 11; mi >= 0; mi--) {
-    var md = new Date(agora.getFullYear(), agora.getMonth() - mi, 1);
-    var mk = md.getFullYear() + "-" + String(md.getMonth() + 1).padStart(2, "0");
-    var mLbl = md.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "");
-    var mFat = 0;
-    var mPed = 0;
-    rOrders.forEach(function(o) {
-      if (o.status === "paid" && o.date && o.date.startsWith(mk)) {
-        mFat += o.price * o.qty;
-        mPed++;
-      }
-    });
-    meses12.push({ mk: mk, label: mLbl, fat: mFat, pedidos: mPed, isCurrent: mk === mesAtual });
-  }
-  var maxMes12 = Math.max.apply(null, meses12.map(function(m) { return m.fat; }).concat([metaMensal, 1]));
-
-  var corMeta = progressoMeta >= 100 ? "#15803d" : progressoMeta >= 70 ? "#d97706" : "#dc2626";
-
-  return (
-    <div style={Object.assign({}, card(), { padding: "20px 24px" })}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <div style={{ fontWeight: 700, fontSize: 15, color: "#0f172a" }}>🎯 Meta do Mês</div>
-        <button onClick={function() { setEditMeta(function(e) { return !e; }); }}
-          style={{ background: "#f1f5f9", border: "none", color: "#64748b", padding: "5px 12px", borderRadius: 8, cursor: "pointer", fontSize: 12 }}>
-          {editMeta ? "Fechar" : "Editar Meta"}
-        </button>
-      </div>
-
-      {/* Input */}
-      {editMeta && (
-        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-          <input type="number" value={metaInput} onChange={function(e) { setMetaInput(e.target.value); }} placeholder="Ex: 50000"
-            style={{ flex: 1, background: "#f8fafc", border: "1px solid #e2e8f0", color: "#0f172a", padding: "8px 12px", borderRadius: 8, fontSize: 13, outline: "none" }} />
-          <button onClick={function() {
-            var v = parseFloat(metaInput) || 0;
-            setMetaMensal(v);
-            localStorage.setItem("metaMensal", v);
-            setEditMeta(false);
-          }} style={{ background: "#0f172a", border: "none", color: "#fff", fontWeight: 700, padding: "8px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>
-            Salvar
-          </button>
-        </div>
-      )}
-
-      {metaMensal > 0 && (
-        <div>
-          {/* KPIs */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 14 }}>
-            {[
-              { label: "Realizado", value: fmt(faturamentoMes), color: corMeta },
-              { label: "Meta", value: fmt(metaMensal), color: "#0f172a" },
-              { label: "Progresso", value: progressoMeta.toFixed(1) + "%", color: corMeta },
-              { label: progressoMeta >= 100 ? "✅ Atingida!" : "Faltam", value: progressoMeta >= 100 ? "" : fmt(metaMensal - faturamentoMes), color: corMeta },
-            ].map(function(k) {
-              return (
-                <div key={k.label} style={{ background: "#f8fafc", borderRadius: 8, padding: "10px 12px" }}>
-                  <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>{k.label}</div>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: k.color }}>{k.value}</div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Barra progresso */}
-          <div style={{ height: 10, background: "#e2e8f0", borderRadius: 99, overflow: "hidden", marginBottom: 6 }}>
-            <div style={{ width: progressoMeta + "%", height: "100%", background: corMeta, borderRadius: 99, transition: "width .5s" }} />
-          </div>
-          <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 20 }}>
-            Meta diária: {fmt(metaDiaria)} · {diasNoMes - diaDoMes} dias restantes
-          </div>
-
-          {/* Gráfico diário */}
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", marginBottom: 8, textTransform: "uppercase" }}>
-              Evolução Diária vs Meta — {agora.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
-            </div>
-            <div style={{ display: "flex", alignItems: "flex-end", gap: 1, height: 70, background: "#f8fafc", borderRadius: 8, padding: "8px 4px 0" }}>
-              {fatAcum.map(function(v, i) {
-                var metaV = metaAcum[i];
-                var barH = v !== null ? Math.max(2, (v / maxGraf) * 100) : 0;
-                var metaH = Math.max(1, (metaV / maxGraf) * 100);
-                var acima = v !== null && v >= metaV;
-                return (
-                  <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center", height: "100%", position: "relative" }}>
-                    {v !== null && (
-                      <div style={{ width: "80%", height: barH + "%", background: acima ? "#15803d" : "#0891b2", borderRadius: "2px 2px 0 0", opacity: 0.8 }} />
-                    )}
-                    {/* Marcador da meta */}
-                    <div style={{ position: "absolute", bottom: metaH + "%", left: 0, right: 0, borderTop: "1px dashed #dc2626", opacity: 0.5 }} />
-                  </div>
-                );
-              })}
-            </div>
-            <div style={{ display: "flex", gap: 12, marginTop: 6, justifyContent: "center" }}>
-              <span style={{ fontSize: 10, color: "#0891b2" }}>■ Realizado diário</span>
-              <span style={{ fontSize: 10, color: "#dc2626" }}>— Linha da meta</span>
-            </div>
-          </div>
-
-          {/* 12 meses */}
-          <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", marginBottom: 8, textTransform: "uppercase" }}>
-              Comparativo — Últimos 12 Meses
-            </div>
-            <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 80 }}>
-              {meses12.map(function(m) {
-                var pct = maxMes12 > 0 ? Math.max(2, (m.fat / maxMes12) * 100) : 2;
-                var atingiu = metaMensal > 0 && m.fat >= metaMensal;
-                var cor = m.isCurrent ? corMeta : (atingiu ? "#15803d88" : "#cbd5e1");
-                return (
-                  <div key={m.mk} title={m.label + ": " + fmt(m.fat)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-                    <div style={{ width: "100%", height: pct + "%", background: cor, borderRadius: "3px 3px 0 0",
-                      outline: m.isCurrent ? "2px solid #0f172a" : "none", alignSelf: "flex-end" }} />
-                    <span style={{ fontSize: 8, color: m.isCurrent ? "#0f172a" : "#94a3b8", fontWeight: m.isCurrent ? 700 : 400 }}>
-                      {m.label}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-            {/* Últimos 4 meses */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 4, marginTop: 10 }}>
-              {meses12.slice(-4).map(function(m) {
-                var ok = metaMensal > 0 && m.fat >= metaMensal;
-                return (
-                  <div key={m.mk} style={{ background: ok ? "#f0fdf4" : "#f8fafc", border: "1px solid " + (ok ? "#bbf7d0" : "#e2e8f0"), borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
-                    <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600 }}>{m.label}</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: ok ? "#15803d" : "#0f172a" }}>{fmt(m.fat)}</div>
-                    {metaMensal > 0 && <div style={{ fontSize: 10, color: ok ? "#15803d" : "#94a3b8" }}>{((m.fat / metaMensal) * 100).toFixed(0)}%</div>}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasBancarias, lancamentos, paymentData, shipmentStatuses, metaMensal, setMetaMensal, darkMode, costs, impostos, setImpostos, custosFixos, setCustosFixos }) {
   const [editMeta, setEditMeta] = useState(false);
   const [metaInput, setMetaInput] = useState(String(metaMensal || ""));
@@ -1940,33 +1772,32 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
 
         {/* Meta Mensal */}
         {(metaMensal > 0 || editMeta) && (
-          <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"20px 24px", boxShadow:"0 1px 3px rgba(15,23,42,.04)" }}>
+          <div style={{ ...card(), padding:"20px 24px" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-              <div style={{ fontWeight:700, fontSize:15, color: darkMode?"#e2e8f0":"#0f172a" }}>🎯 Meta do Mês</div>
-              <button onClick={function(){setEditMeta(function(e){return !e;});}} style={{ background:"#f1f5f9",border:"none",color:"#64748b",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontSize:12 }}>
-                {editMeta ? "Fechar" : "Editar Meta"}
+              <div style={{ fontWeight:700, fontSize:15, ...txt }}>🎯 Meta do Mês</div>
+              <button onClick={() => setEditMeta(e=>!e)} style={{ background:"#f1f5f9",border:"none",color:"#64748b",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontSize:12 }}>
+                {editMeta ? "Fechar" : "Editar"}
               </button>
             </div>
             {editMeta && (
               <div style={{ display:"flex", gap:8, marginBottom:16 }}>
-                <input type="number" value={metaInput} onChange={function(e){setMetaInput(e.target.value);}} placeholder="Ex: 50000"
+                <input type="number" value={metaInput} onChange={e=>setMetaInput(e.target.value)} placeholder="Ex: 50000"
                   style={{ flex:1,background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"8px 12px",borderRadius:8,fontSize:13,outline:"none" }} />
-                <button onClick={function(){ var v=parseFloat(metaInput)||0; setMetaMensal(v); localStorage.setItem("metaMensal",v); setEditMeta(false); }}
+                <button onClick={() => { const v = parseFloat(metaInput)||0; setMetaMensal(v); localStorage.setItem("metaMensal", v); setEditMeta(false); }}
                   style={{ background:"#0f172a",border:"none",color:"#fff",fontWeight:700,padding:"8px 20px",borderRadius:8,cursor:"pointer",fontSize:13 }}>Salvar</button>
               </div>
             )}
-            {metaMensal > 0 && (
-              <MetaMensalCard
-                metaMensal={metaMensal}
-                faturamentoMes={faturamentoMes}
-                progressoMeta={progressoMeta}
-                diasNoMes={diasNoMes}
-                diaDoMes={diaDoMes}
-                mesAtual={mesAtual}
-                rawOrders={rawOrders}
-                fmt={fmt}
-              />
-            )}
+            {metaMensal > 0 && <>
+              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+                <span style={{ fontSize:13,...txtMuted }}>{fmt(faturamentoMes)} de {fmt(metaMensal)}</span>
+                <span style={{ fontSize:13,fontWeight:700,color:progressoMeta>=100?"#15803d":progressoMeta>=70?"#d97706":"#dc2626" }}>{progressoMeta.toFixed(1)}%</span>
+              </div>
+              <div style={{ height:12,background:darkMode?"#334155":"#e2e8f0",borderRadius:99,overflow:"hidden" }}>
+                <div style={{ width:`${progressoMeta}%`,height:"100%",background:progressoMeta>=100?"#15803d":progressoMeta>=70?"#d97706":"#dc2626",borderRadius:99,transition:"width .5s" }} />
+              </div>
+              {progressoMeta<100 && <div style={{ fontSize:12,...txtMuted,marginTop:8 }}>Faltam {fmt(metaMensal-faturamentoMes)} • {diasNoMes-diaDoMes} dias restantes</div>}
+              {progressoMeta>=100 && <div style={{ fontSize:13,color:"#15803d",fontWeight:700,marginTop:8 }}>🎉 Meta atingida!</div>}
+            </>}
           </div>
         )}
         {metaMensal === 0 && !editMeta && (

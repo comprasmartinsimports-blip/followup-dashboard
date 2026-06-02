@@ -8191,9 +8191,6 @@ export default function App() {
   const POR_PAG_PEDIDOS = 50;
   const [filterEnvio, setFilterEnvio] = useState("todos"); // todos | FULL | Flex | ME2 | ME1
 
-  // Reset paginação quando filtros mudam
-  useEffect(function() { setPaginaAnuncios(1); }, [searchListings, searchType, orderFilter]);
-  useEffect(function() { setPaginaPedidos(1); }, [searchOrders, orderStatusFilter, filterEnvio, dateFrom, dateTo]);
   const [orderStatusFilter, setOrderStatusFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -8634,6 +8631,10 @@ export default function App() {
     const youReceive = salePrice - margin.fee - freteSeller;
     return { ...l, ...margin, cost, sku, salePrice, originalPrice, hasPromo, freteSeller, youReceive, totalProfit: margin.profit * (l.sold_quantity ?? 0), score, checks };
   });
+
+  // Reset paginação quando filtros mudam (APÓS todas as declarações de estado)
+  useEffect(function() { setPaginaAnuncios(1); }, [searchListings, searchType, orderFilter]);
+  useEffect(function() { setPaginaPedidos(1); }, [searchOrders, orderStatusFilter, filterEnvio, dateFrom, dateTo]);
 
   const filteredListings = useMemo(() => {
     const q = searchListings.toLowerCase().trim();

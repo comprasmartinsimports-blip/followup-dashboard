@@ -1560,6 +1560,141 @@ function SparkLine({ data, color }) {
   );
 }
 
+function GraficoMeta({ metaMensal, faturamentoMes, progressoMeta, diasNoMes, diaDoMes, mesAtual, rawOrders, fmt }) {
+  var rOrders = rawOrders || [];
+  var corMeta = progressoMeta >= 100 ? "#15803d" : progressoMeta >= 70 ? "#d97706" : "#dc2626";
+  var metaDiaria = diasNoMes > 0 ? metaMensal / diasNoMes : 0;
+
+  // Calcular faturamento acumulado dia a dia no mês atual
+  var fatPorDia = [];
+  var fatAcum = 0;
+  for (var d = 1; d <= diasNoMes; d++) {
+    var ano = new Date().getFullYear();
+    var mes = new Date().getMonth();
+    var ds = new Date(ano, mes, d).toLocaleDateString("sv-SE");
+    if (d <= diaDoMes) {
+      var dayFat = 0;
+      rOrders.forEach(function(o) {
+        if (o.status === "paid" && o.date === ds) dayFat += o.price * o.qty;
+      });
+      fatAcum += dayFat;
+      fatPorDia.push(fatAcum);
+    } else {
+      fatPorDia.push(null);
+    }
+  }
+  var maxGraf = Math.max(metaMensal * 1.05, fatAcum, 1);
+
+  // 12 meses históricos
+  var meses12 = [];
+  var agora = new Date();
+  for (var mi = 11; mi >= 0; mi--) {
+    var md = new Date(agora.getFullYear(), agora.getMonth() - mi, 1);
+    var mk = md.getFullYear() + "-" + String(md.getMonth() + 1).padStart(2, "0");
+    var lbl = md.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "").toUpperCase();
+    var fat = 0;
+    rOrders.forEach(function(o) {
+      if (o.status === "paid" && o.date && o.date.startsWith(mk)) fat += o.price * o.qty;
+    });
+    meses12.push({ mk: mk, label: lbl, fat: fat, atual: mk === mesAtual });
+  }
+  var maxMes = Math.max.apply(null, meses12.map(function(m) { return m.fat; }).concat([metaMensal, 1]));
+
+  return (
+    <div>
+      {/* KPIs */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:16 }}>
+        {[
+          { label:"Realizado", val: fmt(faturamentoMes), cor: corMeta },
+          { label:"Meta", val: fmt(metaMensal), cor: "#0f172a" },
+          { label:"Progresso", val: progressoMeta.toFixed(1)+"%", cor: corMeta },
+          { label: progressoMeta >= 100 ? "✅ Meta!" : "Faltam", val: progressoMeta >= 100 ? "" : fmt(metaMensal - faturamentoMes), cor: corMeta },
+        ].map(function(k) {
+          return (
+            <div key={k.label} style={{ background:"#f8fafc", borderRadius:8, padding:"10px 12px" }}>
+              <div style={{ fontSize:9, color:"#94a3b8", fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>{k.label}</div>
+              <div style={{ fontSize:14, fontWeight:800, color:k.cor }}>{k.val}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Barra progresso */}
+      <div style={{ height:8, background:"#e2e8f0", borderRadius:99, overflow:"hidden", marginBottom:6 }}>
+        <div style={{ width: Math.min(100, progressoMeta) + "%", height:"100%", background:corMeta, borderRadius:99, transition:"width .5s" }} />
+      </div>
+      <div style={{ fontSize:11, color:"#94a3b8", marginBottom:20 }}>
+        Meta diária: {fmt(metaDiaria)} · Ritmo: {fmt(diaDoMes > 0 ? faturamentoMes / diaDoMes : 0)}/dia · {diasNoMes - diaDoMes} dias restantes
+      </div>
+
+      {/* Gráfico diário */}
+      <div style={{ marginBottom:24 }}>
+        <div style={{ fontSize:11, fontWeight:700, color:"#64748b", textTransform:"uppercase", marginBottom:8 }}>
+          Evolução diária vs meta — {agora.toLocaleDateString("pt-BR", { month:"long", year:"numeric" })}
+        </div>
+        <div style={{ display:"flex", alignItems:"flex-end", gap:1, height:80, background:"#f8fafc", borderRadius:8, padding:"8px 6px 0", position:"relative" }}>
+          {fatPorDia.map(function(v, i) {
+            var metaAcum = metaDiaria * (i + 1);
+            var barH = v !== null ? Math.max(2, (v / maxGraf) * 100) : 0;
+            var metaH = Math.max(1, (metaAcum / maxGraf) * 100);
+            var acima = v !== null && v >= metaAcum;
+            return (
+              <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", justifyContent:"flex-end", height:"100%", position:"relative" }}
+                title={"Dia "+(i+1)+": "+(v !== null ? fmt(v) : "—")+" (meta: "+fmt(metaAcum)+")"}>
+                {v !== null && (
+                  <div style={{ width:"100%", height:barH+"%", background: acima ? "#15803d" : "#0891b2", borderRadius:"2px 2px 0 0", opacity:0.85 }} />
+                )}
+                <div style={{ position:"absolute", bottom:metaH+"%", left:0, right:0, borderTop:"1px dashed #ef4444", opacity:0.6 }} />
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ display:"flex", gap:12, marginTop:6, justifyContent:"center" }}>
+          <span style={{ fontSize:10, color:"#0891b2" }}>■ Realizado acumulado</span>
+          <span style={{ fontSize:10, color:"#ef4444" }}>— Meta acumulada</span>
+        </div>
+      </div>
+
+      {/* 12 meses */}
+      <div>
+        <div style={{ fontSize:11, fontWeight:700, color:"#64748b", textTransform:"uppercase", marginBottom:10 }}>
+          Comparativo — Últimos 12 Meses
+        </div>
+        <div style={{ display:"flex", alignItems:"flex-end", gap:3, height:80 }}>
+          {meses12.map(function(m) {
+            var barH = maxMes > 0 ? Math.max(2, (m.fat / maxMes) * 100) : 2;
+            var atingiu = metaMensal > 0 && m.fat >= metaMensal;
+            var cor = m.atual ? corMeta : (atingiu ? "#15803d88" : "#cbd5e1");
+            return (
+              <div key={m.mk} title={m.label+": "+fmt(m.fat)} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:3 }}>
+                <div style={{ width:"100%", height:barH+"%", background:cor, borderRadius:"3px 3px 0 0",
+                  outline: m.atual ? "2px solid #0f172a" : "none", alignSelf:"flex-end" }} />
+                <span style={{ fontSize:8, color: m.atual ? "#0f172a" : "#94a3b8", fontWeight: m.atual ? 700 : 400 }}>
+                  {m.label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        {/* Últimos 4 meses em destaque */}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6, marginTop:10 }}>
+          {meses12.slice(-4).map(function(m) {
+            var ok = metaMensal > 0 && m.fat >= metaMensal;
+            var pct = metaMensal > 0 ? ((m.fat / metaMensal) * 100).toFixed(0) : null;
+            return (
+              <div key={m.mk} style={{ background: ok ? "#f0fdf4" : "#f8fafc", border:"1px solid "+(ok?"#bbf7d0":"#e2e8f0"), borderRadius:8, padding:"8px 10px", textAlign:"center" }}>
+                <div style={{ fontSize:10, color:"#64748b", fontWeight:600 }}>{m.label}</div>
+                <div style={{ fontSize:13, fontWeight:700, color: ok ? "#15803d" : "#0f172a" }}>{fmt(m.fat)}</div>
+                {pct && <div style={{ fontSize:10, color: ok ? "#15803d" : "#94a3b8" }}>{pct}% da meta</div>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasBancarias, lancamentos, paymentData, shipmentStatuses, metaMensal, setMetaMensal, darkMode, costs, impostos, setImpostos, custosFixos, setCustosFixos }) {
   const [editMeta, setEditMeta] = useState(false);
   const [metaInput, setMetaInput] = useState(String(metaMensal || ""));
@@ -1787,17 +1922,18 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
                   style={{ background:"#0f172a",border:"none",color:"#fff",fontWeight:700,padding:"8px 20px",borderRadius:8,cursor:"pointer",fontSize:13 }}>Salvar</button>
               </div>
             )}
-            {metaMensal > 0 && <>
-              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-                <span style={{ fontSize:13,...txtMuted }}>{fmt(faturamentoMes)} de {fmt(metaMensal)}</span>
-                <span style={{ fontSize:13,fontWeight:700,color:progressoMeta>=100?"#15803d":progressoMeta>=70?"#d97706":"#dc2626" }}>{progressoMeta.toFixed(1)}%</span>
-              </div>
-              <div style={{ height:12,background:darkMode?"#334155":"#e2e8f0",borderRadius:99,overflow:"hidden" }}>
-                <div style={{ width:`${progressoMeta}%`,height:"100%",background:progressoMeta>=100?"#15803d":progressoMeta>=70?"#d97706":"#dc2626",borderRadius:99,transition:"width .5s" }} />
-              </div>
-              {progressoMeta<100 && <div style={{ fontSize:12,...txtMuted,marginTop:8 }}>Faltam {fmt(metaMensal-faturamentoMes)} • {diasNoMes-diaDoMes} dias restantes</div>}
-              {progressoMeta>=100 && <div style={{ fontSize:13,color:"#15803d",fontWeight:700,marginTop:8 }}>🎉 Meta atingida!</div>}
-            </>}
+            {metaMensal > 0 && (
+              <GraficoMeta
+                metaMensal={metaMensal}
+                faturamentoMes={faturamentoMes}
+                progressoMeta={progressoMeta}
+                diasNoMes={diasNoMes}
+                diaDoMes={diaDoMes}
+                mesAtual={mesAtual}
+                rawOrders={rawOrders}
+                fmt={fmt}
+              />
+            )}
           </div>
         )}
         {metaMensal === 0 && !editMeta && (

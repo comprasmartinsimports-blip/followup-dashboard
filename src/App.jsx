@@ -25,6 +25,18 @@ function getListingTypeLabel(type) {
 function getPrices(listing) {
   var price = parseFloat(listing.price) || 0;
   var origPrice = parseFloat(listing.original_price) || 0;
+  // DEBUG temporário - remover depois
+  if (listing.id === "MLB6691103238" || listing.id === "MLB6699949882") {
+    console.log("[PRECO DEBUG]", listing.id, {
+      price: listing.price,
+      original_price: listing.original_price,
+      sale_price: listing.sale_price,
+      deals: listing.deals,
+      promotion_type: listing.promotion_type,
+      base_price: listing.base_price,
+      discount: listing.discount,
+    });
+  }
 
   // Caso 1: original_price > price → price é o preço com desconto
   if (origPrice > 0 && origPrice > price) {

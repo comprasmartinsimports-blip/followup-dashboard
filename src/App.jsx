@@ -1795,9 +1795,8 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
             var md = new Date(agora.getFullYear(), agora.getMonth()-mi, 1);
             var mk = md.getFullYear()+"-"+String(md.getMonth()+1).padStart(2,"0");
             var mLabel = md.toLocaleDateString("pt-BR",{month:"short"}).replace(".","");
-            var mFat = rOrders.filter(function(o){ return o.status==="paid" && o.date && o.date.startsWith(mk); })
-              .reduce(function(s,o){ return s+o.price*o.qty; },0);
-            var mPedidos = rOrders.filter(function(o){ return o.status==="paid" && o.date && o.date.startsWith(mk); }).length;
+            var mFat = 0; var mPedidos = 0;
+            rOrders.forEach(function(o){ if(o.status==="paid"&&o.date&&o.date.startsWith(mk)){ mFat+=o.price*o.qty; mPedidos++; } });
             meses12.push({ mk:mk, label:mLabel, fat:mFat, pedidos:mPedidos, isCurrent:mk===mesAtual });
           }
           var maxMes12 = Math.max.apply(null, meses12.map(function(m){return m.fat;}).concat([metaMensal,1]));

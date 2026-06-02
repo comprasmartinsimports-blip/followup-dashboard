@@ -1773,19 +1773,16 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
         {/* Meta Mensal */}
         {(metaMensal > 0 || editMeta) && (function() {
           // ── Gráfico diário da meta ──────────────────────────────
+          var rOrders = rawOrders || [];
           var metaDiaria = metaMensal / diasNoMes;
           var diasGraf = [];
-          var fatDiario = [];
-          var metaAcum = [];
           var fatAcum = [];
+          var metaAcum = [];
           for (var d = 1; d <= diasNoMes; d++) {
             var ds = new Date(new Date().getFullYear(), new Date().getMonth(), d).toLocaleDateString("sv-SE");
-            var dayVal = rawOrders.filter(function(o){ return o.date === ds && o.status === "paid"; })
-              .reduce(function(s,o){ return s + o.price*o.qty; }, 0);
             diasGraf.push(d);
-            fatDiario.push(d <= diaDoMes ? dayVal : null);
-            metaAcum.push(metaDiaria * d);
-            fatAcum.push(d <= diaDoMes ? rawOrders.filter(function(o){
+            metaAcum.push(parseFloat((metaDiaria * d).toFixed(2)));
+            fatAcum.push(d <= diaDoMes ? rOrders.filter(function(o){
               return o.status==="paid" && o.date >= mesAtual+"-01" && o.date <= ds;
             }).reduce(function(s,o){ return s+o.price*o.qty; },0) : null);
           }
@@ -1794,14 +1791,14 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
           // ── Últimos 12 meses ─────────────────────────────────────
           var meses12 = [];
           var agora = new Date();
-          for (var m = 11; m >= 0; m--) {
-            var md = new Date(agora.getFullYear(), agora.getMonth()-m, 1);
+          for (var mi = 11; mi >= 0; mi--) {
+            var md = new Date(agora.getFullYear(), agora.getMonth()-mi, 1);
             var mk = md.getFullYear()+"-"+String(md.getMonth()+1).padStart(2,"0");
             var mLabel = md.toLocaleDateString("pt-BR",{month:"short"}).replace(".","");
-            var mFat = rawOrders.filter(function(o){ return o.status==="paid" && o.date && o.date.startsWith(mk); })
+            var mFat = rOrders.filter(function(o){ return o.status==="paid" && o.date && o.date.startsWith(mk); })
               .reduce(function(s,o){ return s+o.price*o.qty; },0);
-            var mPedidos = rawOrders.filter(function(o){ return o.status==="paid" && o.date && o.date.startsWith(mk); }).length;
-            meses12.push({ mk, label: mLabel, fat: mFat, pedidos: mPedidos, isCurrent: mk === mesAtual });
+            var mPedidos = rOrders.filter(function(o){ return o.status==="paid" && o.date && o.date.startsWith(mk); }).length;
+            meses12.push({ mk:mk, label:mLabel, fat:mFat, pedidos:mPedidos, isCurrent:mk===mesAtual });
           }
           var maxMes12 = Math.max.apply(null, meses12.map(function(m){return m.fat;}).concat([metaMensal,1]));
 

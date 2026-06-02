@@ -342,32 +342,32 @@ async function fetchShipmentCost(shipmentId, tk) {
 
 async function fetchPromoPrice(itemId, tk) {
   try {
-    // Tentar primeiro: seller-promotions (desconto individual PRICE_DISCOUNT)
+    // Endpoint seller-promotions retorna array de promoções ativas
     const r1 = await fetch(`/api/ml/seller-promotions/items/${itemId}?app_version=v2`, {
       headers: { Authorization: `Bearer ${tk}` }
     });
     if (r1.ok) {
       const d1 = await r1.json();
-      if (itemId === "MLB6690949118" || itemId === "MLB6691103238") {
-        console.log("[SELLER-PROMO]", itemId, JSON.stringify(d1).slice(0,500));
-      }
       if (!d1.error) {
-        // Tentar todos os campos possíveis de preço com desconto
-        const sale = parseFloat(d1.deal_price || d1.new_price || d1.price_discount || 0);
-        const orig = parseFloat(d1.original_price || d1.price || d1.base_price || 0);
-        if (sale > 0 && orig > sale) return { salePrice: sale, originalPrice: orig };
-        // Se tem array de prices dentro
-        if (Array.isArray(d1.prices)) {
-          const p = d1.prices.find(function(x){ return x.type !== "standard" && x.amount > 0; });
-          const s = d1.prices.find(function(x){ return x.type === "standard" && x.amount > 0; });
-          if (p && s && parseFloat(p.amount) < parseFloat(s.amount)) {
-            return { salePrice: parseFloat(p.amount), originalPrice: parseFloat(s.amount) };
-          }
+        // d1 é um array de promoções — pegar a que tem menor preço ativo
+        const lista = Array.isArray(d1) ? d1 : (d1.results || [d1]);
+        const ativas = lista.filter(function(p) {
+          return p.status === "started" && parseFloat(p.price || 0) > 0;
+        });
+        if (ativas.length > 0) {
+          // Menor preço entre todas as promoções ativas
+          const melhor = ativas.reduce(function(min, p) {
+            return parseFloat(p.price) < parseFloat(min.price) ? p : min;
+          }, ativas[0]);
+          const sale = parseFloat(melhor.price);
+          const orig = parseFloat(melhor.original_price || 0);
+          if (sale > 0 && orig > sale) return { salePrice: sale, originalPrice: orig };
+          if (sale > 0) return { salePrice: sale, originalPrice: orig || sale };
         }
       }
     }
 
-    // Tentar: /items/{id}/prices — retorna array prices[]
+    // Tentar: /items/{id}/prices — retorna objeto com prices[]
     const r2 = await fetch(`/api/ml/items/${itemId}/prices`, {
       headers: { Authorization: `Bearer ${tk}` }
     });
@@ -375,17 +375,19 @@ async function fetchPromoPrice(itemId, tk) {
       const d2 = await r2.json();
       if (!d2.error) {
         const list = d2.prices || (Array.isArray(d2) ? d2 : []);
-        // Procurar preço promocional (não-standard)
-        const promo = list.find(function(p){ return p.type !== "standard" && parseFloat(p.amount||0) > 0; });
-        const std   = list.find(function(p){ return p.type === "standard"  && parseFloat(p.amount||0) > 0; });
-        if (promo && std) {
-          const s = parseFloat(promo.amount), o = parseFloat(std.amount);
-          if (s < o) return { salePrice: s, originalPrice: o };
-        }
-        // regular_amount dentro de qualquer item
-        for (const p of list) {
-          const a = parseFloat(p.amount||0), r = parseFloat(p.regular_amount||0);
-          if (a > 0 && r > a) return { salePrice: a, originalPrice: r };
+        const stdPrice = list.find(function(p){ return p.type === "standard" && parseFloat(p.amount||0) > 0; });
+        // Pegar o menor amount entre todos (preço vencedor com promoção)
+        const allWithAmt = list.filter(function(p){ return parseFloat(p.amount||0) > 0; });
+        if (allWithAmt.length > 0) {
+          const menor = allWithAmt.reduce(function(m, p){
+            return parseFloat(p.amount) < parseFloat(m.amount) ? p : m;
+          }, allWithAmt[0]);
+          const sale = parseFloat(menor.amount);
+          const orig = parseFloat((stdPrice || menor).amount);
+          // regular_amount é o original riscado
+          const reg  = parseFloat(menor.regular_amount || (stdPrice ? stdPrice.amount : 0) || 0);
+          if (reg > sale) return { salePrice: sale, originalPrice: reg };
+          if (orig > sale) return { salePrice: sale, originalPrice: orig };
         }
       }
     }

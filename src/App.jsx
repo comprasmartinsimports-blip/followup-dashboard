@@ -346,9 +346,12 @@ async function fetchPromoPrice(itemId, tk) {
     const res = await fetch(`/api/ml/items/${itemId}/prices`, {
       headers: { Authorization: `Bearer ${tk}` }
     });
-    if (!res.ok) return null;
     const data = await res.json();
-    if (data.error) return null;
+    // Log para os primeiros itens
+    if (itemId === "MLB6691103238" || itemId === "MLB6699949882") {
+      console.log("[PRICES API]", itemId, "status:", res.status, "data:", JSON.stringify(data).slice(0,400));
+    }
+    if (!res.ok || data.error) return null;
     // amount = preço com desconto, regular_amount = preço original
     const amount = parseFloat(data.amount || 0);
     const regular = parseFloat(data.regular_amount || 0);
@@ -357,7 +360,10 @@ async function fetchPromoPrice(itemId, tk) {
     }
     if (amount > 0) return { salePrice: amount, originalPrice: amount };
     return null;
-  } catch(e) { return null; }
+  } catch(e) {
+    if (itemId === "MLB6691103238") console.log("[PRICES ERR]", itemId, e.message);
+    return null;
+  }
 }
 
 

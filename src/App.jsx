@@ -153,20 +153,23 @@ async function fetchAllListings(userId, tk) {
         // Buscar preço com desconto via promotions
         try {
           var promoRes = await fetch(ML("/items/" + id + "/promotions"), { headers: { Authorization: "Bearer " + tk } });
-          if (promoRes.ok) {
-            var promoData = await promoRes.json();
-            // ML retorna array de promoções — pegar a primeira ativa
-            var promos = Array.isArray(promoData) ? promoData : (promoData.results || []);
-            var promoAtiva = promos.find(function(p){ return p.status === "started" || p.status === "active"; });
-            if (promoAtiva && promoAtiva.new_price && parseFloat(promoAtiva.new_price) > 0) {
-              item._promo_price = parseFloat(promoAtiva.new_price);
-              item._promo_original = parseFloat(promoAtiva.original_price || item.price);
-            } else if (promoAtiva && promoAtiva.price && parseFloat(promoAtiva.price) < parseFloat(item.price)) {
-              item._promo_price = parseFloat(promoAtiva.price);
-              item._promo_original = parseFloat(item.price);
+          var promoData = await promoRes.json();
+          // Log para ver o retorno (primeiros 3)
+          if (details.length < 3) console.log("[PROMO]", id, JSON.stringify(promoData).slice(0,300));
+          if (promoRes.ok && promoData && !promoData.error) {
+            var promos = Array.isArray(promoData) ? promoData : (promoData.results || [promoData]);
+            var promoAtiva = promos.find(function(p){ return p.status === "started" || p.status === "active" || p.type; });
+            if (!promoAtiva && promos.length > 0) promoAtiva = promos[0];
+            if (promoAtiva) {
+              var np = parseFloat(promoAtiva.new_price || promoAtiva.price || 0);
+              var op = parseFloat(promoAtiva.original_price || promoAtiva.base_price || item.price);
+              if (np > 0 && np < parseFloat(item.price)) {
+                item._promo_price = np;
+                item._promo_original = op;
+              }
             }
           }
-        } catch(e) {}
+        } catch(e) { if (details.length < 3) console.log("[PROMO ERR]", id, e.message); }
         return item;
       })
     );

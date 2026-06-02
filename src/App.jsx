@@ -4215,9 +4215,11 @@ function sanitize(str) {
 
 function parseIAJson(text) {
   // Tenta extrair JSON de forma robusta
-  var BT3 = "```";
-  var clean = text.replace(/\`\`\`json[\s\S]*?\`\`\`/g, function(m) { return m.slice(7, -3); });
-  clean = clean.replace(/\`\`\`/g, "").trim();
+  var BT = String.fromCharCode(96);
+  var re1 = new RegExp(BT+BT+BT+'json[\\s\\S]*?'+BT+BT+BT, 'g');
+  var re2 = new RegExp(BT+BT+BT, 'g');
+  var clean = text.replace(re1, function(m) { return m.slice(7, -3); });
+  clean = clean.replace(re2, '').trim();
   var start = clean.indexOf("{");
   var end = clean.lastIndexOf("}");
   if (start === -1 || end === -1) throw new Error("IA não retornou JSON válido");

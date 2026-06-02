@@ -152,24 +152,26 @@ async function fetchAllListings(userId, tk) {
         var item = await fetch(ML("/items/" + id), { headers: { Authorization: "Bearer " + tk } }).then(function(r){ return r.json(); });
         // Buscar preço com desconto via promotions
         try {
-          var promoRes = await fetch(ML("/items/" + id + "/promotions"), { headers: { Authorization: "Bearer " + tk } });
-          var promoData = await promoRes.json();
-          // Log para ver o retorno (primeiros 3)
-          if (details.length < 3) console.log("[PROMO]", id, JSON.stringify(promoData).slice(0,300));
-          if (promoRes.ok && promoData && !promoData.error) {
-            var promos = Array.isArray(promoData) ? promoData : (promoData.results || [promoData]);
-            var promoAtiva = promos.find(function(p){ return p.status === "started" || p.status === "active" || p.type; });
-            if (!promoAtiva && promos.length > 0) promoAtiva = promos[0];
-            if (promoAtiva) {
-              var np = parseFloat(promoAtiva.new_price || promoAtiva.price || 0);
-              var op = parseFloat(promoAtiva.original_price || promoAtiva.base_price || item.price);
-              if (np > 0 && np < parseFloat(item.price)) {
-                item._promo_price = np;
-                item._promo_original = op;
+          // Endpoint correto para preço com promoção: /items/{id}/prices
+          var priceRes = await fetch(ML("/items/" + id + "/prices"), { headers: { Authorization: "Bearer " + tk } });
+          if (priceRes.ok) {
+            var priceData = await priceRes.json();
+            // amount = preço de venda (com desconto), regular_amount = preço original
+            if (priceData && priceData.amount && parseFloat(priceData.amount) > 0) {
+              var saleAmt = parseFloat(priceData.amount);
+              var regAmt = parseFloat(priceData.regular_amount || item.price);
+              // Se regular_amount existe e é maior, há promoção
+              if (priceData.regular_amount && regAmt > saleAmt) {
+                item._promo_price = saleAmt;
+                item._promo_original = regAmt;
+              } else if (saleAmt < parseFloat(item.price)) {
+                // amount menor que o price base também indica promoção
+                item._promo_price = saleAmt;
+                item._promo_original = parseFloat(item.price);
               }
             }
           }
-        } catch(e) { if (details.length < 3) console.log("[PROMO ERR]", id, e.message); }
+        } catch(e) {}
         return item;
       })
     );

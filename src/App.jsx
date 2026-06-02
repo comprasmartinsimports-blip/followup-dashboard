@@ -1512,15 +1512,39 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
   const [editMeta, setEditMeta] = useState(false);
   const [metaInput, setMetaInput] = useState(String(metaMensal || ""));
   const [overviewTab, setOverviewTab] = useState("resumo"); // resumo | dashboard
+  const [dashPeriodo, setDashPeriodo] = useState("mes"); // hoje | 7dias | mes | 30dias | ano | custom | mesSel
+  const [dashMesSel, setDashMesSel] = useState(() => { var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0"); });
+  const [dashDe, setDashDe] = useState("");
+  const [dashAte, setDashAte] = useState("");
+  const [showDashMesPicker, setShowDashMesPicker] = useState(false);
 
   const hoje = new Date().toLocaleDateString("sv-SE");
   const mesAtual = hoje.slice(0,7);
   const mesAnterior = new Date(new Date().setMonth(new Date().getMonth()-1)).toLocaleDateString("sv-SE").slice(0,7);
 
-  // ── Pedidos deste mês ────────────────────────────────────
-  const pedidosMes = rawOrders.filter(o => o.date?.startsWith(mesAtual) && o.status === "paid");
+  // ── Calcular range de datas baseado no período selecionado ──
+  function getDashRange() {
+    var d = new Date();
+    var hojeStr = d.toLocaleDateString("sv-SE");
+    if (dashPeriodo === "hoje") return { de: hojeStr, ate: hojeStr };
+    if (dashPeriodo === "7dias") { var d7 = new Date(); d7.setDate(d7.getDate()-6); return { de: d7.toLocaleDateString("sv-SE"), ate: hojeStr }; }
+    if (dashPeriodo === "mes") return { de: mesAtual + "-01", ate: hojeStr };
+    if (dashPeriodo === "30dias") { var d30 = new Date(); d30.setDate(d30.getDate()-29); return { de: d30.toLocaleDateString("sv-SE"), ate: hojeStr }; }
+    if (dashPeriodo === "ano") return { de: hojeStr.slice(0,4) + "-01-01", ate: hojeStr };
+    if (dashPeriodo === "mesSel") {
+      var ultimo = new Date(parseInt(dashMesSel.slice(0,4)), parseInt(dashMesSel.slice(5,7)), 0).toLocaleDateString("sv-SE");
+      return { de: dashMesSel + "-01", ate: ultimo };
+    }
+    if (dashPeriodo === "custom") return { de: dashDe || "2000-01-01", ate: dashAte || hojeStr };
+    return { de: mesAtual + "-01", ate: hojeStr };
+  }
+  var dashRange = getDashRange();
+
+  // ── Pedidos no período selecionado ───────────────────────
+  const pedidosMes = rawOrders.filter(function(o){
+    return o.status === "paid" && o.date >= dashRange.de && o.date <= dashRange.ate;
+  });
   const pedidosMesAnt = rawOrders.filter(o => o.date?.startsWith(mesAnterior) && o.status === "paid");
-  // Usa todos os pedidos pagos do mês (mesma base dos KPI cards no topo quando filtro = "Este mês")
   const faturamentoMes = pedidosMes.reduce((s,o) => s+o.price*o.qty, 0);
   const faturamentoMesAnt = pedidosMesAnt.reduce((s,o) => s+o.price*o.qty, 0);
   const crescimento = faturamentoMesAnt > 0 ? ((faturamentoMes - faturamentoMesAnt) / faturamentoMesAnt) * 100 : 0;
@@ -1544,9 +1568,9 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
     return l.available_quantity <= 3;
   });
 
-  // ── Ranking produtos mais vendidos ───────────────────────
+  // ── Ranking produtos mais vendidos (período selecionado) ──
   const vendasPorProduto = {};
-  rawOrders.filter(o => o.status === "paid" && o.date?.startsWith(mesAtual)).forEach(o => {
+  rawOrders.filter(function(o){ return o.status === "paid" && o.date >= dashRange.de && o.date <= dashRange.ate; }).forEach(o => {
     const id = o.listing_id;
     if (!id) return;
     if (!vendasPorProduto[id]) vendasPorProduto[id] = { id, title: o.title, qty: 0, revenue: 0 };
@@ -1556,26 +1580,32 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
   const rankingVendas = Object.values(vendasPorProduto).sort((a,b) => b.qty - a.qty).slice(0,5);
   const maxQty = rankingVendas[0]?.qty || 1;
 
-  // ── Ranking mais lucrativos ──────────────────────────────
+  // ── Ranking mais lucrativos (período selecionado) ────────
   const rankingLucro = enriched
     .filter(l => costs[l.id] > 0 && l.sold_quantity > 0)
     .sort((a,b) => b.totalProfit - a.totalProfit)
     .slice(0, 5);
 
-  // ── Dados para o Dashboard (30 dias) ──────────────────────
-  var hoje30base = new Date();
+  // ── Dados para o gráfico (baseado no período selecionado) ──
   var ultimos30dash = [];
   var fat30dash = [];
-  for (var di30 = 29; di30 >= 0; di30--) {
-    var dd30 = new Date(hoje30base); dd30.setDate(dd30.getDate() - di30);
+  var deDate = new Date(dashRange.de);
+  var ateDate = new Date(dashRange.ate);
+  var diffDias = Math.round((ateDate - deDate) / (1000*60*60*24)) + 1;
+  // Limitar a 90 dias no gráfico para não ficar muito denso
+  var diasGrafico = Math.min(diffDias, 90);
+  var baseGrafico = new Date(ateDate);
+  for (var di30 = diasGrafico - 1; di30 >= 0; di30--) {
+    var dd30 = new Date(baseGrafico); dd30.setDate(dd30.getDate() - di30);
     var ds30 = dd30.toLocaleDateString("sv-SE");
+    if (ds30 < dashRange.de || ds30 > dashRange.ate) continue;
     ultimos30dash.push(ds30);
     var dayFat = rawOrders.filter(function(o){ return o.date === ds30 && o.status === "paid"; });
     fat30dash.push(dayFat.reduce(function(s,o){ return s + o.price * o.qty; }, 0));
   }
   var maxFat30dash = Math.max.apply(null, fat30dash.concat([1]));
   var totalFat30dash = fat30dash.reduce(function(s,v){ return s+v; }, 0);
-  var mediaFat30dash = totalFat30dash / 30;
+  var mediaFat30dash = totalFat30dash / Math.max(ultimos30dash.length, 1);
 
   // ── Faturamento por dia (últimos 14 dias) ────────────────
   const ultimos14 = Array.from({length:14}, (_,i) => {
@@ -1774,11 +1804,96 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
 
       {/* ══ ABA DASHBOARD ══ */}
       {overviewTab === "dashboard" && (
-        <DashboardSubAbas
-          fat30={fat30dash} ultimos30={ultimos30dash} maxFat30={maxFat30dash} totalFat30={totalFat30dash} mediaFat30={mediaFat30dash}
-          rankingVendas={rankingVendas} rankingLucro={rankingLucro}
-          fmt={fmt} card={card} txt={txt} txtMuted={txtMuted}
-        />
+        <div>
+          {/* ── Filtro de Período ── */}
+          <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:16, flexWrap:"wrap" }}>
+            <span style={{ fontSize:12, color:"#64748b", fontWeight:600 }}>Período:</span>
+            {[
+              { key:"hoje",   label:"Hoje" },
+              { key:"7dias",  label:"7 dias" },
+              { key:"mes",    label:"Este mês" },
+              { key:"30dias", label:"30 dias" },
+              { key:"ano",    label:"Este ano" },
+            ].map(function(p) {
+              var isActive = dashPeriodo === p.key;
+              return (
+                <button key={p.key} onClick={function(){ setDashPeriodo(p.key); setShowDashMesPicker(false); }}
+                  style={{ padding:"5px 14px", borderRadius:20, border:"none", cursor:"pointer", fontSize:12,
+                    fontWeight:isActive?700:500, background:isActive?"#0f172a":"#f1f5f9", color:isActive?"#fff":"#64748b" }}>
+                  {p.label}
+                </button>
+              );
+            })}
+            {/* Seletor mês específico */}
+            <div style={{ position:"relative" }}>
+              <button onClick={function(){ setShowDashMesPicker(function(v){ return !v; }); }}
+                style={{ padding:"5px 14px", borderRadius:20, border:"none", cursor:"pointer", fontSize:12,
+                  fontWeight:dashPeriodo==="mesSel"?700:500,
+                  background:dashPeriodo==="mesSel"?"#0891b2":"#f1f5f9",
+                  color:dashPeriodo==="mesSel"?"#fff":"#64748b",
+                  display:"flex", alignItems:"center", gap:4 }}>
+                📅 {dashPeriodo==="mesSel"
+                  ? new Date(dashMesSel+"-15").toLocaleDateString("pt-BR",{month:"short",year:"numeric"})
+                  : "Mês"} <span style={{ fontSize:9 }}>▼</span>
+              </button>
+              {showDashMesPicker && (
+                <div style={{ position:"absolute", top:34, left:0, background:"#fff", border:"1px solid #e2e8f0",
+                  borderRadius:12, boxShadow:"0 8px 24px rgba(0,0,0,.12)", zIndex:300, padding:10, minWidth:200 }}
+                  onMouseLeave={function(){ setShowDashMesPicker(false); }}>
+                  <div style={{ fontSize:10, color:"#94a3b8", fontWeight:700, textTransform:"uppercase", marginBottom:6 }}>Selecionar mês</div>
+                  <div style={{ maxHeight:220, overflowY:"auto" }}>
+                    {(function(){
+                      var meses = []; var agora = new Date();
+                      for (var i = 0; i < 24; i++) {
+                        var d = new Date(agora.getFullYear(), agora.getMonth()-i, 1);
+                        var k = d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+                        meses.push({ k, nome: d.toLocaleDateString("pt-BR",{month:"long",year:"numeric"}) });
+                      }
+                      return meses.map(function(m) {
+                        var sel = dashMesSel===m.k && dashPeriodo==="mesSel";
+                        return (
+                          <button key={m.k} onClick={function(){ setDashMesSel(m.k); setDashPeriodo("mesSel"); setShowDashMesPicker(false); }}
+                            style={{ width:"100%", textAlign:"left", background:sel?"#0891b2":"transparent",
+                              border:"none", color:sel?"#fff":"#334155", padding:"6px 10px",
+                              borderRadius:6, cursor:"pointer", fontSize:12, fontWeight:sel?700:400 }}
+                            onMouseEnter={function(e){ if(!sel) e.currentTarget.style.background="#f8fafc"; }}
+                            onMouseLeave={function(e){ if(!sel) e.currentTarget.style.background="transparent"; }}>
+                            {m.nome.charAt(0).toUpperCase()+m.nome.slice(1)}
+                          </button>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
+              )}
+            </div>
+            <button onClick={function(){ setDashPeriodo("custom"); setShowDashMesPicker(false); }}
+              style={{ padding:"5px 14px", borderRadius:20, border:"none", cursor:"pointer", fontSize:12,
+                fontWeight:dashPeriodo==="custom"?700:500,
+                background:dashPeriodo==="custom"?"#0f172a":"#f1f5f9",
+                color:dashPeriodo==="custom"?"#fff":"#64748b" }}>
+              Personalizado
+            </button>
+            {dashPeriodo === "custom" && (
+              <>
+                <input type="date" value={dashDe} onChange={function(e){ setDashDe(e.target.value); }}
+                  style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"4px 10px", borderRadius:8, fontSize:12 }} />
+                <span style={{ fontSize:12, color:"#94a3b8" }}>até</span>
+                <input type="date" value={dashAte} onChange={function(e){ setDashAte(e.target.value); }}
+                  style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"4px 10px", borderRadius:8, fontSize:12 }} />
+              </>
+            )}
+            <span style={{ fontSize:11, color:"#94a3b8", marginLeft:4 }}>
+              {pedidosMes.length} pedido(s) · {fmt(faturamentoMes)}
+            </span>
+          </div>
+
+          <DashboardSubAbas
+            fat30={fat30dash} ultimos30={ultimos30dash} maxFat30={maxFat30dash} totalFat30={totalFat30dash} mediaFat30={mediaFat30dash}
+            rankingVendas={rankingVendas} rankingLucro={rankingLucro}
+            fmt={fmt} card={card} txt={txt} txtMuted={txtMuted}
+          />
+        </div>
       )}
 
     </div>

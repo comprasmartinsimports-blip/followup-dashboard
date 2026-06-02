@@ -151,27 +151,7 @@ async function fetchAllListings(userId, tk) {
       batch.map(async function(id) {
         var item = await fetch(ML("/items/" + id), { headers: { Authorization: "Bearer " + tk } }).then(function(r){ return r.json(); });
         // Buscar preço com desconto via promotions
-        try {
-          // Endpoint correto para preço com promoção: /items/{id}/prices
-          var priceRes = await fetch(ML("/items/" + id + "/prices"), { headers: { Authorization: "Bearer " + tk } });
-          if (priceRes.ok) {
-            var priceData = await priceRes.json();
-            // amount = preço de venda (com desconto), regular_amount = preço original
-            if (priceData && priceData.amount && parseFloat(priceData.amount) > 0) {
-              var saleAmt = parseFloat(priceData.amount);
-              var regAmt = parseFloat(priceData.regular_amount || item.price);
-              // Se regular_amount existe e é maior, há promoção
-              if (priceData.regular_amount && regAmt > saleAmt) {
-                item._promo_price = saleAmt;
-                item._promo_original = regAmt;
-              } else if (saleAmt < parseFloat(item.price)) {
-                // amount menor que o price base também indica promoção
-                item._promo_price = saleAmt;
-                item._promo_original = parseFloat(item.price);
-              }
-            }
-          }
-        } catch(e) {}
+
         return item;
       })
     );
@@ -362,16 +342,22 @@ async function fetchShipmentCost(shipmentId, tk) {
 
 async function fetchPromoPrice(itemId, tk) {
   try {
-    const res = await fetch(`/api/promo/items/${itemId}?app_version=v2`, {
+    // Endpoint oficial ML para preço de venda com promoção
+    const res = await fetch(`/api/ml/items/${itemId}/prices`, {
       headers: { Authorization: `Bearer ${tk}` }
     });
+    if (!res.ok) return null;
     const data = await res.json();
-    if (!Array.isArray(data) || data.length === 0) return null;
-    const active = data.filter(p => p.status === "started" && p.price && parseFloat(p.price) > 0);
-    if (active.length === 0) return null;
-    const best = active.reduce((min, p) => parseFloat(p.price) < parseFloat(min.price) ? p : min, active[0]);
-    return { salePrice: parseFloat(best.price), originalPrice: parseFloat(best.original_price) };
-  } catch { return null; }
+    if (data.error) return null;
+    // amount = preço com desconto, regular_amount = preço original
+    const amount = parseFloat(data.amount || 0);
+    const regular = parseFloat(data.regular_amount || 0);
+    if (amount > 0 && regular > 0 && regular > amount) {
+      return { salePrice: amount, originalPrice: regular };
+    }
+    if (amount > 0) return { salePrice: amount, originalPrice: amount };
+    return null;
+  } catch(e) { return null; }
 }
 
 
@@ -8177,7 +8163,8 @@ export default function App() {
     const novasNotifs = [];
 
     // Novos pedidos (IDs que não existiam antes)
-    orders.forEach(o => {
+    const ordersParaNotif = (typeof orders !== "undefined" && Array.isArray(orders)) ? orders : [];
+    ordersParaNotif.forEach(o => {
       if (o.status === "paid" && !savedIds.includes(String(o.id))) {
         const titulo = o.order_items?.[0]?.item?.title?.slice(0,40) || "Novo pedido";
         const valor = o.total_amount || (o.order_items?.[0]?.unit_price * o.order_items?.[0]?.quantity) || 0;

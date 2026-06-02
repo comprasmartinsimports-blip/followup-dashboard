@@ -8770,10 +8770,11 @@ export default function App() {
   const enrichedOrdersComEnvio = useMemo(function() {
     if (filterEnvio === "todos") return enrichedOrders;
     return enrichedOrders.filter(function(o) {
-      var lt = (shipmentStatuses?.[String(o.id)+"_logistic"]) || o.shipping?.logistic_type || "";
-      var isFull = o.fulfilled === true;
-      var isFlex = !isFull && (lt.includes("fulfillment") || lt.includes("flex"));
-      var isME2  = lt.includes("drop_off") || lt.includes("xd_");
+      var lt = ((shipmentStatuses?.[String(o.id)+"_logistic"]) || o.shipping?.logistic_type || "").toLowerCase();
+      var isFull = (lt === "fulfillment" || lt.includes("fulfillment")) && o.fulfilled === true;
+      var isFlex = (lt === "fulfillment" || lt.includes("fulfillment")) && o.fulfilled !== true;
+      if (!isFull && !isFlex && o.fulfilled === true) isFull = true;
+      var isME2  = lt.includes("xd_drop_off") || lt.includes("drop_off");
       var isME1  = lt.includes("me1") || lt.includes("mandatory");
       if (filterEnvio === "FULL") return isFull;
       if (filterEnvio === "Flex") return isFlex;
@@ -9473,16 +9474,23 @@ export default function App() {
                     // FULL = o.fulfilled true (estoque no galpão ML)
                     // Flex = logistic_type "fulfillment" mas fulfilled=false (rota ML, estoque do seller)
                     // ME2 = xd_drop_off / drop_off
-                    var isFull = o.fulfilled === true;
-                    var isFlex = !isFull && (lt.includes("fulfillment") || lt.includes("flex"));
-                    var isME2  = lt.includes("drop_off") || lt.includes("xd_");
-                    var isME1  = lt.includes("me1") || lt.includes("mandatory");
+                    // Lógica oficial ML:
+                    // FULL = logistic_type "fulfillment" + fulfilled true (estoque no CD do ML)
+                    // Flex = logistic_type "fulfillment" + fulfilled false (seller entrega com rota ML)
+                    // ME2  = xd_drop_off (seller leva à agência)
+                    // ME1  = mandatory (coleta no seller)
+                    var ltNorm = lt.toLowerCase();
+                    var isFull = (ltNorm === "fulfillment" || ltNorm.includes("fulfillment")) && o.fulfilled === true;
+                    var isFlex = (ltNorm === "fulfillment" || ltNorm.includes("fulfillment")) && o.fulfilled !== true;
+                    var isME2  = ltNorm.includes("xd_drop_off") || ltNorm.includes("drop_off");
+                    var isME1  = ltNorm.includes("me1") || ltNorm.includes("mandatory");
+                    // Se fulfilled=true mas logistic não é fulfillment, ainda pode ser FULL via self_service
+                    if (!isFull && !isFlex && o.fulfilled === true) isFull = true;
                     var envCfg = isFull ? {label:"FULL", color:"#1d4ed8", bg:"#eff6ff"}
                       : isFlex ? {label:"Flex", color:"#7c3aed", bg:"#f5f3ff"}
                       : isME2  ? {label:"ME2",  color:"#0891b2", bg:"#ecfeff"}
                       : isME1  ? {label:"ME1",  color:"#0369a1", bg:"#e0f2fe"}
                       : lt.includes("cross") ? {label:"Cross", color:"#15803d", bg:"#f0fdf4"}
-                      : lt.includes("self_service") ? {label:"FULL", color:"#1d4ed8", bg:"#eff6ff"}
                       : null;
                     var envLabel = envCfg ? envCfg.label : "";
                     return (
@@ -9524,12 +9532,17 @@ export default function App() {
                               var title = o.title ?? o.listing?.title;
                               // Montar link do ML: listing_id existe no rawOrder
                               var listingId = o.listing_id;
-                              var link = listingId
-                                ? "https://www.mercadolivre.com.br/p/" + listingId
-                                : (o.permalink ?? o.listing?.permalink ?? null);
-                              // Fallback: buscar o anúncio nos listings para pegar o permalink real
+                              // Buscar permalink real nos listings carregados
                               var listingObj = listings && listingId ? listings.find(function(l){ return l.id === listingId; }) : null;
-                              if (listingObj && listingObj.permalink) link = listingObj.permalink;
+                              var link = null;
+                              if (listingObj && listingObj.permalink) {
+                                link = listingObj.permalink;
+                              } else if (listingId) {
+                                // Montar URL direta do anúncio no ML
+                                link = "https://www.mercadolivre.com.br/anuncio/" + listingId;
+                              } else if (o.permalink) {
+                                link = o.permalink;
+                              }
                               if (!title) return <span style={{ color:"#94a3b8", fontSize:12 }}>—</span>;
                               return link
                                 ? <a href={link} target="_blank" rel="noreferrer" className="title-link" style={{ fontSize:12 }}>{title}</a>

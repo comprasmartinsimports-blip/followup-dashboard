@@ -3746,6 +3746,8 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
   const [showMovEstoque, setShowMovEstoque] = useState(null); // produto para ver movimentação
   const [movEstoque, setMovEstoque] = useState(function(){ try { return JSON.parse(localStorage.getItem("mov_estoque")||"[]"); } catch(e){ return []; } });
   const [importMsg, setImportMsg] = useState(null); // {tipo:"ok"|"erro", texto:"..."}
+  const [paginaProdutos, setPaginaProdutos] = useState(1);
+  const POR_PAG_PROD = 30;
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -5962,6 +5964,10 @@ function ModalConta({ conta, categoriasPagar, fornecedores, contasPagar, onSave,
 
 
 function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], setContasBancarias, categoriasPagar=[], setCategoriasPagar, lancamentos=[], setLancamentos, enrichedOrders=[], rawOrders=[], shipmentStatuses, paymentData, finTab, setFinTab, impostos=[], setImpostos, custosFixos=[], setCustosFixos, fornecedores=[], currentUser=null }) {
+  const [paginaPagar, setPaginaPagar] = useState(1);
+  const [paginaReceber, setPaginaReceber] = useState(1);
+  const POR_PAG_FIN = 30;
+
   // Badge de quantos pagamentos liberados ainda não foram baixados
   var qtdLiberadosNaoRegistrados = (enrichedOrders||[]).filter(function(o) {
     var pd = paymentData?.[o.id];
@@ -8253,11 +8259,7 @@ export default function App() {
     try { return JSON.parse(localStorage.getItem("lancamentos") || "[]"); } catch { return []; }
   });
   const [finTab, setFinTab] = useState("resumo");
-  const [paginaPagar, setPaginaPagar] = useState(1);
-  const [paginaReceber, setPaginaReceber] = useState(1);
-  const [paginaProdutos, setPaginaProdutos] = useState(1);
-  const POR_PAG_FIN = 30;
-  const POR_PAG_PROD = 30;
+
   const [produtos, setProdutos] = useState(() => {
     try { return JSON.parse(localStorage.getItem("produtos_cadastro") || "[]"); } catch { return []; }
   });

@@ -1560,7 +1560,7 @@ function SparkLine({ data, color }) {
   );
 }
 
-function MetaMensalCard({ metaMensal, editMeta, setEditMeta, metaInput, setMetaInput, setMetaMensal, faturamentoMes, progressoMeta, diasNoMes, diaDoMes, mesAtual, rawOrders, darkMode, fmt, txt, txtMuted, card }) {
+function MetaMensalCard({ metaMensal, faturamentoMes, progressoMeta, diasNoMes, diaDoMes, mesAtual, rawOrders, fmt }) {
   var rOrders = rawOrders || [];
   var metaDiaria = metaMensal > 0 ? metaMensal / diasNoMes : 0;
 
@@ -1609,7 +1609,7 @@ function MetaMensalCard({ metaMensal, editMeta, setEditMeta, metaInput, setMetaI
     <div style={Object.assign({}, card(), { padding: "20px 24px" })}>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <div style={{ fontWeight: 700, fontSize: 15, color: (txt && txt.color) || "#0f172a" }}>🎯 Meta do Mês</div>
+        <div style={{ fontWeight: 700, fontSize: 15, color: "#0f172a" }}>🎯 Meta do Mês</div>
         <button onClick={function() { setEditMeta(function(e) { return !e; }); }}
           style={{ background: "#f1f5f9", border: "none", color: "#64748b", padding: "5px 12px", borderRadius: 8, cursor: "pointer", fontSize: 12 }}>
           {editMeta ? "Fechar" : "Editar Meta"}
@@ -1940,25 +1940,34 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
 
         {/* Meta Mensal */}
         {(metaMensal > 0 || editMeta) && (
-          <MetaMensalCard
-            metaMensal={metaMensal}
-            editMeta={editMeta}
-            setEditMeta={setEditMeta}
-            metaInput={metaInput}
-            setMetaInput={setMetaInput}
-            setMetaMensal={setMetaMensal}
-            faturamentoMes={faturamentoMes}
-            progressoMeta={progressoMeta}
-            diasNoMes={diasNoMes}
-            diaDoMes={diaDoMes}
-            mesAtual={mesAtual}
-            rawOrders={rawOrders}
-            darkMode={darkMode}
-            fmt={fmt}
-            txt={txt}
-            txtMuted={txtMuted}
-            card={card}
-          />
+          <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"20px 24px", boxShadow:"0 1px 3px rgba(15,23,42,.04)" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+              <div style={{ fontWeight:700, fontSize:15, color: darkMode?"#e2e8f0":"#0f172a" }}>🎯 Meta do Mês</div>
+              <button onClick={function(){setEditMeta(function(e){return !e;});}} style={{ background:"#f1f5f9",border:"none",color:"#64748b",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontSize:12 }}>
+                {editMeta ? "Fechar" : "Editar Meta"}
+              </button>
+            </div>
+            {editMeta && (
+              <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+                <input type="number" value={metaInput} onChange={function(e){setMetaInput(e.target.value);}} placeholder="Ex: 50000"
+                  style={{ flex:1,background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"8px 12px",borderRadius:8,fontSize:13,outline:"none" }} />
+                <button onClick={function(){ var v=parseFloat(metaInput)||0; setMetaMensal(v); localStorage.setItem("metaMensal",v); setEditMeta(false); }}
+                  style={{ background:"#0f172a",border:"none",color:"#fff",fontWeight:700,padding:"8px 20px",borderRadius:8,cursor:"pointer",fontSize:13 }}>Salvar</button>
+              </div>
+            )}
+            {metaMensal > 0 && (
+              <MetaMensalCard
+                metaMensal={metaMensal}
+                faturamentoMes={faturamentoMes}
+                progressoMeta={progressoMeta}
+                diasNoMes={diasNoMes}
+                diaDoMes={diaDoMes}
+                mesAtual={mesAtual}
+                rawOrders={rawOrders}
+                fmt={fmt}
+              />
+            )}
+          </div>
         )}
         {metaMensal === 0 && !editMeta && (
           <button onClick={() => setEditMeta(true)} style={{ background:"transparent",border:`2px dashed ${darkMode?"#334155":"#e2e8f0"}`,color:darkMode?"#64748b":"#94a3b8",padding:"14px",borderRadius:12,cursor:"pointer",fontSize:13,width:"100%",fontFamily:"inherit" }}>
@@ -1968,7 +1977,7 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
 
         {/* Status dos Pedidos + Anúncios com score baixo */}
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-          <div style={{ ...card(), padding:"20px 24px" }}>
+          <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, boxShadow:"0 1px 3px rgba(15,23,42,.04)", padding:"20px 24px" }}>
             <div style={{ fontWeight:700, fontSize:14, ...txt, marginBottom:16 }}>Status dos Pedidos (mês)</div>
             <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
               {[
@@ -1989,7 +1998,7 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
           </div>
 
           {lowScoreListings.length > 0 && (
-            <div style={{ ...card(), padding:"20px 24px" }}>
+            <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, boxShadow:"0 1px 3px rgba(15,23,42,.04)", padding:"20px 24px" }}>
               <div style={{ fontWeight:700, fontSize:14, ...txt, marginBottom:16 }}>⚠️ Anúncios com Score Baixo</div>
               <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                 {lowScoreListings.map(l => (

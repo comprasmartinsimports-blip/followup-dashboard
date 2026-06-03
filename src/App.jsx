@@ -7309,8 +7309,8 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
                     var ss = shipmentStatuses?.[o.id] ?? o.shipment_status;
                     var ltR = (shipmentStatuses?.[String(o.id) + "_logistic"]) || o.shipping?.logistic_type || "";
                     var tagsR = [].concat(o.tags||[], o.orderTags||[]).map(function(t){return String(t).toLowerCase();});
-                    var isFullR = tagsR.includes("b2b");
-                    var isFlexR = !isFullR && tagsR.includes("d2c");
+                    var isFullR = o.fulfilled === true && tagsR.includes("b2b");
+                    var isFlexR = !isFullR && (tagsR.includes("d2c") || ltR.toLowerCase().includes("self_service"));
                     var isDelivered2 = ss === "delivered" || (o.tags||[]).some(function(t){return t==="delivered";});
                     var isEnviado = ["shipped","in_transit"].includes(ss);
                     var envLabel = isFullR ? "FULL" : isFlexR ? "Flex" : ltR.includes("drop_off")||ltR.includes("xd_") ? "ME2" : null;
@@ -8920,8 +8920,8 @@ export default function App() {
     return enrichedOrders.filter(function(o) {
       var lt = ((shipmentStatuses?.[String(o.id)+"_logistic"]) || o.shipping?.logistic_type || "").toLowerCase();
       var allTags = [].concat(o.tags||[], o.orderTags||[]).map(function(t){return String(t).toLowerCase();});
-      var isFull = allTags.includes("b2b");
-      var isFlex = !isFull && allTags.includes("d2c");
+      var isFull = o.fulfilled === true && allTags.includes("b2b");
+      var isFlex = !isFull && (allTags.includes("d2c") || lt.includes("self_service"));
       var isME2  = !isFull && !isFlex && (lt.includes("xd_drop_off") || lt.includes("drop_off"));
       var isME1  = !isFull && !isFlex && !isME2 && (lt.includes("me1") || lt.includes("mandatory"));
       if (filterEnvio === "FULL") return isFull;
@@ -9627,8 +9627,8 @@ export default function App() {
                     // Flex: logistic_type="fulfillment" + tags NÃO contém "fulfillment" E fulfilled=false
                     var ltNorm = lt.toLowerCase();
                     var allTags = [].concat(o.tags||[], o.orderTags||[]).map(function(t){return String(t).toLowerCase();});
-                    var isFull = allTags.includes("b2b");
-                    var isFlex = !isFull && allTags.includes("d2c");
+                    var isFull = o.fulfilled === true && allTags.includes("b2b");
+                    var isFlex = !isFull && (allTags.includes("d2c") || ltNorm.includes("self_service"));
                     var isME2  = !isFull && !isFlex && (ltNorm.includes("xd_drop_off") || ltNorm.includes("drop_off"));
                     var isME1  = !isFull && !isFlex && !isME2 && (ltNorm.includes("me1") || ltNorm.includes("mandatory"));
                     var envCfg = isFull ? {label:"FULL", color:"#1d4ed8", bg:"#eff6ff"}

@@ -4120,7 +4120,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
           <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
             <button onClick={() => { setEditingProd(null); setShowModalProd(true); }}
               style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Novo Produto</button>
-            <button onClick={function(){ exportarPlanilhaProdutos(filteredProdutos.length > 0 ? filteredProdutos : produtos); }}
+            <button onClick={function(){ exportarPlanilhaProdutos(produtosFiltrados.length > 0 ? produtosFiltrados : produtos); }}
               style={{ background:"#15803d", border:"none", color:"#fff", fontWeight:700, padding:"9px 18px", borderRadius:8, cursor:"pointer", fontSize:13, display:"flex", alignItems:"center", gap:6 }}>
               ⬇️ Exportar Planilha
             </button>

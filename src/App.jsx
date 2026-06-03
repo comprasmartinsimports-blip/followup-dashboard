@@ -7308,8 +7308,8 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
                   return filtered.slice((paginaReceber-1)*POR_PAG_FIN, paginaReceber*POR_PAG_FIN).map(function(o, i) {
                     var ss = shipmentStatuses?.[o.id] ?? o.shipment_status;
                     var ltR = (shipmentStatuses?.[String(o.id) + "_logistic"]) || o.shipping?.logistic_type || "";
-                    var isFullR = o.fulfilled === true || (o.orderTags||o.tags||[]).some(function(t){return String(t).includes("fulfillment");});
-                    var isFlexR = !isFullR && (ltR === "fulfillment" || ltR.includes("flex"));
+                    var isFullR = o.fulfilled === true;
+                    var isFlexR = !isFullR && ltR.toLowerCase().includes("self_service");
                     var isDelivered2 = ss === "delivered" || (o.tags||[]).some(function(t){return t==="delivered";});
                     var isEnviado = ["shipped","in_transit"].includes(ss);
                     var envLabel = isFullR ? "FULL" : isFlexR ? "Flex" : ltR.includes("drop_off")||ltR.includes("xd_") ? "ME2" : null;
@@ -8919,12 +8919,10 @@ export default function App() {
     return enrichedOrders.filter(function(o) {
       var lt = ((shipmentStatuses?.[String(o.id)+"_logistic"]) || o.shipping?.logistic_type || "").toLowerCase();
       var allTags = [].concat(o.tags||[], o.orderTags||[]).map(function(t){return String(t).toLowerCase();});
-      var hasFulfillmentTag = allTags.some(function(t){ return t === "fulfillment" || t === "fbm_flow"; });
-      var isFull = lt.includes("fulfillment") && (o.fulfilled === true || hasFulfillmentTag);
-      var isFlex = lt.includes("fulfillment") && o.fulfilled !== true && !hasFulfillmentTag;
-      if (!isFull && !isFlex && o.fulfilled === true) isFull = true;
-      var isME2  = lt.includes("xd_drop_off") || lt.includes("drop_off");
-      var isME1  = lt.includes("me1") || lt.includes("mandatory");
+      var isFull = o.fulfilled === true;
+      var isFlex = !isFull && lt.includes("self_service");
+      var isME2  = !isFull && !isFlex && (lt.includes("xd_drop_off") || lt.includes("drop_off"));
+      var isME1  = !isFull && !isFlex && !isME2 && (lt.includes("me1") || lt.includes("mandatory"));
       if (filterEnvio === "FULL") return isFull;
       if (filterEnvio === "Flex") return isFlex;
       if (filterEnvio === "ME2")  return isME2;
@@ -9624,16 +9622,14 @@ export default function App() {
                     // Flex = logistic_type "fulfillment" mas fulfilled=false (rota ML, estoque do seller)
                     // ME2 = xd_drop_off / drop_off
                     // Distinção FULL vs Flex:
-                    // FULL: logistic_type="fulfillment" + tags contém "fulfillment" OU fulfilled=true
-                    // Flex: logistic_type="fulfillment" + tags NÃO contém "fulfillment" E fulfilled=false
+                    // FULL: fulfilled === true (estoque no galpão ML)
+                    // Flex: self_service sem fulfilled (entrega pelo seller com rota ML)
                     var ltNorm = lt.toLowerCase();
                     var allTags = [].concat(o.tags||[], o.orderTags||[]).map(function(t){return String(t).toLowerCase();});
-                    var hasFulfillmentTag = allTags.some(function(t){ return t === "fulfillment" || t === "fbm_flow"; });
-                    var isFull = ltNorm.includes("fulfillment") && (o.fulfilled === true || hasFulfillmentTag);
-                    var isFlex = ltNorm.includes("fulfillment") && o.fulfilled !== true && !hasFulfillmentTag;
-                    var isME2  = ltNorm.includes("xd_drop_off") || ltNorm.includes("drop_off");
-                    var isME1  = ltNorm.includes("me1") || ltNorm.includes("mandatory");
-                    if (!isFull && !isFlex && o.fulfilled === true) isFull = true;
+                    var isFull = o.fulfilled === true;
+                    var isFlex = !isFull && ltNorm.includes("self_service");
+                    var isME2  = !isFull && !isFlex && (ltNorm.includes("xd_drop_off") || ltNorm.includes("drop_off"));
+                    var isME1  = !isFull && !isFlex && !isME2 && (ltNorm.includes("me1") || ltNorm.includes("mandatory"));
                     var envCfg = isFull ? {label:"FULL", color:"#1d4ed8", bg:"#eff6ff"}
                       : isFlex ? {label:"Flex", color:"#7c3aed", bg:"#f5f3ff"}
                       : isME2  ? {label:"ME2",  color:"#0891b2", bg:"#ecfeff"}

@@ -7308,9 +7308,8 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
                   return filtered.slice((paginaReceber-1)*POR_PAG_FIN, paginaReceber*POR_PAG_FIN).map(function(o, i) {
                     var ss = shipmentStatuses?.[o.id] ?? o.shipment_status;
                     var ltR = (shipmentStatuses?.[String(o.id) + "_logistic"]) || o.shipping?.logistic_type || "";
-                    var tagsR = [].concat(o.tags||[], o.orderTags||[]).map(function(t){return String(t).toLowerCase();});
-                    var isFullR = o.fulfilled === true && tagsR.includes("b2b");
-                    var isFlexR = !isFullR && (tagsR.includes("d2c") || ltR.toLowerCase().includes("self_service"));
+                    var isFullR = o.fulfilled === true || (o.orderTags||o.tags||[]).some(function(t){return String(t).includes("fulfillment");});
+                    var isFlexR = !isFullR && (ltR === "fulfillment" || ltR.includes("flex"));
                     var isDelivered2 = ss === "delivered" || (o.tags||[]).some(function(t){return t==="delivered";});
                     var isEnviado = ["shipped","in_transit"].includes(ss);
                     var envLabel = isFullR ? "FULL" : isFlexR ? "Flex" : ltR.includes("drop_off")||ltR.includes("xd_") ? "ME2" : null;
@@ -8920,10 +8919,12 @@ export default function App() {
     return enrichedOrders.filter(function(o) {
       var lt = ((shipmentStatuses?.[String(o.id)+"_logistic"]) || o.shipping?.logistic_type || "").toLowerCase();
       var allTags = [].concat(o.tags||[], o.orderTags||[]).map(function(t){return String(t).toLowerCase();});
-      var isFull = o.fulfilled === true && allTags.includes("b2b");
-      var isFlex = !isFull && (allTags.includes("d2c") || lt.includes("self_service"));
-      var isME2  = !isFull && !isFlex && (lt.includes("xd_drop_off") || lt.includes("drop_off"));
-      var isME1  = !isFull && !isFlex && !isME2 && (lt.includes("me1") || lt.includes("mandatory"));
+      var hasFulfillmentTag = allTags.some(function(t){ return t === "fulfillment" || t === "fbm_flow"; });
+      var isFull = lt.includes("fulfillment") && (o.fulfilled === true || hasFulfillmentTag);
+      var isFlex = lt.includes("fulfillment") && o.fulfilled !== true && !hasFulfillmentTag;
+      if (!isFull && !isFlex && o.fulfilled === true) isFull = true;
+      var isME2  = lt.includes("xd_drop_off") || lt.includes("drop_off");
+      var isME1  = lt.includes("me1") || lt.includes("mandatory");
       if (filterEnvio === "FULL") return isFull;
       if (filterEnvio === "Flex") return isFlex;
       if (filterEnvio === "ME2")  return isME2;
@@ -9627,10 +9628,12 @@ export default function App() {
                     // Flex: logistic_type="fulfillment" + tags NÃO contém "fulfillment" E fulfilled=false
                     var ltNorm = lt.toLowerCase();
                     var allTags = [].concat(o.tags||[], o.orderTags||[]).map(function(t){return String(t).toLowerCase();});
-                    var isFull = o.fulfilled === true && allTags.includes("b2b");
-                    var isFlex = !isFull && (allTags.includes("d2c") || ltNorm.includes("self_service"));
-                    var isME2  = !isFull && !isFlex && (ltNorm.includes("xd_drop_off") || ltNorm.includes("drop_off"));
-                    var isME1  = !isFull && !isFlex && !isME2 && (ltNorm.includes("me1") || ltNorm.includes("mandatory"));
+                    var hasFulfillmentTag = allTags.some(function(t){ return t === "fulfillment" || t === "fbm_flow"; });
+                    var isFull = ltNorm.includes("fulfillment") && (o.fulfilled === true || hasFulfillmentTag);
+                    var isFlex = ltNorm.includes("fulfillment") && o.fulfilled !== true && !hasFulfillmentTag;
+                    var isME2  = ltNorm.includes("xd_drop_off") || ltNorm.includes("drop_off");
+                    var isME1  = ltNorm.includes("me1") || ltNorm.includes("mandatory");
+                    if (!isFull && !isFlex && o.fulfilled === true) isFull = true;
                     var envCfg = isFull ? {label:"FULL", color:"#1d4ed8", bg:"#eff6ff"}
                       : isFlex ? {label:"Flex", color:"#7c3aed", bg:"#f5f3ff"}
                       : isME2  ? {label:"ME2",  color:"#0891b2", bg:"#ecfeff"}

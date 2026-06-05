@@ -1768,21 +1768,9 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
   const maxQty = rankingVendas[0]?.qty || 1;
 
   // ── Ranking mais lucrativos (período selecionado) ────────
-  // Lucro por produto no período selecionado (baseado nos pedidos filtrados)
-  var lucroPorProduto = {};
-  rawOrders.filter(function(o){ return o.status === "paid" && o.date >= dashRange.de && o.date <= dashRange.ate; }).forEach(function(o) {
-    var listing = enriched.find(function(l){ return l.id === o.listing_id; });
-    if (!listing || !costs[listing.id]) return;
-    var id = listing.id;
-    if (!lucroPorProduto[id]) lucroPorProduto[id] = { id, title: listing.title, profit: 0, revenue: 0, qty: 0, margin: listing.margin };
-    var lucroUnit = o.price - (listing.fee || 0) - (listing.freteSeller || 0) - costs[listing.id];
-    lucroPorProduto[id].profit += lucroUnit * (o.qty || 1);
-    lucroPorProduto[id].revenue += o.price * (o.qty || 1);
-    lucroPorProduto[id].qty += o.qty || 1;
-  });
-  const rankingLucro = Object.values(lucroPorProduto)
-    .filter(function(p){ return p.profit > 0; })
-    .sort(function(a,b){ return b.profit - a.profit; })
+  const rankingLucro = enriched
+    .filter(l => costs[l.id] > 0 && l.sold_quantity > 0)
+    .sort((a,b) => b.totalProfit - a.totalProfit)
     .slice(0, 5);
 
   // ── Dados para o gráfico (baseado no período selecionado) ──
@@ -2142,7 +2130,7 @@ function DashboardSubAbas({ fat30, ultimos30, maxFat30, totalFat30, mediaFat30, 
               var isHoje = i === 29;
               var pct = maxFat30 > 0 ? (v / maxFat30) : 0;
               var barH = Math.max(4, pct * 120);
-              var dataStr = ultimos30[i] ? ultimos30[i].slice(8) + "/" + ultimos30[i].slice(5,7) : "";
+              var dataStr = ultimos30[i] ? ultimos30[i].slice(5).replace("-","/") : "";
               return (
                 <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:2 }}>
                   <div title={dataStr + ": " + fmt(v)}
@@ -2204,7 +2192,7 @@ function DashboardSubAbas({ fat30, ultimos30, maxFat30, totalFat30, mediaFat30, 
                   </div>
                 </div>
                 <div style={{ textAlign:"right", flexShrink:0 }}>
-                  <div style={{ fontSize:12,fontWeight:700,color:"#15803d" }}>{p.revenue > 0 ? ((p.profit/p.revenue)*100).toFixed(1) : "0.0"}%</div>
+                  <div style={{ fontSize:12,fontWeight:700,color:"#15803d" }}>{(p.margin*100).toFixed(1)}%</div>
                   <div style={{ fontSize:10,color:"#94a3b8" }}>margem</div>
                 </div>
               </div>
@@ -8358,6 +8346,7 @@ export default function App() {
   const [filterUF, setFilterUF] = useState("");
   const [showClienteDetalhe, setShowClienteDetalhe] = useState(null);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [filterListingExtra, setFilterListingExtra] = useState("all"); // all | sem_custo | com_promo | sem_promo
   const [token, setToken] = useState(() => loadSavedTokens()?.accessToken ?? null);
   const [user, setUser] = useState(() => {
     const s = loadSavedTokens();
@@ -8822,8 +8811,11 @@ export default function App() {
     }
     if (statusFilter === "active") results = results.filter(l => l.status === "active");
     if (statusFilter === "paused") results = results.filter(l => l.status === "paused");
+    if (filterListingExtra === "sem_custo") results = results.filter(l => !(costs[l.id] > 0));
+    if (filterListingExtra === "com_promo") results = results.filter(l => l.hasPromo);
+    if (filterListingExtra === "sem_promo") results = results.filter(l => !l.hasPromo);
     return results;
-  }, [enriched, searchListings, searchType, statusFilter]);
+  }, [enriched, searchListings, searchType, statusFilter, filterListingExtra, costs]);
 
   const sorted = [...filteredListings].sort((a, b) =>
     sortBy === "score" ? a.score - b.score :
@@ -9362,6 +9354,26 @@ export default function App() {
                     {f.label}
                   </button>
                 ))}
+              </div>
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                {[
+                  { key: "all",       label: "Todos os filtros" },
+                  { key: "sem_custo", label: "⚠️ Sem custo",    color: "#dc2626", bg: "#fef2f2" },
+                  { key: "com_promo", label: "🔥 Com promoção", color: "#7c3aed", bg: "#f5f3ff" },
+                  { key: "sem_promo", label: "○ Sem promoção",  color: "#64748b", bg: "#f8fafc" },
+                ].map(function(f) {
+                  var isActive = filterListingExtra === f.key;
+                  return (
+                    <button key={f.key} onClick={function(){ setFilterListingExtra(f.key); setPaginaAnuncios(1); }}
+                      style={{ padding: "6px 14px", borderRadius: 20, border: "1px solid " + (isActive ? (f.color||"#0f172a") : "#e2e8f0"),
+                        cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: isActive ? 700 : 500,
+                        background: isActive ? (f.bg||"#0f172a") : "#fff",
+                        color: isActive ? (f.color||"#fff") : "#64748b",
+                        boxShadow: isActive ? "0 0 0 2px " + (f.color||"#0f172a") + "33" : "none" }}>
+                      {f.label}
+                    </button>
+                  );
+                })}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 500 }}>Ordenar:</span>

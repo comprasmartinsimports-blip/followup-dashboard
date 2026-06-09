@@ -7876,9 +7876,10 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
                     var jaRegistrado = lancamentos.some(function(l){ return l.tipo==="recebimento" && String(l.pedidoId) === String(o.id); });
 
                     // Cor da previsão
+                    var isRealmenteLib = pd?.isReleased || (relDays !== null && relDays <= 0);
                     var relColor = "#94a3b8", relBg = "#f8fafc";
                     if (releaseDate) {
-                      if (relDays <= 0) { relColor = "#15803d"; relBg = "#f0fdf4"; }
+                      if (isRealmenteLib) { relColor = "#15803d"; relBg = "#f0fdf4"; }
                       else if (relDays <= 7) { relColor = "#d97706"; relBg = "#fffbeb"; }
                       else { relColor = "#0891b2"; relBg = "#ecfeff"; }
                     }
@@ -7923,11 +7924,11 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
                           {releaseDate ? (
                             <div style={{ background:relBg, borderRadius:8, padding:"4px 10px", display:"inline-block" }}>
                               <div style={{ fontSize:12, fontWeight:700, color:relColor }}>
-                                {relDays <= 0 ? "✓ Liberado" : fmtDate(releaseDate)}
+                                {isRealmenteLib ? "✓ Liberado" : fmtDate(releaseDate)}
                               </div>
-                              {relDays <= 0
+                              {isRealmenteLib
                                 ? <div style={{ fontSize:10, color:relColor, opacity:0.8 }}>{fmtDate(releaseDate)}</div>
-                                : <div style={{ fontSize:10, color:relColor, opacity:0.8 }}>em {relDays} dia(s)</div>
+                                : <div style={{ fontSize:10, color:relColor, opacity:0.8 }}>previsão · em {relDays} dia(s)</div>
                               }
                             </div>
                           ) : (
@@ -9128,6 +9129,22 @@ export default function App() {
             const data = await res.json();
             if (data.error) return;
 
+            // Buscar dados atualizados do payment para ter money_release_date real
+            var paymentId = null;
+            if (Array.isArray(data.payments) && data.payments.length > 0) {
+              var pmtRef = data.payments.find(function(p){ return p.status === "approved"; }) || data.payments[0];
+              paymentId = pmtRef?.id || null;
+            }
+            var paymentDetail = null;
+            if (paymentId) {
+              try {
+                var pmtRes = await fetch(ML(`/collections/${paymentId}`), { headers: { Authorization: `Bearer ${validTk}` } });
+                var pmtData = await pmtRes.json();
+                if (!pmtData.error && pmtData.collection) paymentDetail = pmtData.collection;
+                else if (!pmtData.error) paymentDetail = pmtData;
+              } catch {}
+            }
+
             // Fórmula correta: total_amount - sale_fee (sale_fee já inclui tarifa ML + custo frete)
             var bruto = parseFloat(data.total_amount || o.total_amount || 0);
 
@@ -9155,16 +9172,39 @@ export default function App() {
               if (freteCusto > 0) tarifaML = tarifaFinal - freteCusto;
             }
 
-            // Data de liberação via payments[0]
+            // Data de liberação real
+            // Prioridade: /collections/{id} > payments[].money_release_date
             var releaseDate = null;
-            if (Array.isArray(data.payments) && data.payments.length > 0) {
-              var pmt = data.payments.find(function(p) { return p.status === "approved"; }) || data.payments[0];
-              releaseDate = (pmt && pmt.money_release_date) ? pmt.money_release_date.slice(0, 10) : null;
+            var isReleased = false;
+            var hoje2 = new Date().toLocaleDateString("sv-SE");
+
+            if (paymentDetail) {
+              // /collections retorna dados mais atualizados
+              var rdRaw = paymentDetail.money_release_date || paymentDetail.date_approved || null;
+              var rdStatus = paymentDetail.money_release_status || paymentDetail.release_status || "";
+              if (rdRaw) {
+                releaseDate = rdRaw.slice(0, 10);
+                isReleased = rdStatus === "released" || rdStatus === "released_for_seller" || releaseDate <= hoje2;
+              }
+            }
+
+            // Fallback: usar payments[] do pedido
+            if (!releaseDate && Array.isArray(data.payments) && data.payments.length > 0) {
+              var pmt = data.payments.find(function(p){ return p.status === "approved"; }) || data.payments[0];
+              if (pmt) {
+                var rdRaw2 = pmt.money_release_date || null;
+                var rdStatus2 = pmt.money_release_status || pmt.release_status || "";
+                if (rdRaw2) {
+                  releaseDate = rdRaw2.slice(0, 10);
+                  isReleased = rdStatus2 === "released" || rdStatus2 === "released_for_seller" || releaseDate <= hoje2;
+                }
+              }
             }
 
             if (netAmount > 0 || releaseDate) {
               paymentMap[oid] = {
                 releaseDate,
+                isReleased,
                 netAmount: netAmount > 0 ? netAmount : bruto * 0.87,
                 bruto,
                 tarifaML: tarifaML,

@@ -6713,25 +6713,30 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
   const allOrders = rawOrders || [];
 
   // Usar enrichedOrders — já tem fee e freteSeller calculados (mesmos da aba Pedidos)
+  // Pedidos a receber = pagos e ainda não registrados no financeiro
   const aReceber = (enrichedOrders||[]).filter(function(o) {
-    const jaRegistrado = lancamentos.some(function(l) { return l.tipo === "recebimento" && (l.pedidoId === o.id || String(l.pedidoId) === String(o.id)); });
-    if (jaRegistrado) return false;
-    // Incluir pagos, em envio, entregues — qualquer pedido não registrado ainda
-    const ss = shipmentStatuses?.[o.id] ?? o.shipment_status;
-    const statusValido = o.status === "paid" || ["shipped","in_transit","delivered","ready_to_ship"].includes(ss);
-    return statusValido;
+    if (o.status !== "paid") return false;
+    if (o.tags?.some(function(t){ return t === "cancelled" || t === "refunded"; })) return false;
+    const jaRegistrado = lancamentos.some(function(l) {
+      return l.tipo === "recebimento" && String(l.pedidoId) === String(o.id);
+    });
+    return !jaRegistrado;
   });
 
-  // Entregues já registrados (desde 01/04 — início do período carregado)
+  // Pedidos já registrados no financeiro
   const recebidoMes = (enrichedOrders||[]).filter(function(o) {
-    const ss = shipmentStatuses?.[o.id] ?? o.shipment_status;
-    const isDelivered = ss === "delivered" || o.tags?.some(function(t){return t==="delivered";});
-    const jaRegistrado = lancamentos.some(function(l) { return l.tipo === "recebimento" && (l.pedidoId === o.id || String(l.pedidoId) === String(o.id)); });
-    return isDelivered && jaRegistrado;
+    const jaRegistrado = lancamentos.some(function(l) {
+      return l.tipo === "recebimento" && String(l.pedidoId) === String(o.id);
+    });
+    return jaRegistrado && o.status === "paid";
   });
 
   const totalAReceberLiq = aReceber.reduce((s,o) => s + (paymentData?.[o.id]?.netAmount || o.price*o.qty), 0);
-  const totalRecebidoMesLiq = recebidoMes.reduce((s,o) => s + (paymentData?.[o.id]?.netAmount || o.price*o.qty), 0);
+  const totalRecebidoMesLiq = recebidoMes.reduce(function(s,o) {
+    // Usar valor real do lançamento se existir, senão dado da API, senão bruto
+    var lanc = lancamentos.find(function(l){ return l.tipo==="recebimento" && String(l.pedidoId)===String(o.id); });
+    return s + (lanc?.valor || paymentData?.[o.id]?.netAmount || o.price*o.qty);
+  }, 0);
   const saldoMes = totalRecebidoMesLiq - totalPago;
   const saldoPrevisto = totalAReceberLiq - totalPagar;
 
@@ -6872,7 +6877,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
         tipo: "recebimento",
         descricao: "Pedido ML #"+o.id+" — "+(o.title||"").slice(0,40),
         valor: parseFloat(liquido.toFixed(2)),
-        data: pd.releaseDate,
+        data: pd.releaseDate <= hoje ? pd.releaseDate : hoje,
         contaBancariaId: contaMP.id,
         pedidoId: o.id,
         automatico: true,
@@ -7850,15 +7855,25 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
                     var taxaTarifa = bruto > 0 ? (tarifaExib / bruto * 100) : 0;
                     var taxaFrete  = bruto > 0 ? (freteExib  / bruto * 100) : 0;
                     var taxa = taxaTarifa + taxaFrete; // total (para compatibilidade)
-                    // Previsão: data real da API ou +14 dias da data do pedido
+                    // Previsão: data real da API > +2 dias após entrega > +14 dias após venda
                     var releaseDate = pd?.releaseDate || null;
-                    if (!releaseDate && o.date) {
-                      var d14 = new Date(o.date + "T00:00:00");
-                      d14.setDate(d14.getDate() + 14);
-                      releaseDate = d14.toLocaleDateString("sv-SE");
+                    if (!releaseDate) {
+                      var ss2 = shipmentStatuses?.[o.id] ?? o.shipment_status;
+                      var isDelivered3 = ss2 === "delivered" || (o.tags||[]).some(function(t){return t==="delivered";});
+                      if (isDelivered3 && o.date) {
+                        // Entregue: previsão de liberação em 2 dias úteis
+                        var dEnt = new Date(o.date + "T00:00:00");
+                        dEnt.setDate(dEnt.getDate() + 2);
+                        releaseDate = dEnt.toLocaleDateString("sv-SE");
+                      } else if (o.date) {
+                        // Não entregue: previsão conservadora de 14 dias da venda
+                        var d14 = new Date(o.date + "T00:00:00");
+                        d14.setDate(d14.getDate() + 14);
+                        releaseDate = d14.toLocaleDateString("sv-SE");
+                      }
                     }
                     var relDays = releaseDate ? getDaysUntil(releaseDate) : null;
-                    var jaRegistrado = lancamentos.some(function(l){ return l.tipo==="recebimento"&&l.pedidoId===o.id; });
+                    var jaRegistrado = lancamentos.some(function(l){ return l.tipo==="recebimento" && String(l.pedidoId) === String(o.id); });
 
                     // Cor da previsão
                     var relColor = "#94a3b8", relBg = "#f8fafc";
@@ -7924,11 +7939,12 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
                         </td>
                         <td style={{ padding:"10px 14px" }}>
                           {jaRegistrado ? (function() {
-                            var lanc = lancamentos.find(function(l){ return l.tipo==="recebimento" && (String(l.pedidoId)===String(o.id)); });
+                            var lanc = lancamentos.find(function(l){ return l.tipo==="recebimento" && String(l.pedidoId)===String(o.id); });
                             var isAuto = lanc && lanc.automatico;
                             return (
                               <div>
                                 <span style={{ fontSize:11, color:"#15803d", fontWeight:700 }}>✓ {isAuto ? "Auto" : "Registrado"}</span>
+                                {lanc?.data && <div style={{ fontSize:10, color:"#15803d", opacity:0.8 }}>{fmtDate(lanc.data)}</div>}
                                 {isAuto && <div style={{ fontSize:9, color:"#94a3b8" }}>baixa automática</div>}
                               </div>
                             );

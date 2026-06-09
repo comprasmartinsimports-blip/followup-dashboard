@@ -4131,7 +4131,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
           <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
             <button onClick={() => { setEditingProd(null); setShowModalProd(true); }}
               style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Novo Produto</button>
-            <button onClick={function(){ exportarPlanilhaProdutos(filteredProdutos.length > 0 ? filteredProdutos : produtos); }}
+            <button onClick={function(){ exportarPlanilhaProdutos(produtosFiltrados.length > 0 ? produtosFiltrados : produtos); }}
               style={{ background:"#15803d", border:"none", color:"#fff", fontWeight:700, padding:"9px 18px", borderRadius:8, cursor:"pointer", fontSize:13, display:"flex", alignItems:"center", gap:6 }}>
               ⬇️ Exportar Planilha
             </button>
@@ -6431,6 +6431,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
           { key:"pagar",   label:"📤 Contas a Pagar",   perm:"fin_pagar" },
           { key:"receber", label:"📥 Contas a Receber", perm:"fin_receber" },
           { key:"contas",  label:"🏦 Caixas e Bancos",  perm:"fin_bancos" },
+          { key:"ia",      label:"✦ Consultoria IA",    perm:"fin_pagar" },
           { key:"config",  label:"⚙️ Configurações",    perm:"fin_config" },
         ].filter(function(t) {
           if (currentUser?.admin) return true;
@@ -6744,7 +6745,6 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
             {/* ── CONTAS A PAGAR ── */}
       {finTab === "pagar" && (
         <div>
-          <PainelIAPagamentos contasPagar={contasPagar} contasBancarias={contasBancarias} lancamentos={lancamentos} enrichedOrders={enrichedOrders} paymentData={paymentData} shipmentStatuses={shipmentStatuses} />
           <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:10, flexWrap:"wrap" }}>
             <button onClick={() => { setEditingConta(null); setShowModalConta(true); }}
               style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Nova Conta</button>
@@ -7809,6 +7809,16 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
       )}
 
       {/* Modais */}
+      {finTab === "ia" && (
+        <div>
+          <div style={{ marginBottom:16 }}>
+            <div style={{ fontWeight:800, fontSize:18, color:"#0f172a", marginBottom:4 }}>✦ Consultoria Financeira com IA</div>
+            <div style={{ fontSize:13, color:"#94a3b8" }}>Análise automática de prioridade de pagamentos, simulação de empréstimos e consultor CFO virtual.</div>
+          </div>
+          <PainelIAPagamentos contasPagar={contasPagar} contasBancarias={contasBancarias} lancamentos={lancamentos} enrichedOrders={enrichedOrders} paymentData={paymentData} shipmentStatuses={shipmentStatuses} />
+        </div>
+      )}
+
       {showModalConta && <ModalConta conta={editingConta} categoriasPagar={categoriasPagar} fornecedores={fornecedores} contasPagar={contasPagar} onSave={saveConta} onClose={()=>{ setShowModalConta(false); setEditingConta(null); }} />}
       {showModalBancaria && <ModalContaBancaria conta={editingBancaria} onSave={saveBancaria} onClose={()=>{ setShowModalBancaria(false); setEditingBancaria(null); }} />}
       {showModalTransf && (
@@ -8336,7 +8346,17 @@ export default function App() {
       }
     } catch(e) {}
   }, []);
-  const [costs, setCosts] = useState({});
+  const [costs, setCosts] = useState(function() {
+    try { return JSON.parse(localStorage.getItem("costs_config") || "{}"); } catch { return {}; }
+  });
+  // Wrapper que salva custos no localStorage automaticamente
+  function setCostsAndSave(updater) {
+    setCosts(function(prev) {
+      var next = typeof updater === "function" ? updater(prev) : updater;
+      try { localStorage.setItem("costs_config", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
   const [minStock, setMinStock] = useState({});
   const [selectedListing, setSelectedListing] = useState(null);
   const [sortBy, setSortBy] = useState("score");
@@ -8471,6 +8491,20 @@ export default function App() {
       localStorage.setItem("produtos_cadastro", JSON.stringify(produtosSincronizados));
       // Atualizar state de produtos se existir
       setProdutos(produtosSincronizados);
+
+      // ── Restaurar custos salvos + propagar custos dos produtos cadastrados ──
+      const costsExistentes = JSON.parse(localStorage.getItem("costs_config") || "{}");
+      const costsFromProdutos = {};
+      produtosSincronizados.forEach(function(p) {
+        if (!p.precoCusto) return;
+        var custo = parseFloat(p.precoCusto);
+        if (!custo || custo <= 0) return;
+        var mlbs = p.mlbsVinculados || (p.mlbVinculado ? [p.mlbVinculado] : []);
+        mlbs.forEach(function(mlb) { costsFromProdutos[mlb] = custo; });
+      });
+      // Mesclar: custos dos produtos têm prioridade, depois os salvos manualmente
+      var costsMerged = Object.assign({}, costsExistentes, costsFromProdutos);
+      setCostsAndSave(costsMerged);
 
       setLoadingMsg("Buscando pedidos...");
       const orders = await fetchAllOrders(me.id, validTk);
@@ -9523,7 +9557,7 @@ export default function App() {
                           <div style={{ fontSize: 10, color: "#94a3b8" }}>após tarifa e frete</div>
                         </td>
                         <td>
-                          <input type="number" value={l.cost || ""} onChange={e => setCosts(c => ({ ...c, [l.id]: Number(e.target.value) }))} placeholder="0,00"
+                          <input type="number" value={l.cost || ""} onChange={e => setCostsAndSave(c => ({ ...c, [l.id]: Number(e.target.value) }))} placeholder="0,00"
                             style={{ background: "#f8fafc", border: "1px solid #e2e8f0", color: "#0f172a", padding: "5px 8px", borderRadius: 6, width: 80, fontSize: 12, textAlign: "right" }} />
                         </td>
                         <td style={{ color: l.profit >= 0 ? "#15803d" : "#dc2626", fontWeight: 700 }}>{fmt(l.profit)}</td>
@@ -9804,7 +9838,7 @@ export default function App() {
             setFornecedores={setFornecedores}
             listings={listings}
             costs={costs}
-            setCosts={setCosts}
+            setCosts={setCostsAndSave}
           />
         )}
 

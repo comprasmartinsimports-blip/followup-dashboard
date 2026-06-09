@@ -7333,7 +7333,27 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
           <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px", marginBottom:14 }}>
             <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", marginBottom:8 }}>
               <span style={{ fontSize:12, color:"#64748b", fontWeight:600 }}>📅 Vencimento:</span>
-              <BotoesPeriodo de={pagarDe} ate={pagarAte} onChangeDe={setPagarDe} onChangeAte={setPagarAte} />
+              {/* Atalhos específicos para contas a pagar */}
+              {[
+                { label:"Todos",           de:"", ate:"" },
+                { label:"Vencidas",        de:"2000-01-01", ate: new Date().toLocaleDateString("sv-SE") },
+                { label:"Esta semana",     de: new Date().toLocaleDateString("sv-SE"), ate: (function(){ var d=new Date(); d.setDate(d.getDate()+7); return d.toLocaleDateString("sv-SE"); })() },
+                { label:"Este mês",        de: new Date().toLocaleDateString("sv-SE"), ate: (function(){ var d=new Date(); return new Date(d.getFullYear(),d.getMonth()+1,0).toLocaleDateString("sv-SE"); })() },
+                { label:"Próx. 3 meses",   de: new Date().toLocaleDateString("sv-SE"), ate: (function(){ var d=new Date(); d.setMonth(d.getMonth()+3); return d.toLocaleDateString("sv-SE"); })() },
+                { label:"Próx. 6 meses",   de: new Date().toLocaleDateString("sv-SE"), ate: (function(){ var d=new Date(); d.setMonth(d.getMonth()+6); return d.toLocaleDateString("sv-SE"); })() },
+                { label:"Este ano",        de: new Date().toLocaleDateString("sv-SE"), ate: new Date().getFullYear()+"-12-31" },
+              ].map(function(p) {
+                var isActive = pagarDe === p.de && pagarAte === p.ate;
+                return (
+                  <button key={p.label} onClick={function(){ setPagarDe(p.de); setPagarAte(p.ate); }}
+                    style={{ padding:"5px 12px", borderRadius:20, border:"none", cursor:"pointer", fontSize:11,
+                      fontWeight:isActive?700:500,
+                      background:isActive?"#0f172a":"#f1f5f9",
+                      color:isActive?"#fff":"#64748b" }}>
+                    {p.label}
+                  </button>
+                );
+              })}
               <span style={{ fontSize:12, color:"#94a3b8", marginLeft:"auto" }}>{contasFiltradas.length} conta(s)</span>
             </div>
             <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>

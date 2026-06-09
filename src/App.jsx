@@ -2105,6 +2105,7 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
 // ════════════════════════════════════════════════════════════
 function DashboardSubAbas({ fat30, ultimos30, maxFat30, totalFat30, mediaFat30, rankingVendas, rankingLucro, fmt, card, txt, txtMuted }) {
   const [dashTab, setDashTab] = useState("fat30");
+  const [sortLucro, setSortLucro] = useState("valor"); // "valor" | "margem"
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
       <div style={{ display:"flex", gap:2, background:"#f1f5f9", padding:4, borderRadius:10, width:"fit-content" }}>
@@ -2148,7 +2149,7 @@ function DashboardSubAbas({ fat30, ultimos30, maxFat30, totalFat30, mediaFat30, 
                     style={{ width:"100%", borderRadius:"3px 3px 0 0", cursor:"pointer",
                       background: isHoje ? "#0f172a" : v === maxFat30 && v > 0 ? "#15803d" : v > mediaFat30 ? "#0891b2" : "#e2e8f0",
                       height: barH + "px", transition:"height .3s" }} />
-                  {i % 5 === 0 && <div style={{ fontSize:8, color:"#94a3b8", whiteSpace:"nowrap" }}>{dataStr}</div>}
+                  <div style={{ fontSize:7, color: isHoje?"#0f172a":"#94a3b8", whiteSpace:"nowrap", fontWeight: isHoje?700:400, transform:"rotate(-45deg)", transformOrigin:"top center", marginTop:2 }}>{dataStr}</div>
                 </div>
               );
             })}
@@ -2188,27 +2189,58 @@ function DashboardSubAbas({ fat30, ultimos30, maxFat30, totalFat30, mediaFat30, 
       {/* Mais Lucrativos */}
       {dashTab === "lucro" && (
         <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:14, padding:"20px 24px" }}>
-          <div style={{ fontWeight:700, fontSize:15, color:"#0f172a", marginBottom:16 }}>💰 Mais Lucrativos</div>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+            <div style={{ fontWeight:700, fontSize:15, color:"#0f172a" }}>💰 Mais Lucrativos</div>
+            {rankingLucro && rankingLucro.length > 0 && (
+              <div style={{ display:"flex", gap:4, background:"#f1f5f9", padding:3, borderRadius:8 }}>
+                {[{k:"valor",l:"R$ Lucro"},{k:"margem",l:"% Margem"}].map(function(op){
+                  var active = sortLucro === op.k;
+                  return (
+                    <button key={op.k} onClick={function(){setSortLucro(op.k);}}
+                      style={{ padding:"5px 12px", borderRadius:6, border:"none", cursor:"pointer", fontFamily:"inherit",
+                        fontSize:11, fontWeight:active?700:500,
+                        background:active?"#fff":"transparent",
+                        color:active?"#0f172a":"#94a3b8",
+                        boxShadow:active?"0 1px 2px rgba(0,0,0,.08)":"none" }}>
+                      {op.l}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           {!rankingLucro || rankingLucro.length === 0 ? (
             <div style={{ fontSize:13, color:"#94a3b8", textAlign:"center", padding:"20px 0" }}>Cadastre custos nos anúncios para ver ranking de lucro</div>
-          ) : rankingLucro.slice(0,15).map(function(p,i) {
-            return (
-              <div key={p.id} style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12, paddingBottom:12, borderBottom: i<rankingLucro.slice(0,15).length-1?"1px solid #f1f5f9":"none" }}>
-                <div style={{ width:28,height:28,borderRadius:8,background:i===0?"#fde68a":i===1?"#e2e8f0":i===2?"#fed7aa":"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:13,color:"#0f172a",flexShrink:0 }}>{i+1}</div>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontSize:12,fontWeight:600,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{p.title||p.id}</div>
-                  <div style={{ display:"flex", gap:10, marginTop:3 }}>
-                    <span style={{ fontSize:11,color:"#15803d",fontWeight:600 }}>{fmt(p.profit)}</span>
-                    <span style={{ fontSize:11,color:"#94a3b8" }}>{p.qty} venda(s)</span>
+          ) : (function(){
+            var lista = rankingLucro.slice();
+            if (sortLucro === "margem") {
+              lista = lista.sort(function(a,b){
+                var mA = a.revenue>0 ? a.profit/a.revenue : 0;
+                var mB = b.revenue>0 ? b.profit/b.revenue : 0;
+                return mB - mA;
+              });
+            }
+            return lista.slice(0,15).map(function(p,i) {
+              var margem = p.revenue > 0 ? (p.profit/p.revenue)*100 : 0;
+              var margemColor = margem >= 25 ? "#15803d" : margem >= 15 ? "#d97706" : "#dc2626";
+              return (
+                <div key={p.id} style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12, paddingBottom:12, borderBottom: i<lista.slice(0,15).length-1?"1px solid #f1f5f9":"none" }}>
+                  <div style={{ width:28,height:28,borderRadius:8,background:i===0?"#fde68a":i===1?"#e2e8f0":i===2?"#fed7aa":"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:13,color:"#0f172a",flexShrink:0 }}>{i+1}</div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:12,fontWeight:600,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{p.title||p.id}</div>
+                    <div style={{ display:"flex", gap:10, marginTop:3 }}>
+                      <span style={{ fontSize:11,color:"#15803d",fontWeight:600 }}>{fmt(p.profit)}</span>
+                      <span style={{ fontSize:11,color:"#94a3b8" }}>{p.qty} venda(s)</span>
+                    </div>
+                  </div>
+                  <div style={{ textAlign:"right", flexShrink:0 }}>
+                    <div style={{ fontSize:14,fontWeight:800,color:margemColor }}>{margem.toFixed(1)}%</div>
+                    <div style={{ fontSize:10,color:"#94a3b8" }}>margem</div>
                   </div>
                 </div>
-                <div style={{ textAlign:"right", flexShrink:0 }}>
-                  <div style={{ fontSize:12,fontWeight:700,color:"#15803d" }}>{p.revenue > 0 ? ((p.profit/p.revenue)*100).toFixed(1) : "0.0"}%</div>
-                  <div style={{ fontSize:10,color:"#94a3b8" }}>margem</div>
-                </div>
-              </div>
-            );
-          })}
+              );
+            });
+          })()}
         </div>
       )}
     </div>
@@ -3883,166 +3915,8 @@ function ModalProduto({ produto, fornecedores, listings, onSave, onClose }) {
 }
 
 // ── ProdutosTab Principal ────────────────────────────────────
-
-// ════════════════════════════════════════════════════════════
-//  DEPÓSITOS DE ESTOQUE
-// ════════════════════════════════════════════════════════════
-
-function saveDepositos(v) { try { localStorage.setItem("depositos_estoque", JSON.stringify(v)); } catch {} }
-function saveEstoqueDepositos(v) { try { localStorage.setItem("estoque_depositos", JSON.stringify(v)); } catch {} }
-
-function ModalDeposito({ deposito, onSave, onClose }) {
-  var CORES = ["#0891b2","#15803d","#7c3aed","#d97706","#dc2626","#0f172a","#64748b","#db2777"];
-  var ICONES = ["🏪","🏭","🏬","📦","🗄️","🚛","🏠","⭐"];
-  var empty = { id: Date.now().toString(), nome: "", descricao: "", cor: "#0891b2", icone: "🏪", ativo: true };
-  const [form, setForm] = useState(deposito || empty);
-  var set = function(k,v){ setForm(function(f){ return Object.assign({},f,{[k]:v}); }); };
-  return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:24 }}>
-      <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:460, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
-          <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>{deposito ? "Editar Depósito" : "Novo Depósito"}</div>
-          <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
-        </div>
-        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:12, background:"#f8fafc", borderRadius:12, padding:"12px 16px" }}>
-            <div style={{ width:48, height:48, borderRadius:12, background:form.cor, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24 }}>{form.icone}</div>
-            <div>
-              <div style={{ fontWeight:700, fontSize:15, color:"#0f172a" }}>{form.nome || "Nome do depósito"}</div>
-              <div style={{ fontSize:12, color:"#94a3b8" }}>{form.descricao || "Sem descrição"}</div>
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Nome *</div>
-            <input value={form.nome} onChange={function(e){set("nome",e.target.value);}} placeholder="Ex: Galpão Principal, Loja SP..."
-              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
-          </div>
-          <div>
-            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Descrição</div>
-            <input value={form.descricao} onChange={function(e){set("descricao",e.target.value);}} placeholder="Endereço, observação..."
-              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
-          </div>
-          <div>
-            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:8, fontWeight:600, textTransform:"uppercase" }}>Ícone</div>
-            <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-              {ICONES.map(function(ic){ return (
-                <button key={ic} onClick={function(){set("icone",ic);}}
-                  style={{ width:38, height:38, borderRadius:8, border:form.icone===ic?"2px solid #0f172a":"1px solid #e2e8f0", background:form.icone===ic?"#f1f5f9":"#fff", cursor:"pointer", fontSize:20 }}>{ic}</button>
-              ); })}
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:8, fontWeight:600, textTransform:"uppercase" }}>Cor</div>
-            <div style={{ display:"flex", gap:8 }}>
-              {CORES.map(function(c){ return (
-                <button key={c} onClick={function(){set("cor",c);}}
-                  style={{ width:28, height:28, borderRadius:8, background:c, border:form.cor===c?"3px solid #0f172a":"2px solid transparent", cursor:"pointer" }} />
-              ); })}
-            </div>
-          </div>
-          <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer" }}>
-            <input type="checkbox" checked={form.ativo !== false} onChange={function(e){set("ativo",e.target.checked);}} />
-            <span style={{ fontSize:13, color:"#334155", fontWeight:500 }}>Depósito ativo</span>
-          </label>
-        </div>
-        <div style={{ display:"flex", gap:8, marginTop:20 }}>
-          <button onClick={onClose} style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
-          <button onClick={function(){ if(!form.nome) return; onSave(form); onClose(); }} disabled={!form.nome}
-            style={{ flex:2, background:form.nome?"#0f172a":"#f1f5f9", border:"none", color:form.nome?"#fff":"#94a3b8", fontWeight:700, padding:"11px", borderRadius:10, cursor:form.nome?"pointer":"not-allowed" }}>
-            Salvar Depósito
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ModalTransfEstoque({ produto, depositos, estoqueDepositos, onConfirm, onClose }) {
-  var estoquesProd = estoqueDepositos.filter(function(e){ return e.produtoId === produto.id; });
-  const [origem, setOrigem] = useState(estoquesProd[0]?.depositoId || "");
-  const [destino, setDestino] = useState(estoquesProd[1]?.depositoId || "");
-  const [qtd, setQtd] = useState("");
-  const [erro, setErro] = useState("");
-  var estOrigem = estoquesProd.find(function(e){return e.depositoId===origem;});
-  var dispOrigem = estOrigem ? parseInt(estOrigem.qtd||0) : 0;
-  function confirmar() {
-    var q = parseInt(qtd);
-    if (!origem || !destino) { setErro("Selecione origem e destino"); return; }
-    if (origem === destino) { setErro("Origem e destino não podem ser iguais"); return; }
-    if (!q || q <= 0) { setErro("Informe uma quantidade válida"); return; }
-    if (q > dispOrigem) { setErro("Quantidade maior que o disponível"); return; }
-    onConfirm(origem, destino, q);
-  }
-  return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:24 }}>
-      <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:460, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
-          <div>
-            <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>⇄ Transferência de Estoque</div>
-            <div style={{ fontSize:12, color:"#94a3b8", marginTop:2, maxWidth:340, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{produto.titulo}</div>
-          </div>
-          <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
-        </div>
-        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-            <div style={{ flex:1 }}>
-              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>De (Origem)</div>
-              <select value={origem} onChange={function(e){setOrigem(e.target.value);setErro("");}}
-                style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13 }}>
-                <option value="">— Selecione —</option>
-                {estoquesProd.map(function(e){
-                  var dep = depositos.find(function(d){return d.id===e.depositoId;});
-                  return dep ? <option key={dep.id} value={dep.id}>{dep.icone} {dep.nome} ({e.qtd} un)</option> : null;
-                })}
-              </select>
-            </div>
-            <div style={{ fontSize:20, color:"#0891b2", marginTop:20 }}>→</div>
-            <div style={{ flex:1 }}>
-              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Para (Destino)</div>
-              <select value={destino} onChange={function(e){setDestino(e.target.value);setErro("");}}
-                style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13 }}>
-                <option value="">— Selecione —</option>
-                {depositos.filter(function(d){return d.id!==origem&&d.ativo!==false;}).map(function(d){
-                  var est = estoqueDepositos.find(function(e){return e.produtoId===produto.id&&e.depositoId===d.id;});
-                  return <option key={d.id} value={d.id}>{d.icone} {d.nome} ({est?est.qtd:0} un)</option>;
-                })}
-              </select>
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Quantidade *</div>
-            <input type="number" min="1" max={dispOrigem} value={qtd} onChange={function(e){setQtd(e.target.value);setErro("");}} placeholder="Ex: 5" autoFocus
-              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:16, fontWeight:700, outline:"none" }} />
-            {origem && <div style={{ fontSize:11, color:"#94a3b8", marginTop:4 }}>Disponível na origem: {dispOrigem} un</div>}
-          </div>
-          {qtd && parseInt(qtd)>0 && !erro && origem && destino && origem!==destino && (
-            <div style={{ background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:10, padding:"10px 14px", fontSize:13, color:"#1d4ed8", fontWeight:600 }}>
-              {qtd} un: {depositos.find(function(d){return d.id===origem;})?.nome} → {depositos.find(function(d){return d.id===destino;})?.nome}
-            </div>
-          )}
-          {erro && <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#dc2626", fontWeight:600 }}>⚠️ {erro}</div>}
-        </div>
-        <div style={{ display:"flex", gap:8, marginTop:20 }}>
-          <button onClick={onClose} style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
-          <button onClick={confirmar}
-            style={{ flex:2, background:(!qtd||!origem||!destino||origem===destino)?"#f1f5f9":"#0891b2", border:"none", color:(!qtd||!origem||!destino||origem===destino)?"#94a3b8":"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:(!qtd||!origem||!destino||origem===destino)?"not-allowed":"pointer" }}>
-            ⇄ Confirmar Transferência
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, listings, costs, setCosts }) {
-  const [prodTab, setProdTab] = useState("lista"); // lista | cadastros | depositos | estoque
-  const [depositos, setDepositos] = useState(function(){ try { return JSON.parse(localStorage.getItem("depositos_estoque")||"[]"); } catch { return []; } });
-  const [estoqueDepositos, setEstoqueDepositos] = useState(function(){ try { return JSON.parse(localStorage.getItem("estoque_depositos")||"[]"); } catch { return []; } });
-  const [showModalDeposito, setShowModalDeposito] = useState(false);
-  const [editingDeposito, setEditingDeposito] = useState(null);
-  const [showTransfEstoque, setShowTransfEstoque] = useState(null); // produto para transferência
-  const [searchEstoque, setSearchEstoque] = useState("");
-  const [filterDepositoEst, setFilterDepositoEst] = useState("todos");
+  const [prodTab, setProdTab] = useState("lista"); // lista | cadastros
   const [showModalProd, setShowModalProd] = useState(false);
   const [showModalForn, setShowModalForn] = useState(false);
   const [editingProd, setEditingProd] = useState(null);
@@ -4063,61 +3937,6 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
   function saveMovEstoque2(movs) {
     setMovEstoque(movs);
     localStorage.setItem("mov_estoque", JSON.stringify(movs));
-  }
-
-  function salvarDeposito(dep) {
-    var lista = depositos.find(function(d){return d.id===dep.id;})
-      ? depositos.map(function(d){return d.id===dep.id?dep:d;})
-      : [...depositos, dep];
-    setDepositos(lista); saveDepositos(lista);
-  }
-  function excluirDeposito(id) {
-    if (!window.confirm("Excluir este depósito? O estoque vinculado será removido.")) return;
-    var lista = depositos.filter(function(d){return d.id!==id;});
-    var estoqueAtualizado = estoqueDepositos.filter(function(e){return e.depositoId!==id;});
-    setDepositos(lista); saveDepositos(lista);
-    setEstoqueDepositos(estoqueAtualizado); saveEstoqueDepositos(estoqueAtualizado);
-  }
-
-  function registrarMovDeposito(produtoId, depositoId, tipo, qtd, motivo, preco) {
-    // Atualizar estoque no depósito
-    var novoEst = estoqueDepositos.slice();
-    var idx = novoEst.findIndex(function(e){return e.produtoId===produtoId&&e.depositoId===depositoId;});
-    if (idx >= 0) {
-      var atual = parseInt(novoEst[idx].qtd||0);
-      novoEst[idx] = Object.assign({},novoEst[idx],{qtd: tipo==="entrada" ? atual+parseInt(qtd) : Math.max(0,atual-parseInt(qtd))});
-    } else if (tipo==="entrada") {
-      novoEst.push({produtoId, depositoId, qtd: parseInt(qtd)});
-    }
-    setEstoqueDepositos(novoEst); saveEstoqueDepositos(novoEst);
-    // Registrar movimentação
-    var mov = { id: Date.now(), produtoId, depositoId, tipo, qtd: parseInt(qtd), motivo: motivo||"", preco: parseFloat(preco||0)||null,
-      data: new Date().toLocaleDateString("sv-SE"), hora: new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) };
-    var novasMov = [...movEstoque, mov];
-    setMovEstoque(novasMov); localStorage.setItem("mov_estoque", JSON.stringify(novasMov));
-    // Atualizar estoqueAtual do produto (soma de todos os depósitos)
-    var totalEst = novoEst.filter(function(e){return e.produtoId===produtoId;}).reduce(function(s,e){return s+parseInt(e.qtd||0);},0);
-    var updProd = produtos.map(function(p){return p.id===produtoId?Object.assign({},p,{estoqueAtual:String(totalEst)}):p;});
-    setProdutos(updProd); localStorage.setItem("produtos_cadastro", JSON.stringify(updProd));
-  }
-
-  function transferirEstoque(produtoId, origemId, destinoId, qtd) {
-    var novoEst = estoqueDepositos.slice();
-    // Reduzir origem
-    var idxO = novoEst.findIndex(function(e){return e.produtoId===produtoId&&e.depositoId===origemId;});
-    if (idxO>=0) novoEst[idxO]=Object.assign({},novoEst[idxO],{qtd:Math.max(0,parseInt(novoEst[idxO].qtd||0)-qtd)});
-    // Aumentar destino
-    var idxD = novoEst.findIndex(function(e){return e.produtoId===produtoId&&e.depositoId===destinoId;});
-    if (idxD>=0) novoEst[idxD]=Object.assign({},novoEst[idxD],{qtd:parseInt(novoEst[idxD].qtd||0)+qtd});
-    else novoEst.push({produtoId, depositoId:destinoId, qtd});
-    setEstoqueDepositos(novoEst); saveEstoqueDepositos(novoEst);
-    // Registrar movimentação
-    var depO = depositos.find(function(d){return d.id===origemId;});
-    var depD = depositos.find(function(d){return d.id===destinoId;});
-    var mov1 = {id:Date.now(),   produtoId,depositoId:origemId,  tipo:"saida",   qtd,motivo:"Transferência → "+(depD?.nome||destinoId), data:new Date().toLocaleDateString("sv-SE"),hora:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})};
-    var mov2 = {id:Date.now()+1, produtoId,depositoId:destinoId, tipo:"entrada", qtd,motivo:"Transferência ← "+(depO?.nome||origemId),  data:new Date().toLocaleDateString("sv-SE"),hora:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})};
-    var novasMov = [...movEstoque, mov1, mov2];
-    setMovEstoque(novasMov); localStorage.setItem("mov_estoque", JSON.stringify(novasMov));
   }
   function registrarMovEstoque(produtoId, sku, tipo, qtd, motivo, preco) {
     var mov = { id: Date.now(), produtoId, sku, tipo, qtd: parseInt(qtd), motivo: motivo||"", preco: parseFloat(preco||0)||null, data: new Date().toLocaleDateString("sv-SE"), hora: new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) };
@@ -4317,8 +4136,6 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
       <div style={{ display:"flex", gap:2, marginBottom:16, background:"#f1f5f9", padding:4, borderRadius:10, width:"fit-content" }}>
         {[
           { key:"lista",     label:"📦 Produtos" },
-          { key:"depositos", label:"🏪 Depósitos" },
-          { key:"estoque",   label:"📋 Estoque" },
           { key:"cadastros", label:"🗂️ Cadastros" },
         ].map(function(t) {
           return (
@@ -4541,11 +4358,6 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                             <button onClick={function(){ setShowMovEstoque(p); }}
                               title="Movimentação de estoque"
                               style={{ background:"#eff6ff", border:"1px solid #bfdbfe", color:"#1d4ed8", padding:"4px 8px", borderRadius:6, cursor:"pointer", fontSize:11 }}>📦</button>
-                            {depositos.length >= 2 && estoqueDepositos.some(function(e){return e.produtoId===p.id&&parseInt(e.qtd||0)>0;}) && (
-                              <button onClick={function(){ setShowTransfEstoque(p); }}
-                                title="Transferir entre depósitos"
-                                style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", color:"#15803d", padding:"4px 8px", borderRadius:6, cursor:"pointer", fontSize:11 }}>⇄</button>
-                            )}
                             <button onClick={() => { setEditingProd(p); setShowModalProd(true); }}
                               style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"4px 8px", borderRadius:6, cursor:"pointer", fontSize:11 }}>✏️</button>
                             <button onClick={() => deleteProd(p.id)}
@@ -4563,263 +4375,6 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
       )}
 
       {/* ── FORNECEDORES ── */}
-      {/* ── DEPÓSITOS ── */}
-      {prodTab === "depositos" && (
-        <div>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-            <div>
-              <div style={{ fontWeight:800, fontSize:18, color:"#0f172a" }}>🏪 Depósitos de Estoque</div>
-              <div style={{ fontSize:13, color:"#94a3b8", marginTop:2 }}>Gerencie múltiplos locais de armazenamento e transfira produtos entre eles</div>
-            </div>
-            <button onClick={function(){ setEditingDeposito(null); setShowModalDeposito(true); }}
-              style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"10px 22px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
-              + Novo Depósito
-            </button>
-          </div>
-
-          {depositos.length === 0 ? (
-            <div style={{ background:"#f8fafc", border:"2px dashed #e2e8f0", borderRadius:16, padding:60, textAlign:"center", color:"#94a3b8" }}>
-              <div style={{ fontSize:48, marginBottom:12 }}>🏪</div>
-              <div style={{ fontWeight:700, fontSize:16, color:"#0f172a", marginBottom:6 }}>Nenhum depósito cadastrado</div>
-              <div style={{ fontSize:13, marginBottom:20 }}>Crie depósitos para organizar seu estoque por localização</div>
-              <button onClick={function(){ setEditingDeposito(null); setShowModalDeposito(true); }}
-                style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"11px 28px", borderRadius:10, cursor:"pointer", fontSize:14 }}>
-                + Criar Primeiro Depósito
-              </button>
-            </div>
-          ) : (
-            <div>
-              {/* Cards de depósitos */}
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:14, marginBottom:24 }}>
-                {depositos.map(function(dep) {
-                  var totalProdutos = estoqueDepositos.filter(function(e){return e.depositoId===dep.id&&parseInt(e.qtd||0)>0;}).length;
-                  var totalUnidades = estoqueDepositos.filter(function(e){return e.depositoId===dep.id;}).reduce(function(s,e){return s+parseInt(e.qtd||0);},0);
-                  return (
-                    <div key={dep.id} style={{ background:"#fff", border:"2px solid " + dep.cor + "33", borderRadius:14, overflow:"hidden", boxShadow:"0 1px 4px rgba(0,0,0,.06)", opacity:dep.ativo===false?0.6:1 }}>
-                      <div style={{ background:dep.cor + "15", borderBottom:"1px solid " + dep.cor + "22", padding:"16px 18px", display:"flex", alignItems:"center", gap:12 }}>
-                        <div style={{ width:48, height:48, borderRadius:12, background:dep.cor, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, flexShrink:0 }}>{dep.icone}</div>
-                        <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ fontWeight:700, fontSize:15, color:"#0f172a" }}>{dep.nome}</div>
-                          {dep.descricao && <div style={{ fontSize:12, color:"#64748b", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{dep.descricao}</div>}
-                          {dep.ativo===false && <span style={{ fontSize:10, background:"#fef2f2", color:"#dc2626", padding:"1px 6px", borderRadius:4, fontWeight:600 }}>INATIVO</span>}
-                        </div>
-                      </div>
-                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:0 }}>
-                        <div style={{ padding:"12px 16px", borderRight:"1px solid #f1f5f9" }}>
-                          <div style={{ fontSize:10, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:4 }}>Produtos</div>
-                          <div style={{ fontSize:20, fontWeight:800, color:dep.cor }}>{totalProdutos}</div>
-                        </div>
-                        <div style={{ padding:"12px 16px" }}>
-                          <div style={{ fontSize:10, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:4 }}>Unidades</div>
-                          <div style={{ fontSize:20, fontWeight:800, color:dep.cor }}>{totalUnidades}</div>
-                        </div>
-                      </div>
-                      <div style={{ display:"flex", borderTop:"1px solid #f1f5f9" }}>
-                        <button onClick={function(){ setEditingDeposito(dep); setShowModalDeposito(true); }}
-                          style={{ flex:1, background:"transparent", border:"none", borderRight:"1px solid #f1f5f9", color:"#64748b", padding:"10px", cursor:"pointer", fontSize:12, fontWeight:600, display:"flex", flexDirection:"column", alignItems:"center", gap:2 }}>
-                          <span>✏️</span><span style={{ fontSize:10 }}>Editar</span>
-                        </button>
-                        <button onClick={function(){ excluirDeposito(dep.id); }}
-                          style={{ flex:1, background:"transparent", border:"none", color:"#dc2626", padding:"10px", cursor:"pointer", fontSize:12, fontWeight:600, display:"flex", flexDirection:"column", alignItems:"center", gap:2 }}>
-                          <span>🗑</span><span style={{ fontSize:10 }}>Excluir</span>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Tabela de estoque por depósito */}
-              {depositos.length > 0 && produtos.length > 0 && (
-                <div>
-                  <div style={{ fontWeight:700, fontSize:15, color:"#0f172a", marginBottom:12 }}>Estoque por Produto e Depósito</div>
-                  <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
-                    <table style={{ borderCollapse:"collapse", width:"100%" }}>
-                      <thead>
-                        <tr>
-                          <th style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", padding:"10px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>Produto</th>
-                          {depositos.map(function(dep){
-                            return <th key={dep.id} style={{ fontSize:11, color:dep.cor, textTransform:"uppercase", padding:"10px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"center", fontWeight:700, background:"#fafafa", whiteSpace:"nowrap" }}>{dep.icone} {dep.nome}</th>;
-                          })}
-                          <th style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", padding:"10px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"center", fontWeight:600, background:"#fafafa" }}>Total</th>
-                          <th style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", padding:"10px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"center", fontWeight:600, background:"#fafafa" }}>Ações</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {produtos.filter(function(p){return p.status!=="Inativo";}).slice(0,100).map(function(p, i) {
-                          var totalProd = estoqueDepositos.filter(function(e){return e.produtoId===p.id;}).reduce(function(s,e){return s+parseInt(e.qtd||0);},0);
-                          var temEstDeposito = estoqueDepositos.some(function(e){return e.produtoId===p.id&&parseInt(e.qtd||0)>0;});
-                          return (
-                            <tr key={p.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
-                              <td style={{ padding:"10px 14px" }}>
-                                <div style={{ fontSize:13, fontWeight:600, color:"#0f172a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:220 }}>{p.titulo}</div>
-                                {p.sku && <div style={{ fontSize:11, color:"#94a3b8", fontFamily:"monospace" }}>{p.sku}</div>}
-                              </td>
-                              {depositos.map(function(dep){
-                                var est = estoqueDepositos.find(function(e){return e.produtoId===p.id&&e.depositoId===dep.id;});
-                                var qtdDep = est ? parseInt(est.qtd||0) : 0;
-                                return (
-                                  <td key={dep.id} style={{ padding:"10px 14px", textAlign:"center" }}>
-                                    <input type="number" min="0" value={qtdDep}
-                                      onChange={function(e){
-                                        var novoEst = estoqueDepositos.slice();
-                                        var idx = novoEst.findIndex(function(x){return x.produtoId===p.id&&x.depositoId===dep.id;});
-                                        var novaQtd = parseInt(e.target.value)||0;
-                                        if (idx>=0) novoEst[idx]=Object.assign({},novoEst[idx],{qtd:novaQtd});
-                                        else novoEst.push({produtoId:p.id,depositoId:dep.id,qtd:novaQtd});
-                                        setEstoqueDepositos(novoEst); saveEstoqueDepositos(novoEst);
-                                        // Atualizar total no produto
-                                        var total = novoEst.filter(function(x){return x.produtoId===p.id;}).reduce(function(s,x){return s+parseInt(x.qtd||0);},0);
-                                        var updProd = produtos.map(function(pr){return pr.id===p.id?Object.assign({},pr,{estoqueAtual:String(total)}):pr;});
-                                        setProdutos(updProd); localStorage.setItem("produtos_cadastro", JSON.stringify(updProd));
-                                      }}
-                                      style={{ width:70, textAlign:"center", background:qtdDep>0?"#f0fdf4":"#f8fafc", border:"1px solid "+(qtdDep>0?"#bbf7d0":"#e2e8f0"), color:qtdDep>0?"#15803d":"#94a3b8", padding:"5px 8px", borderRadius:7, fontSize:13, fontWeight:700, outline:"none" }} />
-                                  </td>
-                                );
-                              })}
-                              <td style={{ padding:"10px 14px", textAlign:"center", fontWeight:800, fontSize:14, color:totalProd>0?"#0f172a":"#94a3b8" }}>{totalProd}</td>
-                              <td style={{ padding:"10px 14px", textAlign:"center" }}>
-                                {temEstDeposito && depositos.length >= 2 && (
-                                  <button onClick={function(){ setShowTransfEstoque(p); }}
-                                    title="Transferir entre depósitos"
-                                    style={{ background:"#eff6ff", border:"1px solid #bfdbfe", color:"#1d4ed8", padding:"5px 10px", borderRadius:7, cursor:"pointer", fontSize:12, fontWeight:600 }}>
-                                    ⇄ Transferir
-                                  </button>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── ESTOQUE (Movimentações) ── */}
-      {prodTab === "estoque" && (
-        <div>
-          <div style={{ fontWeight:800, fontSize:18, color:"#0f172a", marginBottom:4 }}>📋 Movimentação de Estoque</div>
-          <div style={{ fontSize:13, color:"#94a3b8", marginBottom:16 }}>Histórico completo de entradas, saídas e transferências por produto e depósito</div>
-
-          {/* Filtros */}
-          <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
-            <div style={{ position:"relative", flex:1, minWidth:220 }}>
-              <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
-              <input value={searchEstoque} onChange={function(e){setSearchEstoque(e.target.value);}} placeholder="Buscar por produto, SKU, motivo..."
-                style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px 8px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
-            </div>
-            <select value={filterDepositoEst} onChange={function(e){setFilterDepositoEst(e.target.value);}}
-              style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 12px", borderRadius:8, fontSize:12 }}>
-              <option value="todos">Todos os depósitos</option>
-              {depositos.map(function(d){ return <option key={d.id} value={d.id}>{d.icone} {d.nome}</option>; })}
-              <option value="sem_deposito">Sem depósito</option>
-            </select>
-          </div>
-
-          {/* Resumo por depósito */}
-          {depositos.length > 0 && (
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10, marginBottom:16 }}>
-              {depositos.map(function(dep){
-                var movsDep = movEstoque.filter(function(m){return m.depositoId===dep.id;});
-                var entradas = movsDep.filter(function(m){return m.tipo==="entrada";}).reduce(function(s,m){return s+m.qtd;},0);
-                var saidas = movsDep.filter(function(m){return m.tipo==="saida";}).reduce(function(s,m){return s+m.qtd;},0);
-                var totalAtual = estoqueDepositos.filter(function(e){return e.depositoId===dep.id;}).reduce(function(s,e){return s+parseInt(e.qtd||0);},0);
-                return (
-                  <div key={dep.id} style={{ background:"#fff", border:"2px solid "+dep.cor+"22", borderRadius:12, padding:"14px 16px" }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
-                      <div style={{ width:32, height:32, borderRadius:8, background:dep.cor, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>{dep.icone}</div>
-                      <div style={{ fontWeight:700, fontSize:13, color:"#0f172a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{dep.nome}</div>
-                    </div>
-                    <div style={{ fontSize:20, fontWeight:800, color:dep.cor, marginBottom:4 }}>{totalAtual} un</div>
-                    <div style={{ display:"flex", gap:8, fontSize:11 }}>
-                      <span style={{ color:"#15803d" }}>↑ {entradas}</span>
-                      <span style={{ color:"#dc2626" }}>↓ {saidas}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Tabela de movimentações */}
-          {(function(){
-            var movsFiltradas = movEstoque.filter(function(m){
-              if (filterDepositoEst === "todos") return true;
-              if (filterDepositoEst === "sem_deposito") return !m.depositoId;
-              return m.depositoId === filterDepositoEst;
-            }).filter(function(m){
-              if (!searchEstoque) return true;
-              var q = searchEstoque.toLowerCase();
-              var prod = produtos.find(function(p){return p.id===m.produtoId;});
-              return (prod?.titulo||"").toLowerCase().includes(q) || (prod?.sku||"").toLowerCase().includes(q) || (m.motivo||"").toLowerCase().includes(q);
-            }).sort(function(a,b){return (b.id||0)-(a.id||0);});
-
-            if (movsFiltradas.length === 0) return (
-              <div style={{ background:"#f8fafc", border:"2px dashed #e2e8f0", borderRadius:12, padding:40, textAlign:"center", color:"#94a3b8" }}>
-                <div style={{ fontSize:36, marginBottom:8 }}>📋</div>
-                <div style={{ fontWeight:600, marginBottom:4 }}>Nenhuma movimentação registrada</div>
-                <div style={{ fontSize:13 }}>Use o botão 📦 nos produtos para registrar entradas e saídas</div>
-              </div>
-            );
-
-            return (
-              <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
-                <table style={{ borderCollapse:"collapse", width:"100%" }}>
-                  <thead>
-                    <tr>{["Data/Hora","Produto","SKU","Depósito","Tipo","Qtd","Motivo","Preço un."].map(function(h){
-                      return <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>;
-                    })}</tr>
-                  </thead>
-                  <tbody>
-                    {movsFiltradas.slice(0,200).map(function(m, i){
-                      var prod = produtos.find(function(p){return p.id===m.produtoId;});
-                      var dep = depositos.find(function(d){return d.id===m.depositoId;});
-                      var isEntrada = m.tipo === "entrada";
-                      return (
-                        <tr key={m.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
-                          <td style={{ padding:"10px 14px", fontSize:11, color:"#64748b", whiteSpace:"nowrap" }}>
-                            <div>{m.data}</div><div style={{ fontSize:10, color:"#94a3b8" }}>{m.hora}</div>
-                          </td>
-                          <td style={{ padding:"10px 14px", fontSize:12, color:"#0f172a", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{prod?.titulo || "Produto removido"}</td>
-                          <td style={{ padding:"10px 14px", fontSize:11, color:"#64748b", fontFamily:"monospace" }}>{prod?.sku||"—"}</td>
-                          <td style={{ padding:"10px 14px" }}>
-                            {dep ? (
-                              <span style={{ display:"flex", alignItems:"center", gap:5, fontSize:12, fontWeight:600, color:dep.cor }}>
-                                <span>{dep.icone}</span><span>{dep.nome}</span>
-                              </span>
-                            ) : <span style={{ fontSize:12, color:"#94a3b8" }}>—</span>}
-                          </td>
-                          <td style={{ padding:"10px 14px" }}>
-                            <span style={{ fontSize:11, fontWeight:700, color:isEntrada?"#15803d":"#dc2626", background:isEntrada?"#f0fdf4":"#fef2f2", padding:"3px 8px", borderRadius:6 }}>
-                              {isEntrada?"↑ Entrada":"↓ Saída"}
-                            </span>
-                          </td>
-                          <td style={{ padding:"10px 14px", fontSize:14, fontWeight:800, color:isEntrada?"#15803d":"#dc2626" }}>
-                            {isEntrada?"+":"-"}{m.qtd}
-                          </td>
-                          <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{m.motivo||"—"}</td>
-                          <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{m.preco?("R$ "+m.preco.toFixed(2).replace(".",",")):"—"}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                {movsFiltradas.length > 200 && (
-                  <div style={{ padding:"12px 16px", fontSize:12, color:"#94a3b8", textAlign:"center", borderTop:"1px solid #f1f5f9" }}>
-                    Mostrando 200 de {movsFiltradas.length} movimentações
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-        </div>
-      )}
-
       {prodTab === "cadastros" && (
         <div>
           {/* Filtros e ações */}
@@ -4979,25 +4534,6 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
       )}
 
       {showModalProd && <ModalProduto produto={editingProd} fornecedores={fornecedores} listings={listings} onSave={saveProd} onClose={() => { setShowModalProd(false); setEditingProd(null); }} />}
-      {showModalDeposito && (
-        <ModalDeposito
-          deposito={editingDeposito}
-          onSave={salvarDeposito}
-          onClose={function(){ setShowModalDeposito(false); setEditingDeposito(null); }}
-        />
-      )}
-      {showTransfEstoque && depositos.length >= 2 && (
-        <ModalTransfEstoque
-          produto={showTransfEstoque}
-          depositos={depositos}
-          estoqueDepositos={estoqueDepositos}
-          onConfirm={function(origemId, destinoId, qtd){
-            transferirEstoque(showTransfEstoque.id, origemId, destinoId, qtd);
-            setShowTransfEstoque(null);
-          }}
-          onClose={function(){ setShowTransfEstoque(null); }}
-        />
-      )}
       {showMovEstoque && (
         <ModalMovEstoque
           produto={showMovEstoque}
@@ -8985,7 +8521,6 @@ export default function App() {
       const produtosSincronizados = syncListingsToProdutos(listings, produtosAtuais);
       localStorage.setItem("produtos_cadastro", JSON.stringify(produtosSincronizados));
       setProdutos(produtosSincronizados);
-      // Restaurar custos salvos + propagar custos dos produtos
       const costsExistentes = JSON.parse(localStorage.getItem("costs_config") || "{}");
       const costsFromProdutos = {};
       produtosSincronizados.forEach(function(p) {

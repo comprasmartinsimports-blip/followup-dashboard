@@ -1768,9 +1768,20 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
   const maxQty = rankingVendas[0]?.qty || 1;
 
   // ── Ranking mais lucrativos (período selecionado) ────────
-  const rankingLucro = enriched
-    .filter(l => costs[l.id] > 0 && l.sold_quantity > 0)
-    .sort((a,b) => b.totalProfit - a.totalProfit)
+  var lucroPorProduto = {};
+  rawOrders.filter(function(o){ return o.status === "paid" && o.date >= dashRange.de && o.date <= dashRange.ate; }).forEach(function(o) {
+    var listing = enriched.find(function(l){ return l.id === o.listing_id; });
+    if (!listing || !costs[listing.id]) return;
+    var id = listing.id;
+    if (!lucroPorProduto[id]) lucroPorProduto[id] = { id, title: listing.title, profit: 0, revenue: 0, qty: 0 };
+    var lucroUnit = o.price - (listing.fee || 0) - (listing.freteSeller || 0) - costs[listing.id];
+    lucroPorProduto[id].profit += lucroUnit * (o.qty || 1);
+    lucroPorProduto[id].revenue += o.price * (o.qty || 1);
+    lucroPorProduto[id].qty += o.qty || 1;
+  });
+  const rankingLucro = Object.values(lucroPorProduto)
+    .filter(function(p){ return p.profit > 0; })
+    .sort(function(a,b){ return b.profit - a.profit; })
     .slice(0, 5);
 
   // ── Dados para o gráfico (baseado no período selecionado) ──
@@ -2130,7 +2141,7 @@ function DashboardSubAbas({ fat30, ultimos30, maxFat30, totalFat30, mediaFat30, 
               var isHoje = i === 29;
               var pct = maxFat30 > 0 ? (v / maxFat30) : 0;
               var barH = Math.max(4, pct * 120);
-              var dataStr = ultimos30[i] ? ultimos30[i].slice(5).replace("-","/") : "";
+              var dataStr = ultimos30[i] ? ultimos30[i].slice(8) + "/" + ultimos30[i].slice(5,7) : "";
               return (
                 <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:2 }}>
                   <div title={dataStr + ": " + fmt(v)}
@@ -2192,7 +2203,7 @@ function DashboardSubAbas({ fat30, ultimos30, maxFat30, totalFat30, mediaFat30, 
                   </div>
                 </div>
                 <div style={{ textAlign:"right", flexShrink:0 }}>
-                  <div style={{ fontSize:12,fontWeight:700,color:"#15803d" }}>{(p.margin*100).toFixed(1)}%</div>
+                  <div style={{ fontSize:12,fontWeight:700,color:"#15803d" }}>{p.revenue > 0 ? ((p.profit/p.revenue)*100).toFixed(1) : "0.0"}%</div>
                   <div style={{ fontSize:10,color:"#94a3b8" }}>margem</div>
                 </div>
               </div>
@@ -8346,7 +8357,7 @@ export default function App() {
   const [filterUF, setFilterUF] = useState("");
   const [showClienteDetalhe, setShowClienteDetalhe] = useState(null);
   const [statusFilter, setStatusFilter] = useState("all");
-  const [filterListingExtra, setFilterListingExtra] = useState("all"); // all | sem_custo | com_promo | sem_promo
+  const [filterListingExtra, setFilterListingExtra] = useState("all");
   const [token, setToken] = useState(() => loadSavedTokens()?.accessToken ?? null);
   const [user, setUser] = useState(() => {
     const s = loadSavedTokens();
@@ -8832,7 +8843,7 @@ export default function App() {
       const todayStr = now.toLocaleDateString("sv-SE");
       return rawOrders.filter(o => o.date === todayStr);
     }
-    const cutoff = new Date();
+    let cutoff = new Date();
     if (orderFilter === "week") cutoff.setDate(now.getDate() - 7);
     else if (orderFilter === "thismonth") { cutoff = new Date(now.getFullYear(), now.getMonth(), 1); }
     else if (orderFilter === "month") cutoff.setMonth(now.getMonth() - 1);

@@ -6682,7 +6682,15 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
     });
     if (filterStatus !== "all") r = r.filter(c => c.status === filterStatus);
     if (filterCat !== "all") r = r.filter(c => c.categoria === filterCat);
-    if (filterPrioridade !== "all-pr") r = r.filter(c => (c.prioridade||"media") === filterPrioridade);
+    if (filterPrioridade !== "all-pr") r = r.filter(function(c) {
+      var priorConta = c.prioridade || "media";
+      // Se conta tem prioridade explícita, usa ela
+      if (priorConta !== "media") return priorConta === filterPrioridade;
+      // Se é média (padrão), verifica se o fornecedor tem prioridade diferente
+      var forn = (fornecedores||[]).find(function(f){ return f.id === c.fornecedorId; });
+      var priorEfetiva = forn?.prioridade || "media";
+      return priorEfetiva === filterPrioridade;
+    });
     if (searchPagar) {
       var qp = searchPagar.toLowerCase();
       r = r.filter(c => (c.descricao||"").toLowerCase().includes(qp) || (c.fornecedorNome||"").toLowerCase().includes(qp) || (c.fornecedorCNPJ||"").includes(qp) || (c.observacao||"").toLowerCase().includes(qp));
@@ -6694,13 +6702,19 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
     if (pagarAte) r = r.filter(c => c.vencimento && c.vencimento <= pagarAte);
     // Ordenar: alta > media > baixa > sem prioridade, depois por vencimento
     const ordPr = { alta:0, media:1, baixa:2 };
+    function getPriorEfetiva(c) {
+      var priorConta = c.prioridade || "media";
+      if (priorConta !== "media") return priorConta;
+      var forn = (fornecedores||[]).find(function(f){ return f.id === c.fornecedorId; });
+      return forn?.prioridade || "media";
+    }
     return r.sort((a,b) => {
-      var pa = ordPr[a.prioridade||"media"] ?? 1;
-      var pb = ordPr[b.prioridade||"media"] ?? 1;
+      var pa = ordPr[getPriorEfetiva(a)] ?? 1;
+      var pb = ordPr[getPriorEfetiva(b)] ?? 1;
       if (pa !== pb) return pa - pb;
       return (a.vencimento||"9999") > (b.vencimento||"9999") ? 1 : -1;
     });
-  }, [contasPagar, filterStatus, filterCat, filterPrioridade, searchPagar, pagarDe, pagarAte]);
+  }, [contasPagar, filterStatus, filterCat, filterPrioridade, searchPagar, pagarDe, pagarAte, fornecedores]);
 
   // ── Totais ───────────────────────────────────────────────
   const totalPagar   = contasPagar.filter(c=>c.status!=="Pago").reduce((s,c)=>s+parseFloat(c.valor||0),0);

@@ -8056,7 +8056,7 @@ function exportarPDF(nomeArquivo, titulo, cabecalho, linhas, totais) {
 }
 
 function BotaoExportar({ onCSV, onXLS, onPDF }) {
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = useState(false);
   return (
     <div style={{ position: "relative", display: "inline-block" }}>
       <button

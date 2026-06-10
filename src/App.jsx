@@ -4421,7 +4421,7 @@ function ModalTransfEstoque({ produto, depositos, estoqueDepositos, onConfirm, o
 // ════════════════════════════════════════════════════════════
 function savePedidosCompra(v){ try { localStorage.setItem("pedidos_compra", JSON.stringify(v)); } catch {} }
 
-function PedidosCompraTab({ produtos, fornecedores, setProdutos }) {
+function PedidosCompraTab({ produtos, fornecedores, setProdutos, exportarCSV, exportarXLS, exportarPDF, BotaoExportar, fmtDate }) {
   const [pedidos, setPedidos] = useState(function(){ try { return JSON.parse(localStorage.getItem("pedidos_compra")||"[]"); } catch { return []; } });
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -4484,10 +4484,41 @@ function PedidosCompraTab({ produtos, fornecedores, setProdutos }) {
           <div style={{ fontWeight:800, fontSize:18, color:"#0f172a" }}>🛒 Pedidos de Compra</div>
           <div style={{ fontSize:13, color:"#94a3b8", marginTop:2 }}>Gerencie pedidos de compra para seus fornecedores</div>
         </div>
-        <button onClick={function(){setEditing(null);setShowModal(true);}}
-          style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"10px 22px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
-          + Novo Pedido de Compra
-        </button>
+        <div style={{ display:"flex", gap:8 }}>
+          <BotaoExportar
+            onCSV={function(){
+              var cab=["Número","Fornecedor","Data Criação","Prev. Entrega","Status","Itens","Valor Total","Observação"];
+              var linhas=filtrados.map(function(p){
+                var total=p.itens.reduce(function(s,it){return s+parseFloat(it.valorTotal||0);},0);
+                return [p.numero||"",p.fornecedorNome||"",fmtDate(p.dataCriacao),fmtDate(p.dataEntregaPrev)||"",p.status,p.itens.length,"R$ "+total.toFixed(2).replace(".",","),p.obs||""];
+              });
+              exportarCSV("pedidos_de_compra",cab,linhas);
+            }}
+            onXLS={function(){
+              var cab=["Número","Fornecedor","Data","Produto","SKU","Qtd Pedida","Qtd Recebida","Vlr Unit.","Vlr Total","Status Pedido"];
+              var linhas=[];
+              filtrados.forEach(function(p){
+                (p.itens||[]).forEach(function(it){
+                  linhas.push([p.numero||"",p.fornecedorNome||"",fmtDate(p.dataCriacao),it.titulo||"",it.sku||"",it.qtd||0,it.qtdRecebida||0,it.valorUnit?"R$ "+parseFloat(it.valorUnit).toFixed(2).replace(".",","):"",it.valorTotal?"R$ "+parseFloat(it.valorTotal).toFixed(2).replace(".",","):"",p.status]);
+                });
+              });
+              exportarXLS("pedidos_de_compra_itens",cab,linhas);
+            }}
+            onPDF={function(){
+              var cab=["Número","Fornecedor","Data","Status","Itens","Total"];
+              var linhas=filtrados.map(function(p){
+                var total=p.itens.reduce(function(s,it){return s+parseFloat(it.valorTotal||0);},0);
+                return [p.numero||"",p.fornecedorNome||"",fmtDate(p.dataCriacao),p.status,p.itens.length,"R$ "+total.toFixed(2).replace(".",",")];
+              });
+              var totalGeral=filtrados.reduce(function(s,p){return s+p.itens.reduce(function(ss,it){return ss+parseFloat(it.valorTotal||0);},0);},0);
+              exportarPDF("pedidos_de_compra","Pedidos de Compra",cab,linhas,["Total de pedidos: "+filtrados.length,"Valor total: R$ "+totalGeral.toFixed(2).replace(".",",")]);
+            }}
+          />
+          <button onClick={function(){setEditing(null);setShowModal(true);}}
+            style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"10px 22px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
+            + Novo Pedido de Compra
+          </button>
+        </div>
       </div>
 
       {/* Cards */}
@@ -5008,7 +5039,7 @@ function RelatoriosEstoqueTab({ produtos, fornecedores, movEstoque, listings }) 
 // ════════════════════════════════════════════════════════════
 //  SUGESTÃO DE COMPRAS
 // ════════════════════════════════════════════════════════════
-function SugestaoComprasTab({ produtos, fornecedores, rawOrders }) {
+function SugestaoComprasTab({ produtos, fornecedores, rawOrders, exportarCSV, exportarXLS, exportarPDF, BotaoExportar, fmtDate }) {
   const [periodoVenda, setPeriodoVenda] = useState(30);
   const [coberturaEstoque, setCoberturaEstoque] = useState(30);
   const [filterForn, setFilterForn] = useState("all");
@@ -5110,8 +5141,27 @@ function SugestaoComprasTab({ produtos, fornecedores, rawOrders }) {
           ):(
             <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"auto" }}>
               <div style={{ padding:"14px 18px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
-                <div style={{ fontWeight:700,fontSize:15,color:"#0f172a" }}>Dashboard Sugestão de Compras</div>
-                <div style={{ fontSize:12,color:"#94a3b8" }}>Período: últimos {periodoVenda} dias · Cobertura: {coberturaEstoque} dias</div>
+                <div>
+                  <div style={{ fontWeight:700,fontSize:15,color:"#0f172a" }}>Dashboard Sugestão de Compras</div>
+                  <div style={{ fontSize:12,color:"#94a3b8" }}>Período: últimos {periodoVenda} dias · Cobertura: {coberturaEstoque} dias</div>
+                </div>
+                <BotaoExportar
+                  onCSV={function(){
+                    var cab=["SKU","Produto","Fornecedor","Vendas","Estoque Atual","Média/Dia","Dias p/ Esgotar","Sugestão Compra","Valor Estimado"];
+                    var linhas=sugestoes.map(function(s){var forn=fornecedores.find(function(f){return f.id===s.p.fornecedorId;}); return [s.p.sku||"",s.p.titulo||"",forn?.nome||"",s.vendas,s.estAtual,s.mediaDia.toFixed(2),s.diasEstoque>=999?"∞":s.diasEstoque,s.sugestaoQtd>0?s.sugestaoQtd:"",s.valorEst>0?"R$ "+s.valorEst.toFixed(2).replace(".",","):""];});
+                    exportarCSV("sugestao_de_compras",cab,linhas);
+                  }}
+                  onXLS={function(){
+                    var cab=["SKU","Produto","Fornecedor","Vendas","Estoque Atual","Média/Dia","Dias p/ Esgotar","Sugestão Compra","Valor Estimado"];
+                    var linhas=sugestoes.map(function(s){var forn=fornecedores.find(function(f){return f.id===s.p.fornecedorId;}); return [s.p.sku||"",s.p.titulo||"",forn?.nome||"",s.vendas,s.estAtual,s.mediaDia.toFixed(2),s.diasEstoque>=999?"∞":s.diasEstoque,s.sugestaoQtd>0?s.sugestaoQtd:"",s.valorEst>0?"R$ "+s.valorEst.toFixed(2).replace(".",","):""];});
+                    exportarXLS("sugestao_de_compras",cab,linhas);
+                  }}
+                  onPDF={function(){
+                    var cab=["SKU","Produto","Vendas","Estoque","Dias","Sugestão","Valor"];
+                    var linhas=sugestoes.map(function(s){return [s.p.sku||"",s.p.titulo?.slice(0,40)||"",s.vendas,s.estAtual,s.diasEstoque>=999?"∞":s.diasEstoque,s.sugestaoQtd>0?s.sugestaoQtd:"—",s.valorEst>0?"R$ "+s.valorEst.toFixed(2).replace(".",","):"—"];});
+                    exportarPDF("sugestao_de_compras","Sugestão de Compras",cab,linhas,["Produtos: "+sugestoes.length,"Total unidades: "+totalSugestao,"Valor: R$ "+totalValor.toFixed(2).replace(".",",")]);
+                  }}
+                />
               </div>
               <table style={{ borderCollapse:"collapse",width:"100%" }}>
                 <thead>
@@ -5462,10 +5512,26 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
           <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
             <button onClick={() => { setEditingProd(null); setShowModalProd(true); }}
               style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Novo Produto</button>
-            <button onClick={function(){ exportarPlanilhaProdutos(produtosFiltrados.length > 0 ? produtosFiltrados : produtos); }}
-              style={{ background:"#15803d", border:"none", color:"#fff", fontWeight:700, padding:"9px 18px", borderRadius:8, cursor:"pointer", fontSize:13, display:"flex", alignItems:"center", gap:6 }}>
-              ⬇️ Exportar Planilha
-            </button>
+            <BotaoExportar
+              onCSV={function(){
+                var list = produtosFiltrados.length > 0 ? produtosFiltrados : produtos;
+                var cab=["Título","SKU","EAN","Categoria","Preço Venda","Preço Custo","Estoque Atual","Estoque Mínimo","Fornecedor","Status","MLB Vinculado"];
+                var linhas=list.map(function(p){ var forn=(fornecedores||[]).find(function(f){return f.id===p.fornecedorId;}); return [p.titulo||"",p.sku||"",p.ean||"",p.categoria||"",p.precoVenda||"",p.precoCusto||"",p.estoqueAtual||0,p.estoqueMinimo||0,forn?.nome||"",p.status||"Ativo",p.mlbVinculado||""]; });
+                exportarCSV("produtos",cab,linhas);
+              }}
+              onXLS={function(){
+                var list = produtosFiltrados.length > 0 ? produtosFiltrados : produtos;
+                var cab=["Título","SKU","EAN","Categoria","Preço Venda","Preço Custo","Estoque Atual","Estoque Mínimo","Fornecedor","Status","MLB Vinculado"];
+                var linhas=list.map(function(p){ var forn=(fornecedores||[]).find(function(f){return f.id===p.fornecedorId;}); return [p.titulo||"",p.sku||"",p.ean||"",p.categoria||"",p.precoVenda||"",p.precoCusto||"",p.estoqueAtual||0,p.estoqueMinimo||0,forn?.nome||"",p.status||"Ativo",p.mlbVinculado||""]; });
+                exportarXLS("produtos",cab,linhas);
+              }}
+              onPDF={function(){
+                var list = produtosFiltrados.length > 0 ? produtosFiltrados : produtos;
+                var cab=["Título","SKU","Categoria","Venda","Custo","Estoque","Mín","Status"];
+                var linhas=list.map(function(p){ return [p.titulo?.slice(0,45)||"",p.sku||"",p.categoria||"",p.precoVenda?"R$ "+parseFloat(p.precoVenda).toFixed(2).replace(".",","):"—",p.precoCusto?"R$ "+parseFloat(p.precoCusto).toFixed(2).replace(".",","):"—",p.estoqueAtual||0,p.estoqueMinimo||0,p.status||"Ativo"]; });
+                exportarPDF("produtos","Lista de Produtos",cab,linhas,["Total: "+list.length+" produto(s)","Filtro ativo: "+(produtosFiltrados.length>0&&produtosFiltrados.length<produtos.length?"Sim":"Não")]);
+              }}
+            />
             <label style={{ background:"#7c3aed", border:"none", color:"#fff", fontWeight:700, padding:"9px 18px", borderRadius:8, cursor:"pointer", fontSize:13, display:"inline-flex", alignItems:"center", gap:6 }}>
               ⬆️ Importar Planilha
               <input type="file" accept=".xlsx,.csv" style={{ display:"none" }}
@@ -5729,10 +5795,46 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
               <div style={{ fontWeight:800, fontSize:18, color:"#0f172a" }}>🏪 Depósitos de Estoque</div>
               <div style={{ fontSize:13, color:"#94a3b8", marginTop:2 }}>Gerencie múltiplos locais de armazenamento e transfira produtos entre eles</div>
             </div>
-            <button onClick={function(){ setEditingDeposito(null); setShowModalDeposito(true); }}
-              style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"10px 22px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
-              + Novo Depósito
-            </button>
+            <div style={{ display:"flex", gap:8 }}>
+              <BotaoExportar
+                onCSV={function(){
+                  var cab=["Depósito","Descrição","Status","Produtos","Unidades Totais"];
+                  var linhas=depositos.map(function(dep){
+                    var totalP=estoqueDepositos.filter(function(e){return e.depositoId===dep.id&&parseInt(e.qtd||0)>0;}).length;
+                    var totalU=estoqueDepositos.filter(function(e){return e.depositoId===dep.id;}).reduce(function(s,e){return s+parseInt(e.qtd||0);},0);
+                    return [dep.nome,dep.descricao||"",dep.ativo===false?"Inativo":"Ativo",totalP,totalU];
+                  });
+                  exportarCSV("depositos",cab,linhas);
+                }}
+                onXLS={function(){
+                  var cab=["Depósito","Produto","SKU","Quantidade"];
+                  var linhas=[];
+                  depositos.forEach(function(dep){
+                    estoqueDepositos.filter(function(e){return e.depositoId===dep.id&&parseInt(e.qtd||0)>0;}).forEach(function(e){
+                      var prod=produtos.find(function(p){return p.id===e.produtoId;});
+                      linhas.push([dep.nome,prod?.titulo||e.produtoId,prod?.sku||"",e.qtd]);
+                    });
+                  });
+                  exportarXLS("estoque_por_deposito",cab,linhas);
+                }}
+                onPDF={function(){
+                  var cab=["Depósito","Produto","SKU","Qtd"];
+                  var linhas=[];
+                  depositos.forEach(function(dep){
+                    estoqueDepositos.filter(function(e){return e.depositoId===dep.id&&parseInt(e.qtd||0)>0;}).forEach(function(e){
+                      var prod=produtos.find(function(p){return p.id===e.produtoId;});
+                      linhas.push([dep.nome,prod?.titulo?.slice(0,40)||"",prod?.sku||"",e.qtd]);
+                    });
+                  });
+                  var total=estoqueDepositos.reduce(function(s,e){return s+parseInt(e.qtd||0);},0);
+                  exportarPDF("estoque_por_deposito","Estoque por Depósito",cab,linhas,["Total de depósitos: "+depositos.length,"Total de unidades: "+total]);
+                }}
+              />
+              <button onClick={function(){ setEditingDeposito(null); setShowModalDeposito(true); }}
+                style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"10px 22px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
+                + Novo Depósito
+              </button>
+            </div>
           </div>
           {depositos.length === 0 ? (
             <div style={{ background:"#f8fafc", border:"2px dashed #e2e8f0", borderRadius:16, padding:60, textAlign:"center", color:"#94a3b8" }}>
@@ -5854,9 +5956,55 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
       {/* ── ESTOQUE (Movimentações) ── */}
       {prodTab === "estoque" && (
         <div>
-          <div style={{ fontWeight:800, fontSize:18, color:"#0f172a", marginBottom:4 }}>📋 Movimentação de Estoque</div>
-          <div style={{ fontSize:13, color:"#94a3b8", marginBottom:16 }}>Histórico completo de entradas, saídas e transferências por produto e depósito</div>
-          <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:4 }}>
+            <div>
+              <div style={{ fontWeight:800, fontSize:18, color:"#0f172a" }}>📋 Movimentação de Estoque</div>
+              <div style={{ fontSize:13, color:"#94a3b8", marginTop:2 }}>Histórico completo de entradas, saídas e transferências por produto e depósito</div>
+            </div>
+            <BotaoExportar
+              onCSV={function(){
+                var cab=["Data","Hora","Produto","SKU","Depósito","Tipo","Quantidade","Motivo","Preço Unit."];
+                var movs=movEstoque.filter(function(m){
+                  if(filterDepositoEst==="todos") return true;
+                  if(filterDepositoEst==="sem_deposito") return !m.depositoId;
+                  return m.depositoId===filterDepositoEst;
+                }).filter(function(m){
+                  if(!searchEstoque) return true; var q=searchEstoque.toLowerCase();
+                  var p=produtos.find(function(x){return x.id===m.produtoId;});
+                  return (p?.titulo||"").toLowerCase().includes(q)||(p?.sku||"").toLowerCase().includes(q)||(m.motivo||"").toLowerCase().includes(q);
+                }).sort(function(a,b){return (b.id||0)-(a.id||0);});
+                var linhas=movs.map(function(m){
+                  var p=produtos.find(function(x){return x.id===m.produtoId;});
+                  var dep=depositos.find(function(d){return d.id===m.depositoId;});
+                  return [fmtDate(m.data),m.hora||"",p?.titulo||"",p?.sku||"",dep?.nome||"Sem depósito",m.tipo==="entrada"?"Entrada":"Saída",m.qtd,m.motivo||"",m.preco||""];
+                });
+                exportarCSV("movimentacoes_estoque",cab,linhas);
+              }}
+              onXLS={function(){
+                var cab=["Data","Hora","Produto","SKU","Depósito","Tipo","Quantidade","Motivo","Preço Unit."];
+                var movs=movEstoque.sort(function(a,b){return (b.id||0)-(a.id||0);});
+                var linhas=movs.map(function(m){
+                  var p=produtos.find(function(x){return x.id===m.produtoId;});
+                  var dep=depositos.find(function(d){return d.id===m.depositoId;});
+                  return [fmtDate(m.data),m.hora||"",p?.titulo||"",p?.sku||"",dep?.nome||"",m.tipo==="entrada"?"Entrada":"Saída",m.qtd,m.motivo||"",m.preco||""];
+                });
+                exportarXLS("movimentacoes_estoque",cab,linhas);
+              }}
+              onPDF={function(){
+                var cab=["Data","Produto","SKU","Depósito","Tipo","Qtd","Motivo"];
+                var movs=movEstoque.sort(function(a,b){return (b.id||0)-(a.id||0);}).slice(0,200);
+                var linhas=movs.map(function(m){
+                  var p=produtos.find(function(x){return x.id===m.produtoId;});
+                  var dep=depositos.find(function(d){return d.id===m.depositoId;});
+                  return [fmtDate(m.data),p?.titulo?.slice(0,35)||"",p?.sku||"",dep?.nome||"",m.tipo==="entrada"?"↑ Entrada":"↓ Saída",m.qtd,m.motivo?.slice(0,40)||""];
+                });
+                var entradas=movEstoque.filter(function(m){return m.tipo==="entrada";}).reduce(function(s,m){return s+m.qtd;},0);
+                var saidas=movEstoque.filter(function(m){return m.tipo==="saida";}).reduce(function(s,m){return s+m.qtd;},0);
+                exportarPDF("movimentacoes_estoque","Movimentações de Estoque",cab,linhas,["Total de movimentações: "+movEstoque.length,"↑ Entradas: "+entradas+" un","↓ Saídas: "+saidas+" un"]);
+              }}
+            />
+          </div>
+          <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, flexWrap:"wrap", marginTop:12 }}>
             <div style={{ position:"relative", flex:1, minWidth:220 }}>
               <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
               <input value={searchEstoque} onChange={function(e){setSearchEstoque(e.target.value);}} placeholder="Buscar por produto, SKU, motivo..."
@@ -5959,6 +6107,11 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
           produtos={produtos}
           fornecedores={fornecedores}
           setProdutos={setProdutos}
+          exportarCSV={exportarCSV}
+          exportarXLS={exportarXLS}
+          exportarPDF={exportarPDF}
+          BotaoExportar={BotaoExportar}
+          fmtDate={fmtDate}
         />
       )}
 
@@ -5978,6 +6131,11 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
           produtos={produtos}
           fornecedores={fornecedores}
           rawOrders={rawOrders||[]}
+          exportarCSV={exportarCSV}
+          exportarXLS={exportarXLS}
+          exportarPDF={exportarPDF}
+          BotaoExportar={BotaoExportar}
+          fmtDate={fmtDate}
         />
       )}
 
@@ -5987,6 +6145,26 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
           <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
             <button onClick={function(){ setEditingForn(null); setTipoPadraoCad("Fornecedor"); setShowModalForn(true); }}
               style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Novo Cadastro</button>
+            <BotaoExportar
+              onCSV={function(){
+                var list=fornecedoresFiltrados||fornecedores;
+                var cab=["Nome","Tipo","CNPJ/CPF","E-mail","Telefone","Cidade","Estado","Prioridade","Observação"];
+                var linhas=list.map(function(f){return [f.nome||"",f.tipo||"",f.cnpj||"",f.email||"",f.telefone||"",f.cidade||"",f.estado||"",f.prioridade||"media",f.obs||""];});
+                exportarCSV("cadastros",cab,linhas);
+              }}
+              onXLS={function(){
+                var list=fornecedoresFiltrados||fornecedores;
+                var cab=["Nome","Tipo","CNPJ/CPF","E-mail","Telefone","Cidade","Estado","Banco","Agência","Conta","PIX","Prioridade"];
+                var linhas=list.map(function(f){return [f.nome||"",f.tipo||"",f.cnpj||"",f.email||"",f.telefone||"",f.cidade||"",f.estado||"",f.banco||"",f.agencia||"",f.conta||"",f.pix||"",f.prioridade||"media"];});
+                exportarXLS("cadastros_completo",cab,linhas);
+              }}
+              onPDF={function(){
+                var list=fornecedoresFiltrados||fornecedores;
+                var cab=["Nome","Tipo","CNPJ/CPF","Cidade","Telefone","Prioridade"];
+                var linhas=list.map(function(f){return [f.nome||"",f.tipo||"",f.cnpj||"",f.cidade||"",f.telefone||"",f.prioridade||"media"];});
+                exportarPDF("cadastros","Cadastros de Fornecedores e Parceiros",cab,linhas,["Total: "+list.length+" cadastro(s)"]);
+              }}
+            />
             <div style={{ position:"relative", flex:1, minWidth:180 }}>
               <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
               <input value={searchCad} onChange={function(e){ setSearchCad(e.target.value); }} placeholder="Buscar nome, CNPJ, cidade..."
@@ -7785,6 +7963,86 @@ function ModalConta({ conta, categoriasPagar, fornecedores, contasPagar, onSave,
 }
 
 
+
+// ════════════════════════════════════════════════════════════
+//  UTILITÁRIOS DE EXPORTAÇÃO FINANCEIRA
+// ════════════════════════════════════════════════════════════
+function exportarCSV(nomeArquivo, cabecalho, linhas) {
+  var bom = "\uFEFF"; // BOM para UTF-8 no Excel
+  var csv = bom + cabecalho.join(";") + "\n" + linhas.map(function(l){ return l.map(function(c){ var s=String(c===null||c===undefined?"":c); return s.includes(";")||s.includes("\n")||s.includes("\"")?\"\"+s.replace(/\"/g,"\"\"")+"\"":s; }).join(";"); }).join("\n");
+  var blob = new Blob([csv], { type:"text/csv;charset=utf-8;" });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a"); a.href=url; a.download=nomeArquivo+".csv"; a.click();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+}
+
+function exportarXLS(nomeArquivo, cabecalho, linhas) {
+  // Gera HTML table que Excel abre nativamente com encoding correto
+  var bom = "\uFEFF";
+  var html = bom + "<table><tr>"+cabecalho.map(function(c){ return "<th><b>"+c+"</b></th>"; }).join("")+"</tr>"+
+    linhas.map(function(l){ return "<tr>"+l.map(function(c){ return "<td>"+String(c===null||c===undefined?"":c).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")+"</td>"; }).join("")+"</tr>"; }).join("")+"</table>";
+  var blob = new Blob([html], { type:"application/vnd.ms-excel;charset=utf-8;" });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a"); a.href=url; a.download=nomeArquivo+".xls"; a.click();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+}
+
+function exportarPDF(nomeArquivo, titulo, cabecalho, linhas, totais) {
+  var estilos = `
+    body { font-family: Arial, sans-serif; font-size: 11px; color: #0f172a; margin: 20px; }
+    h2 { font-size: 16px; margin-bottom: 4px; }
+    .sub { font-size: 11px; color: #64748b; margin-bottom: 14px; }
+    table { border-collapse: collapse; width: 100%; }
+    th { background: #0f172a; color: #fff; padding: 7px 10px; text-align: left; font-size: 10px; text-transform: uppercase; }
+    td { padding: 6px 10px; border-bottom: 1px solid #e2e8f0; font-size: 11px; }
+    tr:nth-child(even) td { background: #f8fafc; }
+    .totais { margin-top: 14px; background: #f1f5f9; padding: 10px 14px; border-radius: 6px; font-weight: bold; }
+    .totais span { margin-right: 24px; }
+    @media print { body { margin: 10px; } }
+  `;
+  var rows = linhas.map(function(l){ return "<tr>"+l.map(function(c){ return "<td>"+String(c===null||c===undefined?"":c).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")+"</td>"; }).join("")+"</tr>"; }).join("");
+  var totaisHtml = totais ? "<div class=\"totais\">"+totais.map(function(t){ return "<span>"+t+"</span>"; }).join("")+"</div>" : "";
+  var html = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>"+titulo+"</title><style>"+estilos+"</style></head><body>"+
+    "<h2>"+titulo+"</h2><div class=\"sub\">Gerado em "+new Date().toLocaleDateString("pt-BR")+" às "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})+"</div>"+
+    "<table><thead><tr>"+cabecalho.map(function(c){ return "<th>"+c+"</th>"; }).join("")+"</tr></thead><tbody>"+rows+"</tbody></table>"+totaisHtml+
+    "</body></html>";
+  var w = window.open("","_blank","width=900,height=700");
+  if (!w) { alert("Permita pop-ups para gerar o PDF."); return; }
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(function(){ w.print(); }, 600);
+}
+
+function BotaoExportar({ onCSV, onXLS, onPDF }) {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <div style={{ position:"relative", display:"inline-block" }}>
+      <button onClick={function(){ setOpen(function(v){return !v;}); }}
+        style={{ display:"flex", alignItems:"center", gap:6, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", fontWeight:600, padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+        ⬇️ Exportar <span style={{ fontSize:10, color:"#94a3b8" }}>▼</span>
+      </button>
+      {open && (
+        <div style={{ position:"absolute", top:"100%", left:0, marginTop:4, background:"#fff", border:"1px solid #e2e8f0", borderRadius:10, boxShadow:"0 8px 24px rgba(0,0,0,.12)", zIndex:200, minWidth:160, overflow:"hidden" }}
+          onMouseLeave={function(){ setOpen(false); }}>
+          {[
+            { label:"📄 PDF", action:onPDF },
+            { label:"📊 Excel (.xls)", action:onXLS },
+            { label:"📋 CSV", action:onCSV },
+          ].map(function(op){ return (
+            <button key={op.label} onClick={function(){ op.action(); setOpen(false); }}
+              style={{ display:"block", width:"100%", textAlign:"left", padding:"10px 16px", border:"none", background:"transparent", cursor:"pointer", fontSize:13, color:"#0f172a", fontWeight:500 }}
+              onMouseEnter={function(e){ e.currentTarget.style.background="#f8fafc"; }}
+              onMouseLeave={function(e){ e.currentTarget.style.background="transparent"; }}>
+              {op.label}
+            </button>
+          ); })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], setContasBancarias, categoriasPagar=[], setCategoriasPagar, lancamentos=[], setLancamentos, enrichedOrders=[], rawOrders=[], shipmentStatuses, paymentData, finTab, setFinTab, impostos=[], setImpostos, custosFixos=[], setCustosFixos, fornecedores=[], currentUser=null }) {
   const [paginaPagar, setPaginaPagar] = useState(1);
   const [paginaReceber, setPaginaReceber] = useState(1);
@@ -8372,6 +8630,19 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
         const totalEntradas = sortedDias.reduce((s,d) => s + dias[d].entradas.filter(e=>!e.previsto).reduce((a,e)=>a+e.valor,0), 0);
         const totalSaidas   = sortedDias.reduce((s,d) => s + dias[d].saidas.filter(e=>!e.previsto).reduce((a,e)=>a+e.valor,0), 0);
 
+        function exportarFluxo(tipo) {
+          var cab=["Data","Descrição","Tipo","Valor","E/S","Previsto"];
+          var linhas=[];
+          sortedDias.forEach(function(d){
+            dias[d].entradas.forEach(function(e){ linhas.push([fmtDate(d),e.desc,e.tipo||"—","R$ "+e.valor.toFixed(2).replace(".",","),"Entrada",e.previsto?"Sim":"Não"]); });
+            dias[d].saidas.forEach(function(s){ linhas.push([fmtDate(d),s.desc,s.tipo||"—","R$ "+s.valor.toFixed(2).replace(".",","),"Saída",s.previsto?"Sim":"Não"]); });
+          });
+          var tots=["Total Entradas: R$ "+totalEntradas.toFixed(2).replace(".",","),"Total Saídas: R$ "+totalSaidas.toFixed(2).replace(".",","),"Saldo: R$ "+(totalEntradas-totalSaidas).toFixed(2).replace(".",",")];
+          if(tipo==="csv") exportarCSV("fluxo_de_caixa",cab,linhas);
+          else if(tipo==="xls") exportarXLS("fluxo_de_caixa",cab,linhas);
+          else exportarPDF("fluxo_de_caixa","Fluxo de Caixa",cab,linhas,tots);
+        }
+
         return (
           <div>
             {/* Filtro de período */}
@@ -8393,7 +8664,10 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
                 )}
               </div>
             </div>
-            {/* Cards resumo */}
+            {/* Exportar + Cards resumo */}
+            <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:10 }}>
+              <BotaoExportar onCSV={function(){exportarFluxo("csv");}} onXLS={function(){exportarFluxo("xls");}} onPDF={function(){exportarFluxo("pdf");}} />
+            </div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:16 }}>
               {[
                 { label:"Total Entradas", value:fmt(totalEntradas), color:"#15803d", bg:"#f0fdf4" },
@@ -8475,6 +8749,25 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
           <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:10, flexWrap:"wrap" }}>
             <button onClick={() => { setEditingConta(null); setShowModalConta(true); }}
               style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Nova Conta</button>
+            <BotaoExportar
+              onCSV={function(){
+                var cab=["Descrição","Categoria","Valor","Vencimento","Status","Conta Paga","Prioridade","Parcela"];
+                var linhas=contasFiltradas.map(function(c){ return [c.descricao,c.categoria||"—",c.valor,fmtDate(c.vencimento),c.status,c.contaBancariaId?(contasBancarias.find(function(b){return b.id===c.contaBancariaId;})?.nome||"—"):"—",c.prioridade||"media",c.parcelaAtual?(c.parcelaAtual+"/"+c.totalParcelas):"—"]; });
+                exportarCSV("contas_a_pagar",cab,linhas);
+              }}
+              onXLS={function(){
+                var cab=["Descrição","Categoria","Valor","Vencimento","Status","Conta Paga","Prioridade","Parcela"];
+                var linhas=contasFiltradas.map(function(c){ return [c.descricao,c.categoria||"—",c.valor,fmtDate(c.vencimento),c.status,c.contaBancariaId?(contasBancarias.find(function(b){return b.id===c.contaBancariaId;})?.nome||"—"):"—",c.prioridade||"media",c.parcelaAtual?(c.parcelaAtual+"/"+c.totalParcelas):"—"]; });
+                exportarXLS("contas_a_pagar",cab,linhas);
+              }}
+              onPDF={function(){
+                var cab=["Descrição","Categoria","Valor","Vencimento","Status","Conta Paga","Prioridade"];
+                var linhas=contasFiltradas.map(function(c){ return [c.descricao,c.categoria||"—","R$ "+parseFloat(c.valor||0).toFixed(2).replace(".",","),fmtDate(c.vencimento),c.status,c.contaBancariaId?(contasBancarias.find(function(b){return b.id===c.contaBancariaId;})?.nome||"—"):"—",c.prioridade||"media"]; });
+                var pendente=contasFiltradas.filter(function(c){return c.status==="Pendente"||c.status==="Vencido";}).reduce(function(s,c){return s+parseFloat(c.valor||0);},0);
+                var pago=contasFiltradas.filter(function(c){return c.status==="Pago";}).reduce(function(s,c){return s+parseFloat(c.valor||0);},0);
+                exportarPDF("contas_a_pagar","Contas a Pagar",cab,linhas,["Total filtrado: "+contasFiltradas.length+" conta(s)","Pendente: R$ "+pendente.toFixed(2).replace(".",","),"Pago: R$ "+pago.toFixed(2).replace(".",",")]);
+              }}
+            />
             <div style={{ position:"relative", flex:1, minWidth:160 }}>
               <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
               <input value={searchPagar} onChange={e=>setSearchPagar(e.target.value)} placeholder="Buscar descrição..."
@@ -8867,6 +9160,22 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
         var semPrevisao = aReceber.filter(function(o) { return !paymentData?.[o.id]?.releaseDate; });
         var totalComDados = aReceber.filter(function(o) { return paymentData?.[o.id]?.netAmount; }).length;
 
+        function exportarReceber(tipo) {
+          var cab=["Pedido","Data Venda","Produto","Bruto","Líquido (MP)","Taxa ML","Frete","Previsão Pagamento","Status"];
+          var linhas=aReceber.map(function(o){
+            var pd=paymentData?.[o.id]; var ss=shipmentStatuses?.[o.id]??o.shipment_status;
+            var bruto=o.price*(o.qty||1); var liq=pd?.netAmount||bruto*0.87;
+            var taxa=pd?.tarifaML||bruto*0.13; var frete=pd?.freteCusto||0;
+            var rel=pd?.releaseDate?fmtDate(pd.releaseDate):"—";
+            var stat=pd?.isReleased?"Liberado":ss==="delivered"?"Entregue":ss==="shipped"?"Enviado":"Aguardando";
+            return ["#"+o.id,fmtDate(o.date),(o.title||"").slice(0,40),"R$ "+bruto.toFixed(2).replace(".",","),"R$ "+liq.toFixed(2).replace(".",","),"R$ "+taxa.toFixed(2).replace(".",","),"R$ "+frete.toFixed(2).replace(".",","),rel,stat];
+          });
+          var totStr=["Total a receber: "+aReceber.length+" pedido(s)","Total bruto: R$ "+aReceber.reduce(function(s,o){return s+o.price*(o.qty||1);},0).toFixed(2).replace(".",",")];
+          if(tipo==="csv") exportarCSV("contas_a_receber",cab,linhas);
+          else if(tipo==="xls") exportarXLS("contas_a_receber",cab,linhas);
+          else exportarPDF("contas_a_receber","Contas a Receber",cab,linhas,totStr);
+        }
+
         // Totais reais com fallback estimado
         var totalBruto = aReceber.reduce(function(s,o){ return s + o.price * o.qty; }, 0);
         var totalTarifas = aReceber.reduce(function(s,o){ return s + (o.fee||0)*(o.qty||1); }, 0);
@@ -8941,12 +9250,15 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
             <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", whiteSpace:"nowrap" }}>
               {receberVista === "recebido" ? "✅ Pedidos Registrados" : receberVista === "todos" ? "📋 Todos os Pedidos" : "📥 Pedidos a Receber"}
             </div>
-            {receberVista !== "recebido" && (
-              <button onClick={baixaAutomaticaLiberados}
-                style={{ background:"#15803d", border:"none", color:"#fff", fontWeight:700, padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:12, display:"flex", alignItems:"center", gap:6, whiteSpace:"nowrap" }}>
-                ⚡ Baixar Liberados Automaticamente
-              </button>
-            )}
+            <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+              <BotaoExportar onCSV={function(){exportarReceber("csv");}} onXLS={function(){exportarReceber("xls");}} onPDF={function(){exportarReceber("pdf");}} />
+              {receberVista !== "recebido" && (
+                <button onClick={baixaAutomaticaLiberados}
+                  style={{ background:"#15803d", border:"none", color:"#fff", fontWeight:700, padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:12, display:"flex", alignItems:"center", gap:6, whiteSpace:"nowrap" }}>
+                  ⚡ Baixar Liberados Automaticamente
+                </button>
+              )}
+            </div>
           </div>
           {/* Filtros */}
           <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:10, flexWrap:"wrap" }}>
@@ -9247,6 +9559,24 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
             <div style={{ fontWeight:700, fontSize:15, color:"#0f172a" }}>Contas Cadastradas</div>
             <div style={{ display:"flex", gap:8 }}>
+              <BotaoExportar
+                onCSV={function(){
+                  var cab=["Conta","Tipo","Banco","Agência","Nº Conta","Saldo Inicial","Saldo Atual"];
+                  var linhas=contasBancarias.map(function(b){ var s=getSaldoConta(b.id); return [b.nome,b.tipo||"—",b.banco||"—",b.agencia||"—",b.numeroConta||"—","R$ "+parseFloat(b.saldoInicial||0).toFixed(2).replace(".",","),"R$ "+s.toFixed(2).replace(".",",")]; });
+                  exportarCSV("caixas_e_bancos",cab,linhas);
+                }}
+                onXLS={function(){
+                  var cab=["Conta","Tipo","Banco","Agência","Nº Conta","Saldo Inicial","Saldo Atual"];
+                  var linhas=contasBancarias.map(function(b){ var s=getSaldoConta(b.id); return [b.nome,b.tipo||"—",b.banco||"—",b.agencia||"—",b.numeroConta||"—","R$ "+parseFloat(b.saldoInicial||0).toFixed(2).replace(".",","),"R$ "+s.toFixed(2).replace(".",",")]; });
+                  exportarXLS("caixas_e_bancos",cab,linhas);
+                }}
+                onPDF={function(){
+                  var cab=["Conta","Tipo","Banco","Saldo Inicial","Saldo Atual"];
+                  var linhas=contasBancarias.map(function(b){ var s=getSaldoConta(b.id); return [b.nome,b.tipo||"—",b.banco||"—","R$ "+parseFloat(b.saldoInicial||0).toFixed(2).replace(".",","),"R$ "+s.toFixed(2).replace(".",",")]; });
+                  var total=contasBancarias.reduce(function(s,b){return s+getSaldoConta(b.id);},0);
+                  exportarPDF("caixas_e_bancos","Caixas e Bancos",cab,linhas,["Total em caixa: R$ "+total.toFixed(2).replace(".",","),"Contas cadastradas: "+contasBancarias.length]);
+                }}
+              />
               {contasBancarias.length >= 2 && (
                 <button onClick={function(){ setShowModalTransf(true); }}
                   style={{ background:"#0891b2", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13, display:"flex", alignItems:"center", gap:6 }}>
@@ -9571,8 +9901,31 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
       {finTab === "ia" && (
         <div>
           <div style={{ marginBottom:16 }}>
-            <div style={{ fontWeight:800, fontSize:18, color:"#0f172a", marginBottom:4 }}>✦ Consultoria Financeira com IA</div>
-            <div style={{ fontSize:13, color:"#94a3b8" }}>Análise automática de prioridade de pagamentos, simulação de empréstimos e consultor CFO virtual.</div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+              <div>
+                <div style={{ fontWeight:800, fontSize:18, color:"#0f172a", marginBottom:4 }}>✦ Consultoria Financeira com IA</div>
+                <div style={{ fontSize:13, color:"#94a3b8" }}>Análise automática de prioridade de pagamentos, simulação de empréstimos e consultor CFO virtual.</div>
+              </div>
+              <BotaoExportar
+                onCSV={function(){
+                  var cab=["Descrição","Valor","Vencimento","Status","Prioridade","Categoria"];
+                  var linhas=contasPagar.filter(function(c){return c.status!=="Pago";}).sort(function(a,b){return (a.vencimento||"")>(b.vencimento||"")?1:-1;}).map(function(c){ return [c.descricao,"R$ "+parseFloat(c.valor||0).toFixed(2).replace(".",","),fmtDate(c.vencimento),c.status,c.prioridade||"media",c.categoria||"—"]; });
+                  exportarCSV("consultoria_ia_pendentes",cab,linhas);
+                }}
+                onXLS={function(){
+                  var cab=["Descrição","Valor","Vencimento","Status","Prioridade","Categoria"];
+                  var linhas=contasPagar.filter(function(c){return c.status!=="Pago";}).sort(function(a,b){return (a.vencimento||"")>(b.vencimento||"")?1:-1;}).map(function(c){ return [c.descricao,"R$ "+parseFloat(c.valor||0).toFixed(2).replace(".",","),fmtDate(c.vencimento),c.status,c.prioridade||"media",c.categoria||"—"]; });
+                  exportarXLS("consultoria_ia_pendentes",cab,linhas);
+                }}
+                onPDF={function(){
+                  var pending=contasPagar.filter(function(c){return c.status!=="Pago";});
+                  var cab=["Descrição","Valor","Vencimento","Prioridade","Status"];
+                  var linhas=pending.sort(function(a,b){return (a.vencimento||"")>(b.vencimento||"")?1:-1;}).map(function(c){ return [c.descricao,"R$ "+parseFloat(c.valor||0).toFixed(2).replace(".",","),fmtDate(c.vencimento),c.prioridade||"media",c.status]; });
+                  var total=pending.reduce(function(s,c){return s+parseFloat(c.valor||0);},0);
+                  exportarPDF("consultoria_ia_pendentes","Consultoria IA — Contas Pendentes",cab,linhas,["Total pendente: R$ "+total.toFixed(2).replace(".",","),"Qtd contas: "+pending.length]);
+                }}
+              />
+            </div>
           </div>
           <PainelIAPagamentos contasPagar={contasPagar} contasBancarias={contasBancarias} lancamentos={lancamentos} enrichedOrders={enrichedOrders} paymentData={paymentData} shipmentStatuses={shipmentStatuses} />
         </div>

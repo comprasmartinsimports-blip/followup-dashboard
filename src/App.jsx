@@ -5539,6 +5539,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
               </label>
               <button onClick={function(){ setEditingProd(null); setShowModalProd(true); }}
                 style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Novo Produto</button>
+            </div>
             {listings.length > 0 && (
               <button onClick={() => {
                 const sincronizados = syncListingsToProdutos(listings, produtos);

@@ -5509,10 +5509,10 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
             </div>
           )}
 
-          <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
-            <button onClick={() => { setEditingProd(null); setShowModalProd(true); }}
-              style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Novo Produto</button>
-            <BotaoExportar
+          <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:10, flexWrap:"wrap" }}>
+            {/* Ações — direita */}
+            <div style={{ display:"flex", gap:6, marginLeft:"auto" }}>
+              <BotaoExportar
               onCSV={function(){
                 var list = produtosFiltrados.length > 0 ? produtosFiltrados : produtos;
                 var cab=["Título","SKU","EAN","Categoria","Preço Venda","Preço Custo","Estoque Atual","Estoque Mínimo","Fornecedor","Status","MLB Vinculado"];
@@ -5531,12 +5531,14 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                 var linhas=list.map(function(p){ return [p.titulo?.slice(0,45)||"",p.sku||"",p.categoria||"",p.precoVenda?"R$ "+parseFloat(p.precoVenda).toFixed(2).replace(".",","):"—",p.precoCusto?"R$ "+parseFloat(p.precoCusto).toFixed(2).replace(".",","):"—",p.estoqueAtual||0,p.estoqueMinimo||0,p.status||"Ativo"]; });
                 exportarPDF("produtos","Lista de Produtos",cab,linhas,["Total: "+list.length+" produto(s)","Filtro ativo: "+(produtosFiltrados.length>0&&produtosFiltrados.length<produtos.length?"Sim":"Não")]);
               }}
-            />
-            <label style={{ background:"#7c3aed", border:"none", color:"#fff", fontWeight:700, padding:"9px 18px", borderRadius:8, cursor:"pointer", fontSize:13, display:"inline-flex", alignItems:"center", gap:6 }}>
-              ⬆️ Importar Planilha
-              <input type="file" accept=".xlsx,.csv" style={{ display:"none" }}
-                onChange={function(e){ if(e.target.files[0]) importarPlanilhaProdutos(e.target.files[0]); e.target.value=""; }} />
-            </label>
+              />
+              <label style={{ background:"#7c3aed", border:"none", color:"#fff", fontWeight:700, padding:"9px 18px", borderRadius:8, cursor:"pointer", fontSize:13, display:"inline-flex", alignItems:"center", gap:6 }}>
+                ⬆️ Importar
+                <input type="file" accept=".xlsx,.csv" style={{ display:"none" }}
+                  onChange={function(e){ if(e.target.files[0]) importarPlanilhaProdutos(e.target.files[0]); e.target.value=""; }} />
+              </label>
+              <button onClick={function(){ setEditingProd(null); setShowModalProd(true); }}
+                style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Novo Produto</button>
             {listings.length > 0 && (
               <button onClick={() => {
                 const sincronizados = syncListingsToProdutos(listings, produtos);
@@ -6142,33 +6144,38 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
       {prodTab === "cadastros" && (
         <div>
           {/* Filtros e ações */}
-          <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
-            <button onClick={function(){ setEditingForn(null); setTipoPadraoCad("Fornecedor"); setShowModalForn(true); }}
-              style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Novo Cadastro</button>
-            <BotaoExportar
-              onCSV={function(){
-                var list=fornecedoresFiltrados||fornecedores;
-                var cab=["Nome","Tipo","CNPJ/CPF","E-mail","Telefone","Cidade","Estado","Prioridade","Observação"];
-                var linhas=list.map(function(f){return [f.nome||"",f.tipo||"",f.cnpj||"",f.email||"",f.telefone||"",f.cidade||"",f.estado||"",f.prioridade||"media",f.obs||""];});
-                exportarCSV("cadastros",cab,linhas);
-              }}
-              onXLS={function(){
-                var list=fornecedoresFiltrados||fornecedores;
-                var cab=["Nome","Tipo","CNPJ/CPF","E-mail","Telefone","Cidade","Estado","Banco","Agência","Conta","PIX","Prioridade"];
-                var linhas=list.map(function(f){return [f.nome||"",f.tipo||"",f.cnpj||"",f.email||"",f.telefone||"",f.cidade||"",f.estado||"",f.banco||"",f.agencia||"",f.conta||"",f.pix||"",f.prioridade||"media"];});
-                exportarXLS("cadastros_completo",cab,linhas);
-              }}
-              onPDF={function(){
-                var list=fornecedoresFiltrados||fornecedores;
-                var cab=["Nome","Tipo","CNPJ/CPF","Cidade","Telefone","Prioridade"];
-                var linhas=list.map(function(f){return [f.nome||"",f.tipo||"",f.cnpj||"",f.cidade||"",f.telefone||"",f.prioridade||"media"];});
-                exportarPDF("cadastros","Cadastros de Fornecedores e Parceiros",cab,linhas,["Total: "+list.length+" cadastro(s)"]);
-              }}
-            />
+          {/* Toolbar Cadastros: busca centro | ações direita */}
+          <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
+            {/* Busca — centro */}
             <div style={{ position:"relative", flex:1, minWidth:180 }}>
               <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
               <input value={searchCad} onChange={function(e){ setSearchCad(e.target.value); }} placeholder="Buscar nome, CNPJ, cidade..."
                 style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px 8px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
+            </div>
+            {/* Ações — direita */}
+            <div style={{ display:"flex", gap:8 }}>
+              <BotaoExportar
+                onCSV={function(){
+                  var list=fornecedoresFiltrados||fornecedores;
+                  var cab=["Nome","Tipo","CNPJ/CPF","E-mail","Telefone","Cidade","Estado","Prioridade","Observação"];
+                  var linhas=list.map(function(f){return [f.nome||"",f.tipo||"",f.cnpj||"",f.email||"",f.telefone||"",f.cidade||"",f.estado||"",f.prioridade||"media",f.obs||""];});
+                  exportarCSV("cadastros",cab,linhas);
+                }}
+                onXLS={function(){
+                  var list=fornecedoresFiltrados||fornecedores;
+                  var cab=["Nome","Tipo","CNPJ/CPF","E-mail","Telefone","Cidade","Estado","Banco","Agência","Conta","PIX","Prioridade"];
+                  var linhas=list.map(function(f){return [f.nome||"",f.tipo||"",f.cnpj||"",f.email||"",f.telefone||"",f.cidade||"",f.estado||"",f.banco||"",f.agencia||"",f.conta||"",f.pix||"",f.prioridade||"media"];});
+                  exportarXLS("cadastros_completo",cab,linhas);
+                }}
+                onPDF={function(){
+                  var list=fornecedoresFiltrados||fornecedores;
+                  var cab=["Nome","Tipo","CNPJ/CPF","Cidade","Telefone","Prioridade"];
+                  var linhas=list.map(function(f){return [f.nome||"",f.tipo||"",f.cnpj||"",f.cidade||"",f.telefone||"",f.prioridade||"media"];});
+                  exportarPDF("cadastros","Cadastros de Fornecedores e Parceiros",cab,linhas,["Total: "+list.length+" cadastro(s)"]);
+                }}
+              />
+              <button onClick={function(){ setEditingForn(null); setTipoPadraoCad("Fornecedor"); setShowModalForn(true); }}
+                style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Novo Cadastro</button>
             </div>
           </div>
 
@@ -8786,34 +8793,10 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
             {/* ── CONTAS A PAGAR ── */}
       {finTab === "pagar" && (
         <div>
-          <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:10, flexWrap:"wrap" }}>
-            <button onClick={() => { setEditingConta(null); setShowModalConta(true); }}
-              style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Nova Conta</button>
-            <BotaoExportar
-              onCSV={function(){
-                var cab=["Descrição","Categoria","Valor","Vencimento","Status","Conta Paga","Prioridade","Parcela"];
-                var linhas=contasFiltradas.map(function(c){ return [c.descricao,c.categoria||"—",c.valor,fmtDate(c.vencimento),c.status,c.contaBancariaId?(contasBancarias.find(function(b){return b.id===c.contaBancariaId;})?.nome||"—"):"—",c.prioridade||"media",c.parcelaAtual?(c.parcelaAtual+"/"+c.totalParcelas):"—"]; });
-                exportarCSV("contas_a_pagar",cab,linhas);
-              }}
-              onXLS={function(){
-                var cab=["Descrição","Categoria","Valor","Vencimento","Status","Conta Paga","Prioridade","Parcela"];
-                var linhas=contasFiltradas.map(function(c){ return [c.descricao,c.categoria||"—",c.valor,fmtDate(c.vencimento),c.status,c.contaBancariaId?(contasBancarias.find(function(b){return b.id===c.contaBancariaId;})?.nome||"—"):"—",c.prioridade||"media",c.parcelaAtual?(c.parcelaAtual+"/"+c.totalParcelas):"—"]; });
-                exportarXLS("contas_a_pagar",cab,linhas);
-              }}
-              onPDF={function(){
-                var cab=["Descrição","Categoria","Valor","Vencimento","Status","Conta Paga","Prioridade"];
-                var linhas=contasFiltradas.map(function(c){ return [c.descricao,c.categoria||"—","R$ "+parseFloat(c.valor||0).toFixed(2).replace(".",","),fmtDate(c.vencimento),c.status,c.contaBancariaId?(contasBancarias.find(function(b){return b.id===c.contaBancariaId;})?.nome||"—"):"—",c.prioridade||"media"]; });
-                var pendente=contasFiltradas.filter(function(c){return c.status==="Pendente"||c.status==="Vencido";}).reduce(function(s,c){return s+parseFloat(c.valor||0);},0);
-                var pago=contasFiltradas.filter(function(c){return c.status==="Pago";}).reduce(function(s,c){return s+parseFloat(c.valor||0);},0);
-                exportarPDF("contas_a_pagar","Contas a Pagar",cab,linhas,["Total filtrado: "+contasFiltradas.length+" conta(s)","Pendente: R$ "+pendente.toFixed(2).replace(".",","),"Pago: R$ "+pago.toFixed(2).replace(".",",")]);
-              }}
-            />
-            <div style={{ position:"relative", flex:1, minWidth:160 }}>
-              <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
-              <input value={searchPagar} onChange={e=>setSearchPagar(e.target.value)} placeholder="Buscar descrição..."
-                style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px 8px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
-            </div>
-            <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}
+          {/* Toolbar Contas a Pagar: Filtros à esquerda | Busca centro | Ações direita */}
+          <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:10, flexWrap:"wrap" }}>
+            {/* Filtros — esquerda */}
+            <select value={filterStatus} onChange={function(e){setFilterStatus(e.target.value);}}
               style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 12px", borderRadius:8, fontSize:12 }}>
               <option value="all">Todos</option>
               <option value="Pendente">📋 Em Aberto</option>
@@ -8822,11 +8805,41 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
               <option value="Pago">✅ Pago</option>
               <option value="Pago Parcial">⚡ Pago Parcial</option>
             </select>
-            <select value={filterCat} onChange={e=>setFilterCat(e.target.value)}
+            <select value={filterCat} onChange={function(e){setFilterCat(e.target.value);}}
               style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 12px", borderRadius:8, fontSize:12 }}>
               <option value="all">Todas categorias</option>
-              {categoriasPagar.map(c=><option key={c} value={c}>{c}</option>)}
+              {categoriasPagar.map(function(c){ return <option key={c} value={c}>{c}</option>; })}
             </select>
+            {/* Busca — centro */}
+            <div style={{ position:"relative", flex:1, minWidth:160 }}>
+              <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
+              <input value={searchPagar} onChange={function(e){setSearchPagar(e.target.value);}} placeholder="Buscar descrição..."
+                style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px 8px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
+            </div>
+            {/* Ações — direita */}
+            <div style={{ display:"flex", gap:8, marginLeft:"auto" }}>
+              <BotaoExportar
+                onCSV={function(){
+                  var cab=["Descrição","Categoria","Valor","Vencimento","Status","Conta Paga","Prioridade","Parcela"];
+                  var linhas=contasFiltradas.map(function(c){ return [c.descricao,c.categoria||"—",c.valor,fmtDate(c.vencimento),c.status,c.contaBancariaId?(contasBancarias.find(function(b){return b.id===c.contaBancariaId;})?.nome||"—"):"—",c.prioridade||"media",c.parcelaAtual?(c.parcelaAtual+"/"+c.totalParcelas):"—"]; });
+                  exportarCSV("contas_a_pagar",cab,linhas);
+                }}
+                onXLS={function(){
+                  var cab=["Descrição","Categoria","Valor","Vencimento","Status","Conta Paga","Prioridade","Parcela"];
+                  var linhas=contasFiltradas.map(function(c){ return [c.descricao,c.categoria||"—",c.valor,fmtDate(c.vencimento),c.status,c.contaBancariaId?(contasBancarias.find(function(b){return b.id===c.contaBancariaId;})?.nome||"—"):"—",c.prioridade||"media",c.parcelaAtual?(c.parcelaAtual+"/"+c.totalParcelas):"—"]; });
+                  exportarXLS("contas_a_pagar",cab,linhas);
+                }}
+                onPDF={function(){
+                  var cab=["Descrição","Categoria","Valor","Vencimento","Status","Conta Paga","Prioridade"];
+                  var linhas=contasFiltradas.map(function(c){ return [c.descricao,c.categoria||"—","R$ "+parseFloat(c.valor||0).toFixed(2).replace(".",","),fmtDate(c.vencimento),c.status,c.contaBancariaId?(contasBancarias.find(function(b){return b.id===c.contaBancariaId;})?.nome||"—"):"—",c.prioridade||"media"]; });
+                  var pendente=contasFiltradas.filter(function(c){return c.status==="Pendente"||c.status==="Vencido";}).reduce(function(s,c){return s+parseFloat(c.valor||0);},0);
+                  var pago=contasFiltradas.filter(function(c){return c.status==="Pago";}).reduce(function(s,c){return s+parseFloat(c.valor||0);},0);
+                  exportarPDF("contas_a_pagar","Contas a Pagar",cab,linhas,["Total: "+contasFiltradas.length+" conta(s)","Pendente: R$ "+pendente.toFixed(2).replace(".",","),"Pago: R$ "+pago.toFixed(2).replace(".",",")]);
+                }}
+              />
+              <button onClick={function(){ setEditingConta(null); setShowModalConta(true); }}
+                style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Nova Conta</button>
+            </div>
           </div>
           {/* Filtros de valor e documento */}
           <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center", marginBottom:10 }}>
@@ -12068,62 +12081,50 @@ export default function App() {
 
                 {tab === "listings" && currentUser?.permissoes?.includes("listings") && (
           <>
-            <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
-              <div style={{ display: "flex", gap: 6, flex: 1, minWidth: 260 }}>
-                <div style={{ position: "relative", flex: 1 }}>
-                  <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", fontSize: 14 }}>🔍</span>
-                  <input className="search-input" value={searchListings} onChange={e => setSearchListings(e.target.value)}
-                    placeholder={searchType === "title" ? "Buscar por título..." : searchType === "sku" ? "Buscar por SKU exato..." : searchType === "mlb" ? "Buscar por MLB..." : "Buscar por título, MLB ou SKU..."} />
+            {/* Toolbar Anúncios */}
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12, flexWrap:"wrap" }}>
+              {/* Filtros — esquerda */}
+              <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
+                <div style={{ display:"flex", gap:3 }}>
+                  {[{ key:"all",label:"Todos"},{key:"active",label:"● Ativos"},{key:"paused",label:"○ Pausados"}].map(function(f){
+                    return <button key={f.key} onClick={function(){setStatusFilter(f.key);}}
+                      style={{ padding:"5px 12px", borderRadius:20, border:"1px solid "+(statusFilter===f.key?"#0f172a":"#e2e8f0"), cursor:"pointer", fontFamily:"inherit", fontSize:11,
+                        fontWeight:statusFilter===f.key?700:500, background:statusFilter===f.key?"#0f172a":"#fff",
+                        color:statusFilter===f.key?"#fff":f.key==="active"?"#15803d":f.key==="paused"?"#94a3b8":"#64748b" }}>{f.label}</button>;
+                  })}
                 </div>
-                <select value={searchType} onChange={e => setSearchType(e.target.value)} style={{ minWidth: 110 }}>
+                {[{k:"all",l:"Sem filtro extra"},{k:"sem_custo",l:"⚠️ Sem custo",color:"#dc2626",bg:"#fef2f2"},{k:"com_promo",l:"🔥 Com promoção",color:"#7c3aed",bg:"#f5f3ff"},{k:"sem_promo",l:"○ Sem promoção",color:"#64748b",bg:"#f8fafc"}].map(function(f){
+                  var isA=filterListingExtra===f.k;
+                  return <button key={f.k} onClick={function(){setFilterListingExtra(f.k);setPaginaAnuncios(1);}}
+                    style={{ padding:"5px 12px", borderRadius:20, border:"1px solid "+(isA?(f.color||"#0f172a"):"#e2e8f0"), cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:isA?700:500,
+                      background:isA?(f.bg||"#0f172a"):"#fff", color:isA?(f.color||"#fff"):"#64748b" }}>{f.l}</button>;
+                })}
+              </div>
+              {/* Busca — centro */}
+              <div style={{ display:"flex", gap:6, flex:1, minWidth:220 }}>
+                <div style={{ position:"relative", flex:1 }}>
+                  <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
+                  <input className="search-input" value={searchListings} onChange={function(e){setSearchListings(e.target.value);}}
+                    placeholder={searchType==="title"?"Buscar por título...":searchType==="sku"?"Buscar por SKU exato...":searchType==="mlb"?"Buscar por MLB...":"Buscar por título, MLB ou SKU..."} />
+                </div>
+                <select value={searchType} onChange={function(e){setSearchType(e.target.value);}} style={{ minWidth:100 }}>
                   <option value="all">Tudo</option>
                   <option value="title">Título</option>
                   <option value="sku">SKU exato</option>
                   <option value="mlb">MLB</option>
                 </select>
               </div>
-              <div style={{ display: "flex", gap: 4 }}>
-                {[{ key: "all", label: "Todos" }, { key: "active", label: "● Ativos" }, { key: "paused", label: "○ Pausados" }].map(f => (
-                  <button key={f.key} onClick={() => setStatusFilter(f.key)}
-                    style={{ padding: "6px 14px", borderRadius: 20, border: "1px solid #e2e8f0", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 500, transition: "all .15s",
-                      background: statusFilter === f.key ? "#0f172a" : "#fff",
-                      color: statusFilter === f.key ? "#fff" : f.key === "active" ? "#15803d" : f.key === "paused" ? "#94a3b8" : "#64748b",
-                      borderColor: statusFilter === f.key ? "#0f172a" : "#e2e8f0" }}>
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                {[
-                  { key: "all",       label: "Todos os filtros" },
-                  { key: "sem_custo", label: "⚠️ Sem custo",    color: "#dc2626", bg: "#fef2f2" },
-                  { key: "com_promo", label: "🔥 Com promoção", color: "#7c3aed", bg: "#f5f3ff" },
-                  { key: "sem_promo", label: "○ Sem promoção",  color: "#64748b", bg: "#f8fafc" },
-                ].map(function(f) {
-                  var isActive = filterListingExtra === f.key;
-                  return (
-                    <button key={f.key} onClick={function(){ setFilterListingExtra(f.key); setPaginaAnuncios(1); }}
-                      style={{ padding: "6px 14px", borderRadius: 20, border: "1px solid " + (isActive ? (f.color||"#0f172a") : "#e2e8f0"),
-                        cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: isActive ? 700 : 500,
-                        background: isActive ? (f.bg||"#0f172a") : "#fff",
-                        color: isActive ? (f.color||"#fff") : "#64748b",
-                        boxShadow: isActive ? "0 0 0 2px " + (f.color||"#0f172a") + "33" : "none" }}>
-                      {f.label}
-                    </button>
-                  );
-                })}
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 500 }}>Ordenar:</span>
-                <select value={sortBy} onChange={e => setSortBy(e.target.value)}>
-                  <option value="score">Pior score primeiro</option>
+              {/* Ações — direita */}
+              <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                <select value={sortBy} onChange={function(e){setSortBy(e.target.value);}} style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"7px 10px", borderRadius:8, fontSize:12 }}>
+                  <option value="score">Pior score</option>
                   <option value="margin">Maior margem</option>
-                  <option value="profit">Maior lucro total</option>
-                  <option value="sales_desc">Maior nº de vendas</option>
-                  <option value="sales_asc">Menor nº de vendas</option>
+                  <option value="profit">Maior lucro</option>
+                  <option value="sales_desc">Mais vendidos</option>
+                  <option value="sales_asc">Menos vendidos</option>
                 </select>
+                <span style={{ fontSize:11, color:"#94a3b8", whiteSpace:"nowrap" }}>{sorted.length} anúncio(s)</span>
               </div>
-              <span style={{ fontSize: 12, color: "#94a3b8" }}>{sorted.length} anúncio{sorted.length !== 1 ? "s" : ""}</span>
             </div>
 
             <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "auto", boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
@@ -12279,74 +12280,54 @@ export default function App() {
 
         {tab === "orders" && currentUser?.permissoes?.includes("orders") && (
           <>
-            <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
-              <div style={{ position: "relative", flex:1, minWidth:260 }}>
-                <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", fontSize: 14 }}>🔍</span>
-                <input className="search-input" value={searchOrders} onChange={e => setSearchOrders(e.target.value)}
-                  placeholder="Buscar por nº pedido, cliente, CPF, e-mail..." style={{ width:"100%", paddingLeft:36 }} />
+            {/* Toolbar Pedidos */}
+            <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:12, padding:"12px 16px", marginBottom:14 }}>
+              {/* Linha 1: Filtros à esquerda + Busca centro + info direita */}
+              <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:8 }}>
+                {/* Filtros período — esquerda */}
+                <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
+                  {[{key:"today",l:"Hoje"},{key:"week",l:"7 dias"},{key:"thismonth",l:"Este mês"},{key:"month",l:"30 dias"},{key:"3months",l:"3 meses"},{key:"all",l:"Todos"}].map(function(f){
+                    return <button key={f.key} className={"filter-btn "+(orderFilter===f.key?"active":"")} onClick={function(){setOrderFilter(f.key);}}>{f.l}</button>;
+                  })}
+                </div>
+                {/* Busca — centro */}
+                <div style={{ position:"relative", flex:1, minWidth:220 }}>
+                  <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
+                  <input className="search-input" value={searchOrders} onChange={function(e){setSearchOrders(e.target.value);}}
+                    placeholder="Buscar por nº pedido, cliente, CPF, e-mail..." style={{ width:"100%", paddingLeft:36 }} />
+                </div>
+                {/* Info — direita */}
+                <span style={{ fontSize:12, color:"#94a3b8", whiteSpace:"nowrap" }}>{enrichedOrders.length} pedido(s) · {fmt(enrichedOrders.reduce(function(s,o){return s+o.price*o.qty;},0))}</span>
               </div>
-              {/* Filtro por tipo de envio */}
-              <div style={{ display:"flex", gap:4, alignItems:"center", flexWrap:"wrap" }}>
-                {[
-                  { key:"todos", label:"Todos" },
-                  { key:"FULL",  label:"FULL",  color:"#1d4ed8", bg:"#eff6ff" },
-                  { key:"Flex",  label:"Flex",  color:"#7c3aed", bg:"#f5f3ff" },
-                  { key:"ME2",   label:"ME2",   color:"#0891b2", bg:"#ecfeff" },
-                  { key:"ME1",   label:"ME1",   color:"#0369a1", bg:"#e0f2fe" },
-                ].map(function(e) {
-                  var isActive = filterEnvio === e.key;
-                  return (
-                    <button key={e.key} onClick={function(){ setFilterEnvio(e.key); setPaginaPedidos(1); }}
-                      style={{ padding:"5px 12px", borderRadius:20, border:"none", cursor:"pointer", fontSize:12,
-                        fontWeight: isActive ? 700 : 500,
-                        background: isActive ? (e.bg || "#0f172a") : "#f1f5f9",
-                        color: isActive ? (e.color || "#fff") : "#64748b",
-                        boxShadow: isActive ? "0 0 0 2px "+(e.color||"#0f172a")+"44" : "none" }}>
-                      {e.label}
-                    </button>
-                  );
-                })}
+              {/* Linha 2: Status + Envio + Data + SKU + UF */}
+              <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+                <div style={{ display:"flex", gap:3 }}>
+                  {[{key:"all",l:"Todos"},{key:"waiting",l:"⏳ Ag. envio"},{key:"shipped",l:"🚚 Enviados"},{key:"done",l:"✓ Concluídos"},{key:"cancelled",l:"✗ Cancelados"},{key:"refunded",l:"↩ Devolvidos"},{key:"mediation",l:"⚠ Disputa"}].map(function(f){
+                    return <button key={f.key} className={"filter-btn "+(orderStatusFilter===f.key?"active":"")} onClick={function(){setOrderStatusFilter(f.key);}}>{f.l}</button>;
+                  })}
+                </div>
+                <div style={{ display:"flex", gap:3 }}>
+                  {[{key:"todos",l:"Envio"},{key:"FULL",l:"FULL",c:"#1d4ed8",bg:"#eff6ff"},{key:"Flex",l:"Flex",c:"#7c3aed",bg:"#f5f3ff"},{key:"ME2",l:"ME2",c:"#0891b2",bg:"#ecfeff"},{key:"ME1",l:"ME1",c:"#0369a1",bg:"#e0f2fe"}].map(function(e){
+                    var a=filterEnvio===e.key;
+                    return <button key={e.key} onClick={function(){setFilterEnvio(e.key);setPaginaPedidos(1);}}
+                      style={{ padding:"4px 10px", borderRadius:20, border:"none", cursor:"pointer", fontSize:11, fontWeight:a?700:400, background:a?(e.bg||"#0f172a"):"#f1f5f9", color:a?(e.c||"#fff"):"#64748b" }}>{e.l}</button>;
+                  })}
+                </div>
+                <input value={filterSku} onChange={function(e){setFilterSku(e.target.value);}} placeholder="SKU..."
+                  style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"5px 10px", borderRadius:8, fontSize:12, outline:"none", width:100 }} />
+                <select value={filterUF} onChange={function(e){setFilterUF(e.target.value);}}
+                  style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 10px", borderRadius:8, fontSize:12 }}>
+                  <option value="">UF</option>
+                  {["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"].map(function(uf){return <option key={uf} value={uf}>{uf}</option>;})}
+                </select>
+                <input type="date" value={dateFrom} onChange={function(e){setDateFrom(e.target.value);}}
+                  style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 8px", borderRadius:8, fontSize:12 }} />
+                <span style={{ fontSize:11, color:"#94a3b8" }}>até</span>
+                <input type="date" value={dateTo} onChange={function(e){setDateTo(e.target.value);}}
+                  style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 8px", borderRadius:8, fontSize:12 }} />
+                {(filterSku||filterUF||dateFrom||dateTo)&&<button onClick={function(){setFilterSku("");setFilterUF("");setDateFrom("");setDateTo("");}}
+                  style={{ background:"#fef2f2", border:"1px solid #fecaca", color:"#dc2626", padding:"5px 10px", borderRadius:8, cursor:"pointer", fontSize:11 }}>✕ Limpar</button>}
               </div>
-              <input value={filterSku} onChange={e => setFilterSku(e.target.value)} placeholder="SKU do produto..."
-                style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"7px 12px", borderRadius:8, fontSize:12, outline:"none", width:130 }} />
-              <select value={filterUF} onChange={e => setFilterUF(e.target.value)}
-                style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"7px 10px", borderRadius:8, fontSize:12 }}>
-                <option value="">Estado (UF)</option>
-                {["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"].map(function(uf){ return <option key={uf} value={uf}>{uf}</option>; })}
-              </select>
-              {(filterSku || filterUF) && (
-                <button onClick={function(){ setFilterSku(""); setFilterUF(""); }}
-                  style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"7px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕ Limpar</button>
-              )}
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 500 }}>De:</span>
-                <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-                  style={{ background: "#fff", border: "1px solid #e2e8f0", color: "#334155", padding: "6px 10px", borderRadius: 8, fontFamily: "inherit", fontSize: 12, cursor: "pointer" }} />
-                <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 500 }}>Até:</span>
-                <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-                  style={{ background: "#fff", border: "1px solid #e2e8f0", color: "#334155", padding: "6px 10px", borderRadius: 8, fontFamily: "inherit", fontSize: 12, cursor: "pointer" }} />
-                {(dateFrom || dateTo) && <button onClick={() => { setDateFrom(""); setDateTo(""); }}
-                  style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", color: "#64748b", padding: "5px 10px", borderRadius: 8, cursor: "pointer", fontSize: 12 }}>✕ Limpar</button>}
-              </div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {[{ key: "today", label: "Hoje" }, { key: "week", label: "7 dias" }, { key: "thismonth", label: "Este mês" }, { key: "month", label: "30 dias" }, { key: "3months", label: "3 meses" }, { key: "all", label: "Todos" }].map(f => (
-                  <button key={f.key} className={`filter-btn ${orderFilter === f.key ? "active" : ""}`} onClick={() => setOrderFilter(f.key)}>{f.label}</button>
-                ))}
-              </div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {[
-                  { key: "all", label: "Todos" },
-                  { key: "waiting", label: "⏳ Ag. envio" },
-                  { key: "shipped", label: "🚚 Enviados" },
-                  { key: "done", label: "✓ Concluídos" },
-                  { key: "cancelled", label: "✗ Cancelados" },
-                  { key: "refunded", label: "↩ Devolvidos" },
-                  { key: "mediation", label: "⚠ Em disputa" },
-                ].map(f => (
-                  <button key={f.key} className={`filter-btn ${orderStatusFilter === f.key ? "active" : ""}`} onClick={() => setOrderStatusFilter(f.key)}>{f.label}</button>
-                ))}
-              </div>
-              <span style={{ fontSize: 12, color: "#94a3b8" }}>{enrichedOrders.length} pedido{enrichedOrders.length !== 1 ? "s" : ""} · {fmt(enrichedOrders.reduce((s, o) => s + o.price * o.qty, 0))}</span>
             </div>
             <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "auto", boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
               <table style={{ borderCollapse:"collapse", width:"100%", tableLayout:"fixed" }}>

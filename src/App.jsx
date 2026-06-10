@@ -7968,80 +7968,120 @@ function ModalConta({ conta, categoriasPagar, fornecedores, contasPagar, onSave,
 //  UTILITÁRIOS DE EXPORTAÇÃO FINANCEIRA
 // ════════════════════════════════════════════════════════════
 function exportarCSV(nomeArquivo, cabecalho, linhas) {
-  var bom = "\uFEFF"; // BOM para UTF-8 no Excel
-  var csv = bom + cabecalho.join(";") + "\n" + linhas.map(function(l){ return l.map(function(c){ var s=String(c===null||c===undefined?"":c); return s.includes(";")||s.includes("\n")||s.includes("\"")?\"\"+s.replace(/\"/g,"\"\"")+"\"":s; }).join(";"); }).join("\n");
-  var blob = new Blob([csv], { type:"text/csv;charset=utf-8;" });
+  function escapeCel(c) {
+    var s = String(c === null || c === undefined ? "" : c);
+    if (s.includes(";") || s.includes("\n") || s.includes('"')) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+  var bom = "\uFEFF";
+  var rows = [cabecalho.map(escapeCel).join(";")];
+  linhas.forEach(function(l) { rows.push(l.map(escapeCel).join(";")); });
+  var csv = bom + rows.join("\n");
+  var blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   var url = URL.createObjectURL(blob);
-  var a = document.createElement("a"); a.href=url; a.download=nomeArquivo+".csv"; a.click();
-  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  var a = document.createElement("a");
+  a.href = url; a.download = nomeArquivo + ".csv"; a.click();
+  setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
 }
 
 function exportarXLS(nomeArquivo, cabecalho, linhas) {
-  // Gera HTML table que Excel abre nativamente com encoding correto
+  function escapeHtml(c) {
+    return String(c === null || c === undefined ? "" : c)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
   var bom = "\uFEFF";
-  var html = bom + "<table><tr>"+cabecalho.map(function(c){ return "<th><b>"+c+"</b></th>"; }).join("")+"</tr>"+
-    linhas.map(function(l){ return "<tr>"+l.map(function(c){ return "<td>"+String(c===null||c===undefined?"":c).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")+"</td>"; }).join("")+"</tr>"; }).join("")+"</table>";
-  var blob = new Blob([html], { type:"application/vnd.ms-excel;charset=utf-8;" });
+  var ths = cabecalho.map(function(h) { return "<th><b>" + escapeHtml(h) + "</b></th>"; }).join("");
+  var trs = linhas.map(function(l) {
+    return "<tr>" + l.map(function(c) { return "<td>" + escapeHtml(c) + "</td>"; }).join("") + "</tr>";
+  }).join("");
+  var html = bom + "<table><tr>" + ths + "</tr>" + trs + "</table>";
+  var blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8;" });
   var url = URL.createObjectURL(blob);
-  var a = document.createElement("a"); a.href=url; a.download=nomeArquivo+".xls"; a.click();
-  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  var a = document.createElement("a");
+  a.href = url; a.download = nomeArquivo + ".xls"; a.click();
+  setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
 }
 
 function exportarPDF(nomeArquivo, titulo, cabecalho, linhas, totais) {
-  var estilos = `
-    body { font-family: Arial, sans-serif; font-size: 11px; color: #0f172a; margin: 20px; }
-    h2 { font-size: 16px; margin-bottom: 4px; }
-    .sub { font-size: 11px; color: #64748b; margin-bottom: 14px; }
-    table { border-collapse: collapse; width: 100%; }
-    th { background: #0f172a; color: #fff; padding: 7px 10px; text-align: left; font-size: 10px; text-transform: uppercase; }
-    td { padding: 6px 10px; border-bottom: 1px solid #e2e8f0; font-size: 11px; }
-    tr:nth-child(even) td { background: #f8fafc; }
-    .totais { margin-top: 14px; background: #f1f5f9; padding: 10px 14px; border-radius: 6px; font-weight: bold; }
-    .totais span { margin-right: 24px; }
-    @media print { body { margin: 10px; } }
-  `;
-  var rows = linhas.map(function(l){ return "<tr>"+l.map(function(c){ return "<td>"+String(c===null||c===undefined?"":c).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")+"</td>"; }).join("")+"</tr>"; }).join("");
-  var totaisHtml = totais ? "<div class=\"totais\">"+totais.map(function(t){ return "<span>"+t+"</span>"; }).join("")+"</div>" : "";
-  var html = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>"+titulo+"</title><style>"+estilos+"</style></head><body>"+
-    "<h2>"+titulo+"</h2><div class=\"sub\">Gerado em "+new Date().toLocaleDateString("pt-BR")+" às "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})+"</div>"+
-    "<table><thead><tr>"+cabecalho.map(function(c){ return "<th>"+c+"</th>"; }).join("")+"</tr></thead><tbody>"+rows+"</tbody></table>"+totaisHtml+
-    "</body></html>";
-  var w = window.open("","_blank","width=900,height=700");
+  function escapeHtml(c) {
+    return String(c === null || c === undefined ? "" : c)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  var estilos = [
+    "body{font-family:Arial,sans-serif;font-size:11px;color:#0f172a;margin:20px}",
+    "h2{font-size:16px;margin-bottom:4px}",
+    ".sub{font-size:11px;color:#64748b;margin-bottom:14px}",
+    "table{border-collapse:collapse;width:100%}",
+    "th{background:#0f172a;color:#fff;padding:7px 10px;text-align:left;font-size:10px;text-transform:uppercase}",
+    "td{padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px}",
+    "tr:nth-child(even) td{background:#f8fafc}",
+    ".totais{margin-top:14px;background:#f1f5f9;padding:10px 14px;border-radius:6px;font-weight:bold}",
+    ".totais span{margin-right:24px}"
+  ].join("");
+  var ths = cabecalho.map(function(h) { return "<th>" + escapeHtml(h) + "</th>"; }).join("");
+  var trs = linhas.map(function(l) {
+    return "<tr>" + l.map(function(c) { return "<td>" + escapeHtml(c) + "</td>"; }).join("") + "</tr>";
+  }).join("");
+  var totaisHtml = totais
+    ? '<div class="totais">' + totais.map(function(t) { return "<span>" + escapeHtml(t) + "</span>"; }).join("") + "</div>"
+    : "";
+  var data = new Date().toLocaleDateString("pt-BR");
+  var hora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  var html = [
+    '<!DOCTYPE html><html><head><meta charset="UTF-8">',
+    "<title>" + escapeHtml(titulo) + "</title>",
+    "<style>" + estilos + "</style></head><body>",
+    "<h2>" + escapeHtml(titulo) + "</h2>",
+    '<div class="sub">Gerado em ' + data + " às " + hora + "</div>",
+    "<table><thead><tr>" + ths + "</tr></thead><tbody>" + trs + "</tbody></table>",
+    totaisHtml,
+    "</body></html>"
+  ].join("");
+  var w = window.open("", "_blank", "width=900,height=700");
   if (!w) { alert("Permita pop-ups para gerar o PDF."); return; }
   w.document.write(html);
   w.document.close();
   w.focus();
-  setTimeout(function(){ w.print(); }, 600);
+  setTimeout(function() { w.print(); }, 600);
 }
 
 function BotaoExportar({ onCSV, onXLS, onPDF }) {
   const [open, setOpen] = React.useState(false);
   return (
-    <div style={{ position:"relative", display:"inline-block" }}>
-      <button onClick={function(){ setOpen(function(v){return !v;}); }}
-        style={{ display:"flex", alignItems:"center", gap:6, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", fontWeight:600, padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
-        ⬇️ Exportar <span style={{ fontSize:10, color:"#94a3b8" }}>▼</span>
+    <div style={{ position: "relative", display: "inline-block" }}>
+      <button
+        onClick={function() { setOpen(function(v) { return !v; }); }}
+        style={{ display: "flex", alignItems: "center", gap: 6, background: "#f8fafc", border: "1px solid #e2e8f0", color: "#334155", fontWeight: 600, padding: "8px 16px", borderRadius: 8, cursor: "pointer", fontSize: 12 }}>
+        ⬇️ Exportar <span style={{ fontSize: 10, color: "#94a3b8" }}>▼</span>
       </button>
       {open && (
-        <div style={{ position:"absolute", top:"100%", left:0, marginTop:4, background:"#fff", border:"1px solid #e2e8f0", borderRadius:10, boxShadow:"0 8px 24px rgba(0,0,0,.12)", zIndex:200, minWidth:160, overflow:"hidden" }}
-          onMouseLeave={function(){ setOpen(false); }}>
+        <div
+          style={{ position: "absolute", top: "100%", left: 0, marginTop: 4, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,.12)", zIndex: 200, minWidth: 160, overflow: "hidden" }}
+          onMouseLeave={function() { setOpen(false); }}>
           {[
-            { label:"📄 PDF", action:onPDF },
-            { label:"📊 Excel (.xls)", action:onXLS },
-            { label:"📋 CSV", action:onCSV },
-          ].map(function(op){ return (
-            <button key={op.label} onClick={function(){ op.action(); setOpen(false); }}
-              style={{ display:"block", width:"100%", textAlign:"left", padding:"10px 16px", border:"none", background:"transparent", cursor:"pointer", fontSize:13, color:"#0f172a", fontWeight:500 }}
-              onMouseEnter={function(e){ e.currentTarget.style.background="#f8fafc"; }}
-              onMouseLeave={function(e){ e.currentTarget.style.background="transparent"; }}>
-              {op.label}
-            </button>
-          ); })}
+            { label: "📄 PDF", action: onPDF },
+            { label: "📊 Excel (.xls)", action: onXLS },
+            { label: "📋 CSV", action: onCSV },
+          ].map(function(op) {
+            return (
+              <button
+                key={op.label}
+                onClick={function() { op.action(); setOpen(false); }}
+                style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 16px", border: "none", background: "transparent", cursor: "pointer", fontSize: 13, color: "#0f172a", fontWeight: 500 }}
+                onMouseEnter={function(e) { e.currentTarget.style.background = "#f8fafc"; }}
+                onMouseLeave={function(e) { e.currentTarget.style.background = "transparent"; }}>
+                {op.label}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
+
 
 function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], setContasBancarias, categoriasPagar=[], setCategoriasPagar, lancamentos=[], setLancamentos, enrichedOrders=[], rawOrders=[], shipmentStatuses, paymentData, finTab, setFinTab, impostos=[], setImpostos, custosFixos=[], setCustosFixos, fornecedores=[], currentUser=null }) {
   const [paginaPagar, setPaginaPagar] = useState(1);

@@ -8856,6 +8856,446 @@ function BotoesPeriodo({ de, ate, onChangeDe, onChangeAte }) {
   );
 }
 
+
+// ════════════════════════════════════════════════════════════
+//  ENVIOS FULL — Montagem de caixas para Mercado Envios Full
+// ════════════════════════════════════════════════════════════
+function saveEnviosFull(v) { try { localStorage.setItem("envios_full", JSON.stringify(v)); } catch {} }
+
+function EnviosFULLTab({ produtos, listings, estoqueDepositos, depositos }) {
+  const [envios, setEnvios] = useState(function(){
+    try { return JSON.parse(localStorage.getItem("envios_full")||"[]"); } catch { return []; }
+  });
+  const [showNovoEnvio, setShowNovoEnvio] = useState(false);
+  const [editingEnvio, setEditingEnvio] = useState(null);
+  const [search, setSearch] = useState("");
+  const [filterStatus, setFilterStatus] = useState("todos");
+
+  function salvarEnvio(envio) {
+    var lista = envios.find(function(e){return e.id===envio.id;})
+      ? envios.map(function(e){return e.id===envio.id?envio:e;})
+      : [envio, ...envios];
+    setEnvios(lista); saveEnviosFull(lista);
+  }
+
+  function excluirEnvio(id) {
+    if (!window.confirm("Excluir este envio?")) return;
+    var lista = envios.filter(function(e){return e.id!==id;});
+    setEnvios(lista); saveEnviosFull(lista);
+  }
+
+  function mudarStatus(id, novoStatus) {
+    var lista = envios.map(function(e){
+      return e.id===id ? Object.assign({},e,{status:novoStatus, dataStatus:new Date().toLocaleDateString("sv-SE")}) : e;
+    });
+    setEnvios(lista); saveEnviosFull(lista);
+  }
+
+  var enviosFiltrados = envios.filter(function(e){
+    if (filterStatus !== "todos" && e.status !== filterStatus) return false;
+    if (search) {
+      var q = search.toLowerCase();
+      return (e.nome||"").toLowerCase().includes(q) || (e.itens||[]).some(function(it){
+        return (it.titulo||"").toLowerCase().includes(q) || (it.sku||"").toLowerCase().includes(q);
+      });
+    }
+    return true;
+  });
+
+  var STATUS_CFG = {
+    "Montando":   { cor:"#d97706", bg:"#fffbeb", icone:"📦" },
+    "Pronto":     { cor:"#0891b2", bg:"#ecfeff", icone:"✅" },
+    "Enviado":    { cor:"#7c3aed", bg:"#f5f3ff", icone:"🚛" },
+    "Recebido":   { cor:"#15803d", bg:"#f0fdf4", icone:"🏭" },
+    "Cancelado":  { cor:"#dc2626", bg:"#fef2f2", icone:"✕" },
+  };
+
+  var totalItens = envios.reduce(function(s,e){ return s+(e.itens||[]).reduce(function(ss,it){return ss+parseInt(it.qtd||0);},0); },0);
+  var totalEnviados = envios.filter(function(e){return e.status==="Enviado"||e.status==="Recebido";}).length;
+
+  return (
+    <div style={{ maxWidth:1440, margin:"0 auto", padding:"24px 32px" }}>
+      {/* Header */}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20 }}>
+        <div>
+          <div style={{ fontWeight:800, fontSize:22, color:"#0f172a", marginBottom:4 }}>⚡ Envios FULL</div>
+          <div style={{ fontSize:13, color:"#94a3b8" }}>Monte caixas para envio ao centro de distribuição do Mercado Livre Full</div>
+        </div>
+        <button onClick={function(){ setEditingEnvio(null); setShowNovoEnvio(true); }}
+          style={{ background:"#ffe000", border:"none", color:"#0f172a", fontWeight:800, padding:"11px 24px", borderRadius:10, cursor:"pointer", fontSize:14, display:"flex", alignItems:"center", gap:8 }}>
+          + Novo Envio FULL
+        </button>
+      </div>
+
+      {/* Cards resumo */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:20 }}>
+        {[
+          { label:"Total de Envios",  value: envios.length,        cor:"#0f172a" },
+          { label:"Montando",         value: envios.filter(function(e){return e.status==="Montando";}).length,  cor:"#d97706" },
+          { label:"Prontos p/ envio", value: envios.filter(function(e){return e.status==="Pronto";}).length,   cor:"#0891b2" },
+          { label:"Enviados/Receb.",  value: totalEnviados,         cor:"#15803d" },
+          { label:"Total de Itens",   value: totalItens + " un",    cor:"#7c3aed" },
+        ].map(function(k){
+          return (
+            <div key={k.label} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"14px 18px" }}>
+              <div style={{ fontSize:10, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:4 }}>{k.label}</div>
+              <div style={{ fontSize:22, fontWeight:800, color:k.cor }}>{k.value}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Filtros */}
+      <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:16, flexWrap:"wrap" }}>
+        <div style={{ position:"relative", flex:1, minWidth:220 }}>
+          <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8" }}>🔍</span>
+          <input value={search} onChange={function(e){setSearch(e.target.value);}} placeholder="Buscar por nome do envio ou produto..."
+            style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px 8px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
+        </div>
+        <div style={{ display:"flex", gap:4 }}>
+          {["todos","Montando","Pronto","Enviado","Recebido","Cancelado"].map(function(s){
+            var active = filterStatus===s;
+            var cfg = STATUS_CFG[s];
+            return (
+              <button key={s} onClick={function(){setFilterStatus(s);}}
+                style={{ padding:"6px 14px", borderRadius:20, border:"none", cursor:"pointer", fontSize:12, fontWeight:active?700:500,
+                  background:active?(cfg?cfg.bg:"#0f172a"):("#f8fafc"),
+                  color:active?(cfg?cfg.cor:"#fff"):"#64748b" }}>
+                {cfg?cfg.icone+" ":""}{s==="todos"?"Todos":s}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Lista de envios */}
+      {enviosFiltrados.length === 0 ? (
+        <div style={{ background:"#f8fafc", border:"2px dashed #e2e8f0", borderRadius:16, padding:60, textAlign:"center", color:"#94a3b8" }}>
+          <div style={{ fontSize:48, marginBottom:12 }}>⚡</div>
+          <div style={{ fontWeight:700, fontSize:16, color:"#0f172a", marginBottom:6 }}>Nenhum envio FULL cadastrado</div>
+          <div style={{ fontSize:13, marginBottom:20 }}>Crie um envio para organizar os produtos que serão enviados ao galpão ML</div>
+          <button onClick={function(){ setEditingEnvio(null); setShowNovoEnvio(true); }}
+            style={{ background:"#ffe000", border:"none", color:"#0f172a", fontWeight:800, padding:"11px 28px", borderRadius:10, cursor:"pointer", fontSize:14 }}>
+            + Criar Primeiro Envio
+          </button>
+        </div>
+      ) : (
+        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+          {enviosFiltrados.map(function(envio) {
+            var cfg = STATUS_CFG[envio.status] || STATUS_CFG["Montando"];
+            var totalQtd = (envio.itens||[]).reduce(function(s,it){return s+parseInt(it.qtd||0);},0);
+            var totalPeso = (envio.itens||[]).reduce(function(s,it){return s+parseFloat(it.peso||0)*parseInt(it.qtd||0);},0);
+            return (
+              <div key={envio.id} style={{ background:"#fff", border:"2px solid "+cfg.cor+"33", borderRadius:14, overflow:"hidden" }}>
+                {/* Header do envio */}
+                <div style={{ background:cfg.bg, borderBottom:"1px solid "+cfg.cor+"22", padding:"14px 20px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                    <div style={{ fontSize:22 }}>{cfg.icone}</div>
+                    <div>
+                      <div style={{ fontWeight:700, fontSize:16, color:"#0f172a" }}>{envio.nome}</div>
+                      <div style={{ display:"flex", gap:10, marginTop:2, flexWrap:"wrap" }}>
+                        <span style={{ fontSize:11, fontWeight:700, color:cfg.cor, background:"#fff", padding:"2px 8px", borderRadius:20, border:"1px solid "+cfg.cor+"44" }}>{envio.status}</span>
+                        <span style={{ fontSize:11, color:"#64748b" }}>{(envio.itens||[]).length} produto(s) · {totalQtd} unidades</span>
+                        {totalPeso > 0 && <span style={{ fontSize:11, color:"#64748b" }}>~{totalPeso.toFixed(1)} kg</span>}
+                        {envio.dataCriacao && <span style={{ fontSize:11, color:"#94a3b8" }}>Criado em {envio.dataCriacao}</span>}
+                        {envio.dataStatus && <span style={{ fontSize:11, color:"#94a3b8" }}>Atualizado {envio.dataStatus}</span>}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                    {/* Botões de mudança de status */}
+                    {envio.status === "Montando" && (
+                      <button onClick={function(){mudarStatus(envio.id,"Pronto");}}
+                        style={{ background:"#0891b2", border:"none", color:"#fff", fontWeight:700, padding:"7px 16px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+                        ✅ Marcar como Pronto
+                      </button>
+                    )}
+                    {envio.status === "Pronto" && (
+                      <button onClick={function(){mudarStatus(envio.id,"Enviado");}}
+                        style={{ background:"#7c3aed", border:"none", color:"#fff", fontWeight:700, padding:"7px 16px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+                        🚛 Marcar como Enviado
+                      </button>
+                    )}
+                    {envio.status === "Enviado" && (
+                      <button onClick={function(){mudarStatus(envio.id,"Recebido");}}
+                        style={{ background:"#15803d", border:"none", color:"#fff", fontWeight:700, padding:"7px 16px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+                        🏭 Confirmar Recebimento
+                      </button>
+                    )}
+                    <button onClick={function(){ setEditingEnvio(envio); setShowNovoEnvio(true); }}
+                      style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"7px 12px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✏️</button>
+                    <button onClick={function(){excluirEnvio(envio.id);}}
+                      style={{ background:"#fef2f2", border:"1px solid #fecaca", color:"#dc2626", padding:"7px 12px", borderRadius:8, cursor:"pointer", fontSize:12 }}>🗑</button>
+                  </div>
+                </div>
+                {/* Tabela de itens */}
+                {(envio.itens||[]).length > 0 && (
+                  <div style={{ padding:"14px 20px" }}>
+                    <table style={{ borderCollapse:"collapse", width:"100%" }}>
+                      <thead>
+                        <tr>
+                          {["Produto","SKU","MLB","Qtd. a Enviar","Estoque Atual","Peso unit.","Total KG","Obs"].map(function(h){
+                            return <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", padding:"8px 10px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, whiteSpace:"nowrap" }}>{h}</th>;
+                          })}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(envio.itens||[]).map(function(it, i){
+                          var prod = produtos.find(function(p){return p.id===it.produtoId;});
+                          var estAtual = parseInt(prod?.estoqueAtual||0);
+                          var ok = parseInt(it.qtd||0) <= estAtual;
+                          return (
+                            <tr key={i} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
+                              <td style={{ padding:"8px 10px", fontSize:13, color:"#0f172a", maxWidth:220, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{it.titulo||"—"}</td>
+                              <td style={{ padding:"8px 10px", fontSize:11, color:"#64748b", fontFamily:"monospace" }}>{it.sku||"—"}</td>
+                              <td style={{ padding:"8px 10px", fontSize:11, color:"#0891b2", fontFamily:"monospace" }}>{it.mlb||"—"}</td>
+                              <td style={{ padding:"8px 10px", textAlign:"center" }}>
+                                <span style={{ fontSize:14, fontWeight:800, color:ok?"#15803d":"#dc2626" }}>{it.qtd}</span>
+                                {!ok && <div style={{ fontSize:10, color:"#dc2626" }}>⚠ insuf.</div>}
+                              </td>
+                              <td style={{ padding:"8px 10px", textAlign:"center", fontSize:13, color:estAtual>0?"#0f172a":"#94a3b8" }}>{estAtual} un</td>
+                              <td style={{ padding:"8px 10px", textAlign:"center", fontSize:12, color:"#64748b" }}>{it.peso?it.peso+"kg":"—"}</td>
+                              <td style={{ padding:"8px 10px", textAlign:"center", fontSize:12, color:"#64748b" }}>{it.peso&&it.qtd?(parseFloat(it.peso)*parseInt(it.qtd)).toFixed(2)+"kg":"—"}</td>
+                              <td style={{ padding:"8px 10px", fontSize:12, color:"#94a3b8" }}>{it.obs||"—"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{ background:"#f1f5f9" }}>
+                          <td colSpan={3} style={{ padding:"8px 10px", fontWeight:700, fontSize:13, color:"#0f172a" }}>TOTAL</td>
+                          <td style={{ padding:"8px 10px", textAlign:"center", fontWeight:800, fontSize:14, color:"#0f172a" }}>{totalQtd} un</td>
+                          <td colSpan={2} />
+                          <td style={{ padding:"8px 10px", textAlign:"center", fontWeight:700, fontSize:13, color:"#0f172a" }}>{totalPeso.toFixed(2)} kg</td>
+                          <td />
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+                {/* Obs do envio */}
+                {envio.obs && (
+                  <div style={{ padding:"0 20px 14px", fontSize:12, color:"#64748b", fontStyle:"italic" }}>💬 {envio.obs}</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Modal de novo/editar envio */}
+      {showNovoEnvio && (
+        <ModalNovoEnvioFull
+          envio={editingEnvio}
+          produtos={produtos}
+          listings={listings}
+          onSave={function(env){ salvarEnvio(env); setShowNovoEnvio(false); setEditingEnvio(null); }}
+          onClose={function(){ setShowNovoEnvio(false); setEditingEnvio(null); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ModalNovoEnvioFull({ envio, produtos, listings, onSave, onClose }) {
+  var empty = {
+    id: Date.now().toString(), nome: "", status: "Montando",
+    dataCriacao: new Date().toLocaleDateString("sv-SE"), itens: [], obs: "",
+  };
+  const [form, setForm] = useState(envio || empty);
+  const [busca, setBusca] = useState("");
+  const [resultados, setResultados] = useState([]);
+  var set = function(k,v){ setForm(function(f){return Object.assign({},f,{[k]:v});}); };
+
+  function buscarProdutos(q) {
+    setBusca(q);
+    if (!q || q.length < 2) { setResultados([]); return; }
+    var ql = q.toLowerCase();
+    var found = produtos.filter(function(p){
+      return (p.titulo||"").toLowerCase().includes(ql) ||
+             (p.sku||"").toLowerCase().includes(ql) ||
+             (p.mlbVinculado||"").toLowerCase().includes(ql);
+    }).slice(0,8);
+    setResultados(found);
+  }
+
+  function adicionarItem(prod) {
+    var jaExiste = form.itens.find(function(it){return it.produtoId===prod.id;});
+    if (jaExiste) { setResultados([]); setBusca(""); return; }
+    var mlb = prod.mlbVinculado || (prod.mlbsVinculados||[])[0] || "";
+    var listing = listings.find(function(l){return l.id===mlb;});
+    var novoItem = {
+      produtoId: prod.id,
+      titulo: prod.titulo,
+      sku: prod.sku||"",
+      mlb: mlb,
+      qtd: "1",
+      peso: prod.peso||"",
+      obs: "",
+    };
+    set("itens", [...form.itens, novoItem]);
+    setResultados([]); setBusca("");
+  }
+
+  function updateItem(idx, field, val) {
+    var updated = form.itens.map(function(it,i){return i===idx?Object.assign({},it,{[field]:val}):it;});
+    set("itens", updated);
+  }
+
+  function removeItem(idx) {
+    set("itens", form.itens.filter(function(_,i){return i!==idx;}));
+  }
+
+  var totalQtd = form.itens.reduce(function(s,it){return s+parseInt(it.qtd||0);},0);
+  var totalPeso = form.itens.reduce(function(s,it){return s+parseFloat(it.peso||0)*parseInt(it.qtd||0);},0);
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.65)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:24 }}>
+      <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:820, maxHeight:"94vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 64px rgba(0,0,0,.2)" }}>
+        {/* Header */}
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"20px 28px", borderBottom:"1px solid #f1f5f9" }}>
+          <div>
+            <div style={{ fontWeight:800, fontSize:18, color:"#0f172a" }}>{envio?"Editar Envio FULL":"Novo Envio FULL"}</div>
+            <div style={{ fontSize:12, color:"#94a3b8", marginTop:2 }}>Monte a caixa com os produtos para envio ao centro de distribuição ML</div>
+          </div>
+          <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
+        </div>
+
+        <div style={{ flex:1, overflowY:"auto", padding:"20px 28px" }}>
+          {/* Dados do envio */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:20 }}>
+            <div>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Nome do Envio *</div>
+              <input value={form.nome} onChange={function(e){set("nome",e.target.value);}} placeholder="Ex: Caixa #01 - Junho 2026"
+                style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+            </div>
+            <div>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Status</div>
+              <select value={form.status} onChange={function(e){set("status",e.target.value);}}
+                style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13 }}>
+                {["Montando","Pronto","Enviado","Recebido","Cancelado"].map(function(s){return <option key={s}>{s}</option>;})}
+              </select>
+            </div>
+            <div style={{ gridColumn:"1/-1" }}>
+              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Observações</div>
+              <input value={form.obs} onChange={function(e){set("obs",e.target.value);}} placeholder="Número da solicitação ML, observações..."
+                style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+            </div>
+          </div>
+
+          {/* Busca de produtos */}
+          <div style={{ marginBottom:16 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:"#0f172a", marginBottom:8 }}>Adicionar Produtos</div>
+            <div style={{ position:"relative" }}>
+              <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8" }}>🔍</span>
+              <input value={busca} onChange={function(e){buscarProdutos(e.target.value);}}
+                placeholder="Buscar produto por nome, SKU ou MLB..."
+                style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px 9px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
+              {resultados.length > 0 && (
+                <div style={{ position:"absolute", top:"100%", left:0, right:0, background:"#fff", border:"1px solid #e2e8f0", borderRadius:10, boxShadow:"0 8px 24px rgba(0,0,0,.12)", zIndex:50, overflow:"hidden" }}>
+                  {resultados.map(function(p){
+                    var jaAdicionado = form.itens.some(function(it){return it.produtoId===p.id;});
+                    return (
+                      <div key={p.id} onClick={function(){if(!jaAdicionado)adicionarItem(p);}}
+                        style={{ padding:"10px 14px", cursor:jaAdicionado?"default":"pointer", borderBottom:"1px solid #f1f5f9", display:"flex", justifyContent:"space-between", alignItems:"center",
+                          background:jaAdicionado?"#f8fafc":"#fff", opacity:jaAdicionado?0.5:1 }}
+                        onMouseEnter={function(e){if(!jaAdicionado)e.currentTarget.style.background="#f0fdf4";}}
+                        onMouseLeave={function(e){if(!jaAdicionado)e.currentTarget.style.background="#fff";}}>
+                        <div>
+                          <div style={{ fontSize:13, fontWeight:600, color:"#0f172a" }}>{p.titulo?.slice(0,60)}</div>
+                          <div style={{ fontSize:11, color:"#94a3b8" }}>
+                            {p.sku&&<span>SKU: {p.sku}</span>}
+                            {p.mlbVinculado&&<span style={{ marginLeft:8 }}>MLB: {p.mlbVinculado}</span>}
+                            <span style={{ marginLeft:8 }}>Estoque: {p.estoqueAtual||0} un</span>
+                          </div>
+                        </div>
+                        {jaAdicionado
+                          ? <span style={{ fontSize:11, color:"#94a3b8" }}>Já adicionado</span>
+                          : <span style={{ fontSize:12, color:"#15803d", fontWeight:700 }}>+ Adicionar</span>
+                        }
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Tabela de itens */}
+          {form.itens.length === 0 ? (
+            <div style={{ background:"#f8fafc", border:"2px dashed #e2e8f0", borderRadius:12, padding:32, textAlign:"center", color:"#94a3b8" }}>
+              <div style={{ fontSize:32, marginBottom:8 }}>📦</div>
+              <div style={{ fontSize:13 }}>Busque e adicione produtos para montar a caixa de envio</div>
+            </div>
+          ) : (
+            <div>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:"#0f172a" }}>Itens da Caixa ({form.itens.length} produto(s) · {totalQtd} unidades · {totalPeso.toFixed(2)} kg)</div>
+              </div>
+              <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"hidden" }}>
+                <table style={{ borderCollapse:"collapse", width:"100%" }}>
+                  <thead>
+                    <tr>
+                      {["Produto","SKU","MLB","Qtd","Peso (kg)","Total kg","Obs",""].map(function(h){
+                        return <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", padding:"9px 12px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>;
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {form.itens.map(function(it,i){
+                      var prod = produtos.find(function(p){return p.id===it.produtoId;});
+                      var estAtual = parseInt(prod?.estoqueAtual||0);
+                      var semEstoque = parseInt(it.qtd||0) > estAtual;
+                      return (
+                        <tr key={i} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
+                          <td style={{ padding:"8px 12px", fontSize:12, color:"#0f172a", maxWidth:180, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={it.titulo}>{it.titulo}</td>
+                          <td style={{ padding:"8px 12px", fontSize:11, color:"#64748b", fontFamily:"monospace" }}>{it.sku||"—"}</td>
+                          <td style={{ padding:"8px 12px", fontSize:11, color:"#0891b2", fontFamily:"monospace" }}>{it.mlb||"—"}</td>
+                          <td style={{ padding:"8px 12px" }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                              <input type="number" min="1" value={it.qtd} onChange={function(e){updateItem(i,"qtd",e.target.value);}}
+                                style={{ width:60, textAlign:"center", background:semEstoque?"#fef2f2":"#f0fdf4", border:"1px solid "+(semEstoque?"#fecaca":"#bbf7d0"), color:semEstoque?"#dc2626":"#15803d", padding:"5px 6px", borderRadius:6, fontSize:13, fontWeight:700, outline:"none" }} />
+                              <span style={{ fontSize:10, color:"#94a3b8" }}>/{estAtual}</span>
+                            </div>
+                          </td>
+                          <td style={{ padding:"8px 12px" }}>
+                            <input type="number" step="0.001" value={it.peso} onChange={function(e){updateItem(i,"peso",e.target.value);}} placeholder="0.000"
+                              style={{ width:70, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"5px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
+                          </td>
+                          <td style={{ padding:"8px 12px", fontSize:12, color:"#64748b", textAlign:"center" }}>
+                            {it.peso&&it.qtd?(parseFloat(it.peso)*parseInt(it.qtd)).toFixed(3):"—"}
+                          </td>
+                          <td style={{ padding:"8px 12px" }}>
+                            <input value={it.obs||""} onChange={function(e){updateItem(i,"obs",e.target.value);}} placeholder="Obs..."
+                              style={{ width:100, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"5px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
+                          </td>
+                          <td style={{ padding:"8px 12px", textAlign:"center" }}>
+                            <button onClick={function(){removeItem(i);}}
+                              style={{ background:"#fef2f2", border:"none", color:"#dc2626", width:26, height:26, borderRadius:6, cursor:"pointer", fontSize:12 }}>✕</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{ display:"flex", gap:8, padding:"16px 28px", borderTop:"1px solid #f1f5f9", background:"#fafafa" }}>
+          <button onClick={onClose} style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
+          <button onClick={function(){ if(!form.nome) return; onSave(form); }} disabled={!form.nome}
+            style={{ flex:3, background:form.nome?"#ffe000":"#f1f5f9", border:"none", color:form.nome?"#0f172a":"#94a3b8", fontWeight:800, padding:"11px", borderRadius:10, cursor:form.nome?"pointer":"not-allowed", fontSize:14 }}>
+            ⚡ {envio?"Salvar Envio":"Criar Envio FULL"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   // ── Auth do dashboard ─────────────────────────────────────
   const [tab, setTab] = useState(() => {
@@ -8998,6 +9438,10 @@ export default function App() {
   const [produtos, setProdutos] = useState(() => {
     try { return JSON.parse(localStorage.getItem("produtos_cadastro") || "[]"); } catch { return []; }
   });
+  // Rastreia IDs de pedidos que já tiveram baixa de estoque
+  const [vendasBaixadas, setVendasBaixadas] = useState(function() {
+    try { return new Set(JSON.parse(localStorage.getItem("vendas_estoque_baixadas") || "[]")); } catch { return new Set(); }
+  });
   const [fornecedores, setFornecedores] = useState(() => {
     try { return JSON.parse(localStorage.getItem("fornecedores_cadastro") || "[]"); } catch { return []; }
   });
@@ -9010,6 +9454,63 @@ export default function App() {
   const [loadError, setLoadError] = useState(null);
 
   const usingMock = !token || realListings.length === 0;
+
+  // ── Baixa automática de estoque por venda ──────────────────
+  function baixarEstoqueVendas(orders, produtosAtuais, movimentosAtuais, baixadasAtuais) {
+    var novasBaixadas = new Set(baixadasAtuais);
+    var produtosUpd = produtosAtuais.slice();
+    var movsUpd = movimentosAtuais.slice();
+    var qtdBaixadas = 0;
+
+    orders.filter(function(o) {
+      return o.status === "paid" && !novasBaixadas.has(String(o.id));
+    }).forEach(function(o) {
+      var listingId = o.listing_id;
+      if (!listingId) return;
+
+      // Encontrar produto vinculado ao listing_id (MLB)
+      var prod = produtosUpd.find(function(p) {
+        return (p.mlbsVinculados||[]).includes(listingId) || p.mlbVinculado === listingId;
+      });
+      if (!prod) return; // produto não cadastrado, não baixa
+
+      var qty = parseInt(o.qty || 1);
+      var estoqueAtual = parseInt(prod.estoqueAtual || 0);
+      var novoEstoque = Math.max(0, estoqueAtual - qty);
+
+      // Atualizar produto
+      var idx = produtosUpd.findIndex(function(p){ return p.id === prod.id; });
+      produtosUpd[idx] = Object.assign({}, prod, { estoqueAtual: String(novoEstoque) });
+
+      // Registrar movimentação vinculada à venda
+      movsUpd.push({
+        id: "venda_" + o.id,
+        produtoId: prod.id,
+        sku: prod.sku,
+        tipo: "saida",
+        qtd: qty,
+        motivo: "Venda ML #" + o.id + (o.title ? " — " + o.title.slice(0,40) : ""),
+        pedidoId: String(o.id),
+        data: o.date || new Date().toLocaleDateString("sv-SE"),
+        hora: "—",
+        automatico: true,
+      });
+
+      novasBaixadas.add(String(o.id));
+      qtdBaixadas++;
+    });
+
+    if (qtdBaixadas > 0) {
+      // Salvar tudo
+      localStorage.setItem("produtos_cadastro", JSON.stringify(produtosUpd));
+      localStorage.setItem("mov_estoque", JSON.stringify(movsUpd));
+      localStorage.setItem("vendas_estoque_baixadas", JSON.stringify([...novasBaixadas]));
+      setProdutos(produtosUpd);
+      setVendasBaixadas(novasBaixadas);
+      console.log("[ESTOQUE] " + qtdBaixadas + " venda(s) baixadas do estoque automaticamente");
+    }
+    return qtdBaixadas;
+  }
 
   // Renova token automaticamente se estiver próximo de vencer
   async function getValidToken() {
@@ -9065,7 +9566,13 @@ export default function App() {
       setLoadingMsg("Buscando pedidos...");
       const orders = await fetchAllOrders(me.id, validTk);
       setRealOrders(orders);
-      // Guardar temporariamente para usar depois
+      // Baixa automática de estoque para pedidos pagos
+      try {
+        var prodAtual = JSON.parse(localStorage.getItem("produtos_cadastro") || "[]");
+        var movAtual  = JSON.parse(localStorage.getItem("mov_estoque") || "[]");
+        var baixAtual = new Set(JSON.parse(localStorage.getItem("vendas_estoque_baixadas") || "[]"));
+        baixarEstoqueVendas(orders, prodAtual, movAtual, baixAtual);
+      } catch(e) { console.warn("Erro ao baixar estoque:", e); }
 
       setLoadingMsg("Buscando custo de frete por anúncio...");
       const shippingMap = {};
@@ -9744,6 +10251,7 @@ export default function App() {
                 currentUser?.permissoes?.includes("produtos")   && { key:"produtos",   label:"Produtos",    badge:null },
                 currentUser?.permissoes?.includes("produtos")   && { key:"nf",         label:"NF Entrada",  badge:null },
                 currentUser?.permissoes?.includes("orders")     && { key:"nfe_saida",  label:"NF Saída",    badge:null },
+                currentUser?.permissoes?.includes("orders")     && { key:"full",        label:"⚡ Envios FULL", badge:null },
               ].filter(Boolean);
               return navTabs.map(function(t) {
                 var isActive = tab === t.key;
@@ -10439,6 +10947,15 @@ export default function App() {
 
         {tab === "admin" && currentUser?.admin && (
           <AdminTab currentUser={currentUser} />
+        )}
+
+        {tab === "full" && currentUser?.permissoes?.includes("orders") && (
+          <EnviosFULLTab
+            produtos={produtos}
+            listings={listings}
+            estoqueDepositos={[]}
+            depositos={[]}
+          />
         )}
 
         {tab === "nfe_saida" && currentUser?.permissoes?.includes("orders") && (

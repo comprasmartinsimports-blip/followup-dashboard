@@ -4099,9 +4099,756 @@ function ModalTransfEstoque({ produto, depositos, estoqueDepositos, onConfirm, o
   );
 }
 
+
+// ════════════════════════════════════════════════════════════
+//  PEDIDOS DE COMPRA
+// ════════════════════════════════════════════════════════════
+function savePedidosCompra(v){ try { localStorage.setItem("pedidos_compra", JSON.stringify(v)); } catch {} }
+
+function PedidosCompraTab({ produtos, fornecedores, setProdutos }) {
+  const [pedidos, setPedidos] = useState(function(){ try { return JSON.parse(localStorage.getItem("pedidos_compra")||"[]"); } catch { return []; } });
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [search, setSearch] = useState("");
+  const [filterStatus, setFilterStatus] = useState("todos");
+  const [filterForn, setFilterForn] = useState("all");
+
+  function salvar(p) {
+    var lista = pedidos.find(function(x){return x.id===p.id;})
+      ? pedidos.map(function(x){return x.id===p.id?p:x;})
+      : [p, ...pedidos];
+    setPedidos(lista); savePedidosCompra(lista);
+  }
+  function excluir(id) {
+    if (!window.confirm("Excluir este pedido de compra?")) return;
+    var lista = pedidos.filter(function(x){return x.id!==id;});
+    setPedidos(lista); savePedidosCompra(lista);
+  }
+  function mudarStatus(id, s) {
+    var lista = pedidos.map(function(x){ return x.id===id?Object.assign({},x,{status:s,dataStatus:new Date().toLocaleDateString("sv-SE")}):x; });
+    setPedidos(lista); savePedidosCompra(lista);
+    // Se recebido: dar entrada no estoque
+    if (s === "Recebido") {
+      var ped = pedidos.find(function(x){return x.id===id;});
+      if (!ped) return;
+      var upd = produtos.slice();
+      (ped.itens||[]).forEach(function(it){
+        var idx = upd.findIndex(function(p){return p.id===it.produtoId;});
+        if (idx>=0) {
+          var novoEst = parseInt(upd[idx].estoqueAtual||0)+parseInt(it.qtd||0);
+          upd[idx] = Object.assign({},upd[idx],{estoqueAtual:String(novoEst)});
+        }
+      });
+      setProdutos(upd); localStorage.setItem("produtos_cadastro", JSON.stringify(upd));
+    }
+  }
+
+  var STATUS_CFG = {
+    "Em aberto":  { cor:"#d97706", bg:"#fffbeb" },
+    "Enviado":    { cor:"#0891b2", bg:"#ecfeff" },
+    "Parcial":    { cor:"#7c3aed", bg:"#f5f3ff" },
+    "Recebido":   { cor:"#15803d", bg:"#f0fdf4" },
+    "Cancelado":  { cor:"#dc2626", bg:"#fef2f2" },
+  };
+
+  var filtrados = pedidos.filter(function(p){
+    if (filterStatus!=="todos"&&p.status!==filterStatus) return false;
+    if (filterForn!=="all"&&p.fornecedorId!==filterForn) return false;
+    if (search) { var q=search.toLowerCase(); return (p.numero||"").includes(q)||(p.fornecedorNome||"").toLowerCase().includes(q)||(p.obs||"").toLowerCase().includes(q); }
+    return true;
+  });
+
+  var totalPendente = pedidos.filter(function(p){return p.status==="Em aberto"||p.status==="Enviado";}).reduce(function(s,p){ return s+(p.itens||[]).reduce(function(ss,it){return ss+parseFloat(it.valorTotal||0);},0); },0);
+  var fmt2 = function(n){ return "R$ "+Number(n).toFixed(2).replace(".",","); };
+
+  return (
+    <div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+        <div>
+          <div style={{ fontWeight:800, fontSize:18, color:"#0f172a" }}>🛒 Pedidos de Compra</div>
+          <div style={{ fontSize:13, color:"#94a3b8", marginTop:2 }}>Gerencie pedidos de compra para seus fornecedores</div>
+        </div>
+        <button onClick={function(){setEditing(null);setShowModal(true);}}
+          style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"10px 22px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
+          + Novo Pedido de Compra
+        </button>
+      </div>
+
+      {/* Cards */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:10, marginBottom:16 }}>
+        {[
+          { l:"Total de Pedidos", v:pedidos.length, cor:"#0f172a" },
+          { l:"Em Aberto", v:pedidos.filter(function(p){return p.status==="Em aberto";}).length, cor:"#d97706" },
+          { l:"Enviados", v:pedidos.filter(function(p){return p.status==="Enviado";}).length, cor:"#0891b2" },
+          { l:"Recebidos", v:pedidos.filter(function(p){return p.status==="Recebido";}).length, cor:"#15803d" },
+          { l:"Total Pendente", v:fmt2(totalPendente), cor:"#dc2626" },
+        ].map(function(k){
+          return (
+            <div key={k.l} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"12px 16px" }}>
+              <div style={{ fontSize:10, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:4 }}>{k.l}</div>
+              <div style={{ fontSize:18, fontWeight:800, color:k.cor }}>{k.v}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Filtros */}
+      <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"12px 14px", marginBottom:14 }}>
+        <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+          <div style={{ position:"relative", flex:1, minWidth:200 }}>
+            <span style={{ position:"absolute", left:8, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
+            <input value={search} onChange={function(e){setSearch(e.target.value);}} placeholder="Buscar por número, fornecedor..."
+              style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"7px 10px 7px 28px", borderRadius:8, fontSize:12, outline:"none" }} />
+          </div>
+          <select value={filterForn} onChange={function(e){setFilterForn(e.target.value);}}
+            style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"7px 10px", borderRadius:8, fontSize:12 }}>
+            <option value="all">Todos fornecedores</option>
+            {fornecedores.map(function(f){ return <option key={f.id} value={f.id}>{f.nome}</option>; })}
+          </select>
+          <div style={{ display:"flex", gap:4 }}>
+            {["todos","Em aberto","Enviado","Parcial","Recebido","Cancelado"].map(function(s){
+              var a = filterStatus===s;
+              var cfg = STATUS_CFG[s];
+              return <button key={s} onClick={function(){setFilterStatus(s);}}
+                style={{ padding:"5px 12px", borderRadius:20, border:"none", cursor:"pointer", fontSize:11, fontWeight:a?700:400,
+                  background:a?(cfg?cfg.bg:"#0f172a"):"#f1f5f9", color:a?(cfg?cfg.cor:"#fff"):"#64748b" }}>
+                {s==="todos"?"Todos":s}
+              </button>;
+            })}
+          </div>
+          <span style={{ fontSize:12, color:"#94a3b8" }}>{filtrados.length} pedido(s)</span>
+        </div>
+      </div>
+
+      {/* Lista */}
+      {filtrados.length === 0 ? (
+        <div style={{ background:"#f8fafc", border:"2px dashed #e2e8f0", borderRadius:12, padding:48, textAlign:"center", color:"#94a3b8" }}>
+          <div style={{ fontSize:40, marginBottom:8 }}>🛒</div>
+          <div style={{ fontWeight:700, fontSize:15, marginBottom:4 }}>Nenhum pedido de compra</div>
+          <div style={{ fontSize:13 }}>Clique em "+ Novo Pedido de Compra" para começar</div>
+        </div>
+      ) : filtrados.map(function(ped){
+        var cfg = STATUS_CFG[ped.status]||STATUS_CFG["Em aberto"];
+        var totalQtd = (ped.itens||[]).reduce(function(s,it){return s+parseInt(it.qtd||0);},0);
+        var totalVal = (ped.itens||[]).reduce(function(s,it){return s+parseFloat(it.valorTotal||0);},0);
+        return (
+          <div key={ped.id} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, marginBottom:12, overflow:"hidden" }}>
+            <div style={{ background:cfg.bg, borderBottom:"1px solid "+cfg.cor+"22", padding:"12px 18px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                <div>
+                  <div style={{ fontWeight:700, fontSize:15, color:"#0f172a" }}>Pedido #{ped.numero||ped.id.slice(-6)}</div>
+                  <div style={{ fontSize:12, color:"#64748b" }}>
+                    {ped.fornecedorNome||"—"} · {ped.dataCriacao||"—"} · {totalQtd} itens · {fmt2(totalVal)}
+                  </div>
+                </div>
+                <span style={{ fontSize:11, fontWeight:700, color:cfg.cor, background:"#fff", padding:"2px 10px", borderRadius:20, border:"1px solid "+cfg.cor+"44" }}>{ped.status}</span>
+              </div>
+              <div style={{ display:"flex", gap:6 }}>
+                {ped.status==="Em aberto" && <button onClick={function(){mudarStatus(ped.id,"Enviado");}} style={{ background:"#0891b2", border:"none", color:"#fff", fontWeight:700, padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>🚛 Marcar Enviado</button>}
+                {ped.status==="Enviado" && <button onClick={function(){mudarStatus(ped.id,"Recebido");}} style={{ background:"#15803d", border:"none", color:"#fff", fontWeight:700, padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✅ Confirmar Recebimento</button>}
+                <button onClick={function(){setEditing(ped);setShowModal(true);}} style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"6px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✏️</button>
+                <button onClick={function(){excluir(ped.id);}} style={{ background:"#fef2f2", border:"1px solid #fecaca", color:"#dc2626", padding:"6px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>🗑</button>
+              </div>
+            </div>
+            {(ped.itens||[]).length > 0 && (
+              <div style={{ padding:"10px 18px" }}>
+                <table style={{ borderCollapse:"collapse", width:"100%" }}>
+                  <thead>
+                    <tr>{["Produto","SKU","Qtd Pedida","Qtd Recebida","Vlr Unit.","Total","Obs"].map(function(h){
+                      return <th key={h} style={{ fontSize:10, color:"#94a3b8", textTransform:"uppercase", padding:"6px 8px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600 }}>{h}</th>;
+                    })}</tr>
+                  </thead>
+                  <tbody>
+                    {(ped.itens||[]).map(function(it,i){
+                      return (
+                        <tr key={i} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
+                          <td style={{ padding:"6px 8px", fontSize:12, color:"#0f172a" }}>{it.titulo||"—"}</td>
+                          <td style={{ padding:"6px 8px", fontSize:11, color:"#64748b", fontFamily:"monospace" }}>{it.sku||"—"}</td>
+                          <td style={{ padding:"6px 8px", fontSize:13, fontWeight:700, color:"#0f172a", textAlign:"center" }}>{it.qtd}</td>
+                          <td style={{ padding:"6px 8px", fontSize:13, fontWeight:700, color:"#15803d", textAlign:"center" }}>{it.qtdRecebida||0}</td>
+                          <td style={{ padding:"6px 8px", fontSize:12, color:"#64748b" }}>{it.valorUnit?fmt2(it.valorUnit):"—"}</td>
+                          <td style={{ padding:"6px 8px", fontSize:12, fontWeight:700, color:"#0f172a" }}>{it.valorTotal?fmt2(it.valorTotal):"—"}</td>
+                          <td style={{ padding:"6px 8px", fontSize:11, color:"#94a3b8" }}>{it.obs||"—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ background:"#f1f5f9" }}>
+                      <td colSpan={2} style={{ padding:"6px 8px", fontWeight:700, fontSize:12 }}>TOTAL</td>
+                      <td style={{ padding:"6px 8px", fontWeight:800, textAlign:"center" }}>{totalQtd}</td>
+                      <td colSpan={2} />
+                      <td style={{ padding:"6px 8px", fontWeight:800, color:"#0f172a" }}>{fmt2(totalVal)}</td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+            {ped.obs && <div style={{ padding:"0 18px 10px", fontSize:12, color:"#64748b", fontStyle:"italic" }}>💬 {ped.obs}</div>}
+          </div>
+        );
+      })}
+
+      {showModal && <ModalPedidoCompra pedido={editing} produtos={produtos} fornecedores={fornecedores} onSave={function(p){salvar(p);setShowModal(false);setEditing(null);}} onClose={function(){setShowModal(false);setEditing(null);}} />}
+    </div>
+  );
+}
+
+function ModalPedidoCompra({ pedido, produtos, fornecedores, onSave, onClose }) {
+  var empty = { id:Date.now().toString(), numero:String(Date.now()).slice(-6), fornecedorId:"", fornecedorNome:"", status:"Em aberto", dataCriacao:new Date().toLocaleDateString("sv-SE"), dataEntregaPrev:"", itens:[], obs:"" };
+  const [form, setForm] = useState(pedido||empty);
+  const [busca, setBusca] = useState("");
+  const [resultados, setResultados] = useState([]);
+  var set = function(k,v){setForm(function(f){return Object.assign({},f,{[k]:v});});};
+
+  function buscarProds(q) {
+    setBusca(q);
+    if (!q||q.length<2) {setResultados([]);return;}
+    var ql=q.toLowerCase();
+    setResultados(produtos.filter(function(p){return (p.titulo||"").toLowerCase().includes(ql)||(p.sku||"").toLowerCase().includes(ql);}).slice(0,8));
+  }
+  function addItem(prod) {
+    if (form.itens.find(function(it){return it.produtoId===prod.id;})) {setResultados([]);setBusca("");return;}
+    set("itens",[...form.itens,{produtoId:prod.id,titulo:prod.titulo,sku:prod.sku||"",qtd:"1",qtdRecebida:"0",valorUnit:prod.precoCusto||"",valorTotal:prod.precoCusto||"",obs:""}]);
+    setResultados([]);setBusca("");
+  }
+  function updItem(i,k,v) {
+    var upd=form.itens.map(function(it,j){
+      if(j!==i)return it;
+      var u=Object.assign({},it,{[k]:v});
+      if(k==="qtd"||k==="valorUnit") u.valorTotal=(parseFloat(k==="qtd"?v:u.qtd||0)*parseFloat(k==="valorUnit"?v:u.valorUnit||0)).toFixed(2);
+      return u;
+    });
+    set("itens",upd);
+  }
+  function remItem(i){set("itens",form.itens.filter(function(_,j){return j!==i;}));}
+  var total=form.itens.reduce(function(s,it){return s+parseFloat(it.valorTotal||0);},0);
+  var fmt2=function(n){return "R$ "+Number(n).toFixed(2).replace(".",",");};
+
+  return (
+    <div style={{ position:"fixed",inset:0,background:"rgba(15,23,42,.65)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:600,padding:24 }}>
+      <div style={{ background:"#fff",borderRadius:16,width:"100%",maxWidth:820,maxHeight:"94vh",display:"flex",flexDirection:"column",boxShadow:"0 24px 64px rgba(0,0,0,.2)" }}>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"18px 28px",borderBottom:"1px solid #f1f5f9" }}>
+          <div style={{ fontWeight:800,fontSize:17,color:"#0f172a" }}>{pedido?"Editar Pedido de Compra":"Novo Pedido de Compra"}</div>
+          <button onClick={onClose} style={{ background:"#f1f5f9",border:"none",color:"#64748b",width:32,height:32,borderRadius:8,cursor:"pointer",fontSize:16 }}>✕</button>
+        </div>
+        <div style={{ flex:1,overflowY:"auto",padding:"20px 28px" }}>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:16 }}>
+            <div>
+              <div style={{ fontSize:11,color:"#94a3b8",marginBottom:5,fontWeight:600,textTransform:"uppercase" }}>Número</div>
+              <input value={form.numero} onChange={function(e){set("numero",e.target.value);}}
+                style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"9px 12px",borderRadius:8,fontSize:13,outline:"none" }} />
+            </div>
+            <div>
+              <div style={{ fontSize:11,color:"#94a3b8",marginBottom:5,fontWeight:600,textTransform:"uppercase" }}>Fornecedor *</div>
+              <select value={form.fornecedorId} onChange={function(e){
+                var f=fornecedores.find(function(x){return x.id===e.target.value;});
+                set("fornecedorId",e.target.value); if(f)set("fornecedorNome",f.nome);
+              }} style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#334155",padding:"9px 12px",borderRadius:8,fontSize:13 }}>
+                <option value="">— Selecione —</option>
+                {fornecedores.map(function(f){return <option key={f.id} value={f.id}>{f.nome}</option>;})}
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize:11,color:"#94a3b8",marginBottom:5,fontWeight:600,textTransform:"uppercase" }}>Previsão de Entrega</div>
+              <input type="date" value={form.dataEntregaPrev||""} onChange={function(e){set("dataEntregaPrev",e.target.value);}}
+                style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#334155",padding:"9px 12px",borderRadius:8,fontSize:13 }} />
+            </div>
+          </div>
+          {/* Busca produto */}
+          <div style={{ marginBottom:14,position:"relative" }}>
+            <div style={{ fontSize:13,fontWeight:700,color:"#0f172a",marginBottom:8 }}>Adicionar Produtos</div>
+            <span style={{ position:"absolute",left:10,top:36,color:"#94a3b8" }}>🔍</span>
+            <input value={busca} onChange={function(e){buscarProds(e.target.value);}} placeholder="Buscar produto por nome ou SKU..."
+              style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"9px 12px 9px 32px",borderRadius:8,fontSize:13,outline:"none" }} />
+            {resultados.length>0&&(
+              <div style={{ position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,.12)",zIndex:50,overflow:"hidden" }}>
+                {resultados.map(function(p){
+                  return <div key={p.id} onClick={function(){addItem(p);}}
+                    style={{ padding:"10px 14px",cursor:"pointer",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between" }}
+                    onMouseEnter={function(e){e.currentTarget.style.background="#f0fdf4";}}
+                    onMouseLeave={function(e){e.currentTarget.style.background="#fff";}}>
+                    <div>
+                      <div style={{ fontSize:13,fontWeight:600,color:"#0f172a" }}>{p.titulo?.slice(0,55)}</div>
+                      <div style={{ fontSize:11,color:"#94a3b8" }}>SKU: {p.sku||"—"} · Estoque: {p.estoqueAtual||0} · Custo: {p.precoCusto?"R$ "+p.precoCusto:"—"}</div>
+                    </div>
+                    <span style={{ fontSize:12,color:"#15803d",fontWeight:700 }}>+ Adicionar</span>
+                  </div>;
+                })}
+              </div>
+            )}
+          </div>
+          {/* Tabela itens */}
+          {form.itens.length>0&&(
+            <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"hidden",marginBottom:12 }}>
+              <table style={{ borderCollapse:"collapse",width:"100%" }}>
+                <thead>
+                  <tr>{["Produto","SKU","Qtd","Qtd Receb.","Vlr Unit R$","Total","Obs",""].map(function(h){
+                    return <th key={h} style={{ fontSize:10,color:"#94a3b8",textTransform:"uppercase",padding:"8px 10px",borderBottom:"1px solid #f1f5f9",textAlign:"left",fontWeight:600,background:"#fafafa" }}>{h}</th>;
+                  })}</tr>
+                </thead>
+                <tbody>
+                  {form.itens.map(function(it,i){
+                    return (
+                      <tr key={i} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
+                        <td style={{ padding:"7px 10px",fontSize:12,color:"#0f172a",maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{it.titulo}</td>
+                        <td style={{ padding:"7px 10px",fontSize:11,color:"#64748b",fontFamily:"monospace" }}>{it.sku||"—"}</td>
+                        <td style={{ padding:"7px 10px" }}><input type="number" min="1" value={it.qtd} onChange={function(e){updItem(i,"qtd",e.target.value);}} style={{ width:60,textAlign:"center",background:"#f0fdf4",border:"1px solid #bbf7d0",color:"#15803d",padding:"4px 6px",borderRadius:6,fontSize:13,fontWeight:700,outline:"none" }} /></td>
+                        <td style={{ padding:"7px 10px" }}><input type="number" min="0" value={it.qtdRecebida||0} onChange={function(e){updItem(i,"qtdRecebida",e.target.value);}} style={{ width:60,textAlign:"center",background:"#eff6ff",border:"1px solid #bfdbfe",color:"#1d4ed8",padding:"4px 6px",borderRadius:6,fontSize:13,fontWeight:700,outline:"none" }} /></td>
+                        <td style={{ padding:"7px 10px" }}><input type="number" step="0.01" value={it.valorUnit||""} onChange={function(e){updItem(i,"valorUnit",e.target.value);}} placeholder="0,00" style={{ width:80,background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"4px 6px",borderRadius:6,fontSize:12,outline:"none" }} /></td>
+                        <td style={{ padding:"7px 10px",fontSize:12,fontWeight:700,color:"#0f172a" }}>{it.valorTotal?"R$ "+parseFloat(it.valorTotal).toFixed(2).replace(".",","):"—"}</td>
+                        <td style={{ padding:"7px 10px" }}><input value={it.obs||""} onChange={function(e){updItem(i,"obs",e.target.value);}} placeholder="Obs..." style={{ width:90,background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"4px 6px",borderRadius:6,fontSize:11,outline:"none" }} /></td>
+                        <td style={{ padding:"7px 10px" }}><button onClick={function(){remItem(i);}} style={{ background:"#fef2f2",border:"none",color:"#dc2626",width:24,height:24,borderRadius:6,cursor:"pointer",fontSize:11 }}>✕</button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr style={{ background:"#f1f5f9" }}>
+                    <td colSpan={5} style={{ padding:"8px 10px",fontWeight:700,fontSize:13 }}>TOTAL DO PEDIDO</td>
+                    <td style={{ padding:"8px 10px",fontWeight:800,fontSize:14,color:"#0f172a" }}>{fmt2(total)}</td>
+                    <td colSpan={2}/>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+          <div>
+            <div style={{ fontSize:11,color:"#94a3b8",marginBottom:5,fontWeight:600,textTransform:"uppercase" }}>Observação Interna</div>
+            <input value={form.obs||""} onChange={function(e){set("obs",e.target.value);}} placeholder="Observações do pedido..."
+              style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"9px 12px",borderRadius:8,fontSize:13,outline:"none" }} />
+          </div>
+        </div>
+        <div style={{ display:"flex",gap:8,padding:"14px 28px",borderTop:"1px solid #f1f5f9",background:"#fafafa" }}>
+          <button onClick={onClose} style={{ flex:1,background:"#f8fafc",border:"1px solid #e2e8f0",color:"#64748b",fontWeight:600,padding:"11px",borderRadius:10,cursor:"pointer" }}>Cancelar</button>
+          <button onClick={function(){if(!form.fornecedorId)return;onSave(form);}} disabled={!form.fornecedorId}
+            style={{ flex:3,background:form.fornecedorId?"#0f172a":"#f1f5f9",border:"none",color:form.fornecedorId?"#fff":"#94a3b8",fontWeight:700,padding:"11px",borderRadius:10,cursor:form.fornecedorId?"pointer":"not-allowed",fontSize:14 }}>
+            ✓ Salvar Pedido de Compra
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+//  RELATÓRIOS DE ESTOQUE
+// ════════════════════════════════════════════════════════════
+function RelatoriosEstoqueTab({ produtos, fornecedores, movEstoque, listings }) {
+  const [relAtivo, setRelAtivo] = useState(null);
+  const [filtroDe, setFiltroDe] = useState("");
+  const [filtroAte, setFiltroAte] = useState("");
+  const [filtroProd, setFiltroProd] = useState("");
+
+  var fmt2=function(n){return "R$ "+Number(n||0).toFixed(2).replace(".",",");};
+  var hoje=new Date().toLocaleDateString("sv-SE");
+
+  var RELATORIOS = [
+    { key:"entradas_saidas",    titulo:"Entradas e Saídas de Estoque",         desc:"Todas as movimentações realizadas em um período com saldos" },
+    { key:"saldo_atual",        titulo:"Relatório de Saldo em Estoque",         desc:"Saldo atual de todos os produtos com valor de estoque" },
+    { key:"abaixo_minimo",      titulo:"Produtos Abaixo do Estoque Mínimo",     desc:"Produtos que precisam de reposição urgente" },
+    { key:"sem_movimentacao",   titulo:"Produtos sem Movimentação",             desc:"Produtos que não tiveram movimentação no período" },
+    { key:"maior_circulacao",   titulo:"Produtos com Maior Circulação",         desc:"Produtos mais movimentados no período" },
+    { key:"visao_financeira",   titulo:"Visão Financeira do Estoque",           desc:"Valor total do estoque pelo preço de custo e venda" },
+  ];
+
+  function gerarRelatorio(key) {
+    setRelAtivo(key);
+  }
+
+  var movsFiltradas = movEstoque.filter(function(m){
+    if (filtroDe && m.data < filtroDe) return false;
+    if (filtroAte && m.data > filtroAte) return false;
+    if (filtroProd) { var p=produtos.find(function(x){return x.id===m.produtoId;}); return (p?.titulo||"").toLowerCase().includes(filtroProd.toLowerCase())||(p?.sku||"").toLowerCase().includes(filtroProd.toLowerCase()); }
+    return true;
+  });
+
+  return (
+    <div>
+      <div style={{ fontWeight:800,fontSize:18,color:"#0f172a",marginBottom:4 }}>📊 Relatórios de Estoque</div>
+      <div style={{ fontSize:13,color:"#94a3b8",marginBottom:20 }}>Análises e relatórios completos do seu estoque</div>
+
+      {/* Lista de relatórios disponíveis */}
+      <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:12,marginBottom:24 }}>
+        {RELATORIOS.map(function(r){
+          var isAtivo=relAtivo===r.key;
+          return (
+            <div key={r.key} onClick={function(){gerarRelatorio(r.key);}}
+              style={{ background:isAtivo?"#0f172a":"#fff", border:isAtivo?"2px solid #0f172a":"1px solid #e2e8f0", borderRadius:12, padding:"16px 18px", cursor:"pointer", transition:"all .15s" }}
+              onMouseEnter={function(e){if(!isAtivo){e.currentTarget.style.borderColor="#0f172a";e.currentTarget.style.background="#f8fafc";}}}
+              onMouseLeave={function(e){if(!isAtivo){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fff";}}}>
+              <div style={{ display:"flex",alignItems:"flex-start",gap:10 }}>
+                <div style={{ width:36,height:36,borderRadius:8,background:isAtivo?"rgba(255,255,255,.15)":"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0 }}>📋</div>
+                <div>
+                  <div style={{ fontWeight:700,fontSize:14,color:isAtivo?"#fff":"#0f172a",marginBottom:4 }}>{r.titulo}</div>
+                  <div style={{ fontSize:12,color:isAtivo?"rgba(255,255,255,.7)":"#94a3b8",lineHeight:1.4 }}>{r.desc}</div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Filtros para o relatório */}
+      {relAtivo && (
+        <div style={{ background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 16px",marginBottom:16 }}>
+          <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+            <span style={{ fontSize:12,color:"#64748b",fontWeight:600 }}>Período:</span>
+            <input type="date" value={filtroDe} onChange={function(e){setFiltroDe(e.target.value);}}
+              style={{ background:"#fff",border:"1px solid #e2e8f0",color:"#334155",padding:"6px 10px",borderRadius:8,fontSize:12 }} />
+            <span style={{ fontSize:12,color:"#94a3b8" }}>até</span>
+            <input type="date" value={filtroAte} onChange={function(e){setFiltroAte(e.target.value);}}
+              style={{ background:"#fff",border:"1px solid #e2e8f0",color:"#334155",padding:"6px 10px",borderRadius:8,fontSize:12 }} />
+            <input value={filtroProd} onChange={function(e){setFiltroProd(e.target.value);}} placeholder="Filtrar produto..."
+              style={{ background:"#fff",border:"1px solid #e2e8f0",color:"#0f172a",padding:"6px 10px",borderRadius:8,fontSize:12,outline:"none",width:160 }} />
+            {(filtroDe||filtroAte||filtroProd)&&<button onClick={function(){setFiltroDe("");setFiltroAte("");setFiltroProd("");}} style={{ background:"#f1f5f9",border:"1px solid #e2e8f0",color:"#64748b",padding:"5px 10px",borderRadius:8,cursor:"pointer",fontSize:12 }}>✕ Limpar</button>}
+          </div>
+        </div>
+      )}
+
+      {/* Conteúdo do relatório */}
+      {relAtivo === "entradas_saidas" && (
+        <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"auto" }}>
+          <div style={{ padding:"14px 18px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+            <div style={{ fontWeight:700,fontSize:15,color:"#0f172a" }}>Entradas e Saídas de Estoque</div>
+            <div style={{ fontSize:12,color:"#94a3b8" }}>{movsFiltradas.length} movimentações</div>
+          </div>
+          {movsFiltradas.length===0?(<div style={{ padding:32,textAlign:"center",color:"#94a3b8" }}>Nenhuma movimentação no período</div>):(
+            <table style={{ borderCollapse:"collapse",width:"100%" }}>
+              <thead><tr>{["Data","Produto","SKU","Tipo","Qtd","Motivo","Preço un."].map(function(h){return <th key={h} style={{ fontSize:11,color:"#94a3b8",textTransform:"uppercase",padding:"9px 14px",borderBottom:"1px solid #f1f5f9",textAlign:"left",fontWeight:600,background:"#fafafa",whiteSpace:"nowrap" }}>{h}</th>;})}</tr></thead>
+              <tbody>
+                {movsFiltradas.sort(function(a,b){return (b.id||0)-(a.id||0);}).slice(0,500).map(function(m,i){
+                  var prod=produtos.find(function(p){return p.id===m.produtoId;});
+                  var isE=m.tipo==="entrada";
+                  return (
+                    <tr key={m.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
+                      <td style={{ padding:"8px 14px",fontSize:12,color:"#64748b",whiteSpace:"nowrap" }}>{m.data}<div style={{ fontSize:10,color:"#94a3b8" }}>{m.hora}</div></td>
+                      <td style={{ padding:"8px 14px",fontSize:12,color:"#0f172a",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{prod?.titulo||"—"}</td>
+                      <td style={{ padding:"8px 14px",fontSize:11,color:"#64748b",fontFamily:"monospace" }}>{prod?.sku||"—"}</td>
+                      <td style={{ padding:"8px 14px" }}><span style={{ fontSize:11,fontWeight:700,color:isE?"#15803d":"#dc2626",background:isE?"#f0fdf4":"#fef2f2",padding:"2px 8px",borderRadius:6 }}>{isE?"↑ Entrada":"↓ Saída"}</span></td>
+                      <td style={{ padding:"8px 14px",fontSize:14,fontWeight:800,color:isE?"#15803d":"#dc2626",textAlign:"center" }}>{isE?"+":"-"}{m.qtd}</td>
+                      <td style={{ padding:"8px 14px",fontSize:12,color:"#64748b" }}>{m.motivo||"—"}</td>
+                      <td style={{ padding:"8px 14px",fontSize:12,color:"#64748b" }}>{m.preco?fmt2(m.preco):"—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {relAtivo === "saldo_atual" && (
+        <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"auto" }}>
+          <div style={{ padding:"14px 18px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+            <div style={{ fontWeight:700,fontSize:15,color:"#0f172a" }}>Saldo Atual de Estoque</div>
+            <div style={{ display:"flex",gap:16 }}>
+              <div style={{ textAlign:"right" }}>
+                <div style={{ fontSize:10,color:"#94a3b8" }}>Valor Total (Custo)</div>
+                <div style={{ fontSize:14,fontWeight:800,color:"#0f172a" }}>{fmt2(produtos.reduce(function(s,p){return s+(parseFloat(p.precoCusto||0)*parseInt(p.estoqueAtual||0));},0))}</div>
+              </div>
+              <div style={{ textAlign:"right" }}>
+                <div style={{ fontSize:10,color:"#94a3b8" }}>Valor Total (Venda)</div>
+                <div style={{ fontSize:14,fontWeight:800,color:"#15803d" }}>{fmt2(produtos.reduce(function(s,p){return s+(parseFloat(p.precoVenda||0)*parseInt(p.estoqueAtual||0));},0))}</div>
+              </div>
+            </div>
+          </div>
+          <table style={{ borderCollapse:"collapse",width:"100%" }}>
+            <thead><tr>{["Produto","SKU","Categoria","Estoque","Mín","Vlr Custo","Vlr Venda","Total Custo","Total Venda","Status"].map(function(h){return <th key={h} style={{ fontSize:10,color:"#94a3b8",textTransform:"uppercase",padding:"8px 12px",borderBottom:"1px solid #f1f5f9",textAlign:"left",fontWeight:600,background:"#fafafa",whiteSpace:"nowrap" }}>{h}</th>;})}</tr></thead>
+            <tbody>
+              {produtos.filter(function(p){return !filtroProd||(p.titulo||"").toLowerCase().includes(filtroProd.toLowerCase())||(p.sku||"").toLowerCase().includes(filtroProd.toLowerCase());}).map(function(p,i){
+                var est=parseInt(p.estoqueAtual||0),min=parseInt(p.estoqueMinimo||0);
+                var critico=min>0&&est<=min, zerado=est<=0;
+                var cor=zerado?"#dc2626":critico?"#d97706":"#15803d";
+                return (
+                  <tr key={p.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
+                    <td style={{ padding:"8px 12px",fontSize:12,color:"#0f172a",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{p.titulo}</td>
+                    <td style={{ padding:"8px 12px",fontSize:11,color:"#64748b",fontFamily:"monospace" }}>{p.sku||"—"}</td>
+                    <td style={{ padding:"8px 12px",fontSize:12,color:"#64748b" }}>{p.categoria||"—"}</td>
+                    <td style={{ padding:"8px 12px",textAlign:"center",fontWeight:800,fontSize:13,color:cor }}>{est}</td>
+                    <td style={{ padding:"8px 12px",textAlign:"center",fontSize:12,color:"#94a3b8" }}>{min||"—"}</td>
+                    <td style={{ padding:"8px 12px",fontSize:12,color:"#64748b" }}>{p.precoCusto?fmt2(p.precoCusto):"—"}</td>
+                    <td style={{ padding:"8px 12px",fontSize:12,color:"#64748b" }}>{p.precoVenda?fmt2(p.precoVenda):"—"}</td>
+                    <td style={{ padding:"8px 12px",fontSize:12,fontWeight:700,color:"#0f172a" }}>{p.precoCusto?fmt2(parseFloat(p.precoCusto)*est):"—"}</td>
+                    <td style={{ padding:"8px 12px",fontSize:12,fontWeight:700,color:"#15803d" }}>{p.precoVenda?fmt2(parseFloat(p.precoVenda)*est):"—"}</td>
+                    <td style={{ padding:"8px 12px" }}><span style={{ fontSize:10,fontWeight:600,color:cor,background:cor+"11",padding:"2px 7px",borderRadius:5 }}>{zerado?"Zerado":critico?"Crítico":"OK"}</span></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {relAtivo === "abaixo_minimo" && (
+        <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"auto" }}>
+          <div style={{ padding:"14px 18px",borderBottom:"1px solid #f1f5f9",fontWeight:700,fontSize:15,color:"#dc2626" }}>⚠️ Produtos Abaixo do Estoque Mínimo</div>
+          <table style={{ borderCollapse:"collapse",width:"100%" }}>
+            <thead><tr>{["Produto","SKU","Fornecedor","Estoque Atual","Estoque Mínimo","Diferença","Custo Unit.","Custo Reposição"].map(function(h){return <th key={h} style={{ fontSize:10,color:"#94a3b8",textTransform:"uppercase",padding:"8px 12px",borderBottom:"1px solid #f1f5f9",textAlign:"left",fontWeight:600,background:"#fafafa",whiteSpace:"nowrap" }}>{h}</th>;})}</tr></thead>
+            <tbody>
+              {produtos.filter(function(p){return p.estoqueMinimo&&parseInt(p.estoqueAtual||0)<=parseInt(p.estoqueMinimo||0);}).map(function(p,i){
+                var est=parseInt(p.estoqueAtual||0),min=parseInt(p.estoqueMinimo||0),diff=min-est;
+                var forn=fornecedores.find(function(f){return f.id===p.fornecedorId;});
+                return (
+                  <tr key={p.id} style={{ background:i%2===0?"#fff9f9":"#fff" }}>
+                    <td style={{ padding:"8px 12px",fontSize:12,color:"#0f172a",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{p.titulo}</td>
+                    <td style={{ padding:"8px 12px",fontSize:11,color:"#64748b",fontFamily:"monospace" }}>{p.sku||"—"}</td>
+                    <td style={{ padding:"8px 12px",fontSize:12,color:"#64748b" }}>{forn?.nome||"—"}</td>
+                    <td style={{ padding:"8px 12px",textAlign:"center",fontWeight:800,fontSize:13,color:est<=0?"#dc2626":"#d97706" }}>{est}</td>
+                    <td style={{ padding:"8px 12px",textAlign:"center",fontSize:12,color:"#94a3b8" }}>{min}</td>
+                    <td style={{ padding:"8px 12px",textAlign:"center",fontWeight:800,fontSize:13,color:"#dc2626" }}>-{diff}</td>
+                    <td style={{ padding:"8px 12px",fontSize:12,color:"#64748b" }}>{p.precoCusto?fmt2(p.precoCusto):"—"}</td>
+                    <td style={{ padding:"8px 12px",fontSize:12,fontWeight:700,color:"#dc2626" }}>{p.precoCusto?fmt2(parseFloat(p.precoCusto)*diff):"—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {relAtivo === "visao_financeira" && (
+        <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"auto" }}>
+          <div style={{ padding:"14px 18px",borderBottom:"1px solid #f1f5f9",fontWeight:700,fontSize:15,color:"#0f172a" }}>💰 Visão Financeira do Estoque</div>
+          {(function(){
+            var totalCusto=0,totalVenda=0,totalLucro=0;
+            var rows=produtos.filter(function(p){return parseInt(p.estoqueAtual||0)>0;}).map(function(p){
+              var est=parseInt(p.estoqueAtual||0);
+              var custo=parseFloat(p.precoCusto||0)*est;
+              var venda=parseFloat(p.precoVenda||0)*est;
+              var lucro=venda-custo;
+              var margem=venda>0?(lucro/venda)*100:0;
+              totalCusto+=custo;totalVenda+=venda;totalLucro+=lucro;
+              return {p,est,custo,venda,lucro,margem};
+            }).sort(function(a,b){return b.custo-a.custo;});
+            return (
+              <>
+                <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,padding:"14px 18px",borderBottom:"1px solid #f1f5f9" }}>
+                  {[{l:"Valor de Custo",v:fmt2(totalCusto),c:"#dc2626"},{l:"Valor de Venda",v:fmt2(totalVenda),c:"#15803d"},{l:"Lucro Potencial",v:fmt2(totalLucro),c:totalLucro>=0?"#0891b2":"#dc2626"}].map(function(k){
+                    return <div key={k.l} style={{ background:"#f8fafc",borderRadius:10,padding:"12px 16px" }}><div style={{ fontSize:11,color:"#94a3b8",marginBottom:4 }}>{k.l}</div><div style={{ fontSize:18,fontWeight:800,color:k.c }}>{k.v}</div></div>;
+                  })}
+                </div>
+                <table style={{ borderCollapse:"collapse",width:"100%" }}>
+                  <thead><tr>{["Produto","SKU","Estoque","Custo Unit.","Venda Unit.","Total Custo","Total Venda","Lucro","Margem"].map(function(h){return <th key={h} style={{ fontSize:10,color:"#94a3b8",textTransform:"uppercase",padding:"8px 12px",borderBottom:"1px solid #f1f5f9",textAlign:"left",fontWeight:600,background:"#fafafa",whiteSpace:"nowrap" }}>{h}</th>;})}</tr></thead>
+                  <tbody>
+                    {rows.map(function(r,i){
+                      return <tr key={r.p.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
+                        <td style={{ padding:"7px 12px",fontSize:12,color:"#0f172a",maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{r.p.titulo}</td>
+                        <td style={{ padding:"7px 12px",fontSize:11,color:"#64748b",fontFamily:"monospace" }}>{r.p.sku||"—"}</td>
+                        <td style={{ padding:"7px 12px",textAlign:"center",fontWeight:700 }}>{r.est}</td>
+                        <td style={{ padding:"7px 12px",fontSize:12,color:"#64748b" }}>{r.p.precoCusto?fmt2(r.p.precoCusto):"—"}</td>
+                        <td style={{ padding:"7px 12px",fontSize:12,color:"#64748b" }}>{r.p.precoVenda?fmt2(r.p.precoVenda):"—"}</td>
+                        <td style={{ padding:"7px 12px",fontSize:12,fontWeight:700,color:"#dc2626" }}>{r.custo>0?fmt2(r.custo):"—"}</td>
+                        <td style={{ padding:"7px 12px",fontSize:12,fontWeight:700,color:"#15803d" }}>{r.venda>0?fmt2(r.venda):"—"}</td>
+                        <td style={{ padding:"7px 12px",fontSize:12,fontWeight:700,color:r.lucro>=0?"#0891b2":"#dc2626" }}>{r.venda>0&&r.custo>0?fmt2(r.lucro):"—"}</td>
+                        <td style={{ padding:"7px 12px",fontSize:12,fontWeight:700,color:r.margem>=25?"#15803d":r.margem>=15?"#d97706":"#dc2626" }}>{r.venda>0&&r.custo>0?r.margem.toFixed(1)+"%":"—"}</td>
+                      </tr>;
+                    })}
+                  </tbody>
+                </table>
+              </>
+            );
+          })()}
+        </div>
+      )}
+
+      {(relAtivo==="sem_movimentacao"||relAtivo==="maior_circulacao") && (function(){
+        var movsProd={};
+        movsFiltradas.forEach(function(m){ movsProd[m.produtoId]=(movsProd[m.produtoId]||0)+m.qtd; });
+        var prods=relAtivo==="sem_movimentacao"
+          ? produtos.filter(function(p){return !movsProd[p.id];})
+          : produtos.filter(function(p){return movsProd[p.id]>0;}).sort(function(a,b){return (movsProd[b.id]||0)-(movsProd[a.id]||0);}).slice(0,50);
+        return (
+          <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"auto" }}>
+            <div style={{ padding:"14px 18px",borderBottom:"1px solid #f1f5f9",fontWeight:700,fontSize:15,color:"#0f172a" }}>
+              {relAtivo==="sem_movimentacao"?"📦 Produtos sem Movimentação":"🏆 Produtos com Maior Circulação"}
+              <span style={{ marginLeft:10,fontSize:12,color:"#94a3b8",fontWeight:400 }}>{prods.length} produtos</span>
+            </div>
+            {prods.length===0?<div style={{ padding:32,textAlign:"center",color:"#94a3b8" }}>Nenhum produto encontrado</div>:(
+              <table style={{ borderCollapse:"collapse",width:"100%" }}>
+                <thead><tr>{["#","Produto","SKU","Estoque Atual","Movimentação Total","Custo Unit."].map(function(h){return <th key={h} style={{ fontSize:10,color:"#94a3b8",textTransform:"uppercase",padding:"8px 12px",borderBottom:"1px solid #f1f5f9",textAlign:"left",fontWeight:600,background:"#fafafa" }}>{h}</th>;})}</tr></thead>
+                <tbody>
+                  {prods.map(function(p,i){return (
+                    <tr key={p.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
+                      <td style={{ padding:"8px 12px",fontSize:13,fontWeight:700,color:"#94a3b8" }}>{i+1}</td>
+                      <td style={{ padding:"8px 12px",fontSize:12,color:"#0f172a",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{p.titulo}</td>
+                      <td style={{ padding:"8px 12px",fontSize:11,color:"#64748b",fontFamily:"monospace" }}>{p.sku||"—"}</td>
+                      <td style={{ padding:"8px 12px",textAlign:"center",fontWeight:700 }}>{p.estoqueAtual||0}</td>
+                      <td style={{ padding:"8px 12px",textAlign:"center",fontWeight:800,color:relAtivo==="maior_circulacao"?"#0891b2":"#94a3b8" }}>{movsProd[p.id]||0}</td>
+                      <td style={{ padding:"8px 12px",fontSize:12,color:"#64748b" }}>{p.precoCusto?fmt2(p.precoCusto):"—"}</td>
+                    </tr>
+                  );}).slice(0,100)}
+                </tbody>
+              </table>
+            )}
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+//  SUGESTÃO DE COMPRAS
+// ════════════════════════════════════════════════════════════
+function SugestaoComprasTab({ produtos, fornecedores, rawOrders }) {
+  const [periodoVenda, setPeriodoVenda] = useState(30);
+  const [coberturaEstoque, setCoberturaEstoque] = useState(30);
+  const [filterForn, setFilterForn] = useState("all");
+  const [search, setSearch] = useState("");
+  const [gerado, setGerado] = useState(false);
+
+  var fmt2=function(n){return "R$ "+Number(n||0).toFixed(2).replace(".",",");};
+  var hoje=new Date().toLocaleDateString("sv-SE");
+  var deDate=new Date(); deDate.setDate(deDate.getDate()-parseInt(periodoVenda));
+  var deStr=deDate.toLocaleDateString("sv-SE");
+
+  // Calcular vendas por produto no período
+  var vendasPorProd={};
+  (rawOrders||[]).filter(function(o){return o.status==="paid"&&o.date>=deStr;}).forEach(function(o){
+    if(!o.listing_id)return;
+    vendasPorProd[o.listing_id]=(vendasPorProd[o.listing_id]||0)+(o.qty||1);
+  });
+
+  // Montar sugestões
+  var sugestoes=produtos.filter(function(p){
+    if(filterForn!=="all"&&p.fornecedorId!==filterForn)return false;
+    if(search){var q=search.toLowerCase();return (p.titulo||"").toLowerCase().includes(q)||(p.sku||"").toLowerCase().includes(q);}
+    return true;
+  }).map(function(p){
+    var mlb=p.mlbVinculado||(p.mlbsVinculados||[])[0]||"";
+    var vendas=vendasPorProd[mlb]||0;
+    var mediaDia=vendas/parseInt(periodoVenda);
+    var estAtual=parseInt(p.estoqueAtual||0);
+    var diasEstoque=mediaDia>0?Math.floor(estAtual/mediaDia):999;
+    var sugestaoQtd=Math.max(0,Math.ceil(mediaDia*parseInt(coberturaEstoque))-estAtual);
+    var valorEst=sugestaoQtd*parseFloat(p.precoCusto||0);
+    return {p,vendas,mediaDia,estAtual,diasEstoque,sugestaoQtd,valorEst};
+  }).filter(function(s){return s.sugestaoQtd>0||s.vendas>0;}).sort(function(a,b){return b.sugestaoQtd-a.sugestaoQtd;});
+
+  var totalSugestao=sugestoes.reduce(function(s,x){return s+x.sugestaoQtd;},0);
+  var totalValor=sugestoes.reduce(function(s,x){return s+x.valorEst;},0);
+
+  return (
+    <div>
+      <div style={{ fontWeight:800,fontSize:18,color:"#0f172a",marginBottom:4 }}>💡 Sugestão de Compras</div>
+      <div style={{ fontSize:13,color:"#94a3b8",marginBottom:20 }}>Baseado no histórico de vendas e estoque atual</div>
+
+      {/* Parâmetros */}
+      <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px 20px",marginBottom:20 }}>
+        <div style={{ fontWeight:700,fontSize:14,color:"#0f172a",marginBottom:14 }}>⚙️ Parâmetros de Cálculo</div>
+        <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:16 }}>
+          <div>
+            <div style={{ fontSize:11,color:"#94a3b8",marginBottom:5,fontWeight:600,textTransform:"uppercase" }}>Período de Venda (dias)</div>
+            <input type="number" min="7" max="365" value={periodoVenda} onChange={function(e){setPeriodoVenda(e.target.value);setGerado(false);}}
+              style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"9px 12px",borderRadius:8,fontSize:13,outline:"none" }} />
+            <div style={{ fontSize:11,color:"#94a3b8",marginTop:4 }}>Analisar vendas dos últimos {periodoVenda} dias</div>
+          </div>
+          <div>
+            <div style={{ fontSize:11,color:"#94a3b8",marginBottom:5,fontWeight:600,textTransform:"uppercase" }}>Cobertura de Estoque (dias)</div>
+            <input type="number" min="7" max="365" value={coberturaEstoque} onChange={function(e){setCoberturaEstoque(e.target.value);setGerado(false);}}
+              style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"9px 12px",borderRadius:8,fontSize:13,outline:"none" }} />
+            <div style={{ fontSize:11,color:"#94a3b8",marginTop:4 }}>Quantidade para cobrir {coberturaEstoque} dias de vendas</div>
+          </div>
+          <div>
+            <div style={{ fontSize:11,color:"#94a3b8",marginBottom:5,fontWeight:600,textTransform:"uppercase" }}>Filtrar Fornecedor</div>
+            <select value={filterForn} onChange={function(e){setFilterForn(e.target.value);setGerado(false);}}
+              style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#334155",padding:"9px 12px",borderRadius:8,fontSize:13 }}>
+              <option value="all">Todos os fornecedores</option>
+              {fornecedores.map(function(f){return <option key={f.id} value={f.id}>{f.nome}</option>;})}
+            </select>
+          </div>
+          <div>
+            <div style={{ fontSize:11,color:"#94a3b8",marginBottom:5,fontWeight:600,textTransform:"uppercase" }}>Buscar Produto</div>
+            <input value={search} onChange={function(e){setSearch(e.target.value);}} placeholder="Nome ou SKU..."
+              style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"9px 12px",borderRadius:8,fontSize:13,outline:"none" }} />
+          </div>
+        </div>
+        <button onClick={function(){setGerado(true);}}
+          style={{ marginTop:14,background:"#0f172a",border:"none",color:"#fff",fontWeight:700,padding:"11px 28px",borderRadius:10,cursor:"pointer",fontSize:13 }}>
+          🔍 Gerar Sugestão de Compras
+        </button>
+      </div>
+
+      {/* Resultado */}
+      {gerado && (
+        <>
+          {/* Cards resumo */}
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:16 }}>
+            {[
+              {l:"Produtos p/ Comprar",v:sugestoes.filter(function(s){return s.sugestaoQtd>0;}).length,c:"#0f172a"},
+              {l:"Total de Unidades",v:totalSugestao,c:"#0891b2"},
+              {l:"Valor Estimado",v:fmt2(totalValor),c:"#dc2626"},
+              {l:"Sem Estoque",v:sugestoes.filter(function(s){return s.estAtual<=0;}).length,c:"#dc2626"},
+              {l:"Período Analisado",v:periodoVenda+" dias",c:"#64748b"},
+            ].map(function(k){return <div key={k.l} style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 16px" }}><div style={{ fontSize:10,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",marginBottom:4 }}>{k.l}</div><div style={{ fontSize:18,fontWeight:800,color:k.c }}>{k.v}</div></div>;})}
+          </div>
+
+          {sugestoes.length===0?(
+            <div style={{ background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:12,padding:40,textAlign:"center",color:"#15803d" }}>
+              <div style={{ fontSize:32,marginBottom:8 }}>✅</div>
+              <div style={{ fontWeight:700,fontSize:15 }}>Nenhuma sugestão de compra necessária</div>
+              <div style={{ fontSize:13,marginTop:4 }}>Seu estoque está adequado para o período de cobertura definido</div>
+            </div>
+          ):(
+            <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"auto" }}>
+              <div style={{ padding:"14px 18px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+                <div style={{ fontWeight:700,fontSize:15,color:"#0f172a" }}>Dashboard Sugestão de Compras</div>
+                <div style={{ fontSize:12,color:"#94a3b8" }}>Período: últimos {periodoVenda} dias · Cobertura: {coberturaEstoque} dias</div>
+              </div>
+              <table style={{ borderCollapse:"collapse",width:"100%" }}>
+                <thead>
+                  <tr>{["SKU","Produto","Fornecedor","Peças Vendidas","Estoque Atual","Média/Dia","Dias p/ Esgotar","Sugestão de Compra","Valor Estimado"].map(function(h){
+                    return <th key={h} style={{ fontSize:10,color:"#94a3b8",textTransform:"uppercase",padding:"9px 12px",borderBottom:"1px solid #f1f5f9",textAlign:"left",fontWeight:600,background:"#fafafa",whiteSpace:"nowrap" }}>{h}</th>;
+                  })}</tr>
+                </thead>
+                <tbody>
+                  {sugestoes.map(function(s,i){
+                    var forn=fornecedores.find(function(f){return f.id===s.p.fornecedorId;});
+                    var urgente=s.diasEstoque<7,atencao=s.diasEstoque<15;
+                    return (
+                      <tr key={s.p.id} style={{ background:urgente?"#fff9f9":i%2===0?"#f8fafc":"#fff" }}>
+                        <td style={{ padding:"8px 12px",fontSize:11,color:"#64748b",fontFamily:"monospace" }}>{s.p.sku||"—"}</td>
+                        <td style={{ padding:"8px 12px",fontSize:12,color:"#0f172a",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{s.p.titulo}</td>
+                        <td style={{ padding:"8px 12px",fontSize:12,color:"#64748b" }}>{forn?.nome||"—"}</td>
+                        <td style={{ padding:"8px 12px",textAlign:"center",fontWeight:700,fontSize:13,color:"#0891b2" }}>{s.vendas}</td>
+                        <td style={{ padding:"8px 12px",textAlign:"center",fontWeight:800,fontSize:13,color:s.estAtual<=0?"#dc2626":atencao?"#d97706":"#15803d" }}>{s.estAtual}</td>
+                        <td style={{ padding:"8px 12px",textAlign:"center",fontSize:12,color:"#64748b" }}>{s.mediaDia.toFixed(1)}</td>
+                        <td style={{ padding:"8px 12px",textAlign:"center" }}>
+                          <span style={{ fontSize:12,fontWeight:700,color:urgente?"#dc2626":atencao?"#d97706":"#0f172a",background:urgente?"#fef2f2":atencao?"#fffbeb":"#f8fafc",padding:"3px 8px",borderRadius:6 }}>
+                            {s.diasEstoque>=999?"∞":s.diasEstoque+" dias"}
+                          </span>
+                        </td>
+                        <td style={{ padding:"8px 12px",textAlign:"center",fontWeight:800,fontSize:14,color:s.sugestaoQtd>0?"#dc2626":"#94a3b8" }}>{s.sugestaoQtd>0?s.sugestaoQtd:"—"}</td>
+                        <td style={{ padding:"8px 12px",fontSize:12,fontWeight:700,color:"#0f172a" }}>{s.valorEst>0?fmt2(s.valorEst):"—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr style={{ background:"#f1f5f9" }}>
+                    <td colSpan={7} style={{ padding:"10px 12px",fontWeight:700,fontSize:13 }}>TOTAL</td>
+                    <td style={{ padding:"10px 12px",textAlign:"center",fontWeight:800,fontSize:14,color:"#dc2626" }}>{totalSugestao}</td>
+                    <td style={{ padding:"10px 12px",fontWeight:800,color:"#0f172a" }}>{fmt2(totalValor)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── ProdutosTab Principal ────────────────────────────────────
-function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, listings, costs, setCosts }) {
-  const [prodTab, setProdTab] = useState("lista"); // lista | depositos | estoque | cadastros
+function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, listings, costs, setCosts, rawOrders }) {
+  const [prodTab, setProdTab] = useState("lista"); // lista | depositos | estoque | cadastros | pedidos | relatorios | sugestao
+  const [viewProdutos, setViewProdutos] = useState("tabela"); // tabela | cards
+  const [filterEstoque, setFilterEstoque] = useState("todos"); // todos | critico | zerado | ok
+  const [filterMarca, setFilterMarca] = useState("");
+  const [filterFornecedorProd, setFilterFornecedorProd] = useState("all");
   const [depositos, setDepositos] = useState(function(){ try { return JSON.parse(localStorage.getItem("depositos_estoque")||"[]"); } catch { return []; } });
   const [estoqueDepositos, setEstoqueDepositos] = useState(function(){ try { return JSON.parse(localStorage.getItem("estoque_depositos")||"[]"); } catch { return []; } });
   const [showModalDeposito, setShowModalDeposito] = useState(false);
@@ -4339,15 +5086,25 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
   const produtosFiltrados = useMemo(() => {
     let r = produtos;
     if (search) r = r.filter(p =>
-      p.titulo?.toLowerCase().includes(search.toLowerCase()) ||
-      p.sku?.toLowerCase().includes(search.toLowerCase()) ||
-      p.ean?.includes(search) ||
-      p.codigoFornecedor?.toLowerCase().includes(search.toLowerCase())
+      (p.titulo||"").toLowerCase().includes(search.toLowerCase()) ||
+      (p.sku||"").toLowerCase().includes(search.toLowerCase()) ||
+      (p.ean||"").includes(search) ||
+      (p.codigoFornecedor||"").toLowerCase().includes(search.toLowerCase()) ||
+      (p.marca||"").toLowerCase().includes(search.toLowerCase())
     );
     if (filterCat !== "all") r = r.filter(p => p.categoria === filterCat);
     if (filterStatus !== "all") r = r.filter(p => p.status === filterStatus);
+    if (filterFornecedorProd !== "all") r = r.filter(p => p.fornecedorId === filterFornecedorProd);
+    // Filtros rápidos de situação
+    if (filterEstoque === "zerado") r = r.filter(p => parseInt(p.estoqueAtual||0) <= 0);
+    else if (filterEstoque === "critico") r = r.filter(p => p.estoqueMinimo && parseInt(p.estoqueAtual||0) <= parseInt(p.estoqueMinimo||0));
+    else if (filterEstoque === "ok") r = r.filter(p => parseInt(p.estoqueAtual||0) > parseInt(p.estoqueMinimo||0));
+    else if (filterEstoque === "sem_img") r = r.filter(p => !p.imagens || p.imagens.length === 0);
+    else if (filterEstoque === "sem_custo") r = r.filter(p => !p.precoCusto || parseFloat(p.precoCusto||0) <= 0);
+    else if (filterEstoque === "sem_sku") r = r.filter(p => !p.sku);
+    else if (filterEstoque === "sem_ml") r = r.filter(p => !p.mlbVinculado && (!p.mlbsVinculados || p.mlbsVinculados.length === 0));
     return r;
-  }, [produtos, search, filterCat, filterStatus]);
+  }, [produtos, search, filterCat, filterStatus, filterFornecedorProd, filterEstoque]);
 
   const estoqueBaixo = produtos.filter(p => p.estoqueMinimo && p.estoqueAtual && parseFloat(p.estoqueAtual) <= parseFloat(p.estoqueMinimo));
 
@@ -4356,10 +5113,13 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
       {/* Sub-tabs */}
       <div style={{ display:"flex", gap:2, marginBottom:16, background:"#f1f5f9", padding:4, borderRadius:10, width:"fit-content" }}>
         {[
-          { key:"lista",     label:"📦 Produtos" },
-          { key:"depositos", label:"🏪 Depósitos" },
-          { key:"estoque",   label:"📋 Estoque" },
-          { key:"cadastros", label:"🗂️ Cadastros" },
+          { key:"lista",      label:"📦 Produtos" },
+          { key:"depositos",  label:"🏪 Depósitos" },
+          { key:"estoque",    label:"📋 Movimentações" },
+          { key:"pedidos",    label:"🛒 Pedidos de Compra" },
+          { key:"relatorios", label:"📊 Relatórios" },
+          { key:"sugestao",   label:"💡 Sugestão de Compras" },
+          { key:"cadastros",  label:"🗂️ Cadastros" },
         ].map(function(t) {
           return (
             <button key={t.key} onClick={function(){ setProdTab(t.key); }}
@@ -4423,25 +5183,67 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
               <button onClick={function(){ setImportMsg(null); }} style={{ background:"none", border:"none", cursor:"pointer", color:"#94a3b8", fontSize:15 }}>✕</button>
             </div>
           )}
-          <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
-            <div style={{ position:"relative", flex:1, minWidth:200 }}>
-              <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
-              <input value={search} onChange={function(e){ setSearch(e.target.value); setPaginaProdutos(1); }} placeholder="Buscar por título, SKU, EAN..."
-                style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px 8px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
+          {/* Barra de filtros estilo Bling */}
+          <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
+            <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap", marginBottom:10 }}>
+              <div style={{ position:"relative", flex:2, minWidth:220 }}>
+                <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
+                <input value={search} onChange={function(e){ setSearch(e.target.value); setPaginaProdutos(1); }} placeholder="Buscar por título, SKU, EAN, cód. fornecedor..."
+                  style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px 8px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
+              </div>
+              <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
+                style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 12px", borderRadius:8, fontSize:12 }}>
+                <option value="all">Todas categorias</option>
+                {CATEGORIAS_PRODUTO.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+                style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 12px", borderRadius:8, fontSize:12 }}>
+                <option value="all">Todos status</option>
+                <option value="Ativo">✅ Ativo</option>
+                <option value="Inativo">○ Inativo</option>
+              </select>
+              <select value={filterFornecedorProd} onChange={e=>setFilterFornecedorProd(e.target.value)}
+                style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 12px", borderRadius:8, fontSize:12 }}>
+                <option value="all">Todos fornecedores</option>
+                {fornecedores.map(function(f){ return <option key={f.id} value={f.id}>{f.nome}</option>; })}
+              </select>
+              <select value={filterEstoque} onChange={e=>setFilterEstoque(e.target.value)}
+                style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 12px", borderRadius:8, fontSize:12 }}>
+                <option value="todos">Todos estoques</option>
+                <option value="zerado">🔴 Estoque zerado</option>
+                <option value="critico">⚠️ Abaixo do mínimo</option>
+                <option value="ok">✅ Estoque OK</option>
+              </select>
+              {/* Toggle view */}
+              <div style={{ display:"flex", gap:2, background:"#e2e8f0", padding:3, borderRadius:8, marginLeft:"auto" }}>
+                {[{k:"tabela",l:"≡"},{k:"cards",l:"⊞"}].map(function(v){
+                  var a = viewProdutos===v.k;
+                  return <button key={v.k} onClick={function(){setViewProdutos(v.k);}}
+                    style={{ width:30, height:28, borderRadius:6, border:"none", cursor:"pointer", fontSize:16, background:a?"#fff":"transparent", color:a?"#0f172a":"#64748b", boxShadow:a?"0 1px 2px rgba(0,0,0,.1)":"none" }}>{v.l}</button>;
+                })}
+              </div>
             </div>
-            <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
-              style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 12px", borderRadius:8, fontSize:12 }}>
-              <option value="all">Todas categorias</option>
-              {CATEGORIAS_PRODUTO.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-              style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 12px", borderRadius:8, fontSize:12 }}>
-              <option value="all">Todos status</option>
-              <option value="Ativo">Ativo</option>
-              <option value="Inativo">Inativo</option>
-            </select>
-            <span style={{ fontSize:12, color:"#94a3b8" }}>{produtosFiltrados.length} produto(s)</span>
-            <span style={{ fontSize:12, color:"#854d0e", background:"#fef9c3", padding:"3px 10px", borderRadius:20, fontWeight:600 }}>🟡 {produtos.filter(p=>p.syncML).length} sincronizados com ML</span>
+            <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+              <span style={{ fontSize:12, color:"#64748b", fontWeight:600 }}>Situação:</span>
+              {[
+                { k:"todos",   l:"Todos",          cor:"#64748b" },
+                { k:"sem_img", l:"📷 Sem imagem",  cor:"#d97706" },
+                { k:"sem_custo",l:"💰 Sem custo",  cor:"#dc2626" },
+                { k:"sem_sku", l:"# Sem SKU",      cor:"#7c3aed" },
+                { k:"sem_ml",  l:"🟡 Sem ML",      cor:"#0891b2" },
+              ].map(function(f){
+                var isActive = (filterEstoque==="todos"&&f.k==="todos") || filterEstoque===f.k;
+                // reuse filterEstoque for these quick filters
+                return (
+                  <button key={f.k} onClick={function(){setFilterEstoque(f.k==="todos"?"todos":f.k);}}
+                    style={{ padding:"4px 12px", borderRadius:20, border:"1px solid "+(isActive?f.cor:"#e2e8f0"), cursor:"pointer", fontSize:11, fontWeight:isActive?700:400,
+                      background:isActive?f.cor+"11":"#fff", color:isActive?f.cor:"#64748b" }}>
+                    {f.l}
+                  </button>
+                );
+              })}
+              <span style={{ fontSize:12, color:"#94a3b8", marginLeft:"auto" }}>{produtosFiltrados.length} produto(s) · {produtos.filter(p=>p.syncML).length} sync ML</span>
+            </div>
           </div>
 
           {prodSel.length > 0 && (
@@ -4833,6 +5635,34 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
             );
           })()}
         </div>
+      )}
+
+      {/* ── PEDIDOS DE COMPRA ── */}
+      {prodTab === "pedidos" && (
+        <PedidosCompraTab
+          produtos={produtos}
+          fornecedores={fornecedores}
+          setProdutos={setProdutos}
+        />
+      )}
+
+      {/* ── RELATÓRIOS ── */}
+      {prodTab === "relatorios" && (
+        <RelatoriosEstoqueTab
+          produtos={produtos}
+          fornecedores={fornecedores}
+          movEstoque={movEstoque}
+          listings={listings}
+        />
+      )}
+
+      {/* ── SUGESTÃO DE COMPRAS ── */}
+      {prodTab === "sugestao" && (
+        <SugestaoComprasTab
+          produtos={produtos}
+          fornecedores={fornecedores}
+          rawOrders={rawOrders||[]}
+        />
       )}
 
       {prodTab === "cadastros" && (
@@ -10942,6 +11772,7 @@ export default function App() {
             listings={listings}
             costs={costs}
             setCosts={setCostsAndSave}
+            rawOrders={rawOrders}
           />
         )}
 

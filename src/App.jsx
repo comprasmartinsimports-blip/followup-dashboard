@@ -741,7 +741,7 @@ function SinoNotificacoes({ notificacoes, setNotificacoes, darkMode }) {
                         {!n.lido && <div style={{ width: 8, height: 8, background: "#0891b2", borderRadius: "50%", flexShrink: 0, marginTop: 4 }} />}
                       </div>
                       <div style={{ fontSize: 12, color: darkMode ? "#94a3b8" : "#475569", marginTop: 2, lineHeight: 1.4 }}>{n.msg}</div>
-                      <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>{n.data}</div>
+                      <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>{fmtDate(n.data)}</div>
                     </div>
                   </div>
                 </div>
@@ -2176,7 +2176,7 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
                       return <tr key={o.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
                         <td style={{ padding:"8px 14px", fontSize:13, fontWeight:700, color:"#94a3b8" }}>{i+1}</td>
                         <td style={{ padding:"8px 14px", fontSize:12, color:"#0891b2", fontFamily:"monospace" }}>#{o.id}</td>
-                        <td style={{ padding:"8px 14px", fontSize:12, color:"#64748b" }}>{o.date}</td>
+                        <td style={{ padding:"8px 14px", fontSize:12, color:"#64748b" }}>{fmtDate(o.date)}</td>
                         <td style={{ padding:"8px 14px", fontSize:12, color:"#0f172a", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{o.title||"—"}</td>
                         <td style={{ padding:"8px 14px", fontSize:13, fontWeight:700, color:"#15803d" }}>{fmt(o.price*(o.qty||1))}</td>
                       </tr>;
@@ -2226,7 +2226,7 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
                       var mCor=o.margem>=20?"#15803d":o.margem>=10?"#d97706":"#dc2626";
                       return <tr key={o.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
                         <td style={{ padding:"7px 12px", fontSize:11, color:"#0891b2", fontFamily:"monospace" }}>#{o.id}</td>
-                        <td style={{ padding:"7px 12px", fontSize:11, color:"#64748b" }}>{o.date}</td>
+                        <td style={{ padding:"7px 12px", fontSize:11, color:"#64748b" }}>{fmtDate(o.date)}</td>
                         <td style={{ padding:"7px 12px", fontSize:11, color:"#0f172a", maxWidth:160, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{o.title||"—"}</td>
                         <td style={{ padding:"7px 12px", fontSize:12, fontWeight:600, color:"#0f172a" }}>{fmt(o.bruto)}</td>
                         <td style={{ padding:"7px 12px", fontSize:12, color:"#dc2626" }}>{fmt(o.taxa)}</td>
@@ -3895,7 +3895,7 @@ function ModalMovEstoque({ produto, movEstoque, onRegistrar, onClose }) {
                         {m.motivo && <div style={{ fontSize:12, color:"#64748b", marginTop:2 }}>{m.motivo}</div>}
                       </div>
                       <div style={{ textAlign:"right", flexShrink:0 }}>
-                        <div style={{ fontSize:12, color:"#64748b" }}>{m.data}</div>
+                        <div style={{ fontSize:12, color:"#64748b" }}>{fmtDate(m.data)}</div>
                         <div style={{ fontSize:10, color:"#94a3b8" }}>{m.hora}</div>
                       </div>
                     </div>
@@ -4554,7 +4554,7 @@ function PedidosCompraTab({ produtos, fornecedores, setProdutos }) {
                 <div>
                   <div style={{ fontWeight:700, fontSize:15, color:"#0f172a" }}>Pedido #{ped.numero||ped.id.slice(-6)}</div>
                   <div style={{ fontSize:12, color:"#64748b" }}>
-                    {ped.fornecedorNome||"—"} · {ped.dataCriacao||"—"} · {totalQtd} itens · {fmt2(totalVal)}
+                    {ped.fornecedorNome||"—"} · {fmtDate(ped.dataCriacao)||"—"} · {totalQtd} itens · {fmt2(totalVal)}
                   </div>
                 </div>
                 <span style={{ fontSize:11, fontWeight:700, color:cfg.cor, background:"#fff", padding:"2px 10px", borderRadius:20, border:"1px solid "+cfg.cor+"44" }}>{ped.status}</span>
@@ -4839,7 +4839,7 @@ function RelatoriosEstoqueTab({ produtos, fornecedores, movEstoque, listings }) 
                   var isE=m.tipo==="entrada";
                   return (
                     <tr key={m.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
-                      <td style={{ padding:"8px 14px",fontSize:12,color:"#64748b",whiteSpace:"nowrap" }}>{m.data}<div style={{ fontSize:10,color:"#94a3b8" }}>{m.hora}</div></td>
+                      <td style={{ padding:"8px 14px",fontSize:12,color:"#64748b",whiteSpace:"nowrap" }}>{fmtDate(m.data)}<div style={{ fontSize:10,color:"#94a3b8" }}>{m.hora}</div></td>
                       <td style={{ padding:"8px 14px",fontSize:12,color:"#0f172a",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{prod?.titulo||"—"}</td>
                       <td style={{ padding:"8px 14px",fontSize:11,color:"#64748b",fontFamily:"monospace" }}>{prod?.sku||"—"}</td>
                       <td style={{ padding:"8px 14px" }}><span style={{ fontSize:11,fontWeight:700,color:isE?"#15803d":"#dc2626",background:isE?"#f0fdf4":"#fef2f2",padding:"2px 8px",borderRadius:6 }}>{isE?"↑ Entrada":"↓ Saída"}</span></td>
@@ -5926,7 +5926,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                       return (
                         <tr key={m.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
                           <td style={{ padding:"10px 14px", fontSize:11, color:"#64748b", whiteSpace:"nowrap" }}>
-                            <div>{m.data}</div><div style={{ fontSize:10, color:"#94a3b8" }}>{m.hora}</div>
+                            <div>{fmtDate(m.data)}</div><div style={{ fontSize:10, color:"#94a3b8" }}>{m.hora}</div>
                           </td>
                           <td style={{ padding:"10px 14px", fontSize:12, color:"#0f172a", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{prod?.titulo||"—"}</td>
                           <td style={{ padding:"10px 14px", fontSize:11, color:"#64748b", fontFamily:"monospace" }}>{prod?.sku||"—"}</td>
@@ -9812,7 +9812,7 @@ function NfSaidaTab({ enrichedOrders, nfeSaida, setNfeSaida, loadingNfe, setLoad
                 return (
                   <tr key={o.id} style={{ background: i%2===0?"#f8fafc":"#fff" }}>
                     <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", fontFamily:"monospace", fontWeight:600 }}>#{o.id}</td>
-                    <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", whiteSpace:"nowrap" }}>{o.date}</td>
+                    <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", whiteSpace:"nowrap" }}>{fmtDate(o.date)}</td>
                     <td style={{ padding:"10px 14px", fontSize:12, color:"#334155", maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                       {o.buyerName || "—"}
                       {o.buyerUF && <span style={{ marginLeft:4, fontSize:10, background:"#f1f5f9", padding:"1px 5px", borderRadius:4, color:"#64748b" }}>{o.buyerUF}</span>}
@@ -9829,7 +9829,7 @@ function NfSaidaTab({ enrichedOrders, nfeSaida, setNfeSaida, loadingNfe, setLoad
                       )}
                     </td>
                     <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{nf?.serie || "—"}</td>
-                    <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", whiteSpace:"nowrap" }}>{nf?.dataEmissao ? nf.dataEmissao.slice(0,10) : "—"}</td>
+                    <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", whiteSpace:"nowrap" }}>{nf?.dataEmissao ? fmtDate(nf.dataEmissao.slice(0,10)) : "—"}</td>
                     <td style={{ padding:"10px 14px" }}>
                       {nf?.chave ? (
                         <div style={{ display:"flex", alignItems:"center", gap:4 }}>
@@ -10143,8 +10143,8 @@ function EnviosFULLTab({ produtos, listings, estoqueDepositos, depositos }) {
                         <span style={{ fontSize:11, fontWeight:700, color:cfg.cor, background:"#fff", padding:"2px 8px", borderRadius:20, border:"1px solid "+cfg.cor+"44" }}>{envio.status}</span>
                         <span style={{ fontSize:11, color:"#64748b" }}>{(envio.itens||[]).length} produto(s) · {totalQtd} unidades</span>
                         {totalPeso > 0 && <span style={{ fontSize:11, color:"#64748b" }}>~{totalPeso.toFixed(1)} kg</span>}
-                        {envio.dataCriacao && <span style={{ fontSize:11, color:"#94a3b8" }}>Criado em {envio.dataCriacao}</span>}
-                        {envio.dataStatus && <span style={{ fontSize:11, color:"#94a3b8" }}>Atualizado {envio.dataStatus}</span>}
+                        {envio.dataCriacao && <span style={{ fontSize:11, color:"#94a3b8" }}>Criado em {fmtDate(envio.dataCriacao)}</span>}
+                        {envio.dataStatus && <span style={{ fontSize:11, color:"#94a3b8" }}>Atualizado {fmtDate(envio.dataStatus)}</span>}
                       </div>
                     </div>
                   </div>
@@ -12016,7 +12016,7 @@ export default function App() {
                             })()}
                           </div>
                         </td>
-                        <td style={{ padding:"10px 12px", fontSize:12, color:"#64748b", whiteSpace:"nowrap" }}>{o.date}</td>
+                        <td style={{ padding:"10px 12px", fontSize:12, color:"#64748b", whiteSpace:"nowrap" }}>{fmtDate(o.date)}</td>
                         <td style={{ padding:"10px 12px", fontSize:13, fontWeight:700, color:"#0f172a", textAlign:"right", whiteSpace:"nowrap" }}>{fmt(o.price)}</td>
                         <td style={{ padding:"10px 12px", fontSize:12, color:"#64748b", textAlign:"center" }}>×{o.qty}</td>
                         <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#d97706", fontWeight:600, fontSize:12 }}>{fmt(o.fee)}</span></td>

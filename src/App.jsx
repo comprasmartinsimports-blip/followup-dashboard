@@ -7639,7 +7639,25 @@ function ModalConta({ conta, categoriasPagar, fornecedores, contasPagar, onSave,
           )}
 
           {/* Info recorrência */}
-          {form.recorrencia && form.recorrencia !== "unica" && form.recorrencia !== "parcelada" && form.vencimento && (
+          {form.recorrencia && form.recorrencia !== "unica" && form.recorrencia !== "parcelada" && form.vencimento && (function(){
+            // Calcular preview de quantas ocorrências serão geradas
+            var mesesMap = { semanal:0, quinzenal:0, mensal:1, bimestral:2, trimestral:3, semestral:6, anual:12 };
+            var diasSemMap = { semanal:7, quinzenal:15 };
+            var isSem = form.recorrencia==="semanal"||form.recorrencia==="quinzenal";
+            var limite = new Date(); limite.setFullYear(limite.getFullYear()+2);
+            var dataAt = new Date(form.vencimento+"T12:00:00"); var count=0;
+            while(dataAt<=limite&&count<104){
+              count++;
+              if(isSem){dataAt=new Date(dataAt);dataAt.setDate(dataAt.getDate()+diasSemMap[form.recorrencia]);}
+              else{var m=mesesMap[form.recorrencia]||1;dataAt=new Date(dataAt);dataAt.setMonth(dataAt.getMonth()+m);}
+            }
+            return (
+              <div style={{ background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#1d4ed8", fontWeight:600, marginBottom:4 }}>
+                ℹ️ Serão geradas <strong>{count} ocorrências</strong> automaticamente (cobertura de 2 anos a partir do primeiro vencimento)
+              </div>
+            );
+          })()}
+          {false && form.recorrencia && form.recorrencia !== "unica" && form.recorrencia !== "parcelada" && form.vencimento && (
             <div style={{ gridColumn:"1/-1", background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#15803d" }}>
               Esta conta se repetirá automaticamente — a próxima será criada ao dar baixa nesta.
             </div>
@@ -7913,24 +7931,56 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
     let novas = [];
 
     if (!editingConta && form.recorrencia === "parcelada" && form.totalParcelas > 1) {
-      // Gera parcelas automaticamente
+      // Gera todas as parcelas de uma vez
       const total = parseInt(form.totalParcelas);
       const valorParcela = parseFloat(form.valor) / total;
       const intervaloDias = { semanal:7, quinzenal:15, mensal:30, bimestral:60, trimestral:90 }[form.intervaloParcelas||"mensal"] || 30;
+      const grupo = Date.now();
       for (let i = 0; i < total; i++) {
         const dataVenc = new Date(form.vencimento + "T12:00:00");
         dataVenc.setDate(dataVenc.getDate() + intervaloDias * i);
         novas.push({
           ...form,
-          id: Date.now() + i,
+          id: grupo + i,
           descricao: `${form.descricao} (${i+1}/${total})`,
           valor: valorParcela.toFixed(2),
           vencimento: dataVenc.toLocaleDateString("sv-SE"),
           recorrencia: "parcelada",
           parcelaAtual: i + 1,
           totalParcelas: total,
-          grupoParcelado: Date.now(),
+          grupoParcelado: grupo,
         });
+      }
+    } else if (!editingConta && form.recorrencia && form.recorrencia !== "unica" && form.recorrencia !== "parcelada" && form.vencimento) {
+      // Recorrente (mensal, semanal, etc.) — gera ocorrências até 2 anos à frente
+      const diasMap = { semanal:7, quinzenal:15, mensal:1, bimestral:2, trimestral:3, semestral:6, anual:12 };
+      const mesesMap = { semanal:0, quinzenal:0, mensal:1, bimestral:2, trimestral:3, semestral:6, anual:12 };
+      const diasSemMap = { semanal:7, quinzenal:15 };
+      const isSemanas = form.recorrencia === "semanal" || form.recorrencia === "quinzenal";
+      const grupo = Date.now();
+      const limite = new Date(); limite.setFullYear(limite.getFullYear() + 2); // até 2 anos
+
+      let dataAtual = new Date(form.vencimento + "T12:00:00");
+      let i = 0;
+      while (dataAtual <= limite && i < 104) { // max 104 semanas / 24 meses
+        novas.push({
+          ...form,
+          id: grupo + i,
+          vencimento: dataAtual.toLocaleDateString("sv-SE"),
+          status: "Pendente",
+          grupoRecorrente: grupo,
+          parcelaAtual: i + 1,
+        });
+        i++;
+        // Avançar para próxima data
+        if (isSemanas) {
+          dataAtual = new Date(dataAtual);
+          dataAtual.setDate(dataAtual.getDate() + diasSemMap[form.recorrencia]);
+        } else {
+          const meses = mesesMap[form.recorrencia] || 1;
+          dataAtual = new Date(dataAtual);
+          dataAtual.setMonth(dataAtual.getMonth() + meses);
+        }
       }
     } else {
       novas = [editingConta ? form : { ...form, id: Date.now() }];
@@ -7967,10 +8017,11 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
     var valorFinal = valorPago || parseFloat(conta.valor || 0);
     let updatedContas = contasPagar.map(c => c.id===conta.id ? {...c, status: novoStatus, contaBancariaId, dataPagamento, valorPago: valorFinal} : c);
 
-    // Se for recorrente, cria a próxima ocorrência automaticamente
+    // Se for recorrente e tiver grupoRecorrente, NÃO cria nova (já foram pré-geradas ao cadastrar)
+    // Se for recorrente sem grupo (legado), cria a próxima
     const rec = conta.recorrencia;
     const diasMap = { semanal:7, quinzenal:15, mensal:30, bimestral:60, trimestral:90, semestral:180, anual:365 };
-    if (rec && diasMap[rec] && conta.vencimento) {
+    if (rec && diasMap[rec] && conta.vencimento && !conta.grupoRecorrente) {
       const proxVenc = new Date(conta.vencimento + "T12:00:00");
       proxVenc.setDate(proxVenc.getDate() + diasMap[rec]);
       const proxConta = {

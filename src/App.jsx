@@ -1699,6 +1699,7 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
   const [editMeta, setEditMeta] = useState(false);
   const [metaInput, setMetaInput] = useState(String(metaMensal || ""));
   const [overviewTab, setOverviewTab] = useState("resumo"); // resumo | dashboard
+  const [dashSubTab, setDashSubTab] = useState("geral"); // geral | vendas | margem | produtos | clientes | abc | metas
   const [dashPeriodo, setDashPeriodo] = useState("mes"); // hoje | 7dias | mes | 30dias | ano | custom | mesSel
   const [dashMesSel, setDashMesSel] = useState(() => { var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0"); });
   const [dashDe, setDashDe] = useState("");
@@ -1850,7 +1851,7 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
 
-      {/* ── NAVEGAÇÃO ── */}
+      {/* ── NAVEGAÇÃO PRINCIPAL ── */}
       <div style={{ display:"flex", gap:2, background:"#f1f5f9", padding:4, borderRadius:10, width:"fit-content" }}>
         {[{key:"resumo",label:"📊 Resumo"},{key:"dashboard",label:"📈 Dashboard"}].map(function(t){
           var active = overviewTab===t.key;
@@ -1860,6 +1861,33 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
             borderRadius:8,fontWeight:active?700:500,boxShadow:active?"0 1px 3px rgba(0,0,0,.08)":"none"}}>{t.label}</button>;
         })}
       </div>
+
+      {/* ── SUB-NAVEGAÇÃO DO DASHBOARD ── */}
+      {overviewTab === "dashboard" && (
+        <div style={{ display:"flex", gap:4, flexWrap:"wrap", borderBottom:"2px solid #f1f5f9", paddingBottom:12 }}>
+          {[
+            { key:"geral",    label:"📊 Dashboard Geral" },
+            { key:"vendas",   label:"🛒 Dashboard Vendas" },
+            { key:"margem",   label:"💰 Margem por Pedido" },
+            { key:"produtos", label:"📦 Dashboard Produtos" },
+            { key:"clientes", label:"👥 Dashboard Clientes" },
+            { key:"abc",      label:"🏆 Curva ABC" },
+            { key:"metas",    label:"🎯 Metas" },
+          ].map(function(t){
+            var active = dashSubTab===t.key;
+            return (
+              <button key={t.key} onClick={function(){setDashSubTab(t.key);}}
+                style={{ padding:"7px 16px", borderRadius:8, border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:12,
+                  fontWeight:active?700:500,
+                  background:active?"#0f172a":"#f8fafc",
+                  color:active?"#fff":"#64748b",
+                  boxShadow:active?"0 2px 6px rgba(0,0,0,.12)":"none" }}>
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* ══ ABA RESUMO ══ */}
       {overviewTab === "resumo" && <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
@@ -2004,7 +2032,7 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
       {/* ══ ABA DASHBOARD ══ */}
       {overviewTab === "dashboard" && (
         <div>
-          {/* ── Filtro de Período ── */}
+          {/* ── Filtro de Período (sempre visível no dashboard) ── */}
           <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:16, flexWrap:"wrap" }}>
             <span style={{ fontSize:12, color:"#64748b", fontWeight:600 }}>Período:</span>
             {[
@@ -2087,11 +2115,299 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
             </span>
           </div>
 
-          <DashboardSubAbas
-            fat30={fat30dash} ultimos30={ultimos30dash} maxFat30={maxFat30dash} totalFat30={totalFat30dash} mediaFat30={mediaFat30dash}
-            rankingVendas={rankingVendas} rankingLucro={rankingLucro}
-            fmt={fmt} card={card} txt={txt} txtMuted={txtMuted}
-          />
+          {/* ══ GERAL ══ */}
+          {dashSubTab === "geral" && (
+            <DashboardSubAbas
+              fat30={fat30dash} ultimos30={ultimos30dash} maxFat30={maxFat30dash} totalFat30={totalFat30dash} mediaFat30={mediaFat30dash}
+              rankingVendas={rankingVendas} rankingLucro={rankingLucro}
+              fmt={fmt} card={card} txt={txt} txtMuted={txtMuted}
+            />
+          )}
+
+          {/* ══ DASHBOARD VENDAS ══ */}
+          {dashSubTab === "vendas" && (function(){
+            var pedidosPeriodo = rawOrders.filter(function(o){ return o.status==="paid" && o.date>=dashRange.de && o.date<=dashRange.ate; });
+            var totalBruto = pedidosPeriodo.reduce(function(s,o){return s+o.price*(o.qty||1);},0);
+            var porDia = {}; pedidosPeriodo.forEach(function(o){ porDia[o.date]=(porDia[o.date]||0)+o.price*(o.qty||1); });
+            var diasComVenda = Object.keys(porDia).length || 1;
+            var mediaDia = totalBruto / diasComVenda;
+            var cancelados = rawOrders.filter(function(o){ return o.status==="cancelled" && o.date>=dashRange.de && o.date<=dashRange.ate; }).length;
+            var ticketMedio = pedidosPeriodo.length > 0 ? totalBruto/pedidosPeriodo.length : 0;
+            var statusCount = {};
+            rawOrders.filter(function(o){return o.date>=dashRange.de&&o.date<=dashRange.ate;}).forEach(function(o){ statusCount[o.status]=(statusCount[o.status]||0)+1; });
+            return (
+              <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+                {/* Cards principais */}
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:12 }}>
+                  {[
+                    { l:"Total de Pedidos", v:pedidosPeriodo.length, cor:"#0f172a" },
+                    { l:"Faturamento Bruto", v:fmt(totalBruto), cor:"#15803d" },
+                    { l:"Ticket Médio", v:fmt(ticketMedio), cor:"#0891b2" },
+                    { l:"Média Diária", v:fmt(mediaDia), cor:"#7c3aed" },
+                    { l:"Pedidos Cancelados", v:cancelados, cor:"#dc2626" },
+                    { l:"Dias com Venda", v:diasComVenda, cor:"#d97706" },
+                  ].map(function(k){ return (
+                    <div key={k.l} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"14px 16px" }}>
+                      <div style={{ fontSize:10, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:4 }}>{k.l}</div>
+                      <div style={{ fontSize:20, fontWeight:800, color:k.cor }}>{k.v}</div>
+                    </div>
+                  ); })}
+                </div>
+                {/* Vendas por status */}
+                <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"18px 20px" }}>
+                  <div style={{ fontWeight:700, fontSize:15, color:"#0f172a", marginBottom:12 }}>Pedidos por Status</div>
+                  <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+                    {Object.entries(statusCount).map(function(e){
+                      var cor=e[0]==="paid"?"#15803d":e[0]==="cancelled"?"#dc2626":"#d97706";
+                      var bg=e[0]==="paid"?"#f0fdf4":e[0]==="cancelled"?"#fef2f2":"#fffbeb";
+                      return <div key={e[0]} style={{ background:bg, border:"1px solid "+cor+"33", borderRadius:10, padding:"10px 18px", textAlign:"center" }}>
+                        <div style={{ fontSize:11, color:cor, fontWeight:600, textTransform:"uppercase" }}>{e[0]}</div>
+                        <div style={{ fontSize:24, fontWeight:800, color:cor }}>{e[1]}</div>
+                      </div>;
+                    })}
+                  </div>
+                </div>
+                {/* Top 10 pedidos por valor */}
+                <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
+                  <div style={{ padding:"14px 18px", borderBottom:"1px solid #f1f5f9", fontWeight:700, fontSize:15, color:"#0f172a" }}>Top 10 Pedidos por Valor</div>
+                  <table style={{ borderCollapse:"collapse", width:"100%" }}>
+                    <thead><tr>{["#","Pedido","Data","Produto","Valor"].map(function(h){ return <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", padding:"8px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa" }}>{h}</th>; })}</tr></thead>
+                    <tbody>{pedidosPeriodo.sort(function(a,b){return (b.price*(b.qty||1))-(a.price*(a.qty||1));}).slice(0,10).map(function(o,i){
+                      return <tr key={o.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
+                        <td style={{ padding:"8px 14px", fontSize:13, fontWeight:700, color:"#94a3b8" }}>{i+1}</td>
+                        <td style={{ padding:"8px 14px", fontSize:12, color:"#0891b2", fontFamily:"monospace" }}>#{o.id}</td>
+                        <td style={{ padding:"8px 14px", fontSize:12, color:"#64748b" }}>{o.date}</td>
+                        <td style={{ padding:"8px 14px", fontSize:12, color:"#0f172a", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{o.title||"—"}</td>
+                        <td style={{ padding:"8px 14px", fontSize:13, fontWeight:700, color:"#15803d" }}>{fmt(o.price*(o.qty||1))}</td>
+                      </tr>;
+                    })}</tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ══ MARGEM POR PEDIDO ══ */}
+          {dashSubTab === "margem" && (function(){
+            var pedidosPeriodo = rawOrders.filter(function(o){ return o.status==="paid" && o.date>=dashRange.de && o.date<=dashRange.ate; });
+            var comCusto = pedidosPeriodo.map(function(o){
+              var listing = enriched.find(function(l){return l.id===o.listing_id;});
+              var custo = costs[o.listing_id]||0;
+              var bruto = o.price*(o.qty||1);
+              var taxa = listing ? (listing.fee||0)*(o.qty||1) : bruto*0.13;
+              var frete = listing ? (listing.freteSeller||0)*(o.qty||1) : 0;
+              var lucro = bruto - taxa - frete - custo*(o.qty||1);
+              var margem = bruto>0?(lucro/bruto)*100:0;
+              return Object.assign({},o,{bruto,taxa,frete,custo:custo*(o.qty||1),lucro,margem,listing});
+            });
+            var comCustoVal = comCusto.filter(function(o){return costs[o.listing_id]>0;});
+            var totalBruto=comCusto.reduce(function(s,o){return s+o.bruto;},0);
+            var totalLucro=comCustoVal.reduce(function(s,o){return s+o.lucro;},0);
+            var margemMedia=comCustoVal.length>0?comCustoVal.reduce(function(s,o){return s+o.margem;},0)/comCustoVal.length:0;
+            return (
+              <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:12 }}>
+                  {[
+                    {l:"Pedidos Analisados",v:comCustoVal.length,cor:"#0f172a"},
+                    {l:"Faturamento Bruto",v:fmt(totalBruto),cor:"#15803d"},
+                    {l:"Lucro Total",v:fmt(totalLucro),cor:totalLucro>=0?"#0891b2":"#dc2626"},
+                    {l:"Margem Média",v:margemMedia.toFixed(1)+"%",cor:margemMedia>=20?"#15803d":margemMedia>=10?"#d97706":"#dc2626"},
+                    {l:"Sem Custo Cad.",v:comCusto.length-comCustoVal.length,cor:"#dc2626"},
+                  ].map(function(k){ return <div key={k.l} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"14px 16px" }}>
+                    <div style={{ fontSize:10, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:4 }}>{k.l}</div>
+                    <div style={{ fontSize:20, fontWeight:800, color:k.cor }}>{k.v}</div>
+                  </div>; })}
+                </div>
+                <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
+                  <div style={{ padding:"14px 18px", borderBottom:"1px solid #f1f5f9", fontWeight:700, fontSize:15, color:"#0f172a" }}>Margem por Pedido</div>
+                  <table style={{ borderCollapse:"collapse", width:"100%" }}>
+                    <thead><tr>{["Pedido","Data","Produto","Bruto","Taxa ML","Frete","Custo","Lucro","Margem"].map(function(h){ return <th key={h} style={{ fontSize:10, color:"#94a3b8", textTransform:"uppercase", padding:"8px 12px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>; })}</tr></thead>
+                    <tbody>{comCusto.sort(function(a,b){return b.margem-a.margem;}).slice(0,100).map(function(o,i){
+                      var mCor=o.margem>=20?"#15803d":o.margem>=10?"#d97706":"#dc2626";
+                      return <tr key={o.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
+                        <td style={{ padding:"7px 12px", fontSize:11, color:"#0891b2", fontFamily:"monospace" }}>#{o.id}</td>
+                        <td style={{ padding:"7px 12px", fontSize:11, color:"#64748b" }}>{o.date}</td>
+                        <td style={{ padding:"7px 12px", fontSize:11, color:"#0f172a", maxWidth:160, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{o.title||"—"}</td>
+                        <td style={{ padding:"7px 12px", fontSize:12, fontWeight:600, color:"#0f172a" }}>{fmt(o.bruto)}</td>
+                        <td style={{ padding:"7px 12px", fontSize:12, color:"#dc2626" }}>{fmt(o.taxa)}</td>
+                        <td style={{ padding:"7px 12px", fontSize:12, color:"#d97706" }}>{fmt(o.frete)}</td>
+                        <td style={{ padding:"7px 12px", fontSize:12, color:"#64748b" }}>{o.custo>0?fmt(o.custo):<span style={{color:"#94a3b8"}}>—</span>}</td>
+                        <td style={{ padding:"7px 12px", fontSize:12, fontWeight:700, color:o.lucro>=0?"#0891b2":"#dc2626" }}>{o.custo>0?fmt(o.lucro):<span style={{color:"#94a3b8"}}>—</span>}</td>
+                        <td style={{ padding:"7px 12px" }}>{o.custo>0?<span style={{ fontSize:12, fontWeight:700, color:mCor, background:mCor+"11", padding:"2px 7px", borderRadius:5 }}>{o.margem.toFixed(1)}%</span>:<span style={{fontSize:11,color:"#94a3b8"}}>sem custo</span>}</td>
+                      </tr>;
+                    })}</tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ══ DASHBOARD PRODUTOS ══ */}
+          {dashSubTab === "produtos" && (function(){
+            var pedidosPeriodo = rawOrders.filter(function(o){ return o.status==="paid" && o.date>=dashRange.de && o.date<=dashRange.ate; });
+            var porProd = {};
+            pedidosPeriodo.forEach(function(o){
+              var id=o.listing_id||"sem_listing";
+              if(!porProd[id]) porProd[id]={id,titulo:o.title||id,qtd:0,receita:0};
+              porProd[id].qtd+=(o.qty||1);
+              porProd[id].receita+=o.price*(o.qty||1);
+            });
+            var ranking=Object.values(porProd).sort(function(a,b){return b.receita-a.receita;});
+            return (
+              <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12 }}>
+                  {[
+                    {l:"Produtos Vendidos",v:ranking.length,cor:"#0f172a"},
+                    {l:"Total de Unidades",v:pedidosPeriodo.reduce(function(s,o){return s+(o.qty||1);},0),cor:"#0891b2"},
+                    {l:"Receita Total",v:fmt(pedidosPeriodo.reduce(function(s,o){return s+o.price*(o.qty||1);},0)),cor:"#15803d"},
+                    {l:"Produto #1",v:ranking[0]?.titulo?.slice(0,20)||"—",cor:"#d97706"},
+                  ].map(function(k){ return <div key={k.l} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"14px 16px" }}>
+                    <div style={{ fontSize:10, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:4 }}>{k.l}</div>
+                    <div style={{ fontSize:k.l==="Produto #1"?13:20, fontWeight:800, color:k.cor }}>{k.v}</div>
+                  </div>; })}
+                </div>
+                <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
+                  <div style={{ padding:"14px 18px", borderBottom:"1px solid #f1f5f9", fontWeight:700, fontSize:15, color:"#0f172a" }}>Ranking de Produtos por Receita</div>
+                  <table style={{ borderCollapse:"collapse", width:"100%" }}>
+                    <thead><tr>{["#","Produto","MLB","Qtd Vendida","Receita","Part. %"].map(function(h){ return <th key={h} style={{ fontSize:10, color:"#94a3b8", textTransform:"uppercase", padding:"8px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa" }}>{h}</th>; })}</tr></thead>
+                    <tbody>{(function(){
+                      var total=ranking.reduce(function(s,r){return s+r.receita;},0);
+                      return ranking.slice(0,50).map(function(r,i){ return <tr key={r.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
+                        <td style={{ padding:"8px 14px", fontSize:13, fontWeight:800, color:i===0?"#d97706":i===1?"#64748b":i===2?"#d97706":"#94a3b8" }}>{i+1}</td>
+                        <td style={{ padding:"8px 14px", fontSize:12, color:"#0f172a", maxWidth:220, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.titulo}</td>
+                        <td style={{ padding:"8px 14px", fontSize:11, color:"#0891b2", fontFamily:"monospace" }}>{r.id!=="sem_listing"?r.id:"—"}</td>
+                        <td style={{ padding:"8px 14px", textAlign:"center", fontSize:13, fontWeight:700, color:"#0891b2" }}>{r.qtd}</td>
+                        <td style={{ padding:"8px 14px", fontSize:13, fontWeight:700, color:"#15803d" }}>{fmt(r.receita)}</td>
+                        <td style={{ padding:"8px 14px" }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                            <div style={{ flex:1, background:"#f1f5f9", borderRadius:4, height:8, overflow:"hidden" }}>
+                              <div style={{ width:(r.receita/total*100).toFixed(1)+"%", background:"#0891b2", height:"100%", borderRadius:4 }} />
+                            </div>
+                            <span style={{ fontSize:11, color:"#64748b", fontWeight:600 }}>{(r.receita/total*100).toFixed(1)}%</span>
+                          </div>
+                        </td>
+                      </tr>; });
+                    })()}</tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ══ DASHBOARD CLIENTES ══ */}
+          {dashSubTab === "clientes" && (function(){
+            var pedidosPeriodo = rawOrders.filter(function(o){ return o.status==="paid" && o.date>=dashRange.de && o.date<=dashRange.ate; });
+            var porCliente={};
+            pedidosPeriodo.forEach(function(o){
+              var nick=o.buyer_nickname||o.buyer_id||"Desconhecido";
+              if(!porCliente[nick]) porCliente[nick]={nick,pedidos:0,receita:0,primeiroId:o.id};
+              porCliente[nick].pedidos++;
+              porCliente[nick].receita+=o.price*(o.qty||1);
+            });
+            var ranking=Object.values(porCliente).sort(function(a,b){return b.receita-a.receita;});
+            var totalReceita=ranking.reduce(function(s,c){return s+c.receita;},0);
+            var recorrentes=ranking.filter(function(c){return c.pedidos>1;}).length;
+            return (
+              <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12 }}>
+                  {[
+                    {l:"Clientes Únicos",v:ranking.length,cor:"#0f172a"},
+                    {l:"Clientes Recorrentes",v:recorrentes,cor:"#15803d"},
+                    {l:"Ticket Médio/Cliente",v:fmt(ranking.length>0?totalReceita/ranking.length:0),cor:"#0891b2"},
+                    {l:"Top Cliente",v:ranking[0]?.nick?.slice(0,20)||"—",cor:"#d97706"},
+                  ].map(function(k){ return <div key={k.l} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"14px 16px" }}>
+                    <div style={{ fontSize:10, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:4 }}>{k.l}</div>
+                    <div style={{ fontSize:k.l.includes("Top")?13:20, fontWeight:800, color:k.cor }}>{k.v}</div>
+                  </div>; })}
+                </div>
+                <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
+                  <div style={{ padding:"14px 18px", borderBottom:"1px solid #f1f5f9", fontWeight:700, fontSize:15, color:"#0f172a" }}>Top Clientes por Receita</div>
+                  <table style={{ borderCollapse:"collapse", width:"100%" }}>
+                    <thead><tr>{["#","Cliente (nickname ML)","Pedidos","Receita Total","Ticket Médio","Part. %"].map(function(h){ return <th key={h} style={{ fontSize:10, color:"#94a3b8", textTransform:"uppercase", padding:"8px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa" }}>{h}</th>; })}</tr></thead>
+                    <tbody>{ranking.slice(0,50).map(function(c,i){ return <tr key={c.nick} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
+                      <td style={{ padding:"8px 14px", fontSize:13, fontWeight:800, color:i===0?"#d97706":"#94a3b8" }}>{i+1}</td>
+                      <td style={{ padding:"8px 14px", fontSize:12, color:"#0f172a", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.nick}</td>
+                      <td style={{ padding:"8px 14px", textAlign:"center", fontWeight:700, color:c.pedidos>1?"#15803d":"#64748b" }}>{c.pedidos}{c.pedidos>1&&<span style={{fontSize:10,marginLeft:4,color:"#15803d"}}>✓ recorrente</span>}</td>
+                      <td style={{ padding:"8px 14px", fontWeight:700, color:"#15803d" }}>{fmt(c.receita)}</td>
+                      <td style={{ padding:"8px 14px", fontSize:12, color:"#64748b" }}>{fmt(c.receita/c.pedidos)}</td>
+                      <td style={{ padding:"8px 14px", fontSize:12, color:"#64748b", fontWeight:600 }}>{(c.receita/totalReceita*100).toFixed(1)}%</td>
+                    </tr>; })}</tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ══ CURVA ABC ══ */}
+          {dashSubTab === "abc" && (function(){
+            var pedidosPeriodo = rawOrders.filter(function(o){ return o.status==="paid" && o.date>=dashRange.de && o.date<=dashRange.ate; });
+            var porProd={};
+            pedidosPeriodo.forEach(function(o){
+              var id=o.listing_id||"sem";
+              if(!porProd[id]) porProd[id]={id,titulo:o.title||id,qtd:0,receita:0};
+              porProd[id].qtd+=(o.qty||1);
+              porProd[id].receita+=o.price*(o.qty||1);
+            });
+            var total=Object.values(porProd).reduce(function(s,p){return s+p.receita;},0);
+            var acum=0;
+            var ranking=Object.values(porProd).sort(function(a,b){return b.receita-a.receita;}).map(function(p){
+              acum+=p.receita;
+              var perc=total>0?(acum/total)*100:0;
+              var curva=perc<=80?"A":perc<=95?"B":"C";
+              return Object.assign({},p,{acum,percAcum:perc,curva});
+            });
+            var qtdA=ranking.filter(function(p){return p.curva==="A";}).length;
+            var qtdB=ranking.filter(function(p){return p.curva==="B";}).length;
+            var qtdC=ranking.filter(function(p){return p.curva==="C";}).length;
+            return (
+              <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
+                  {[
+                    {l:"Curva A",desc:"Representam 80% da receita",v:qtdA+" produtos",cor:"#15803d",bg:"#f0fdf4"},
+                    {l:"Curva B",desc:"Entre 80% e 95% da receita",v:qtdB+" produtos",cor:"#d97706",bg:"#fffbeb"},
+                    {l:"Curva C",desc:"Últimos 5% da receita",v:qtdC+" produtos",cor:"#dc2626",bg:"#fef2f2"},
+                  ].map(function(k){ return <div key={k.l} style={{ background:k.bg, border:"1px solid "+k.cor+"33", borderRadius:12, padding:"16px 18px" }}>
+                    <div style={{ fontSize:18, fontWeight:800, color:k.cor, marginBottom:4 }}>{k.l}</div>
+                    <div style={{ fontSize:20, fontWeight:800, color:"#0f172a" }}>{k.v}</div>
+                    <div style={{ fontSize:11, color:"#64748b", marginTop:4 }}>{k.desc}</div>
+                  </div>; })}
+                </div>
+                <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
+                  <div style={{ padding:"14px 18px", borderBottom:"1px solid #f1f5f9", fontWeight:700, fontSize:15, color:"#0f172a" }}>Curva ABC de Produtos</div>
+                  <table style={{ borderCollapse:"collapse", width:"100%" }}>
+                    <thead><tr>{["#","Curva","Produto","MLB","Qtd","Receita","Part. %","Acum. %"].map(function(h){ return <th key={h} style={{ fontSize:10, color:"#94a3b8", textTransform:"uppercase", padding:"8px 12px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>; })}</tr></thead>
+                    <tbody>{ranking.map(function(p,i){
+                      var cor=p.curva==="A"?"#15803d":p.curva==="B"?"#d97706":"#dc2626";
+                      var bg=p.curva==="A"?"#f0fdf4":p.curva==="B"?"#fffbeb":"#fef2f2";
+                      return <tr key={p.id} style={{ background:i%2===0?"#f9f9f9":"#fff" }}>
+                        <td style={{ padding:"7px 12px", fontSize:12, fontWeight:700, color:"#94a3b8" }}>{i+1}</td>
+                        <td style={{ padding:"7px 12px" }}><span style={{ fontSize:12, fontWeight:800, color:cor, background:bg, padding:"2px 10px", borderRadius:20 }}>{p.curva}</span></td>
+                        <td style={{ padding:"7px 12px", fontSize:12, color:"#0f172a", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.titulo}</td>
+                        <td style={{ padding:"7px 12px", fontSize:11, color:"#0891b2", fontFamily:"monospace" }}>{p.id!=="sem"?p.id:"—"}</td>
+                        <td style={{ padding:"7px 12px", textAlign:"center", fontWeight:700, color:"#0891b2" }}>{p.qtd}</td>
+                        <td style={{ padding:"7px 12px", fontWeight:700, color:"#15803d" }}>{fmt(p.receita)}</td>
+                        <td style={{ padding:"7px 12px", fontSize:12, color:"#64748b" }}>{(p.receita/total*100).toFixed(2)}%</td>
+                        <td style={{ padding:"7px 12px" }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                            <div style={{ width:60, background:"#f1f5f9", borderRadius:4, height:8, overflow:"hidden" }}>
+                              <div style={{ width:Math.min(p.percAcum,100).toFixed(0)+"%", background:cor, height:"100%", borderRadius:4 }} />
+                            </div>
+                            <span style={{ fontSize:11, fontWeight:600, color:cor }}>{p.percAcum.toFixed(1)}%</span>
+                          </div>
+                        </td>
+                      </tr>;
+                    })}</tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ══ METAS ══ */}
+          {dashSubTab === "metas" && (
+            <GraficoMeta metaMensal={metaMensal} faturamentoMes={faturamentoMes} progressoMeta={progressoMeta} diasNoMes={diasNoMes} diaDoMes={diaDoMes} mesAtual={mesAtual} rawOrders={rawOrders} fmt={fmt} />
+          )}
+
         </div>
       )}
 

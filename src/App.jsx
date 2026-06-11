@@ -3811,8 +3811,14 @@ function ModalMovEstoque({ produto, movEstoque, onRegistrar, onClose }) {
   const [preco, setPreco] = useState("");
   const [abaView, setAbaView] = useState("historico"); // historico | registrar
 
-  var movsProd = (movEstoque||[]).filter(function(m){ return m.produtoId===produto.id || m.sku===produto.sku; })
-    .sort(function(a,b){ return b.id - a.id; });
+  var mlbsProd = [produto.mlbVinculado].concat(produto.mlbsVinculados||[]).filter(Boolean);
+  var skuProd = (produto.sku||"").trim().toLowerCase();
+  var movsProd = (movEstoque||[]).filter(function(m){
+    if (m.produtoId && m.produtoId === produto.id) return true;
+    if (skuProd && m.sku && m.sku.trim().toLowerCase() === skuProd) return true;
+    if (m.mlbId && mlbsProd.includes(m.mlbId)) return true;
+    return false;
+  }).sort(function(a,b){ return (b.id||0) - (a.id||0); });
 
   var estoqueAtual = parseInt(produto.estoqueAtual||0);
   var totalEntradas = movsProd.filter(function(m){return m.tipo==="entrada";}).reduce(function(s,m){return s+m.qtd;},0);
@@ -3868,10 +3874,19 @@ function ModalMovEstoque({ produto, movEstoque, onRegistrar, onClose }) {
           {/* Histórico */}
           {abaView === "historico" && (
             movsProd.length === 0 ? (
-              <div style={{ textAlign:"center", color:"#94a3b8", padding:"40px 0" }}>
+              <div style={{ textAlign:"center", color:"#94a3b8", padding:"24px 0" }}>
                 <div style={{ fontSize:32, marginBottom:8 }}>📦</div>
-                <div>Nenhuma movimentação registrada ainda</div>
-                <button onClick={function(){setAbaView("registrar");}} style={{ marginTop:12, background:"#0f172a", border:"none", color:"#fff", padding:"8px 20px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:600 }}>Registrar primeiro movimento</button>
+                <div style={{ fontWeight:600, color:"#0f172a", marginBottom:8 }}>Nenhuma movimentação registrada ainda</div>
+                {mlbsProd.length > 0 ? (
+                  <div style={{ fontSize:12, color:"#92400e", background:"#fffbeb", border:"1px solid #fde68a", borderRadius:8, padding:"8px 12px", marginBottom:14, textAlign:"left", maxWidth:380, margin:"0 auto 14px" }}>
+                    ⚠️ Produto tem MLB vinculado ({mlbsProd[0]}). Vá em <b>Produtos → 📋 Movimentações</b> e clique em <b>🔄 Reprocessar Vendas</b> para importar as saídas automáticas de todas as vendas.
+                  </div>
+                ) : (
+                  <div style={{ fontSize:12, color:"#dc2626", background:"#fef2f2", border:"1px solid #fecaca", borderRadius:8, padding:"8px 12px", marginBottom:14, maxWidth:380, margin:"0 auto 14px" }}>
+                    ⚠️ Produto sem MLB vinculado. Edite o produto e vincule um MLB para que as vendas sejam baixadas automaticamente.
+                  </div>
+                )}
+                <button onClick={function(){setAbaView("registrar");}} style={{ background:"#0f172a", border:"none", color:"#fff", padding:"8px 20px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:600 }}>+ Registrar movimento manual</button>
               </div>
             ) : (
               <div>
@@ -11177,6 +11192,23 @@ export default function App() {
 
   const usingMock = !token || realListings.length === 0;
 
+  // ── Auto-baixa de estoque sempre que rawOrders ou produtos mudarem ──
+  useEffect(function() {
+    if (!rawOrders || rawOrders.length === 0) return;
+    if (!produtos || produtos.length === 0) return;
+    try {
+      var prodAtual = JSON.parse(localStorage.getItem("produtos_cadastro") || "[]");
+      if (prodAtual.length === 0) return;
+      var movAtual  = JSON.parse(localStorage.getItem("mov_estoque") || "[]");
+      var baixAtual = new Set(JSON.parse(localStorage.getItem("vendas_estoque_baixadas") || "[]"));
+      // Só processa se tiver vendas novas não baixadas ainda
+      var novas = rawOrders.filter(function(o){ return o.status === "paid" && !baixAtual.has(String(o.id)); });
+      if (novas.length > 0 || movAtual.some(function(m){return m.semProduto;})) {
+        baixarEstoqueVendas(rawOrders, prodAtual, movAtual, baixAtual);
+      }
+    } catch(e) { console.warn("[ESTOQUE] Erro auto-baixa:", e); }
+  }, [rawOrders, produtos]);
+
   // ── Baixa automática de estoque por venda ──────────────────
   function baixarEstoqueVendas(orders, produtosAtuais, movimentosAtuais, baixadasAtuais) {
     var novasBaixadas = new Set(baixadasAtuais);
@@ -11188,12 +11220,22 @@ export default function App() {
     var mapMlb = {};
     var mapSku = {};
     produtosUpd.forEach(function(p) {
-      // por MLB vinculado
       if (p.mlbVinculado) mapMlb[p.mlbVinculado] = p;
       (p.mlbsVinculados || []).forEach(function(m) { mapMlb[m] = p; });
-      // por SKU (fallback)
       if (p.sku) mapSku[p.sku.trim().toLowerCase()] = p;
     });
+
+    // PASSO 0: Corrigir movimentações "semProduto" que agora têm produto cadastrado
+    var movsCorrigidas = 0;
+    movsUpd = movsUpd.map(function(m) {
+      if (!m.semProduto) return m;
+      var prod = (m.mlbId && mapMlb[m.mlbId]) ||
+                 (m.sku && mapSku[m.sku.trim().toLowerCase()]) || null;
+      if (!prod) return m;
+      movsCorrigidas++;
+      return Object.assign({}, m, { produtoId: prod.id, sku: prod.sku, semProduto: false });
+    });
+    if (movsCorrigidas > 0) console.log("[ESTOQUE] " + movsCorrigidas + " movimentações corrigidas com produto.");
 
     orders.filter(function(o) {
       return o.status === "paid" && !novasBaixadas.has(String(o.id));

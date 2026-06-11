@@ -5509,9 +5509,39 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
             </div>
           )}
 
-          <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:10, flexWrap:"wrap" }}>
-            {/* Ações — direita */}
-            <div style={{ display:"flex", gap:6, marginLeft:"auto" }}>
+          <LayoutFiltros
+            filtros={
+              <>
+                <FiltroGrupo titulo="Categoria">
+                  <FiltroBotao label="Todas" active={filterCat==="all"} cor="#0f172a" bg="#f1f5f9" onClick={function(){setFilterCat("all");setPaginaProdutos(1);}} />
+                  {CATEGORIAS_PRODUTO.map(function(c){ return <FiltroBotao key={c} label={c} active={filterCat===c} cor="#0f172a" bg="#f1f5f9" onClick={function(){setFilterCat(c);setPaginaProdutos(1);}} />; })}
+                </FiltroGrupo>
+                <FiltroGrupo titulo="Status">
+                  <FiltroBotao label="Todos" active={filterStatus==="all"} cor="#0f172a" bg="#f1f5f9" onClick={function(){setFilterStatus("all");}} />
+                  <FiltroBotao label="✅ Ativo" active={filterStatus==="Ativo"} cor="#15803d" bg="#f0fdf4" onClick={function(){setFilterStatus("Ativo");}} />
+                  <FiltroBotao label="○ Inativo" active={filterStatus==="Inativo"} cor="#94a3b8" bg="#f8fafc" onClick={function(){setFilterStatus("Inativo");}} />
+                </FiltroGrupo>
+                <FiltroGrupo titulo="Fornecedor">
+                  <FiltroBotao label="Todos" active={filterFornecedorProd==="all"} cor="#0f172a" bg="#f1f5f9" onClick={function(){setFilterFornecedorProd("all");}} />
+                  {fornecedores.filter(function(f){return f.tipo==="Fornecedor";}).map(function(f){ return <FiltroBotao key={f.id} label={f.nome} active={filterFornecedorProd===f.id} cor="#0891b2" bg="#ecfeff" onClick={function(){setFilterFornecedorProd(f.id);}} />; })}
+                </FiltroGrupo>
+                <FiltroGrupo titulo="Situação">
+                  {[{k:"todos",l:"Todos"},{k:"zerado",l:"🔴 Zerado"},{k:"critico",l:"⚠️ Crítico"},{k:"ok",l:"✅ OK"},{k:"sem_img",l:"📷 Sem imagem"},{k:"sem_custo",l:"💰 Sem custo"},{k:"sem_sku",l:"# Sem SKU"},{k:"sem_ml",l:"🟡 Sem MLB"}].map(function(f){
+                    return <FiltroBotao key={f.k} label={f.l} active={filterEstoque===f.k} cor="#0f172a" bg="#f1f5f9" onClick={function(){setFilterEstoque(f.k);}} />;
+                  })}
+                </FiltroGrupo>
+                <div style={{ fontSize:11, color:"#94a3b8", marginTop:"auto" }}>{produtosFiltrados.length} produto(s)</div>
+              </>
+            }
+            busca={
+              <div style={{ position:"relative" }}>
+                <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
+                <input value={search} onChange={function(e){ setSearch(e.target.value); setPaginaProdutos(1); }} placeholder="Buscar por título, SKU, EAN, cód. fornecedor..."
+                  style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px 8px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
+              </div>
+            }
+            acoes={
+              <div style={{ display:"flex", gap:6 }}>
               <BotaoExportar
               onCSV={function(){
                 var list = produtosFiltrados.length > 0 ? produtosFiltrados : produtos;
@@ -5540,6 +5570,8 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
               <button onClick={function(){ setEditingProd(null); setShowModalProd(true); }}
                 style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Novo Produto</button>
             </div>
+          }>
+            <div>
             {listings.length > 0 && (
               <button onClick={() => {
                 const sincronizados = syncListingsToProdutos(listings, produtos);
@@ -5568,68 +5600,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
               <button onClick={function(){ setImportMsg(null); }} style={{ background:"none", border:"none", cursor:"pointer", color:"#94a3b8", fontSize:15 }}>✕</button>
             </div>
           )}
-          {/* Barra de filtros estilo Bling */}
-          <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
-            <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap", marginBottom:10 }}>
-              <div style={{ position:"relative", flex:2, minWidth:220 }}>
-                <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
-                <input value={search} onChange={function(e){ setSearch(e.target.value); setPaginaProdutos(1); }} placeholder="Buscar por título, SKU, EAN, cód. fornecedor..."
-                  style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px 8px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
-              </div>
-              <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
-                style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 12px", borderRadius:8, fontSize:12 }}>
-                <option value="all">Todas categorias</option>
-                {CATEGORIAS_PRODUTO.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-                style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 12px", borderRadius:8, fontSize:12 }}>
-                <option value="all">Todos status</option>
-                <option value="Ativo">✅ Ativo</option>
-                <option value="Inativo">○ Inativo</option>
-              </select>
-              <select value={filterFornecedorProd} onChange={e=>setFilterFornecedorProd(e.target.value)}
-                style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 12px", borderRadius:8, fontSize:12 }}>
-                <option value="all">Todos fornecedores</option>
-                {fornecedores.map(function(f){ return <option key={f.id} value={f.id}>{f.nome}</option>; })}
-              </select>
-              <select value={filterEstoque} onChange={e=>setFilterEstoque(e.target.value)}
-                style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 12px", borderRadius:8, fontSize:12 }}>
-                <option value="todos">Todos estoques</option>
-                <option value="zerado">🔴 Estoque zerado</option>
-                <option value="critico">⚠️ Abaixo do mínimo</option>
-                <option value="ok">✅ Estoque OK</option>
-              </select>
-              {/* Toggle view */}
-              <div style={{ display:"flex", gap:2, background:"#e2e8f0", padding:3, borderRadius:8, marginLeft:"auto" }}>
-                {[{k:"tabela",l:"≡"},{k:"cards",l:"⊞"}].map(function(v){
-                  var a = viewProdutos===v.k;
-                  return <button key={v.k} onClick={function(){setViewProdutos(v.k);}}
-                    style={{ width:30, height:28, borderRadius:6, border:"none", cursor:"pointer", fontSize:16, background:a?"#fff":"transparent", color:a?"#0f172a":"#64748b", boxShadow:a?"0 1px 2px rgba(0,0,0,.1)":"none" }}>{v.l}</button>;
-                })}
-              </div>
-            </div>
-            <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-              <span style={{ fontSize:12, color:"#64748b", fontWeight:600 }}>Situação:</span>
-              {[
-                { k:"todos",   l:"Todos",          cor:"#64748b" },
-                { k:"sem_img", l:"📷 Sem imagem",  cor:"#d97706" },
-                { k:"sem_custo",l:"💰 Sem custo",  cor:"#dc2626" },
-                { k:"sem_sku", l:"# Sem SKU",      cor:"#7c3aed" },
-                { k:"sem_ml",  l:"🟡 Sem ML",      cor:"#0891b2" },
-              ].map(function(f){
-                var isActive = (filterEstoque==="todos"&&f.k==="todos") || filterEstoque===f.k;
-                // reuse filterEstoque for these quick filters
-                return (
-                  <button key={f.k} onClick={function(){setFilterEstoque(f.k==="todos"?"todos":f.k);}}
-                    style={{ padding:"4px 12px", borderRadius:20, border:"1px solid "+(isActive?f.cor:"#e2e8f0"), cursor:"pointer", fontSize:11, fontWeight:isActive?700:400,
-                      background:isActive?f.cor+"11":"#fff", color:isActive?f.cor:"#64748b" }}>
-                    {f.l}
-                  </button>
-                );
-              })}
-              <span style={{ fontSize:12, color:"#94a3b8", marginLeft:"auto" }}>{produtosFiltrados.length} produto(s) · {produtos.filter(p=>p.syncML).length} sync ML</span>
-            </div>
-          </div>
+
 
           {prodSel.length > 0 && (
             <div style={{ display:"flex", gap:8, alignItems:"center", background:"#0f172a", borderRadius:10, padding:"10px 16px", marginBottom:10, flexWrap:"wrap" }}>
@@ -5786,6 +5757,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
               </table>
             </div>
           )}
+          </LayoutFiltros>
         </div>
       )}
 
@@ -8794,31 +8766,51 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
             {/* ── CONTAS A PAGAR ── */}
       {finTab === "pagar" && (
         <div>
-          {/* Toolbar Contas a Pagar: Filtros à esquerda | Busca centro | Ações direita */}
-          <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:10, flexWrap:"wrap" }}>
-            {/* Filtros — esquerda */}
-            <select value={filterStatus} onChange={function(e){setFilterStatus(e.target.value);}}
-              style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 12px", borderRadius:8, fontSize:12 }}>
-              <option value="all">Todos</option>
-              <option value="Pendente">📋 Em Aberto</option>
-              <option value="Vencido">🔴 Em Atraso</option>
-              <option value="Protestado">⚖️ Protestado</option>
-              <option value="Pago">✅ Pago</option>
-              <option value="Pago Parcial">⚡ Pago Parcial</option>
-            </select>
-            <select value={filterCat} onChange={function(e){setFilterCat(e.target.value);}}
-              style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 12px", borderRadius:8, fontSize:12 }}>
-              <option value="all">Todas categorias</option>
-              {categoriasPagar.map(function(c){ return <option key={c} value={c}>{c}</option>; })}
-            </select>
-            {/* Busca — centro */}
-            <div style={{ position:"relative", flex:1, minWidth:160 }}>
-              <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
-              <input value={searchPagar} onChange={function(e){setSearchPagar(e.target.value);}} placeholder="Buscar descrição..."
-                style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px 8px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
-            </div>
-            {/* Ações — direita */}
-            <div style={{ display:"flex", gap:8, marginLeft:"auto" }}>
+          <LayoutFiltros
+            filtros={
+              <>
+                <FiltroGrupo titulo="Status">
+                  {[{v:"all",l:"Todos"},{v:"Pendente",l:"📋 Em Aberto"},{v:"Vencido",l:"🔴 Em Atraso"},{v:"Protestado",l:"⚖️ Protestado"},{v:"Pago",l:"✅ Pago"},{v:"Pago Parcial",l:"⚡ Pago Parcial"}].map(function(s){
+                    return <FiltroBotao key={s.v} label={s.l} active={filterStatus===s.v} cor={s.v==="Vencido"?"#dc2626":s.v==="Pago"?"#15803d":s.v==="Protestado"?"#7c3aed":"#0f172a"} bg={s.v==="Vencido"?"#fef2f2":s.v==="Pago"?"#f0fdf4":s.v==="Protestado"?"#f5f3ff":"#f1f5f9"} onClick={function(){setFilterStatus(s.v);}} />;
+                  })}
+                </FiltroGrupo>
+                <FiltroGrupo titulo="Categoria">
+                  <FiltroBotao label="Todas" active={filterCat==="all"} cor="#0f172a" bg="#f1f5f9" onClick={function(){setFilterCat("all");}} />
+                  {categoriasPagar.map(function(c){ return <FiltroBotao key={c} label={c} active={filterCat===c} cor="#0f172a" bg="#f1f5f9" onClick={function(){setFilterCat(c);}} />; })}
+                </FiltroGrupo>
+                <FiltroGrupo titulo="Prioridade">
+                  {[{key:"all-pr",l:"Todas",cor:"#64748b",abg:"#334155"},{key:"alta",l:"!!! Alta",cor:"#dc2626",abg:"#dc2626",bg:"#fef2f2"},{key:"media",l:"!! Média",cor:"#d97706",abg:"#d97706",bg:"#fffbeb"},{key:"baixa",l:"! Baixa",cor:"#15803d",abg:"#15803d",bg:"#f0fdf4"}].map(function(p){
+                    var qtd = p.key==="all-pr" ? 0 : contasPagar.filter(function(c){ var pc=c.prioridade||"media"; var f=(fornecedores||[]).find(function(x){return x.id===c.fornecedorId;}); var pf=pc!=="media"?pc:(f?.prioridade||pc); return pf===p.key&&c.status!=="Pago"; }).length;
+                    return <FiltroBotao key={p.key} label={p.l} active={filterPrioridade===p.key} cor={p.cor} bg={p.bg||"#f1f5f9"} count={p.key!=="all-pr"?qtd:undefined} onClick={function(){setFilterPrioridade(p.key);}} />;
+                  })}
+                </FiltroGrupo>
+                <FiltroGrupo titulo="Vencimento">
+                  {[{l:"Todos",de:"",ate:""},{l:"Vencidas",de:"2000-01-01",ate:new Date().toLocaleDateString("sv-SE")},{l:"Esta semana",de:new Date().toLocaleDateString("sv-SE"),ate:(function(){var d=new Date();d.setDate(d.getDate()+7);return d.toLocaleDateString("sv-SE");})()},{l:"Este mês",de:new Date().toLocaleDateString("sv-SE"),ate:(function(){var d=new Date();return new Date(d.getFullYear(),d.getMonth()+1,0).toLocaleDateString("sv-SE");})()},{l:"Próx. 3 meses",de:new Date().toLocaleDateString("sv-SE"),ate:(function(){var d=new Date();d.setMonth(d.getMonth()+3);return d.toLocaleDateString("sv-SE");})()},{l:"Próx. 6 meses",de:new Date().toLocaleDateString("sv-SE"),ate:(function(){var d=new Date();d.setMonth(d.getMonth()+6);return d.toLocaleDateString("sv-SE");})()},{l:"Este ano",de:new Date().toLocaleDateString("sv-SE"),ate:new Date().getFullYear()+"-12-31"}].map(function(p){
+                    return <FiltroBotao key={p.l} label={p.l} active={pagarDe===p.de&&pagarAte===p.ate} cor="#0f172a" bg="#f1f5f9" onClick={function(){setPagarDe(p.de);setPagarAte(p.ate);}} />;
+                  })}
+                  <div style={{ display:"flex", flexDirection:"column", gap:4, marginTop:4 }}>
+                    <input type="date" value={pagarDe} onChange={function(e){setPagarDe(e.target.value);}} style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 7px", borderRadius:7, fontSize:11 }} />
+                    <input type="date" value={pagarAte} onChange={function(e){setPagarAte(e.target.value);}} style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 7px", borderRadius:7, fontSize:11 }} />
+                  </div>
+                </FiltroGrupo>
+                <FiltroGrupo titulo="Valor / Doc">
+                  <input type="number" value={filterValorMin} onChange={function(e){setFilterValorMin(e.target.value);}} placeholder="Mín R$" style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"5px 7px", borderRadius:7, fontSize:11, outline:"none" }} />
+                  <input type="number" value={filterValorMax} onChange={function(e){setFilterValorMax(e.target.value);}} placeholder="Máx R$" style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"5px 7px", borderRadius:7, fontSize:11, outline:"none" }} />
+                  <input value={filterDoc} onChange={function(e){setFilterDoc(e.target.value);}} placeholder="Nº doc / obs..." style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"5px 7px", borderRadius:7, fontSize:11, outline:"none" }} />
+                  {(filterValorMin||filterValorMax||filterDoc||pagarDe||pagarAte) && <button onClick={function(){setFilterValorMin("");setFilterValorMax("");setFilterDoc("");setPagarDe("");setPagarAte("");}} style={{ background:"#fef2f2", border:"1px solid #fecaca", color:"#dc2626", padding:"5px 7px", borderRadius:7, cursor:"pointer", fontSize:11, width:"100%" }}>✕ Limpar</button>}
+                </FiltroGrupo>
+                <div style={{ fontSize:11, color:"#94a3b8", marginTop:"auto" }}>{contasFiltradas.length} conta(s)</div>
+              </>
+            }
+            busca={
+              <div style={{ position:"relative" }}>
+                <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
+                <input value={searchPagar} onChange={function(e){setSearchPagar(e.target.value);}} placeholder="Buscar descrição..."
+                  style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px 8px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
+              </div>
+            }
+            acoes={
+              <div style={{ display:"flex", gap:8 }}>
               <BotaoExportar
                 onCSV={function(){
                   var cab=["Descrição","Categoria","Valor","Vencimento","Status","Conta Paga","Prioridade","Parcela"];
@@ -8841,90 +8833,81 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
               <button onClick={function(){ setEditingConta(null); setShowModalConta(true); }}
                 style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Nova Conta</button>
             </div>
-          </div>
-          {/* Filtros de valor e documento */}
-          <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center", marginBottom:10 }}>
-            <span style={{ fontSize:12, color:"#64748b", fontWeight:600 }}>Valor:</span>
-            <input type="number" value={filterValorMin} onChange={function(e){setFilterValorMin(e.target.value);}} placeholder="Mín R$"
-              style={{ width:90, background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"6px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
-            <span style={{ fontSize:12, color:"#94a3b8" }}>até</span>
-            <input type="number" value={filterValorMax} onChange={function(e){setFilterValorMax(e.target.value);}} placeholder="Máx R$"
-              style={{ width:90, background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"6px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
-            <input value={filterDoc} onChange={function(e){setFilterDoc(e.target.value);}} placeholder="Nº doc / obs..."
-              style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"6px 10px", borderRadius:8, fontSize:12, outline:"none", width:140 }} />
-            {(filterValorMin||filterValorMax||filterDoc) && (
-              <button onClick={function(){setFilterValorMin("");setFilterValorMax("");setFilterDoc("");}}
-                style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"5px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕</button>
-            )}
-          </div>
-          {/* Filtro de prioridade */}
-          <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:10, flexWrap:"wrap" }}>
-            <span style={{ fontSize:12, color:"#64748b", fontWeight:600 }}>Prioridade:</span>
-            {[
-              { key:"all-pr", label:"Todas",      cor:"#64748b", bg:"#f8fafc", activeBg:"#334155" },
-              { key:"alta",   label:"!!! Alta",   cor:"#dc2626", bg:"#fef2f2", activeBg:"#dc2626" },
-              { key:"media",  label:"!! Média",   cor:"#d97706", bg:"#fffbeb", activeBg:"#d97706" },
-              { key:"baixa",  label:"! Baixa",    cor:"#15803d", bg:"#f0fdf4", activeBg:"#15803d" },
-            ].map(function(p) {
-              var isActive = filterPrioridade === p.key;
-              var qtd = p.key === "all-pr" ? 0 : contasPagar.filter(function(c){
-                // Considera prioridade da conta OU do fornecedor cadastrado
-                var priorConta = c.prioridade || "media";
-                var forn = (fornecedores||[]).find(function(f){ return f.id === c.fornecedorId; });
-                var priorForn = forn?.prioridade || priorConta;
-                var priorFinal = priorConta !== "media" ? priorConta : priorForn;
-                return priorFinal === p.key && c.status !== "Pago";
-              }).length;
-              return (
-                <button key={p.key} onClick={function(){ setFilterPrioridade(p.key); }}
-                  style={{ padding:"5px 14px", borderRadius:20,
-                    border: isActive ? "2px solid " + p.activeBg : "1px solid #e2e8f0",
-                    background: isActive ? p.activeBg : p.bg,
-                    color: isActive ? "#fff" : p.cor,
-                    fontWeight: isActive ? 700 : 500, fontSize:12, cursor:"pointer" }}>
-                  {p.label}
-                  {p.key !== "all-pr" && <span style={{ marginLeft:5, fontSize:10, opacity:0.8 }}>({qtd})</span>}
-                </button>
-              );
-            })}
-          </div>
-          <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px", marginBottom:14 }}>
-            <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", marginBottom:8 }}>
-              <span style={{ fontSize:12, color:"#64748b", fontWeight:600 }}>📅 Vencimento:</span>
-              {/* Atalhos específicos para contas a pagar */}
+          }>
+          {/* Conteúdo da aba pagar */}
+          <div>
+            {/* Prioridade */}
+            <div style={{ display:"flex", gap:4, alignItems:"center" }}>
+              <span style={{ fontSize:11, color:"#64748b", fontWeight:600, whiteSpace:"nowrap" }}>Prioridade:</span>
               {[
-                { label:"Todos",           de:"", ate:"" },
-                { label:"Vencidas",        de:"2000-01-01", ate: new Date().toLocaleDateString("sv-SE") },
-                { label:"Esta semana",     de: new Date().toLocaleDateString("sv-SE"), ate: (function(){ var d=new Date(); d.setDate(d.getDate()+7); return d.toLocaleDateString("sv-SE"); })() },
-                { label:"Este mês",        de: new Date().toLocaleDateString("sv-SE"), ate: (function(){ var d=new Date(); return new Date(d.getFullYear(),d.getMonth()+1,0).toLocaleDateString("sv-SE"); })() },
-                { label:"Próx. 3 meses",   de: new Date().toLocaleDateString("sv-SE"), ate: (function(){ var d=new Date(); d.setMonth(d.getMonth()+3); return d.toLocaleDateString("sv-SE"); })() },
-                { label:"Próx. 6 meses",   de: new Date().toLocaleDateString("sv-SE"), ate: (function(){ var d=new Date(); d.setMonth(d.getMonth()+6); return d.toLocaleDateString("sv-SE"); })() },
-                { label:"Este ano",        de: new Date().toLocaleDateString("sv-SE"), ate: new Date().getFullYear()+"-12-31" },
+                { key:"all-pr", label:"Todas",    cor:"#64748b", activeBg:"#334155" },
+                { key:"alta",   label:"!!! Alta", cor:"#dc2626", bg:"#fef2f2", activeBg:"#dc2626" },
+                { key:"media",  label:"!! Média", cor:"#d97706", bg:"#fffbeb", activeBg:"#d97706" },
+                { key:"baixa",  label:"! Baixa",  cor:"#15803d", bg:"#f0fdf4", activeBg:"#15803d" },
+              ].map(function(p) {
+                var isActive = filterPrioridade === p.key;
+                var qtd = p.key === "all-pr" ? 0 : contasPagar.filter(function(c){
+                  var priorConta = c.prioridade || "media";
+                  var forn = (fornecedores||[]).find(function(f){ return f.id === c.fornecedorId; });
+                  var priorFinal = priorConta !== "media" ? priorConta : (forn?.prioridade || priorConta);
+                  return priorFinal === p.key && c.status !== "Pago";
+                }).length;
+                return (
+                  <button key={p.key} onClick={function(){ setFilterPrioridade(p.key); }}
+                    style={{ padding:"4px 10px", borderRadius:20,
+                      border: isActive ? "2px solid "+p.activeBg : "1px solid #e2e8f0",
+                      background: isActive ? p.activeBg : (p.bg||"#f8fafc"),
+                      color: isActive ? "#fff" : p.cor,
+                      fontWeight: isActive ? 700 : 500, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
+                    {p.label}{p.key !== "all-pr" && <span style={{ marginLeft:4, fontSize:10, opacity:0.8 }}>({qtd})</span>}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ width:1, height:20, background:"#e2e8f0", flexShrink:0 }} />
+            {/* Vencimento */}
+            <div style={{ display:"flex", gap:4, alignItems:"center", flexWrap:"wrap" }}>
+              <span style={{ fontSize:11, color:"#64748b", fontWeight:600, whiteSpace:"nowrap" }}>📅</span>
+              {[
+                { label:"Todos",         de:"", ate:"" },
+                { label:"Vencidas",      de:"2000-01-01", ate: new Date().toLocaleDateString("sv-SE") },
+                { label:"Esta semana",   de: new Date().toLocaleDateString("sv-SE"), ate: (function(){ var d=new Date(); d.setDate(d.getDate()+7); return d.toLocaleDateString("sv-SE"); })() },
+                { label:"Este mês",      de: new Date().toLocaleDateString("sv-SE"), ate: (function(){ var d=new Date(); return new Date(d.getFullYear(),d.getMonth()+1,0).toLocaleDateString("sv-SE"); })() },
+                { label:"Próx. 3m",      de: new Date().toLocaleDateString("sv-SE"), ate: (function(){ var d=new Date(); d.setMonth(d.getMonth()+3); return d.toLocaleDateString("sv-SE"); })() },
+                { label:"Próx. 6m",      de: new Date().toLocaleDateString("sv-SE"), ate: (function(){ var d=new Date(); d.setMonth(d.getMonth()+6); return d.toLocaleDateString("sv-SE"); })() },
+                { label:"Este ano",      de: new Date().toLocaleDateString("sv-SE"), ate: new Date().getFullYear()+"-12-31" },
               ].map(function(p) {
                 var isActive = pagarDe === p.de && pagarAte === p.ate;
                 return (
                   <button key={p.label} onClick={function(){ setPagarDe(p.de); setPagarAte(p.ate); }}
-                    style={{ padding:"5px 12px", borderRadius:20, border:"none", cursor:"pointer", fontSize:11,
-                      fontWeight:isActive?700:500,
-                      background:isActive?"#0f172a":"#f1f5f9",
-                      color:isActive?"#fff":"#64748b" }}>
+                    style={{ padding:"4px 10px", borderRadius:20, border:"none", cursor:"pointer", fontSize:11,
+                      fontWeight:isActive?700:500, background:isActive?"#0f172a":"#f1f5f9",
+                      color:isActive?"#fff":"#64748b", whiteSpace:"nowrap" }}>
                     {p.label}
                   </button>
                 );
               })}
-              <span style={{ fontSize:12, color:"#94a3b8", marginLeft:"auto" }}>{contasFiltradas.length} conta(s)</span>
             </div>
-            <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+            <div style={{ width:1, height:20, background:"#e2e8f0", flexShrink:0 }} />
+            {/* Data manual + Valor + Doc */}
+            <div style={{ display:"flex", gap:5, alignItems:"center", flexWrap:"wrap" }}>
               <input type="date" value={pagarDe} onChange={function(e){ setPagarDe(e.target.value); }}
-                style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 10px", borderRadius:8, fontSize:12 }} />
-              <span style={{ fontSize:12, color:"#94a3b8" }}>até</span>
+                style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"4px 7px", borderRadius:7, fontSize:11 }} />
+              <span style={{ fontSize:10, color:"#94a3b8" }}>até</span>
               <input type="date" value={pagarAte} onChange={function(e){ setPagarAte(e.target.value); }}
-                style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 10px", borderRadius:8, fontSize:12 }} />
-              {(pagarDe||pagarAte) && (
-                <button onClick={function(){ setPagarDe(""); setPagarAte(""); }}
-                  style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"5px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕ Limpar</button>
+                style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"4px 7px", borderRadius:7, fontSize:11 }} />
+              <input type="number" value={filterValorMin} onChange={function(e){setFilterValorMin(e.target.value);}} placeholder="Mín R$"
+                style={{ width:72, background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"4px 7px", borderRadius:7, fontSize:11, outline:"none" }} />
+              <input type="number" value={filterValorMax} onChange={function(e){setFilterValorMax(e.target.value);}} placeholder="Máx R$"
+                style={{ width:72, background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"4px 7px", borderRadius:7, fontSize:11, outline:"none" }} />
+              <input value={filterDoc} onChange={function(e){setFilterDoc(e.target.value);}} placeholder="Nº doc..."
+                style={{ width:90, background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"4px 7px", borderRadius:7, fontSize:11, outline:"none" }} />
+              {(filterValorMin||filterValorMax||filterDoc||pagarDe||pagarAte) && (
+                <button onClick={function(){setFilterValorMin("");setFilterValorMax("");setFilterDoc("");setPagarDe("");setPagarAte("");}}
+                  style={{ background:"#fef2f2", border:"1px solid #fecaca", color:"#dc2626", padding:"4px 8px", borderRadius:7, cursor:"pointer", fontSize:11 }}>✕</button>
               )}
             </div>
+            <span style={{ fontSize:11, color:"#94a3b8", marginLeft:"auto", whiteSpace:"nowrap" }}>{contasFiltradas.length} conta(s)</span>
           </div>
           {(() => {
             const hoje = new Date(); hoje.setHours(0,0,0,0);
@@ -9191,6 +9174,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
               onMudar={function(p){ setPaginaPagar(p); window.scrollTo({top:0,behavior:"smooth"}); }}
             />
           </div>
+          </LayoutFiltros>
         </div>
       )}
 
@@ -10900,6 +10884,67 @@ function ModalNovoEnvioFull({ envio, produtos, listings, onSave, onClose }) {
   );
 }
 
+
+// ════════════════════════════════════════════════════════════
+//  LAYOUT PADRÃO: Filtros lateral esquerda | Conteúdo | Ação direita
+// ════════════════════════════════════════════════════════════
+function LayoutFiltros({ filtros, busca, acoes, children }) {
+  return (
+    <div style={{ display:"flex", gap:0, minHeight:"calc(100vh - 180px)" }}>
+      {/* Painel de filtros — lateral esquerda */}
+      {filtros && (
+        <div style={{ width:220, flexShrink:0, background:"#f8fafc", borderRight:"1px solid #e2e8f0", padding:"16px 14px", display:"flex", flexDirection:"column", gap:14 }}>
+          {filtros}
+        </div>
+      )}
+      {/* Área principal */}
+      <div style={{ flex:1, minWidth:0, padding:"16px 20px", display:"flex", flexDirection:"column", gap:12 }}>
+        {/* Busca + Ações no topo */}
+        {(busca || acoes) && (
+          <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+            {busca && <div style={{ flex:1 }}>{busca}</div>}
+            {acoes && <div style={{ display:"flex", gap:8, flexShrink:0 }}>{acoes}</div>}
+          </div>
+        )}
+        {/* Conteúdo */}
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// Grupo de filtro lateral reutilizável
+function FiltroGrupo({ titulo, children }) {
+  return (
+    <div>
+      {titulo && <div style={{ fontSize:10, color:"#94a3b8", fontWeight:700, textTransform:"uppercase", letterSpacing:0.8, marginBottom:8 }}>{titulo}</div>}
+      <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// Botão de filtro lateral
+function FiltroBotao({ label, active, cor, bg, onClick, count }) {
+  return (
+    <button onClick={onClick}
+      style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"7px 10px", borderRadius:8,
+        border: active ? "1.5px solid "+(cor||"#0f172a") : "1px solid transparent",
+        background: active ? (bg||"#f1f5f9") : "transparent",
+        color: active ? (cor||"#0f172a") : "#64748b",
+        fontWeight: active ? 700 : 400, fontSize:12, cursor:"pointer", textAlign:"left", width:"100%" }}>
+      <span>{label}</span>
+      {count !== undefined && (
+        <span style={{ fontSize:10, fontWeight:600, color: active?(cor||"#0f172a"):"#94a3b8",
+          background: active?(bg||"#e2e8f0"):"#f1f5f9", padding:"1px 6px", borderRadius:10, minWidth:18, textAlign:"center" }}>
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+
 export default function App() {
   // ── Auth do dashboard ─────────────────────────────────────
   const [tab, setTab] = useState(() => {
@@ -12082,51 +12127,52 @@ export default function App() {
 
                 {tab === "listings" && currentUser?.permissoes?.includes("listings") && (
           <>
-            {/* Toolbar Anúncios */}
-            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12, flexWrap:"wrap" }}>
-              {/* Filtros — esquerda */}
-              <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
-                <div style={{ display:"flex", gap:3 }}>
-                  {[{ key:"all",label:"Todos"},{key:"active",label:"● Ativos"},{key:"paused",label:"○ Pausados"}].map(function(f){
-                    return <button key={f.key} onClick={function(){setStatusFilter(f.key);}}
-                      style={{ padding:"5px 12px", borderRadius:20, border:"1px solid "+(statusFilter===f.key?"#0f172a":"#e2e8f0"), cursor:"pointer", fontFamily:"inherit", fontSize:11,
-                        fontWeight:statusFilter===f.key?700:500, background:statusFilter===f.key?"#0f172a":"#fff",
-                        color:statusFilter===f.key?"#fff":f.key==="active"?"#15803d":f.key==="paused"?"#94a3b8":"#64748b" }}>{f.label}</button>;
-                  })}
+            <LayoutFiltros
+              filtros={
+                <>
+                  <FiltroGrupo titulo="Status">
+                    {[{key:"all",label:"Todos"},{key:"active",label:"● Ativos"},{key:"paused",label:"○ Pausados"}].map(function(f){
+                      return <FiltroBotao key={f.key} label={f.label} active={statusFilter===f.key}
+                        cor={f.key==="active"?"#15803d":f.key==="paused"?"#94a3b8":"#0f172a"}
+                        bg={f.key==="active"?"#f0fdf4":f.key==="paused"?"#f8fafc":"#f1f5f9"}
+                        onClick={function(){setStatusFilter(f.key);}} />;
+                    })}
+                  </FiltroGrupo>
+                  <FiltroGrupo titulo="Situação">
+                    {[{k:"all",l:"Todos"},{k:"sem_custo",l:"⚠️ Sem custo",cor:"#dc2626",bg:"#fef2f2"},{k:"com_promo",l:"🔥 Com promoção",cor:"#7c3aed",bg:"#f5f3ff"},{k:"sem_promo",l:"○ Sem promoção",cor:"#64748b",bg:"#f8fafc"}].map(function(f){
+                      return <FiltroBotao key={f.k} label={f.l} active={filterListingExtra===f.k}
+                        cor={f.cor||"#0f172a"} bg={f.bg||"#f1f5f9"}
+                        onClick={function(){setFilterListingExtra(f.k);setPaginaAnuncios(1);}} />;
+                    })}
+                  </FiltroGrupo>
+                  <FiltroGrupo titulo="Ordenar">
+                    <select value={sortBy} onChange={function(e){setSortBy(e.target.value);}}
+                      style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"7px 8px", borderRadius:8, fontSize:12 }}>
+                      <option value="score">Pior score primeiro</option>
+                      <option value="margin">Maior margem</option>
+                      <option value="profit">Maior lucro</option>
+                      <option value="sales_desc">Mais vendidos</option>
+                      <option value="sales_asc">Menos vendidos</option>
+                    </select>
+                  </FiltroGrupo>
+                  <div style={{ fontSize:11, color:"#94a3b8", marginTop:"auto" }}>{sorted.length} anúncio(s)</div>
+                </>
+              }
+              busca={
+                <div style={{ display:"flex", gap:6 }}>
+                  <div style={{ position:"relative", flex:1 }}>
+                    <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
+                    <input className="search-input" value={searchListings} onChange={function(e){setSearchListings(e.target.value);}}
+                      placeholder={searchType==="title"?"Buscar por título...":searchType==="sku"?"Buscar por SKU exato...":searchType==="mlb"?"Buscar por MLB...":"Buscar por título, MLB ou SKU..."} style={{ paddingLeft:34 }} />
+                  </div>
+                  <select value={searchType} onChange={function(e){setSearchType(e.target.value);}} style={{ minWidth:100 }}>
+                    <option value="all">Tudo</option>
+                    <option value="title">Título</option>
+                    <option value="sku">SKU exato</option>
+                    <option value="mlb">MLB</option>
+                  </select>
                 </div>
-                {[{k:"all",l:"Sem filtro extra"},{k:"sem_custo",l:"⚠️ Sem custo",color:"#dc2626",bg:"#fef2f2"},{k:"com_promo",l:"🔥 Com promoção",color:"#7c3aed",bg:"#f5f3ff"},{k:"sem_promo",l:"○ Sem promoção",color:"#64748b",bg:"#f8fafc"}].map(function(f){
-                  var isA=filterListingExtra===f.k;
-                  return <button key={f.k} onClick={function(){setFilterListingExtra(f.k);setPaginaAnuncios(1);}}
-                    style={{ padding:"5px 12px", borderRadius:20, border:"1px solid "+(isA?(f.color||"#0f172a"):"#e2e8f0"), cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:isA?700:500,
-                      background:isA?(f.bg||"#0f172a"):"#fff", color:isA?(f.color||"#fff"):"#64748b" }}>{f.l}</button>;
-                })}
-              </div>
-              {/* Busca — centro */}
-              <div style={{ display:"flex", gap:6, flex:1, minWidth:220 }}>
-                <div style={{ position:"relative", flex:1 }}>
-                  <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
-                  <input className="search-input" value={searchListings} onChange={function(e){setSearchListings(e.target.value);}}
-                    placeholder={searchType==="title"?"Buscar por título...":searchType==="sku"?"Buscar por SKU exato...":searchType==="mlb"?"Buscar por MLB...":"Buscar por título, MLB ou SKU..."} />
-                </div>
-                <select value={searchType} onChange={function(e){setSearchType(e.target.value);}} style={{ minWidth:100 }}>
-                  <option value="all">Tudo</option>
-                  <option value="title">Título</option>
-                  <option value="sku">SKU exato</option>
-                  <option value="mlb">MLB</option>
-                </select>
-              </div>
-              {/* Ações — direita */}
-              <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-                <select value={sortBy} onChange={function(e){setSortBy(e.target.value);}} style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"7px 10px", borderRadius:8, fontSize:12 }}>
-                  <option value="score">Pior score</option>
-                  <option value="margin">Maior margem</option>
-                  <option value="profit">Maior lucro</option>
-                  <option value="sales_desc">Mais vendidos</option>
-                  <option value="sales_asc">Menos vendidos</option>
-                </select>
-                <span style={{ fontSize:11, color:"#94a3b8", whiteSpace:"nowrap" }}>{sorted.length} anúncio(s)</span>
-              </div>
-            </div>
+              }>
 
             <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "auto", boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
               <table>
@@ -12276,61 +12322,63 @@ export default function App() {
               paginaAtual={paginaAnuncios}
               onMudar={function(p){ setPaginaAnuncios(p); window.scrollTo({top:0,behavior:"smooth"}); }}
             />
+            </LayoutFiltros>
           </>
         )}
 
         {tab === "orders" && currentUser?.permissoes?.includes("orders") && (
           <>
-            {/* Toolbar Pedidos */}
-            <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:12, padding:"12px 16px", marginBottom:14 }}>
-              {/* Linha 1: Filtros à esquerda + Busca centro + info direita */}
-              <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:8 }}>
-                {/* Filtros período — esquerda */}
-                <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
-                  {[{key:"today",l:"Hoje"},{key:"week",l:"7 dias"},{key:"thismonth",l:"Este mês"},{key:"month",l:"30 dias"},{key:"3months",l:"3 meses"},{key:"all",l:"Todos"}].map(function(f){
-                    return <button key={f.key} className={"filter-btn "+(orderFilter===f.key?"active":"")} onClick={function(){setOrderFilter(f.key);}}>{f.l}</button>;
-                  })}
-                </div>
-                {/* Busca — centro */}
-                <div style={{ position:"relative", flex:1, minWidth:220 }}>
+            <LayoutFiltros
+              filtros={
+                <>
+                  <FiltroGrupo titulo="Período">
+                    {[{key:"today",l:"Hoje"},{key:"week",l:"7 dias"},{key:"thismonth",l:"Este mês"},{key:"month",l:"30 dias"},{key:"3months",l:"3 meses"},{key:"all",l:"Todos"}].map(function(f){
+                      return <FiltroBotao key={f.key} label={f.l} active={orderFilter===f.key} cor="#0f172a" bg="#f1f5f9" onClick={function(){setOrderFilter(f.key);}} />;
+                    })}
+                  </FiltroGrupo>
+                  <FiltroGrupo titulo="Status">
+                    {[{key:"all",l:"Todos"},{key:"waiting",l:"⏳ Ag. envio"},{key:"shipped",l:"🚚 Enviados"},{key:"done",l:"✓ Concluídos"},{key:"cancelled",l:"✗ Cancelados"},{key:"refunded",l:"↩ Devolvidos"},{key:"mediation",l:"⚠ Disputa"}].map(function(f){
+                      return <FiltroBotao key={f.key} label={f.l} active={orderStatusFilter===f.key} cor="#0f172a" bg="#f1f5f9" onClick={function(){setOrderStatusFilter(f.key);}} />;
+                    })}
+                  </FiltroGrupo>
+                  <FiltroGrupo titulo="Tipo de Envio">
+                    {[{key:"todos",l:"Todos"},{key:"FULL",l:"FULL",c:"#1d4ed8",bg:"#eff6ff"},{key:"Flex",l:"Flex",c:"#7c3aed",bg:"#f5f3ff"},{key:"ME2",l:"ME2",c:"#0891b2",bg:"#ecfeff"},{key:"ME1",l:"ME1",c:"#0369a1",bg:"#e0f2fe"}].map(function(e){
+                      return <FiltroBotao key={e.key} label={e.l} active={filterEnvio===e.key} cor={e.c||"#0f172a"} bg={e.bg||"#f1f5f9"} onClick={function(){setFilterEnvio(e.key);setPaginaPedidos(1);}} />;
+                    })}
+                  </FiltroGrupo>
+                  <FiltroGrupo titulo="Outros Filtros">
+                    <input value={filterSku} onChange={function(e){setFilterSku(e.target.value);}} placeholder="SKU do produto..."
+                      style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"6px 8px", borderRadius:7, fontSize:11, outline:"none" }} />
+                    <select value={filterUF} onChange={function(e){setFilterUF(e.target.value);}}
+                      style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"6px 8px", borderRadius:7, fontSize:11 }}>
+                      <option value="">Estado (UF)</option>
+                      {["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"].map(function(uf){return <option key={uf} value={uf}>{uf}</option>;})}
+                    </select>
+                    <div style={{ display:"flex", gap:4, alignItems:"center" }}>
+                      <input type="date" value={dateFrom} onChange={function(e){setDateFrom(e.target.value);}}
+                        style={{ flex:1, background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 6px", borderRadius:7, fontSize:11 }} />
+                    </div>
+                    <div style={{ display:"flex", gap:4, alignItems:"center" }}>
+                      <span style={{ fontSize:10, color:"#94a3b8" }}>até</span>
+                      <input type="date" value={dateTo} onChange={function(e){setDateTo(e.target.value);}}
+                        style={{ flex:1, background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 6px", borderRadius:7, fontSize:11 }} />
+                    </div>
+                    {(filterSku||filterUF||dateFrom||dateTo) && (
+                      <button onClick={function(){setFilterSku("");setFilterUF("");setDateFrom("");setDateTo("");}}
+                        style={{ background:"#fef2f2", border:"1px solid #fecaca", color:"#dc2626", padding:"5px 8px", borderRadius:7, cursor:"pointer", fontSize:11, width:"100%" }}>✕ Limpar filtros</button>
+                    )}
+                  </FiltroGrupo>
+                  <div style={{ fontSize:11, color:"#94a3b8", marginTop:"auto" }}>{enrichedOrders.length} pedido(s)<br/>{fmt(enrichedOrders.reduce(function(s,o){return s+o.price*o.qty;},0))}</div>
+                </>
+              }
+              busca={
+                <div style={{ position:"relative" }}>
                   <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
                   <input className="search-input" value={searchOrders} onChange={function(e){setSearchOrders(e.target.value);}}
                     placeholder="Buscar por nº pedido, cliente, CPF, e-mail..." style={{ width:"100%", paddingLeft:36 }} />
                 </div>
-                {/* Info — direita */}
-                <span style={{ fontSize:12, color:"#94a3b8", whiteSpace:"nowrap" }}>{enrichedOrders.length} pedido(s) · {fmt(enrichedOrders.reduce(function(s,o){return s+o.price*o.qty;},0))}</span>
-              </div>
-              {/* Linha 2: Status + Envio + Data + SKU + UF */}
-              <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-                <div style={{ display:"flex", gap:3 }}>
-                  {[{key:"all",l:"Todos"},{key:"waiting",l:"⏳ Ag. envio"},{key:"shipped",l:"🚚 Enviados"},{key:"done",l:"✓ Concluídos"},{key:"cancelled",l:"✗ Cancelados"},{key:"refunded",l:"↩ Devolvidos"},{key:"mediation",l:"⚠ Disputa"}].map(function(f){
-                    return <button key={f.key} className={"filter-btn "+(orderStatusFilter===f.key?"active":"")} onClick={function(){setOrderStatusFilter(f.key);}}>{f.l}</button>;
-                  })}
-                </div>
-                <div style={{ display:"flex", gap:3 }}>
-                  {[{key:"todos",l:"Envio"},{key:"FULL",l:"FULL",c:"#1d4ed8",bg:"#eff6ff"},{key:"Flex",l:"Flex",c:"#7c3aed",bg:"#f5f3ff"},{key:"ME2",l:"ME2",c:"#0891b2",bg:"#ecfeff"},{key:"ME1",l:"ME1",c:"#0369a1",bg:"#e0f2fe"}].map(function(e){
-                    var a=filterEnvio===e.key;
-                    return <button key={e.key} onClick={function(){setFilterEnvio(e.key);setPaginaPedidos(1);}}
-                      style={{ padding:"4px 10px", borderRadius:20, border:"none", cursor:"pointer", fontSize:11, fontWeight:a?700:400, background:a?(e.bg||"#0f172a"):"#f1f5f9", color:a?(e.c||"#fff"):"#64748b" }}>{e.l}</button>;
-                  })}
-                </div>
-                <input value={filterSku} onChange={function(e){setFilterSku(e.target.value);}} placeholder="SKU..."
-                  style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"5px 10px", borderRadius:8, fontSize:12, outline:"none", width:100 }} />
-                <select value={filterUF} onChange={function(e){setFilterUF(e.target.value);}}
-                  style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 10px", borderRadius:8, fontSize:12 }}>
-                  <option value="">UF</option>
-                  {["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"].map(function(uf){return <option key={uf} value={uf}>{uf}</option>;})}
-                </select>
-                <input type="date" value={dateFrom} onChange={function(e){setDateFrom(e.target.value);}}
-                  style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 8px", borderRadius:8, fontSize:12 }} />
-                <span style={{ fontSize:11, color:"#94a3b8" }}>até</span>
-                <input type="date" value={dateTo} onChange={function(e){setDateTo(e.target.value);}}
-                  style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 8px", borderRadius:8, fontSize:12 }} />
-                {(filterSku||filterUF||dateFrom||dateTo)&&<button onClick={function(){setFilterSku("");setFilterUF("");setDateFrom("");setDateTo("");}}
-                  style={{ background:"#fef2f2", border:"1px solid #fecaca", color:"#dc2626", padding:"5px 10px", borderRadius:8, cursor:"pointer", fontSize:11 }}>✕ Limpar</button>}
-              </div>
-            </div>
-            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "auto", boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
+              }>
+              <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "auto", boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
               <table style={{ borderCollapse:"collapse", width:"100%", tableLayout:"fixed" }}>
                 <colgroup>
                   <col style={{ width:130 }} />
@@ -12461,7 +12509,8 @@ export default function App() {
                 paginaAtual={paginaPedidos}
                 onMudar={function(p){ setPaginaPedidos(p); window.scrollTo({top:0,behavior:"smooth"}); }}
               />
-            </div>
+              </div>
+            </LayoutFiltros>
           </>
         )}
       </main>

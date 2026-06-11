@@ -11192,22 +11192,6 @@ export default function App() {
 
   const usingMock = !token || realListings.length === 0;
 
-  // ── Auto-baixa de estoque sempre que rawOrders ou produtos mudarem ──
-  useEffect(function() {
-    if (!rawOrders || rawOrders.length === 0) return;
-    if (!produtos || produtos.length === 0) return;
-    try {
-      var prodAtual = JSON.parse(localStorage.getItem("produtos_cadastro") || "[]");
-      if (prodAtual.length === 0) return;
-      var movAtual  = JSON.parse(localStorage.getItem("mov_estoque") || "[]");
-      var baixAtual = new Set(JSON.parse(localStorage.getItem("vendas_estoque_baixadas") || "[]"));
-      // Só processa se tiver vendas novas não baixadas ainda
-      var novas = rawOrders.filter(function(o){ return o.status === "paid" && !baixAtual.has(String(o.id)); });
-      if (novas.length > 0 || movAtual.some(function(m){return m.semProduto;})) {
-        baixarEstoqueVendas(rawOrders, prodAtual, movAtual, baixAtual);
-      }
-    } catch(e) { console.warn("[ESTOQUE] Erro auto-baixa:", e); }
-  }, [rawOrders, produtos]);
 
   // ── Baixa automática de estoque por venda ──────────────────
   function baixarEstoqueVendas(orders, produtosAtuais, movimentosAtuais, baixadasAtuais) {
@@ -11323,6 +11307,22 @@ export default function App() {
     }
     return qtdBaixadas;
   }
+
+  // ── Auto-baixa de estoque sempre que rawOrders ou produtos mudarem ──
+  useEffect(function() {
+    if (!rawOrders || rawOrders.length === 0) return;
+    if (!produtos || produtos.length === 0) return;
+    try {
+      var prodAtual = JSON.parse(localStorage.getItem("produtos_cadastro") || "[]");
+      if (prodAtual.length === 0) return;
+      var movAtual  = JSON.parse(localStorage.getItem("mov_estoque") || "[]");
+      var baixAtual = new Set(JSON.parse(localStorage.getItem("vendas_estoque_baixadas") || "[]"));
+      var novas = rawOrders.filter(function(o){ return o.status === "paid" && !baixAtual.has(String(o.id)); });
+      if (novas.length > 0 || movAtual.some(function(m){return m.semProduto;})) {
+        baixarEstoqueVendas(rawOrders, prodAtual, movAtual, baixAtual);
+      }
+    } catch(e) { console.warn("[ESTOQUE] Erro auto-baixa:", e); }
+  }, [rawOrders, produtos]);
 
   // Renova token automaticamente se estiver próximo de vencer
   async function getValidToken() {

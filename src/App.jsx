@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, Children, cloneElement } from "react";
 
 const ML = (path) => `/api/ml${path}`;
 const fmt = (n) => `R$ ${Number(n).toFixed(2).replace(".", ",")}`;
@@ -10919,7 +10919,7 @@ function FiltroGrupo({ titulo, children }) {
   const [open, setOpen] = useState(false);
   // Detectar qual filho está ativo para mostrar no botão
   var activeLabel = null;
-  var childArr = React.Children.toArray(children);
+  var childArr = Children.toArray(children);
   childArr.forEach(function(child) {
     if (child?.props?.active && child?.props?.label) activeLabel = child.props.label;
   });
@@ -10950,7 +10950,7 @@ function FiltroGrupo({ titulo, children }) {
             {childArr.map(function(child, i) {
               if (!child) return null;
               // Wrap each FiltroBotao click to also close dropdown
-              return React.cloneElement(child, {
+              return cloneElement(child, {
                 key: i,
                 onClick: function() {
                   if (child.props.onClick) child.props.onClick();

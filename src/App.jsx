@@ -11101,6 +11101,8 @@ export default function App() {
     } catch(e) {}
     return "overview";
   });
+  const [abaAnuncio, setAbaAnuncio] = useState("ml");
+  const [abaPedido,  setAbaPedido]  = useState("ml");
 
   // ── Verificar autenticação OAuth ao carregar ──────────────
   useEffect(function() {
@@ -12334,6 +12336,37 @@ export default function App() {
 
                 {tab === "listings" && currentUser?.permissoes?.includes("listings") && (
           <>
+            {/* Sub-abas de Anúncios */}
+            <div style={{ display:"flex", gap:2, borderBottom:"2px solid #f1f5f9", marginBottom:20 }}>
+              {[
+                { key:"ml",    label:"🟡 Anúncios Mercado Livre", badge: enriched.length },
+                { key:"outros",label:"➕ Outros Marketplaces",    badge: null },
+              ].map(function(t){
+                var active = (abaAnuncio) === t.key;
+                return (
+                  <button key={t.key}
+                    onClick={function(){ setAbaAnuncio(t.key); }}
+                    style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 20px", border:"none",
+                      borderBottom: active?"2px solid #0f172a":"2px solid transparent", marginBottom:-2,
+                      background:"transparent", color:active?"#0f172a":"#94a3b8",
+                      fontWeight:active?700:400, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>
+                    {t.label}
+                    {t.badge != null && (
+                      <span style={{ background:active?"#0f172a":"#e2e8f0", color:active?"#fff":"#64748b",
+                        fontSize:11, fontWeight:700, padding:"1px 7px", borderRadius:20 }}>{t.badge}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {/* Conteúdo — só ML por enquanto */}
+            {(abaAnuncio) === "outros" ? (
+              <div style={{ textAlign:"center", padding:"60px 20px", color:"#94a3b8" }}>
+                <div style={{ fontSize:48, marginBottom:12 }}>🔌</div>
+                <div style={{ fontWeight:700, fontSize:16, color:"#0f172a", marginBottom:8 }}>Em breve: outros marketplaces</div>
+                <div style={{ fontSize:13 }}>Integração com Shopee, Shein, Amazon e outros em desenvolvimento</div>
+              </div>
+            ) : (
             <LayoutFiltros
               filtros={
                 <>
@@ -12530,11 +12563,42 @@ export default function App() {
               onMudar={function(p){ setPaginaAnuncios(p); window.scrollTo({top:0,behavior:"smooth"}); }}
             />
             </LayoutFiltros>
+            )} {/* fecha condicional ml */}
           </>
         )}
 
         {tab === "orders" && currentUser?.permissoes?.includes("orders") && (
           <>
+            {/* Sub-abas de Pedidos */}
+            <div style={{ display:"flex", gap:2, borderBottom:"2px solid #f1f5f9", marginBottom:20 }}>
+              {[
+                { key:"ml",    label:"🟡 Pedidos Mercado Livre", badge: enrichedOrders.length },
+                { key:"outros",label:"➕ Outros Marketplaces",   badge: null },
+              ].map(function(t){
+                var active = (abaPedido) === t.key;
+                return (
+                  <button key={t.key}
+                    onClick={function(){ setAbaPedido(t.key); }}
+                    style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 20px", border:"none",
+                      borderBottom: active?"2px solid #0f172a":"2px solid transparent", marginBottom:-2,
+                      background:"transparent", color:active?"#0f172a":"#94a3b8",
+                      fontWeight:active?700:400, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>
+                    {t.label}
+                    {t.badge != null && (
+                      <span style={{ background:active?"#0f172a":"#e2e8f0", color:active?"#fff":"#64748b",
+                        fontSize:11, fontWeight:700, padding:"1px 7px", borderRadius:20 }}>{t.badge}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {(abaPedido) === "outros" ? (
+              <div style={{ textAlign:"center", padding:"60px 20px", color:"#94a3b8" }}>
+                <div style={{ fontSize:48, marginBottom:12 }}>🔌</div>
+                <div style={{ fontWeight:700, fontSize:16, color:"#0f172a", marginBottom:8 }}>Em breve: outros marketplaces</div>
+                <div style={{ fontSize:13 }}>Integração com Shopee, Shein, Amazon e outros em desenvolvimento</div>
+              </div>
+            ) : (
             <LayoutFiltros
               filtros={
                 <>
@@ -12718,6 +12782,7 @@ export default function App() {
               />
               </div>
             </LayoutFiltros>
+            )} {/* fecha condicional ml pedidos */}
           </>
         )}
       </main>

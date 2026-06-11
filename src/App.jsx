@@ -11308,22 +11308,6 @@ export default function App() {
     return qtdBaixadas;
   }
 
-  // ── Auto-baixa de estoque sempre que rawOrders ou produtos mudarem ──
-  useEffect(function() {
-    if (!rawOrders || rawOrders.length === 0) return;
-    if (!produtos || produtos.length === 0) return;
-    try {
-      var prodAtual = JSON.parse(localStorage.getItem("produtos_cadastro") || "[]");
-      if (prodAtual.length === 0) return;
-      var movAtual  = JSON.parse(localStorage.getItem("mov_estoque") || "[]");
-      var baixAtual = new Set(JSON.parse(localStorage.getItem("vendas_estoque_baixadas") || "[]"));
-      var novas = rawOrders.filter(function(o){ return o.status === "paid" && !baixAtual.has(String(o.id)); });
-      if (novas.length > 0 || movAtual.some(function(m){return m.semProduto;})) {
-        baixarEstoqueVendas(rawOrders, prodAtual, movAtual, baixAtual);
-      }
-    } catch(e) { console.warn("[ESTOQUE] Erro auto-baixa:", e); }
-  }, [rawOrders, produtos]);
-
   // Renova token automaticamente se estiver próximo de vencer
   async function getValidToken() {
     const saved = loadSavedTokens();
@@ -11380,10 +11364,11 @@ export default function App() {
       setRealOrders(orders);
       // Baixa automática de estoque para pedidos pagos
       try {
-        var prodAtual = JSON.parse(localStorage.getItem("produtos_cadastro") || "[]");
-        var movAtual  = JSON.parse(localStorage.getItem("mov_estoque") || "[]");
-        var baixAtual = new Set(JSON.parse(localStorage.getItem("vendas_estoque_baixadas") || "[]"));
-        baixarEstoqueVendas(orders, prodAtual, movAtual, baixAtual);
+        var pedidosPagos2 = orders.filter(function(o){ return o.status === "paid"; });
+        var prodAtual2 = JSON.parse(localStorage.getItem("produtos_cadastro") || "[]");
+        var movAtual2  = JSON.parse(localStorage.getItem("mov_estoque") || "[]");
+        var baixAtual2 = new Set(JSON.parse(localStorage.getItem("vendas_estoque_baixadas") || "[]"));
+        baixarEstoqueVendas(pedidosPagos2, prodAtual2, movAtual2, baixAtual2);
       } catch(e) { console.warn("Erro ao baixar estoque:", e); }
 
       setLoadingMsg("Buscando custo de frete por anúncio...");

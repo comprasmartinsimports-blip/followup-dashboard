@@ -3804,12 +3804,12 @@ function ModalFornecedor({ fornecedor, tipoPadrao, onSave, onClose }) {
 
 // ── Modal de Produto ─────────────────────────────────────────
 function ModalMovEstoque({ produto, movEstoque, onRegistrar, onClose }) {
-  var hoje = new Date().toLocaleDateString("sv-SE");
   const [tipo, setTipo] = useState("entrada");
   const [qtd, setQtd] = useState("");
   const [motivo, setMotivo] = useState("");
   const [preco, setPreco] = useState("");
-  const [abaView, setAbaView] = useState("historico"); // historico | registrar
+  const [precoVenda, setPrecoVenda] = useState("");
+  const [abaView, setAbaView] = useState("historico");
 
   var mlbsProd = [produto.mlbVinculado].concat(produto.mlbsVinculados||[]).filter(Boolean);
   var skuProd = (produto.sku||"").trim().toLowerCase();
@@ -3821,152 +3821,211 @@ function ModalMovEstoque({ produto, movEstoque, onRegistrar, onClose }) {
   }).sort(function(a,b){ return (b.id||0) - (a.id||0); });
 
   var estoqueAtual = parseInt(produto.estoqueAtual||0);
-  var totalEntradas = movsProd.filter(function(m){return m.tipo==="entrada";}).reduce(function(s,m){return s+m.qtd;},0);
-  var totalSaidas = movsProd.filter(function(m){return m.tipo==="saida";}).reduce(function(s,m){return s+m.qtd;},0);
+  var totalEntradas = movsProd.filter(function(m){return m.tipo==="entrada";}).reduce(function(s,m){return s+parseInt(m.qtd||0);},0);
+  var totalSaidas   = movsProd.filter(function(m){return m.tipo==="saida";}).reduce(function(s,m){return s+parseInt(m.qtd||0);},0);
 
   function handleRegistrar() {
     if (!qtd || parseInt(qtd) <= 0) return;
-    onRegistrar(produto.id, produto.sku, tipo, qtd, motivo, preco);
-    setQtd(""); setMotivo(""); setPreco(""); setAbaView("historico");
+    onRegistrar(produto.id, produto.sku, tipo, qtd, motivo, preco, precoVenda);
+    setQtd(""); setMotivo(""); setPreco(""); setPrecoVenda(""); setAbaView("historico");
   }
 
+  var fmt2 = function(n){ return n!=null&&n!==""?"R$ "+Number(n).toFixed(2).replace(".",","):"—"; };
+
   return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:24 }}>
-      <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:580, maxHeight:"90vh", display:"flex", flexDirection:"column", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
+    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:16 }}>
+      <div style={{ background:"#fff", borderRadius:14, width:"100%", maxWidth:960, maxHeight:"92vh", display:"flex", flexDirection:"column", boxShadow:"0 20px 60px rgba(0,0,0,.18)" }}>
+
         {/* Header */}
-        <div style={{ padding:"20px 24px", borderBottom:"1px solid #f1f5f9", display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+        <div style={{ padding:"16px 24px", borderBottom:"1px solid #f1f5f9", display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
           <div>
-            <div style={{ fontWeight:800, fontSize:16, color:"#0f172a" }}>📦 Movimentação de Estoque</div>
-            <div style={{ fontSize:12, color:"#64748b", marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:420 }}>{produto.titulo}</div>
-            {produto.sku && <div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>SKU: {produto.sku}</div>}
+            <div style={{ fontWeight:800, fontSize:16, color:"#0f172a" }}>Lançamentos de Estoque</div>
+            <div style={{ fontSize:13, color:"#0f172a", fontWeight:600, marginTop:2 }}>
+              {produto.sku ? produto.sku + " - " : ""}{produto.titulo}
+            </div>
           </div>
-          <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
+          <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+            <button onClick={function(){setAbaView("registrar");}}
+              style={{ background:"#15803d", border:"none", color:"#fff", fontWeight:700, padding:"8px 18px", borderRadius:8, cursor:"pointer", fontSize:13 }}>
+              + Incluir lançamento
+            </button>
+            <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:34, height:34, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
+          </div>
         </div>
 
-        {/* Cards resumo */}
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, padding:"14px 24px", borderBottom:"1px solid #f1f5f9" }}>
-          {[
-            { label:"Estoque Atual", value:estoqueAtual, color:"#0f172a" },
-            { label:"Total Entradas", value:totalEntradas, color:"#15803d" },
-            { label:"Total Saídas", value:totalSaidas, color:"#dc2626" },
-            { label:"Movimentações", value:movsProd.length, color:"#7c3aed" },
-          ].map(function(k){
-            return (
-              <div key={k.label} style={{ background:"#f8fafc", borderRadius:8, padding:"10px 12px" }}>
-                <div style={{ fontSize:10, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:4 }}>{k.label}</div>
-                <div style={{ fontSize:20, fontWeight:800, color:k.color }}>{k.value}</div>
-              </div>
-            );
-          })}
-        </div>
+        {/* Resumo lateral estilo Bling */}
+        <div style={{ display:"flex", gap:0 }}>
+          {/* Tabela principal */}
+          <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0 }}>
 
-        {/* Sub-abas */}
-        <div style={{ display:"flex", gap:2, padding:"12px 24px 0", borderBottom:"1px solid #f1f5f9" }}>
-          {[{k:"historico",l:"📋 Histórico"},{k:"registrar",l:"+ Registrar Movimento"}].map(function(t){
-            var active = abaView===t.k;
-            return <button key={t.k} onClick={function(){setAbaView(t.k);}}
-              style={{ padding:"8px 16px", border:"none", borderBottom: active?"2px solid #0f172a":"2px solid transparent",
-                background:"transparent", color:active?"#0f172a":"#94a3b8", fontWeight:active?600:400, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>{t.l}</button>;
-          })}
-        </div>
+            {/* Sub-abas */}
+            <div style={{ display:"flex", gap:0, borderBottom:"2px solid #f1f5f9", padding:"0 24px" }}>
+              {[{k:"historico",l:"Lançamentos"},{k:"registrar",l:"+ Registrar"}].map(function(t){
+                var active = abaView===t.k;
+                return <button key={t.k} onClick={function(){setAbaView(t.k);}}
+                  style={{ padding:"10px 16px", border:"none", borderBottom:active?"2px solid #15803d":"2px solid transparent", marginBottom:-2,
+                    background:"transparent", color:active?"#15803d":"#94a3b8", fontWeight:active?700:400, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>
+                  {t.l}
+                </button>;
+              })}
+            </div>
 
-        <div style={{ flex:1, overflowY:"auto", padding:"16px 24px" }}>
-          {/* Histórico */}
-          {abaView === "historico" && (
-            movsProd.length === 0 ? (
-              <div style={{ textAlign:"center", color:"#94a3b8", padding:"24px 0" }}>
-                <div style={{ fontSize:32, marginBottom:8 }}>📦</div>
-                <div style={{ fontWeight:600, color:"#0f172a", marginBottom:8 }}>Nenhuma movimentação registrada ainda</div>
-                {mlbsProd.length > 0 ? (
-                  <div style={{ fontSize:12, color:"#92400e", background:"#fffbeb", border:"1px solid #fde68a", borderRadius:8, padding:"8px 12px", marginBottom:14, textAlign:"left", maxWidth:380, margin:"0 auto 14px" }}>
-                    ⚠️ Produto tem MLB vinculado ({mlbsProd[0]}). Vá em <b>Produtos → 📋 Movimentações</b> e clique em <b>🔄 Reprocessar Vendas</b> para importar as saídas automáticas de todas as vendas.
+            <div style={{ flex:1, overflowY:"auto" }}>
+              {abaView === "historico" && (
+                movsProd.length === 0 ? (
+                  <div style={{ textAlign:"center", color:"#94a3b8", padding:"40px 24px" }}>
+                    <div style={{ fontSize:32, marginBottom:8 }}>📦</div>
+                    <div style={{ fontWeight:600, color:"#0f172a", marginBottom:10 }}>Nenhuma movimentação registrada</div>
+                    {mlbsProd.length > 0 ? (
+                      <div style={{ fontSize:12, color:"#92400e", background:"#fffbeb", border:"1px solid #fde68a", borderRadius:8, padding:"10px 14px", marginBottom:14, textAlign:"left", maxWidth:440, margin:"0 auto 14px" }}>
+                        ⚠️ MLB vinculado: <b>{mlbsProd[0]}</b>. Vá em <b>Produtos → 📋 Movimentações → 🔄 Reprocessar Vendas</b> para importar todas as saídas automáticas.
+                      </div>
+                    ) : (
+                      <div style={{ fontSize:12, color:"#dc2626", background:"#fef2f2", border:"1px solid #fecaca", borderRadius:8, padding:"10px 14px", marginBottom:14, maxWidth:440, margin:"0 auto 14px" }}>
+                        ⚠️ Produto sem MLB vinculado. Edite o produto e vincule um MLB para baixa automática de vendas.
+                      </div>
+                    )}
+                    <button onClick={function(){setAbaView("registrar");}} style={{ background:"#15803d", border:"none", color:"#fff", padding:"9px 22px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700 }}>+ Incluir lançamento</button>
                   </div>
                 ) : (
-                  <div style={{ fontSize:12, color:"#dc2626", background:"#fef2f2", border:"1px solid #fecaca", borderRadius:8, padding:"8px 12px", marginBottom:14, maxWidth:380, margin:"0 auto 14px" }}>
-                    ⚠️ Produto sem MLB vinculado. Edite o produto e vincule um MLB para que as vendas sejam baixadas automaticamente.
+                  <div style={{ overflowX:"auto" }}>
+                    <table style={{ borderCollapse:"collapse", width:"100%", minWidth:700 }}>
+                      <thead>
+                        <tr style={{ background:"#f8fafc", borderBottom:"2px solid #e2e8f0" }}>
+                          {["Data","Entrada","Saída","Preço de Venda","Preço de Custo","Observação","Origem"].map(function(h){
+                            return <th key={h} style={{ fontSize:11, color:"#64748b", fontWeight:600, padding:"10px 12px", textAlign:"left", whiteSpace:"nowrap", borderBottom:"1px solid #e2e8f0" }}>{h}</th>;
+                          })}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {movsProd.map(function(m, i){
+                          var isE = m.tipo === "entrada";
+                          return (
+                            <tr key={m.id} style={{ borderBottom:"1px solid #f1f5f9", background:i%2===0?"#fff":"#fafafa" }}>
+                              {/* Data */}
+                              <td style={{ padding:"10px 12px", fontSize:12, color:"#334155", whiteSpace:"nowrap" }}>
+                                <div style={{ fontWeight:500 }}>{fmtDate(m.data)}</div>
+                                {m.hora && m.hora!=="—" && <div style={{ fontSize:10, color:"#94a3b8" }}>{m.hora}</div>}
+                              </td>
+                              {/* Entrada */}
+                              <td style={{ padding:"10px 12px", fontSize:13, fontWeight:700, color:"#15803d", textAlign:"right" }}>
+                                {isE ? <span>{parseInt(m.qtd||0).toFixed(10).replace(/\.?0+$/, "").replace(".",",").padEnd(13,"0000000000").slice(0,13)}</span> : <span style={{ color:"#94a3b8" }}>—</span>}
+                              </td>
+                              {/* Saída */}
+                              <td style={{ padding:"10px 12px", fontSize:13, fontWeight:700, color:"#dc2626", textAlign:"right" }}>
+                                {!isE ? <span>{parseInt(m.qtd||0).toFixed(10).replace(/\.?0+$/, "").replace(".",",").padEnd(13,"0000000000").slice(0,13)}</span> : <span style={{ color:"#94a3b8" }}>—</span>}
+                              </td>
+                              {/* Preço de Venda */}
+                              <td style={{ padding:"10px 12px", fontSize:12, color:"#334155", textAlign:"right" }}>
+                                {m.precoVenda ? fmt2(m.precoVenda) : (isE ? "—" : (produto.precoVenda ? fmt2(produto.precoVenda) : "—"))}
+                              </td>
+                              {/* Preço de Custo */}
+                              <td style={{ padding:"10px 12px", fontSize:12, color:"#334155", textAlign:"right" }}>
+                                {m.preco ? fmt2(m.preco) : (produto.precoCusto ? fmt2(produto.precoCusto) : "—")}
+                              </td>
+                              {/* Observação */}
+                              <td style={{ padding:"10px 12px", fontSize:12, color:"#64748b", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                                {m.motivo||"—"}
+                              </td>
+                              {/* Origem */}
+                              <td style={{ padding:"10px 12px", fontSize:11, fontFamily:"monospace" }}>
+                                {m.pedidoId ? (
+                                  <span style={{ background:"#eff6ff", color:"#1d4ed8", padding:"2px 8px", borderRadius:5, fontWeight:600, fontSize:11 }}>
+                                    {m.pedidoId}
+                                  </span>
+                                ) : m.mlbId ? (
+                                  <span style={{ background:"#f0fdf4", color:"#15803d", padding:"2px 8px", borderRadius:5, fontWeight:600, fontSize:11 }}>
+                                    {m.mlbId}
+                                  </span>
+                                ) : "—"}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
-                )}
-                <button onClick={function(){setAbaView("registrar");}} style={{ background:"#0f172a", border:"none", color:"#fff", padding:"8px 20px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:600 }}>+ Registrar movimento manual</button>
-              </div>
-            ) : (
-              <div>
-                {movsProd.map(function(m) {
-                  var isEntrada = m.tipo === "entrada";
-                  return (
-                    <div key={m.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderBottom:"1px solid #f8fafc" }}>
-                      <div style={{ width:36, height:36, borderRadius:10, background:isEntrada?"#f0fdf4":"#fef2f2", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>
-                        {isEntrada ? "↑" : "↓"}
-                      </div>
-                      <div style={{ flex:1 }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                          <span style={{ fontWeight:700, fontSize:14, color:isEntrada?"#15803d":"#dc2626" }}>
-                            {isEntrada ? "+" : "-"}{m.qtd} un
-                          </span>
-                          <span style={{ fontSize:11, background:isEntrada?"#f0fdf4":"#fef2f2", color:isEntrada?"#15803d":"#dc2626", padding:"1px 6px", borderRadius:4, fontWeight:600 }}>
-                            {isEntrada ? "ENTRADA" : "SAÍDA"}
-                          </span>
-                          {m.preco && <span style={{ fontSize:11, color:"#94a3b8" }}>R$ {m.preco.toFixed(2).replace(".",",")}/un</span>}
-                        </div>
-                        {m.motivo && <div style={{ fontSize:12, color:"#64748b", marginTop:2 }}>{m.motivo}</div>}
-                      </div>
-                      <div style={{ textAlign:"right", flexShrink:0 }}>
-                        <div style={{ fontSize:12, color:"#64748b" }}>{fmtDate(m.data)}</div>
-                        <div style={{ fontSize:10, color:"#94a3b8" }}>{m.hora}</div>
+                )
+              )}
+
+              {/* Registrar movimento */}
+              {abaView === "registrar" && (
+                <div style={{ padding:"20px 24px", display:"flex", flexDirection:"column", gap:14 }}>
+                  <div style={{ fontWeight:700, fontSize:15, color:"#0f172a" }}>Registrar Lançamento Manual</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
+                    <div>
+                      <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Tipo *</div>
+                      <div style={{ display:"flex", gap:6 }}>
+                        {["entrada","saida"].map(function(t){
+                          var a = tipo===t;
+                          return <button key={t} onClick={function(){setTipo(t);}}
+                            style={{ flex:1, padding:"9px", borderRadius:8, border:"1.5px solid "+(a?(t==="entrada"?"#15803d":"#dc2626"):"#e2e8f0"),
+                              background:a?(t==="entrada"?"#f0fdf4":"#fef2f2"):"#fff",
+                              color:a?(t==="entrada"?"#15803d":"#dc2626"):"#64748b",
+                              fontWeight:a?700:500, fontSize:12, cursor:"pointer" }}>
+                            {t==="entrada"?"↑ Entrada":"↓ Saída"}
+                          </button>;
+                        })}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )
-          )}
-
-          {/* Registrar */}
-          {abaView === "registrar" && (
-            <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-              <div>
-                <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:8 }}>Tipo de Movimento</div>
-                <div style={{ display:"flex", gap:8 }}>
-                  {[{k:"entrada",l:"↑ Entrada",cor:"#15803d",bg:"#f0fdf4"},{k:"saida",l:"↓ Saída",cor:"#dc2626",bg:"#fef2f2"}].map(function(t){
-                    var active = tipo===t.k;
-                    return <button key={t.k} onClick={function(){setTipo(t.k);}}
-                      style={{ flex:1, padding:"12px", borderRadius:10, border: active ? "2px solid "+t.cor : "2px solid #e2e8f0",
-                        background: active ? t.bg : "#fff", color: active ? t.cor : "#94a3b8",
-                        fontWeight: active ? 700 : 500, fontSize:14, cursor:"pointer", fontFamily:"inherit" }}>{t.l}</button>;
-                  })}
-                </div>
-              </div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-                <div>
-                  <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:6 }}>Quantidade *</div>
-                  <input type="number" min="1" value={qtd} onChange={function(e){setQtd(e.target.value);}} placeholder="Ex: 10" autoFocus
-                    style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"10px 12px", borderRadius:8, fontSize:14, fontWeight:700, outline:"none" }} />
-                </div>
-                <div>
-                  <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:6 }}>Preço unit. (R$) — opcional</div>
-                  <input type="number" step="0.01" value={preco} onChange={function(e){setPreco(e.target.value);}} placeholder="Ex: 45.90"
-                    style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"10px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:6 }}>Motivo / Observação</div>
-                <input value={motivo} onChange={function(e){setMotivo(e.target.value);}}
-                  placeholder={tipo==="entrada" ? "Ex: Compra fornecedor, ajuste inventário..." : "Ex: Venda, devolução, avaria..."}
-                  style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"10px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
-              </div>
-              {qtd && parseInt(qtd) > 0 && (
-                <div style={{ background: tipo==="entrada"?"#f0fdf4":"#fef2f2", border:"1px solid "+(tipo==="entrada"?"#bbf7d0":"#fecaca"), borderRadius:10, padding:"12px 16px", fontSize:13, color:tipo==="entrada"?"#15803d":"#dc2626", fontWeight:600 }}>
-                  Estoque: {estoqueAtual} {tipo==="entrada"?"+":"−"} {qtd} = {tipo==="entrada"?estoqueAtual+parseInt(qtd):Math.max(0,estoqueAtual-parseInt(qtd))} un
+                    <div>
+                      <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Quantidade *</div>
+                      <input type="number" min="1" value={qtd} onChange={function(e){setQtd(e.target.value);}} placeholder="0"
+                        style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:14, fontWeight:700, outline:"none" }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Preço de Custo</div>
+                      <input type="number" step="0.01" value={preco} onChange={function(e){setPreco(e.target.value);}} placeholder="R$ 0,00"
+                        style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Preço de Venda</div>
+                      <input type="number" step="0.01" value={precoVenda} onChange={function(e){setPrecoVenda(e.target.value);}} placeholder="R$ 0,00"
+                        style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                    </div>
+                    <div style={{ gridColumn:"span 2" }}>
+                      <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Observação</div>
+                      <input value={motivo} onChange={function(e){setMotivo(e.target.value);}} placeholder="Motivo da movimentação..."
+                        style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                    </div>
+                  </div>
+                  <div style={{ display:"flex", gap:8 }}>
+                    <button onClick={function(){setAbaView("historico");}} style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
+                    <button onClick={handleRegistrar} disabled={!qtd||parseInt(qtd)<=0}
+                      style={{ flex:2, background:(!qtd||parseInt(qtd)<=0)?"#f1f5f9":"#15803d", border:"none", color:(!qtd||parseInt(qtd)<=0)?"#94a3b8":"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:(!qtd||parseInt(qtd)<=0)?"not-allowed":"pointer", fontSize:14 }}>
+                      ✓ Confirmar Lançamento
+                    </button>
+                  </div>
                 </div>
               )}
-              <button onClick={handleRegistrar} disabled={!qtd||parseInt(qtd)<=0}
-                style={{ background:(!qtd||parseInt(qtd)<=0)?"#f1f5f9":tipo==="entrada"?"#15803d":"#dc2626",
-                  border:"none", color:(!qtd||parseInt(qtd)<=0)?"#94a3b8":"#fff",
-                  fontWeight:700, padding:"13px", borderRadius:10, cursor:(!qtd||parseInt(qtd)<=0)?"not-allowed":"pointer", fontSize:14 }}>
-                {tipo==="entrada"?"↑ Registrar Entrada":"↓ Registrar Saída"}
-              </button>
             </div>
-          )}
+          </div>
+
+          {/* Painel lateral direito — resumo estilo Bling */}
+          <div style={{ width:200, flexShrink:0, borderLeft:"1px solid #f1f5f9", padding:"20px 16px", display:"flex", flexDirection:"column", gap:16 }}>
+            <div>
+              <div style={{ fontSize:11, color:"#64748b", fontWeight:600, marginBottom:4 }}>Entradas</div>
+              <div style={{ fontSize:15, fontWeight:800, color:"#15803d" }}>{totalEntradas.toFixed(13).replace(/\.?0+$/,"")}</div>
+            </div>
+            <div>
+              <div style={{ fontSize:11, color:"#64748b", fontWeight:600, marginBottom:4 }}>Saídas</div>
+              <div style={{ fontSize:15, fontWeight:800, color:"#dc2626" }}>{totalSaidas.toFixed(13).replace(/\.?0+$/,"")}</div>
+            </div>
+            <div style={{ borderTop:"1px solid #f1f5f9", paddingTop:12 }}>
+              <div style={{ fontSize:11, color:"#64748b", fontWeight:600, marginBottom:4 }}>Saldo atual</div>
+              <div style={{ fontSize:18, fontWeight:800, color:estoqueAtual>0?"#0f172a":"#dc2626" }}>{estoqueAtual}</div>
+            </div>
+            {mlbsProd.length > 0 && (
+              <div style={{ borderTop:"1px solid #f1f5f9", paddingTop:12 }}>
+                <div style={{ fontSize:11, color:"#64748b", fontWeight:600, marginBottom:6 }}>MLBs Vinculados</div>
+                {mlbsProd.slice(0,3).map(function(m){
+                  return <div key={m} style={{ fontSize:11, fontFamily:"monospace", color:"#0891b2", marginBottom:3 }}>{m}</div>;
+                })}
+              </div>
+            )}
+          </div>
         </div>
+
       </div>
     </div>
   );

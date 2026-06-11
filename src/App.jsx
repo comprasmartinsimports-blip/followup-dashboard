@@ -6011,33 +6011,59 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
               <div style={{ fontSize:13, color:"#94a3b8", marginTop:2 }}>Histórico completo de entradas, saídas e transferências por produto e depósito</div>
             </div>
             <div style={{ display:"flex", gap:8, alignItems:"center", flexShrink:0 }}>
-              {rawOrders && rawOrders.length > 0 && (
                 <button onClick={function(){
-                  // Reprocessar baixas de estoque para todas as vendas
+                  if (!window.confirm("Isso vai gerar:\n\n1. Uma ENTRADA inicial para cada produto com estoque atual\n2. Uma SAÍDA para cada venda paga\n\nContinuar?")) return;
+
                   var prodAtual = JSON.parse(localStorage.getItem("produtos_cadastro") || "[]");
-                  // Limpar vendas já baixadas para reprocessar do zero
-                  if (window.confirm("Reprocessar movimentações de todas as vendas? Isso irá recalcular o estoque com base nos pedidos pagos.")) {
-                    localStorage.removeItem("vendas_estoque_baixadas");
-                    var movAtual = JSON.parse(localStorage.getItem("mov_estoque") || "[]");
-                    // Remover movimentações automáticas de vendas antigas
-                    var movsManual = movAtual.filter(function(m){ return !m.automatico || m.tipo === "entrada"; });
-                    localStorage.setItem("mov_estoque", JSON.stringify(movsManual));
-                    setMovEstoque(movsManual);
-                    // Zerar estoque dos produtos sincronizados (só os que têm MLB)
-                    var prodReset = prodAtual.map(function(p){
-                      if (p.mlbVinculado || (p.mlbsVinculados||[]).length > 0) {
-                        return Object.assign({}, p, { estoqueAtual: "0" });
-                      }
-                      return p;
+                  var hoje = new Date().toLocaleDateString("sv-SE");
+                  var horaAgora = new Date().toLocaleTimeString("pt-BR", {hour:"2-digit", minute:"2-digit"});
+
+                  // 1. Apagar tudo e começar do zero
+                  localStorage.removeItem("vendas_estoque_baixadas");
+
+                  // 2. Criar movimentações de ENTRADA com saldo atual de cada produto
+                  var movsIniciais = [];
+                  prodAtual.forEach(function(p) {
+                    var saldo = parseInt(p.estoqueAtual || 0);
+                    if (saldo <= 0) return;
+                    movsIniciais.push({
+                      id: "saldo_inicial_" + p.id,
+                      produtoId: p.id,
+                      mlbId: p.mlbVinculado || (p.mlbsVinculados||[])[0] || null,
+                      sku: p.sku || "",
+                      tipo: "entrada",
+                      qtd: saldo,
+                      motivo: "Saldo inicial de estoque",
+                      data: hoje,
+                      hora: horaAgora,
+                      automatico: true,
+                      saldoInicial: true,
                     });
-                    baixarEstoqueVendas(rawOrders, prodReset, movsManual, new Set());
-                    alert("✅ Movimentações reprocessadas! Verifique o estoque abaixo.");
+                  });
+
+                  localStorage.setItem("mov_estoque", JSON.stringify(movsIniciais));
+                  setMovEstoque(movsIniciais);
+
+                  // 3. Buscar pedidos do localStorage (se não tiver em memória, usa os salvos)
+                  var ordersParaProcessar = (rawOrders && rawOrders.length > 0)
+                    ? rawOrders
+                    : (function(){
+                        try { return JSON.parse(localStorage.getItem("ml_orders_cache") || "[]"); } catch { return []; }
+                      })();
+
+                  if (ordersParaProcessar.length === 0) {
+                    setMovEstoque(movsIniciais);
+                    alert("✅ Saldos iniciais criados! Reconecte ao ML para importar as saídas de vendas.");
+                    return;
                   }
+
+                  // 4. Gerar saídas de todas as vendas pagas — sem zerar estoque (já foi iniciado no passo 2)
+                  baixarEstoqueVendas(ordersParaProcessar, prodAtual, movsIniciais, new Set());
+                  alert("✅ Movimentações geradas! " + movsIniciais.length + " entradas iniciais + saídas de " + ordersParaProcessar.filter(function(o){return o.status==="paid";}).length + " vendas pagas.");
                 }}
                   style={{ background:"#ffe000", border:"none", color:"#0f172a", fontWeight:700, padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
                   🔄 Reprocessar Vendas
                 </button>
-              )}
             <BotaoExportar
               onCSV={function(){
                 var cab=["Data","Hora","Produto","SKU","Depósito","Tipo","Quantidade","Motivo","Preço Unit."];
@@ -11423,6 +11449,13 @@ export default function App() {
       setLoadingMsg("Buscando pedidos...");
       const orders = await fetchAllOrders(me.id, validTk);
       setRealOrders(orders);
+      // Salvar pedidos no localStorage para uso offline pelo Reprocessar Vendas
+      try {
+        var ordersLeve = orders.map(function(o){
+          return { id:o.id, listing_id:o.listing_id, status:o.status, qty:o.qty||1, price:o.price, date:o.date, title:o.title, seller_sku:o.seller_sku||"" };
+        });
+        localStorage.setItem("ml_orders_cache", JSON.stringify(ordersLeve));
+      } catch(e) {}
       // Baixa automática de estoque para pedidos pagos
       try {
         var pedidosPagos2 = orders.filter(function(o){ return o.status === "paid"; });

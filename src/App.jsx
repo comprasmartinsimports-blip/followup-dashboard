@@ -5936,6 +5936,34 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
               <div style={{ fontWeight:800, fontSize:18, color:"#0f172a" }}>📋 Movimentação de Estoque</div>
               <div style={{ fontSize:13, color:"#94a3b8", marginTop:2 }}>Histórico completo de entradas, saídas e transferências por produto e depósito</div>
             </div>
+            <div style={{ display:"flex", gap:8, alignItems:"center", flexShrink:0 }}>
+              {rawOrders && rawOrders.length > 0 && (
+                <button onClick={function(){
+                  // Reprocessar baixas de estoque para todas as vendas
+                  var prodAtual = JSON.parse(localStorage.getItem("produtos_cadastro") || "[]");
+                  // Limpar vendas já baixadas para reprocessar do zero
+                  if (window.confirm("Reprocessar movimentações de todas as vendas? Isso irá recalcular o estoque com base nos pedidos pagos.")) {
+                    localStorage.removeItem("vendas_estoque_baixadas");
+                    var movAtual = JSON.parse(localStorage.getItem("mov_estoque") || "[]");
+                    // Remover movimentações automáticas de vendas antigas
+                    var movsManual = movAtual.filter(function(m){ return !m.automatico || m.tipo === "entrada"; });
+                    localStorage.setItem("mov_estoque", JSON.stringify(movsManual));
+                    setMovEstoque(movsManual);
+                    // Zerar estoque dos produtos sincronizados (só os que têm MLB)
+                    var prodReset = prodAtual.map(function(p){
+                      if (p.mlbVinculado || (p.mlbsVinculados||[]).length > 0) {
+                        return Object.assign({}, p, { estoqueAtual: "0" });
+                      }
+                      return p;
+                    });
+                    baixarEstoqueVendas(rawOrders, prodReset, movsManual, new Set());
+                    alert("✅ Movimentações reprocessadas! Verifique o estoque abaixo.");
+                  }
+                }}
+                  style={{ background:"#ffe000", border:"none", color:"#0f172a", fontWeight:700, padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+                  🔄 Reprocessar Vendas
+                </button>
+              )}
             <BotaoExportar
               onCSV={function(){
                 var cab=["Data","Hora","Produto","SKU","Depósito","Tipo","Quantidade","Motivo","Preço Unit."];
@@ -5978,6 +6006,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                 exportarPDF("movimentacoes_estoque","Movimentações de Estoque",cab,linhas,["Total de movimentações: "+movEstoque.length,"↑ Entradas: "+entradas+" un","↓ Saídas: "+saidas+" un"]);
               }}
             />
+            </div>
           </div>
           <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, flexWrap:"wrap", marginTop:12 }}>
             <div style={{ position:"relative", flex:1, minWidth:220 }}>
@@ -11155,37 +11184,86 @@ export default function App() {
     var movsUpd = movimentosAtuais.slice();
     var qtdBaixadas = 0;
 
+    // Montar mapa rápido MLB → produto para lookup eficiente
+    var mapMlb = {};
+    var mapSku = {};
+    produtosUpd.forEach(function(p) {
+      // por MLB vinculado
+      if (p.mlbVinculado) mapMlb[p.mlbVinculado] = p;
+      (p.mlbsVinculados || []).forEach(function(m) { mapMlb[m] = p; });
+      // por SKU (fallback)
+      if (p.sku) mapSku[p.sku.trim().toLowerCase()] = p;
+    });
+
     orders.filter(function(o) {
       return o.status === "paid" && !novasBaixadas.has(String(o.id));
     }).forEach(function(o) {
       var listingId = o.listing_id;
-      if (!listingId) return;
 
-      // Encontrar produto vinculado ao listing_id (MLB)
-      var prod = produtosUpd.find(function(p) {
-        return (p.mlbsVinculados||[]).includes(listingId) || p.mlbVinculado === listingId;
-      });
-      if (!prod) return; // produto não cadastrado, não baixa
+      // 1. Tentar achar pelo listing_id (MLB)
+      var prod = listingId ? mapMlb[listingId] : null;
+
+      // 2. Fallback: buscar pelo SKU do pedido (seller_sku)
+      if (!prod && o.seller_sku) {
+        prod = mapSku[o.seller_sku.trim().toLowerCase()];
+      }
+
+      // 3. Fallback: buscar pelo título parcial
+      if (!prod && o.title && o.title.length > 10) {
+        var titleLower = o.title.toLowerCase();
+        prod = produtosUpd.find(function(p) {
+          return p.titulo && p.titulo.toLowerCase().includes(titleLower.slice(0, 30));
+        });
+      }
+
+      if (!prod) {
+        // Produto não cadastrado — registra movimentação sem vínculo mas com MLB
+        // para que o usuário saiba que aquela venda saiu sem produto vinculado
+        if (listingId) {
+          movsUpd.push({
+            id: "venda_" + o.id,
+            produtoId: null,
+            mlbId: listingId,
+            sku: o.seller_sku || "",
+            tipo: "saida",
+            qtd: parseInt(o.qty || 1),
+            motivo: "Venda ML #" + o.id + " (" + (o.title||"").slice(0,35) + ") — sem produto cadastrado",
+            pedidoId: String(o.id),
+            data: o.date || new Date().toLocaleDateString("sv-SE"),
+            hora: "—",
+            automatico: true,
+            semProduto: true,
+          });
+          novasBaixadas.add(String(o.id));
+        }
+        return;
+      }
 
       var qty = parseInt(o.qty || 1);
       var estoqueAtual = parseInt(prod.estoqueAtual || 0);
       var novoEstoque = Math.max(0, estoqueAtual - qty);
 
-      // Atualizar produto
+      // Atualizar produto no array
       var idx = produtosUpd.findIndex(function(p){ return p.id === prod.id; });
-      produtosUpd[idx] = Object.assign({}, prod, { estoqueAtual: String(novoEstoque) });
+      if (idx >= 0) {
+        produtosUpd[idx] = Object.assign({}, prod, { estoqueAtual: String(novoEstoque) });
+        // Atualizar mapa para próximas iterações
+        if (prod.mlbVinculado) mapMlb[prod.mlbVinculado] = produtosUpd[idx];
+        (prod.mlbsVinculados || []).forEach(function(m) { mapMlb[m] = produtosUpd[idx]; });
+      }
 
-      // Registrar movimentação vinculada à venda
+      // Registrar movimentação
       movsUpd.push({
         id: "venda_" + o.id,
         produtoId: prod.id,
-        sku: prod.sku,
+        mlbId: listingId,
+        sku: prod.sku || o.seller_sku || "",
         tipo: "saida",
         qtd: qty,
         motivo: "Venda ML #" + o.id + (o.title ? " — " + o.title.slice(0,40) : ""),
         pedidoId: String(o.id),
         data: o.date || new Date().toLocaleDateString("sv-SE"),
-        hora: "—",
+        hora: new Date().toLocaleTimeString("pt-BR", {hour:"2-digit", minute:"2-digit"}),
         automatico: true,
       });
 
@@ -11193,14 +11271,13 @@ export default function App() {
       qtdBaixadas++;
     });
 
-    if (qtdBaixadas > 0) {
-      // Salvar tudo
+    if (qtdBaixadas > 0 || movsUpd.length > movimentosAtuais.length) {
       localStorage.setItem("produtos_cadastro", JSON.stringify(produtosUpd));
       localStorage.setItem("mov_estoque", JSON.stringify(movsUpd));
       localStorage.setItem("vendas_estoque_baixadas", JSON.stringify([...novasBaixadas]));
       setProdutos(produtosUpd);
       setVendasBaixadas(novasBaixadas);
-      console.log("[ESTOQUE] " + qtdBaixadas + " venda(s) baixadas do estoque automaticamente");
+      console.log("[ESTOQUE] " + qtdBaixadas + " baixa(s) de estoque. Movimentações totais: " + movsUpd.length);
     }
     return qtdBaixadas;
   }

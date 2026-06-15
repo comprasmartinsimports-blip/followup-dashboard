@@ -4867,7 +4867,16 @@ function PedidosCompraTab({ produtos, fornecedores, setProdutos, exportarCSV, ex
 }
 
 function ModalPedidoCompra({ pedido, produtos, fornecedores, onSave, onClose }) {
-  var empty = { id:Date.now().toString(), numero:String(Date.now()).slice(-6), fornecedorId:"", fornecedorNome:"", status:"Em aberto", dataCriacao:new Date().toLocaleDateString("sv-SE"), dataEntregaPrev:"", itens:[], obs:"" };
+  var empty = {
+    id:Date.now().toString(), numero:String(Date.now()).slice(-6),
+    fornecedorId:"", fornecedorNome:"", fornecedorCNPJ:"",
+    status:"Em aberto", dataCriacao:new Date().toLocaleDateString("sv-SE"),
+    dataEntregaPrev:"", ordemCompra:"",
+    desconto:"0", frete:"0", outrasDespesas:"0",
+    condicaoPagamento:"", transportador:"", fretePorConta:"0",
+    pesoBruto:"", quantidade:"",
+    itens:[], obs:"", obsInternas:""
+  };
   const [form, setForm] = useState(pedido||empty);
   const [busca, setBusca] = useState("");
   const [resultados, setResultados] = useState([]);
@@ -4905,28 +4914,34 @@ function ModalPedidoCompra({ pedido, produtos, fornecedores, onSave, onClose }) 
           <button onClick={onClose} style={{ background:"#f1f5f9",border:"none",color:"#64748b",width:32,height:32,borderRadius:8,cursor:"pointer",fontSize:16 }}>✕</button>
         </div>
         <div style={{ flex:1,overflowY:"auto",padding:"20px 28px" }}>
-          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:16 }}>
+          {/* ── FORNECEDOR ── */}
+          <div style={{ fontSize:12,fontWeight:700,color:"#0f172a",marginBottom:8,paddingBottom:6,borderBottom:"1px solid #f1f5f9" }}>Fornecedor</div>
+          <div style={{ display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:10,marginBottom:14 }}>
             <div>
-              <div style={{ fontSize:11,color:"#94a3b8",marginBottom:5,fontWeight:600,textTransform:"uppercase" }}>Número</div>
-              <input value={form.numero} onChange={function(e){set("numero",e.target.value);}}
-                style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"9px 12px",borderRadius:8,fontSize:13,outline:"none" }} />
-            </div>
-            <div>
-              <div style={{ fontSize:11,color:"#94a3b8",marginBottom:5,fontWeight:600,textTransform:"uppercase" }}>Fornecedor *</div>
+              <div style={{ fontSize:11,color:"#94a3b8",marginBottom:4,fontWeight:600,textTransform:"uppercase" }}>Fornecedor *</div>
               <select value={form.fornecedorId} onChange={function(e){
                 var f=fornecedores.find(function(x){return x.id===e.target.value;});
-                set("fornecedorId",e.target.value); if(f)set("fornecedorNome",f.nome);
-              }} style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#334155",padding:"9px 12px",borderRadius:8,fontSize:13 }}>
+                set("fornecedorId",e.target.value);
+                if(f){set("fornecedorNome",f.nome);set("fornecedorCNPJ",f.cnpj||"");}
+              }} style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#334155",padding:"8px 11px",borderRadius:8,fontSize:12 }}>
                 <option value="">— Selecione —</option>
-                {fornecedores.map(function(f){return <option key={f.id} value={f.id}>{f.nome}</option>;})}
+                {fornecedores.filter(function(f){return !f.tipo||f.tipo==="Fornecedor";}).map(function(f){return <option key={f.id} value={f.id}>{f.nome}</option>;})}
               </select>
             </div>
             <div>
-              <div style={{ fontSize:11,color:"#94a3b8",marginBottom:5,fontWeight:600,textTransform:"uppercase" }}>Previsão de Entrega</div>
-              <input type="date" value={form.dataEntregaPrev||""} onChange={function(e){set("dataEntregaPrev",e.target.value);}}
-                style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#334155",padding:"9px 12px",borderRadius:8,fontSize:13 }} />
+              <div style={{ fontSize:11,color:"#94a3b8",marginBottom:4,fontWeight:600,textTransform:"uppercase" }}>CNPJ/CPF</div>
+              <input type="text" value={form.fornecedorCNPJ||""} onChange={function(e){set("fornecedorCNPJ",e.target.value);}} placeholder=""
+                style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"8px 11px",borderRadius:8,fontSize:12,outline:"none" }} />
+            </div>
+            <div>
+              <div style={{ fontSize:11,color:"#94a3b8",marginBottom:4,fontWeight:600,textTransform:"uppercase" }}>Nº do Pedido</div>
+              <input type="text" value={form.numero||""} onChange={function(e){set("numero",e.target.value);}} placeholder=""
+                style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"8px 11px",borderRadius:8,fontSize:12,outline:"none" }} />
             </div>
           </div>
+
+          {/* ── ITENS DO PEDIDO ── */}
+          <div style={{ fontSize:12,fontWeight:700,color:"#0f172a",marginBottom:8,paddingBottom:6,borderBottom:"1px solid #f1f5f9" }}>Itens do Pedido de Compra</div>
           {/* Busca produto */}
           <div style={{ marginBottom:14,position:"relative" }}>
             <div style={{ fontSize:13,fontWeight:700,color:"#0f172a",marginBottom:8 }}>Adicionar Produtos</div>
@@ -4955,7 +4970,7 @@ function ModalPedidoCompra({ pedido, produtos, fornecedores, onSave, onClose }) 
             <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"hidden",marginBottom:12 }}>
               <table style={{ borderCollapse:"collapse",width:"100%" }}>
                 <thead>
-                  <tr>{["Produto","SKU","Qtd","Qtd Receb.","Vlr Unit R$","Total","Obs",""].map(function(h){
+                  <tr>{["Item","Produto","Código SKU","Un","Qtde","Preço un","IPI %","Preço total","Obs",""].map(function(h){
                     return <th key={h} style={{ fontSize:10,color:"#94a3b8",textTransform:"uppercase",padding:"8px 10px",borderBottom:"1px solid #f1f5f9",textAlign:"left",fontWeight:600,background:"#fafafa" }}>{h}</th>;
                   })}</tr>
                 </thead>
@@ -4963,13 +4978,17 @@ function ModalPedidoCompra({ pedido, produtos, fornecedores, onSave, onClose }) 
                   {form.itens.map(function(it,i){
                     return (
                       <tr key={i} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
+                        <td style={{ padding:"7px 10px",fontSize:11,color:"#94a3b8",textAlign:"center",width:30 }}>{i+1}</td>
                         <td style={{ padding:"7px 10px",fontSize:12,color:"#0f172a",maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{it.titulo}</td>
                         <td style={{ padding:"7px 10px",fontSize:11,color:"#64748b",fontFamily:"monospace" }}>{it.sku||"—"}</td>
-                        <td style={{ padding:"7px 10px" }}><input type="number" min="1" value={it.qtd} onChange={function(e){updItem(i,"qtd",e.target.value);}} style={{ width:60,textAlign:"center",background:"#f0fdf4",border:"1px solid #bbf7d0",color:"#15803d",padding:"4px 6px",borderRadius:6,fontSize:13,fontWeight:700,outline:"none" }} /></td>
-                        <td style={{ padding:"7px 10px" }}><input type="number" min="0" value={it.qtdRecebida||0} onChange={function(e){updItem(i,"qtdRecebida",e.target.value);}} style={{ width:60,textAlign:"center",background:"#eff6ff",border:"1px solid #bfdbfe",color:"#1d4ed8",padding:"4px 6px",borderRadius:6,fontSize:13,fontWeight:700,outline:"none" }} /></td>
-                        <td style={{ padding:"7px 10px" }}><input type="number" step="0.01" value={it.valorUnit||""} onChange={function(e){updItem(i,"valorUnit",e.target.value);}} placeholder="0,00" style={{ width:80,background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"4px 6px",borderRadius:6,fontSize:12,outline:"none" }} /></td>
-                        <td style={{ padding:"7px 10px",fontSize:12,fontWeight:700,color:"#0f172a" }}>{it.valorTotal?"R$ "+parseFloat(it.valorTotal).toFixed(2).replace(".",","):"—"}</td>
-                        <td style={{ padding:"7px 10px" }}><input value={it.obs||""} onChange={function(e){updItem(i,"obs",e.target.value);}} placeholder="Obs..." style={{ width:90,background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"4px 6px",borderRadius:6,fontSize:11,outline:"none" }} /></td>
+                        <td style={{ padding:"7px 10px",fontSize:11,color:"#94a3b8",textAlign:"center" }}>UN</td>
+                        <td style={{ padding:"7px 10px" }}><input type="number" min="1" value={it.qtd} onChange={function(e){updItem(i,"qtd",e.target.value);}} style={{ width:56,textAlign:"center",background:"#f0fdf4",border:"1px solid #bbf7d0",color:"#15803d",padding:"4px 6px",borderRadius:6,fontSize:13,fontWeight:700,outline:"none" }} /></td>
+                        <td style={{ padding:"7px 10px" }}><input type="number" step="0.01" value={it.valorUnit||""} onChange={function(e){updItem(i,"valorUnit",e.target.value);}} placeholder="0,00" style={{ width:76,background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"4px 6px",borderRadius:6,fontSize:12,outline:"none" }} /></td>
+                        <td style={{ padding:"7px 10px" }}><input type="number" step="0.01" min="0" value={it.ipi||""} onChange={function(e){updItem(i,"ipi",e.target.value);}} placeholder="0" style={{ width:50,background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"4px 6px",borderRadius:6,fontSize:12,outline:"none",textAlign:"center" }} /></td>
+                        <td style={{ padding:"7px 10px",fontSize:12,fontWeight:700,color:"#0f172a",whiteSpace:"nowrap" }}>
+                          {it.valorTotal?"R$ "+parseFloat(it.valorTotal).toFixed(2).replace(".",","):"—"}
+                        </td>
+                        <td style={{ padding:"7px 10px" }}><input value={it.obs||""} onChange={function(e){updItem(i,"obs",e.target.value);}} placeholder="Obs..." style={{ width:85,background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"4px 6px",borderRadius:6,fontSize:11,outline:"none" }} /></td>
                         <td style={{ padding:"7px 10px" }}><button onClick={function(){remItem(i);}} style={{ background:"#fef2f2",border:"none",color:"#dc2626",width:24,height:24,borderRadius:6,cursor:"pointer",fontSize:11 }}>✕</button></td>
                       </tr>
                     );
@@ -4985,10 +5004,101 @@ function ModalPedidoCompra({ pedido, produtos, fornecedores, onSave, onClose }) 
               </table>
             </div>
           )}
-          <div>
-            <div style={{ fontSize:11,color:"#94a3b8",marginBottom:5,fontWeight:600,textTransform:"uppercase" }}>Observação Interna</div>
-            <input value={form.obs||""} onChange={function(e){set("obs",e.target.value);}} placeholder="Observações do pedido..."
-              style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"9px 12px",borderRadius:8,fontSize:13,outline:"none" }} />
+          {/* ── TOTAIS DA COMPRA ── */}
+          <div style={{ fontSize:12,fontWeight:700,color:"#0f172a",marginBottom:8,marginTop:14,paddingBottom:6,borderBottom:"1px solid #f1f5f9" }}>Totais da Compra</div>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10,marginBottom:14 }}>
+            <div>
+              <div style={{ fontSize:10,color:"#94a3b8",marginBottom:4,fontWeight:600,textTransform:"uppercase" }}>Total dos Produtos</div>
+              <div style={{ background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 11px",fontSize:13,fontWeight:700,color:"#0f172a" }}>
+                R$ {total.toFixed(2).replace(".",",")}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize:10,color:"#94a3b8",marginBottom:4,fontWeight:600,textTransform:"uppercase" }}>Desconto (R$)</div>
+              <input type="number" step="0.01" min="0" value={form.desconto||"0"} onChange={function(e){set("desconto",e.target.value);}}
+                style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"8px 11px",borderRadius:8,fontSize:12,outline:"none" }} />
+            </div>
+            <div>
+              <div style={{ fontSize:10,color:"#94a3b8",marginBottom:4,fontWeight:600,textTransform:"uppercase" }}>Frete (R$)</div>
+              <input type="number" step="0.01" min="0" value={form.frete||"0"} onChange={function(e){set("frete",e.target.value);}}
+                style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"8px 11px",borderRadius:8,fontSize:12,outline:"none" }} />
+            </div>
+            <div>
+              <div style={{ fontSize:10,color:"#94a3b8",marginBottom:4,fontWeight:600,textTransform:"uppercase" }}>Total do Pedido</div>
+              <div style={{ background:"#0f172a",borderRadius:8,padding:"8px 11px",fontSize:14,fontWeight:800,color:"#fff" }}>
+                R$ {(total - parseFloat(form.desconto||0) + parseFloat(form.frete||0)).toFixed(2).replace(".",",")}
+              </div>
+            </div>
+          </div>
+
+          {/* ── DETALHES DA COMPRA ── */}
+          <div style={{ fontSize:12,fontWeight:700,color:"#0f172a",marginBottom:8,paddingBottom:6,borderBottom:"1px solid #f1f5f9" }}>Detalhes da Compra</div>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10,marginBottom:14 }}>
+            <div>
+              <div style={{ fontSize:10,color:"#94a3b8",marginBottom:4,fontWeight:600,textTransform:"uppercase" }}>Data da Compra</div>
+              <input type="date" value={form.dataCriacao||""} onChange={function(e){set("dataCriacao",e.target.value);}}
+                style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#334155",padding:"8px 11px",borderRadius:8,fontSize:12 }} />
+            </div>
+            <div>
+              <div style={{ fontSize:10,color:"#94a3b8",marginBottom:4,fontWeight:600,textTransform:"uppercase" }}>Data Prevista</div>
+              <input type="date" value={form.dataEntregaPrev||""} onChange={function(e){set("dataEntregaPrev",e.target.value);}}
+                style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#334155",padding:"8px 11px",borderRadius:8,fontSize:12 }} />
+            </div>
+            <div>
+              <div style={{ fontSize:10,color:"#94a3b8",marginBottom:4,fontWeight:600,textTransform:"uppercase" }}>Ordem de Compra</div>
+              <input value={form.ordemCompra||""} onChange={function(e){set("ordemCompra",e.target.value);}} placeholder=""
+                style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"8px 11px",borderRadius:8,fontSize:12,outline:"none" }} />
+            </div>
+            <div>
+              <div style={{ fontSize:10,color:"#94a3b8",marginBottom:4,fontWeight:600,textTransform:"uppercase" }}>Condição de Pagamento</div>
+              <input value={form.condicaoPagamento||""} onChange={function(e){set("condicaoPagamento",e.target.value);}} placeholder="Ex: 30/60/90 dias"
+                style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"8px 11px",borderRadius:8,fontSize:12,outline:"none" }} />
+            </div>
+          </div>
+
+          {/* ── TRANSPORTADOR ── */}
+          <div style={{ fontSize:12,fontWeight:700,color:"#0f172a",marginBottom:8,paddingBottom:6,borderBottom:"1px solid #f1f5f9" }}>Transportador</div>
+          <div style={{ display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",gap:10,marginBottom:14 }}>
+            <div>
+              <div style={{ fontSize:10,color:"#94a3b8",marginBottom:4,fontWeight:600,textTransform:"uppercase" }}>Nome</div>
+              <input value={form.transportador||""} onChange={function(e){set("transportador",e.target.value);}} placeholder="Nome da transportadora"
+                style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"8px 11px",borderRadius:8,fontSize:12,outline:"none" }} />
+            </div>
+            <div>
+              <div style={{ fontSize:10,color:"#94a3b8",marginBottom:4,fontWeight:600,textTransform:"uppercase" }}>Frete por Conta</div>
+              <select value={form.fretePorConta||"0"} onChange={function(e){set("fretePorConta",e.target.value);}}
+                style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#334155",padding:"8px 11px",borderRadius:8,fontSize:11 }}>
+                <option value="0">0 - CIF (Remetente)</option>
+                <option value="1">1 - FOB (Destinatário)</option>
+                <option value="2">2 - Terceiros</option>
+                <option value="9">9 - Sem Frete</option>
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize:10,color:"#94a3b8",marginBottom:4,fontWeight:600,textTransform:"uppercase" }}>Peso Bruto (kg)</div>
+              <input type="number" step="0.001" value={form.pesoBruto||""} onChange={function(e){set("pesoBruto",e.target.value);}} placeholder="0,000"
+                style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"8px 11px",borderRadius:8,fontSize:12,outline:"none" }} />
+            </div>
+            <div>
+              <div style={{ fontSize:10,color:"#94a3b8",marginBottom:4,fontWeight:600,textTransform:"uppercase" }}>Quantidade Volumes</div>
+              <input type="number" value={form.quantidade||""} onChange={function(e){set("quantidade",e.target.value);}} placeholder="0"
+                style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"8px 11px",borderRadius:8,fontSize:12,outline:"none" }} />
+            </div>
+          </div>
+
+          {/* ── OBSERVAÇÕES ── */}
+          <div style={{ fontSize:12,fontWeight:700,color:"#0f172a",marginBottom:8,paddingBottom:6,borderBottom:"1px solid #f1f5f9" }}>Dados Adicionais</div>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
+            <div>
+              <div style={{ fontSize:10,color:"#94a3b8",marginBottom:4,fontWeight:600,textTransform:"uppercase" }}>Observações</div>
+              <textarea value={form.obs||""} onChange={function(e){set("obs",e.target.value);}} placeholder="Observações da compra..." rows={3}
+                style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"8px 11px",borderRadius:8,fontSize:12,outline:"none",resize:"none",fontFamily:"inherit" }} />
+            </div>
+            <div>
+              <div style={{ fontSize:10,color:"#94a3b8",marginBottom:4,fontWeight:600,textTransform:"uppercase" }}>Observações Internas</div>
+              <textarea value={form.obsInternas||""} onChange={function(e){set("obsInternas",e.target.value);}} placeholder="Notas internas..." rows={3}
+                style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"8px 11px",borderRadius:8,fontSize:12,outline:"none",resize:"none",fontFamily:"inherit" }} />
+            </div>
           </div>
         </div>
         <div style={{ display:"flex",gap:8,padding:"14px 28px",borderTop:"1px solid #f1f5f9",background:"#fafafa" }}>
@@ -6203,54 +6313,79 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
             </div>
             <div style={{ display:"flex", gap:8, alignItems:"center", flexShrink:0 }}>
                 <button onClick={function(){
-                  if (!window.confirm("Isso vai gerar:\n\n1. Uma ENTRADA inicial para cada produto com estoque atual\n2. Uma SAÍDA para cada venda paga\n\nContinuar?")) return;
+                  if (!window.confirm("Isso vai:\n\n1. Calcular saldo = estoque ML atual + total de saídas de venda\n2. Criar ENTRADA inicial com esse saldo\n3. Criar SAÍDA para cada venda paga\n\nContinuar?")) return;
 
                   var prodAtual = JSON.parse(localStorage.getItem("produtos_cadastro") || "[]");
                   var hoje = new Date().toLocaleDateString("sv-SE");
                   var horaAgora = new Date().toLocaleTimeString("pt-BR", {hour:"2-digit", minute:"2-digit"});
-
-                  // 1. Apagar tudo e começar do zero
                   localStorage.removeItem("vendas_estoque_baixadas");
 
-                  // 2. Criar movimentações de ENTRADA com saldo atual de cada produto
-                  var movsIniciais = [];
-                  prodAtual.forEach(function(p) {
-                    var saldo = parseInt(p.estoqueAtual || 0);
-                    if (saldo <= 0) return;
-                    movsIniciais.push({
-                      id: "saldo_inicial_" + p.id,
-                      produtoId: p.id,
-                      mlbId: p.mlbVinculado || (p.mlbsVinculados||[])[0] || null,
-                      sku: p.sku || "",
-                      tipo: "entrada",
-                      qtd: saldo,
-                      motivo: "Saldo inicial de estoque",
-                      data: hoje,
-                      hora: horaAgora,
-                      automatico: true,
-                      saldoInicial: true,
-                    });
+                  // Buscar pedidos
+                  var ordersParaProcessar = (rawOrders && rawOrders.length > 0)
+                    ? rawOrders
+                    : (function(){ try { return JSON.parse(localStorage.getItem("ml_orders_cache")||"[]"); } catch { return []; } })();
+
+                  var pedidosPagos = ordersParaProcessar.filter(function(o){ return o.status==="paid"; });
+
+                  // Contar saídas por MLB (vendas pagas)
+                  var vendasPorMlb = {};
+                  pedidosPagos.forEach(function(o) {
+                    if (!o.listing_id) return;
+                    vendasPorMlb[o.listing_id] = (vendasPorMlb[o.listing_id]||0) + parseInt(o.qty||1);
                   });
 
+                  // Mapa MLB -> quantidade disponível no ML agora
+                  var saldoMlb = {};
+                  (listings||[]).forEach(function(l) {
+                    saldoMlb[l.id] = parseInt(l.available_quantity||l.initial_quantity||0);
+                  });
+
+                  // Criar entradas iniciais: saldo ML atual + todas as saídas que ocorreram
+                  var movsIniciais = [];
+                  var produtosUpd = prodAtual.map(function(p) {
+                    var mlbs = [p.mlbVinculado].concat(p.mlbsVinculados||[]).filter(Boolean);
+                    // Soma vendas de todos os MLB do produto
+                    var totalSaidas = mlbs.reduce(function(s,m){ return s+(vendasPorMlb[m]||0); },0);
+                    // Saldo atual no ML
+                    var saldoAtualMl = mlbs.reduce(function(s,m){ return s+(saldoMlb[m]||0); },0);
+                    // Se tem MLB, usa saldo ML + saídas; senão usa estoqueAtual cadastrado
+                    var saldoInicial = mlbs.length>0 ? (saldoAtualMl + totalSaidas) : parseInt(p.estoqueAtual||0);
+                    if (saldoInicial <= 0 && parseInt(p.estoqueAtual||0) > 0) saldoInicial = parseInt(p.estoqueAtual||0);
+                    if (saldoInicial > 0) {
+                      movsIniciais.push({
+                        id: "saldo_inicial_" + p.id,
+                        produtoId: p.id,
+                        mlbId: mlbs[0]||null,
+                        sku: p.sku||"",
+                        tipo: "entrada",
+                        qtd: saldoInicial,
+                        motivo: mlbs.length>0
+                          ? "Saldo inicial (ML atual: "+saldoAtualMl+" + vendas: "+totalSaidas+")"
+                          : "Saldo inicial de estoque",
+                        data: hoje, hora: horaAgora,
+                        automatico: true, saldoInicial: true,
+                      });
+                    }
+                    // Atualizar estoqueAtual com saldo ML se disponível
+                    if (mlbs.length>0 && saldoAtualMl > 0) {
+                      return Object.assign({}, p, { estoqueAtual: String(saldoAtualMl) });
+                    }
+                    return p;
+                  });
+
+                  localStorage.setItem("produtos_cadastro", JSON.stringify(produtosUpd));
+                  setProdutos(produtosUpd);
                   localStorage.setItem("mov_estoque", JSON.stringify(movsIniciais));
                   setMovEstoque(movsIniciais);
 
-                  // 3. Buscar pedidos do localStorage (se não tiver em memória, usa os salvos)
-                  var ordersParaProcessar = (rawOrders && rawOrders.length > 0)
-                    ? rawOrders
-                    : (function(){
-                        try { return JSON.parse(localStorage.getItem("ml_orders_cache") || "[]"); } catch { return []; }
-                      })();
-
-                  if (ordersParaProcessar.length === 0) {
-                    setMovEstoque(movsIniciais);
-                    alert("✅ Saldos iniciais criados! Reconecte ao ML para importar as saídas de vendas.");
+                  if (pedidosPagos.length === 0) {
+                    alert("✅ " + movsIniciais.length + " entradas iniciais criadas! Reconecte ao ML para importar saídas.");
                     return;
                   }
 
-                  // 4. Gerar saídas de todas as vendas pagas — sem zerar estoque (já foi iniciado no passo 2)
-                  baixarEstoqueVendas(ordersParaProcessar, prodAtual, movsIniciais, new Set());
-                  alert("✅ Movimentações geradas! " + movsIniciais.length + " entradas iniciais + saídas de " + ordersParaProcessar.filter(function(o){return o.status==="paid";}).length + " vendas pagas.");
+                  // Gerar saídas de todas as vendas pagas
+                  baixarEstoqueVendas(pedidosPagos, produtosUpd, movsIniciais, new Set());
+                  alert("✅ Concluído!\n• " + movsIniciais.length + " entradas iniciais\n• " + pedidosPagos.length + " saídas de vendas geradas");
                 }}
                   style={{ background:"#ffe000", border:"none", color:"#0f172a", fontWeight:700, padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
                   🔄 Reprocessar Vendas
@@ -11520,7 +11655,16 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
   const [margemAlvo, setMargemAlvo] = useState(20);
   const [selectedId, setSelectedId] = useState(null);
   const [editingFreteId, setEditingFreteId] = useState(null);
+  const [editingDescId, setEditingDescId] = useState(null);
   const [custosLocais, setCustosLocais] = useState({});
+  const [descontosConfig, setDescontosConfig] = useState(function(){
+    try { return JSON.parse(localStorage.getItem("descontos_config")||"{}"); } catch { return {}; }
+  });
+  function setDesconto(id, pct) {
+    var next = Object.assign({}, descontosConfig, { [id]: pct });
+    setDescontosConfig(next);
+    try { localStorage.setItem("descontos_config", JSON.stringify(next)); } catch {}
+  }
 
   var listsFiltrados = (enriched||[]).filter(function(l) {
     if (!busca) return true;
@@ -11569,7 +11713,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
         <table style={{ borderCollapse:"collapse", width:"100%", minWidth:900 }}>
           <thead>
             <tr style={{ background:"#f8fafc" }}>
-              {["Anúncio","MLB","Preço Atual","Preço Médio Vendas","Custo","Taxa ML","Frete Config.","Frete Real","⚠ Frete","Lucro Atual","Margem","Preço Sugerido","Ação"].map(function(h){
+              {["Anúncio","MLB","Preço Atual","Preço Médio Vendas","Custo","Taxa ML","Frete Config.","Frete Real","⚠ Frete","Lucro Atual","Margem","Preço Sugerido","🏷 % Desc. Promoção","Preço c/ Desc.","Margem c/ Desc.","Ação"].map(function(h){
                 return <th key={h} style={{ fontSize:10, color:"#64748b", fontWeight:600, textTransform:"uppercase", padding:"10px 12px", borderBottom:"1px solid #e2e8f0", textAlign:"left", whiteSpace:"nowrap" }}>{h}</th>;
               })}
             </tr>
@@ -11681,11 +11825,83 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                       </span>
                     ) : <span style={{color:"#94a3b8",fontSize:11}}>informe custo</span>}
                   </td>
+                  {/* % Desconto para promoção */}
                   <td style={{ padding:"10px 12px" }}>
-                    <a href={"https://www.mercadolivre.com.br/anuncios/"+l.id+"/editar"} target="_blank" rel="noreferrer"
-                      style={{ fontSize:11, color:"#0891b2", textDecoration:"none", fontWeight:600 }}>
-                      Editar ML ↗
-                    </a>
+                    {editingDescId === l.id ? (
+                      <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                        <input type="number" min="0" max="80" step="1"
+                          defaultValue={descontosConfig[l.id]||""}
+                          placeholder="0"
+                          autoFocus
+                          onBlur={function(e){
+                            var v = Math.min(80, Math.max(0, parseFloat(e.target.value)||0));
+                            setDesconto(l.id, v);
+                            setEditingDescId(null);
+                          }}
+                          onKeyDown={function(e){ if(e.key==="Enter"||e.key==="Escape") e.target.blur(); }}
+                          style={{ width:52, background:"#fff", border:"1px solid #7c3aed", color:"#0f172a", padding:"4px 7px", borderRadius:6, fontSize:12, outline:"none", textAlign:"center" }} />
+                        <span style={{ fontSize:11, color:"#94a3b8" }}>%</span>
+                      </div>
+                    ) : (
+                      <span onClick={function(){ setEditingDescId(l.id); }} title="Clique para definir % de desconto"
+                        style={{ cursor:"pointer", display:"inline-flex", alignItems:"center", gap:4 }}>
+                        <span style={{ fontSize:12, fontWeight:700,
+                          color: descontosConfig[l.id]>0 ? "#7c3aed" : "#94a3b8",
+                          background: descontosConfig[l.id]>0 ? "#f5f3ff" : "#f8fafc",
+                          border: "1px solid " + (descontosConfig[l.id]>0 ? "#ede9fe" : "#e2e8f0"),
+                          padding:"3px 10px", borderRadius:6 }}>
+                          {descontosConfig[l.id]>0 ? descontosConfig[l.id]+"%" : "✎ definir"}
+                        </span>
+                      </span>
+                    )}
+                  </td>
+                  {/* Preço com desconto */}
+                  <td style={{ padding:"10px 12px" }}>
+                    {descontosConfig[l.id]>0 ? (function(){
+                      var precoDesc = bruto * (1 - descontosConfig[l.id]/100);
+                      return (
+                        <div>
+                          <span style={{ fontSize:13, fontWeight:800, color:"#7c3aed" }}>
+                            R$ {precoDesc.toFixed(2).replace(".",",")}
+                          </span>
+                          <div style={{ fontSize:10, color:"#94a3b8" }}>
+                            de R$ {bruto.toFixed(2).replace(".",",")}
+                          </div>
+                        </div>
+                      );
+                    })() : <span style={{ color:"#94a3b8", fontSize:11 }}>—</span>}
+                  </td>
+                  {/* Margem com desconto */}
+                  <td style={{ padding:"10px 12px" }}>
+                    {descontosConfig[l.id]>0 && custo>0 ? (function(){
+                      var precoDesc = bruto * (1 - descontosConfig[l.id]/100);
+                      var taxaDesc = taxa * (precoDesc/bruto); // taxa proporcional ao novo preço
+                      var lucroDesc = precoDesc - custo - frete - taxaDesc;
+                      var margemDesc = precoDesc>0 ? (lucroDesc/precoDesc)*100 : 0;
+                      var mCorDesc = margemDesc>=margemAlvo?"#15803d":margemDesc>=0?"#d97706":"#dc2626";
+                      return (
+                        <div>
+                          <span style={{ fontSize:12, fontWeight:700, color:mCorDesc, background:mCorDesc+"18", padding:"3px 8px", borderRadius:6 }}>
+                            {margemDesc.toFixed(1)}%
+                          </span>
+                          <div style={{ fontSize:10, color: lucroDesc>=0?"#64748b":"#dc2626", marginTop:2 }}>
+                            lucro R$ {lucroDesc.toFixed(2).replace(".",",")}
+                          </div>
+                        </div>
+                      );
+                    })() : <span style={{ color:"#94a3b8", fontSize:11 }}>—</span>}
+                  </td>
+                  <td style={{ padding:"10px 12px" }}>
+                    <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                      <a href={"https://www.mercadolivre.com.br/anuncios/"+l.id+"/editar"} target="_blank" rel="noreferrer"
+                        style={{ fontSize:11, color:"#0891b2", textDecoration:"none", fontWeight:600 }}>
+                        Editar ML ↗
+                      </a>
+                      <a href={"https://www.mercadolivre.com.br/publicidade/promocoes"} target="_blank" rel="noreferrer"
+                        style={{ fontSize:10, color:"#7c3aed", textDecoration:"none", fontWeight:600 }}>
+                        Central Promoções ↗
+                      </a>
+                    </div>
                   </td>
                 </tr>
               );

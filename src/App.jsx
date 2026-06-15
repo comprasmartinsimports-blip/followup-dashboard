@@ -1700,6 +1700,7 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
   const [metaInput, setMetaInput] = useState(String(metaMensal || ""));
   const [overviewTab, setOverviewTab] = useState("resumo"); // resumo | dashboard
   const [dashSubTab, setDashSubTab] = useState("geral"); // geral | vendas | margem | produtos | clientes | abc | metas
+  const [sortMargem, setSortMargem] = useState("data"); // data | maior | menor
   const [dashPeriodo, setDashPeriodo] = useState("mes"); // hoje | 7dias | mes | 30dias | ano | custom | mesSel
   const [dashMesSel, setDashMesSel] = useState(() => { var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0"); });
   const [dashDe, setDashDe] = useState("");
@@ -2219,8 +2220,6 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
                   </div>; })}
                 </div>
                 {(function(){
-                  var [sortMargem, setSortMargem] = useState("data"); // data | maior | menor
-
                   var pedidosOrdenados = comCusto.slice().sort(function(a, b) {
                     if (sortMargem === "maior") return b.margem - a.margem;
                     if (sortMargem === "menor") return a.margem - b.margem;

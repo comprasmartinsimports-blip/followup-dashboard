@@ -2218,26 +2218,59 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
                     <div style={{ fontSize:20, fontWeight:800, color:k.cor }}>{k.v}</div>
                   </div>; })}
                 </div>
-                <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
-                  <div style={{ padding:"14px 18px", borderBottom:"1px solid #f1f5f9", fontWeight:700, fontSize:15, color:"#0f172a" }}>Margem por Pedido</div>
-                  <table style={{ borderCollapse:"collapse", width:"100%" }}>
-                    <thead><tr>{["Pedido","Data","Produto","Bruto","Taxa ML","Frete","Custo","Lucro","Margem"].map(function(h){ return <th key={h} style={{ fontSize:10, color:"#94a3b8", textTransform:"uppercase", padding:"8px 12px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>; })}</tr></thead>
-                    <tbody>{comCusto.sort(function(a,b){return b.margem-a.margem;}).slice(0,100).map(function(o,i){
-                      var mCor=o.margem>=20?"#15803d":o.margem>=10?"#d97706":"#dc2626";
-                      return <tr key={o.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
-                        <td style={{ padding:"7px 12px", fontSize:11, color:"#0891b2", fontFamily:"monospace" }}>#{o.id}</td>
-                        <td style={{ padding:"7px 12px", fontSize:11, color:"#64748b" }}>{fmtDate(o.date)}</td>
-                        <td style={{ padding:"7px 12px", fontSize:11, color:"#0f172a", maxWidth:160, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{o.title||"—"}</td>
-                        <td style={{ padding:"7px 12px", fontSize:12, fontWeight:600, color:"#0f172a" }}>{fmt(o.bruto)}</td>
-                        <td style={{ padding:"7px 12px", fontSize:12, color:"#dc2626" }}>{fmt(o.taxa)}</td>
-                        <td style={{ padding:"7px 12px", fontSize:12, color:"#d97706" }}>{fmt(o.frete)}</td>
-                        <td style={{ padding:"7px 12px", fontSize:12, color:"#64748b" }}>{o.custo>0?fmt(o.custo):<span style={{color:"#94a3b8"}}>—</span>}</td>
-                        <td style={{ padding:"7px 12px", fontSize:12, fontWeight:700, color:o.lucro>=0?"#0891b2":"#dc2626" }}>{o.custo>0?fmt(o.lucro):<span style={{color:"#94a3b8"}}>—</span>}</td>
-                        <td style={{ padding:"7px 12px" }}>{o.custo>0?<span style={{ fontSize:12, fontWeight:700, color:mCor, background:mCor+"11", padding:"2px 7px", borderRadius:5 }}>{o.margem.toFixed(1)}%</span>:<span style={{fontSize:11,color:"#94a3b8"}}>sem custo</span>}</td>
-                      </tr>;
-                    })}</tbody>
-                  </table>
-                </div>
+                {(function(){
+                  var [sortMargem, setSortMargem] = useState("data"); // data | maior | menor
+
+                  var pedidosOrdenados = comCusto.slice().sort(function(a, b) {
+                    if (sortMargem === "maior") return b.margem - a.margem;
+                    if (sortMargem === "menor") return a.margem - b.margem;
+                    // padrão: data mais recente primeiro
+                    return (b.date||"") > (a.date||"") ? 1 : -1;
+                  });
+
+                  return (
+                    <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
+                      <div style={{ padding:"12px 18px", borderBottom:"1px solid #f1f5f9", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                        <span style={{ fontWeight:700, fontSize:15, color:"#0f172a" }}>Margem por Pedido</span>
+                        <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                          <span style={{ fontSize:12, color:"#94a3b8" }}>Ordenar:</span>
+                          {[
+                            { k:"data",  l:"📅 Data" },
+                            { k:"maior", l:"▲ Maior margem" },
+                            { k:"menor", l:"▼ Menor margem" },
+                          ].map(function(op){
+                            var a = sortMargem === op.k;
+                            return (
+                              <button key={op.k} onClick={function(){ setSortMargem(op.k); }}
+                                style={{ padding:"5px 12px", borderRadius:8, border:"1px solid "+(a?"#0f172a":"#e2e8f0"),
+                                  background:a?"#0f172a":"#fff", color:a?"#fff":"#64748b",
+                                  fontWeight:a?700:400, fontSize:12, cursor:"pointer" }}>
+                                {op.l}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <table style={{ borderCollapse:"collapse", width:"100%" }}>
+                        <thead><tr>{["Pedido","Data","Produto","Bruto","Taxa ML","Frete","Custo","Lucro","Margem"].map(function(h){ return <th key={h} style={{ fontSize:10, color:"#94a3b8", textTransform:"uppercase", padding:"8px 12px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>; })}</tr></thead>
+                        <tbody>{pedidosOrdenados.slice(0,200).map(function(o,i){
+                          var mCor=o.margem>=20?"#15803d":o.margem>=10?"#d97706":"#dc2626";
+                          return <tr key={o.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
+                            <td style={{ padding:"7px 12px", fontSize:11, color:"#0891b2", fontFamily:"monospace" }}>#{o.id}</td>
+                            <td style={{ padding:"7px 12px", fontSize:11, color:"#64748b", whiteSpace:"nowrap" }}>{fmtDate(o.date)}</td>
+                            <td style={{ padding:"7px 12px", fontSize:11, color:"#0f172a", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{o.title||"—"}</td>
+                            <td style={{ padding:"7px 12px", fontSize:12, fontWeight:600, color:"#0f172a" }}>{fmt(o.bruto)}</td>
+                            <td style={{ padding:"7px 12px", fontSize:12, color:"#dc2626" }}>{fmt(o.taxa)}</td>
+                            <td style={{ padding:"7px 12px", fontSize:12, color:"#d97706" }}>{fmt(o.frete)}</td>
+                            <td style={{ padding:"7px 12px", fontSize:12, color:"#64748b" }}>{o.custo>0?fmt(o.custo):<span style={{color:"#94a3b8"}}>—</span>}</td>
+                            <td style={{ padding:"7px 12px", fontSize:12, fontWeight:700, color:o.lucro>=0?"#0891b2":"#dc2626" }}>{o.custo>0?fmt(o.lucro):<span style={{color:"#94a3b8"}}>—</span>}</td>
+                            <td style={{ padding:"7px 12px" }}>{o.custo>0?<span style={{ fontSize:12, fontWeight:700, color:mCor, background:mCor+"11", padding:"2px 7px", borderRadius:5 }}>{o.margem.toFixed(1)}%</span>:<span style={{fontSize:11,color:"#94a3b8"}}>sem custo</span>}</td>
+                          </tr>;
+                        })}</tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
               </div>
             );
           })()}

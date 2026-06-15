@@ -534,7 +534,7 @@ function AIPanel({ listing, onClose }) {
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {checks.map(c => (
-              <div key={c.key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: c.pass ? "#f0fdf4" : "#fef2f2", borderRadius: 8 }}>
+              <div key={c.key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 7px", background: c.pass ? "#f0fdf4" : "#fef2f2", borderRadius: 8 }}>
                 <span style={{ color: c.pass ? "#16a34a" : "#dc2626", fontSize: 13, fontWeight: 700 }}>{c.pass ? "✓" : "✗"}</span>
                 <span style={{ fontSize: 12, color: c.pass ? "#15803d" : "#b91c1c" }}>{c.label}</span>
               </div>
@@ -885,7 +885,7 @@ function PainelBackup({ onClose }) {
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.65)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:700, padding:24 }}>
       <div style={{ background:"#fff", borderRadius:20, width:"100%", maxWidth:580, maxHeight:"90vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 64px rgba(0,0,0,.2)" }}>
         {/* Header */}
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"20px 28px", borderBottom:"1px solid #f1f5f9" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", borderBottom:"1px solid #f1f5f9" }}>
           <div>
             <div style={{ fontWeight:800, fontSize:18, color:"#0f172a" }}>💾 Backup e Restauração</div>
             <div style={{ fontSize:12, color:"#94a3b8", marginTop:2 }}>Exporte seus dados para um arquivo seguro ou restaure de um backup anterior</div>
@@ -893,24 +893,24 @@ function PainelBackup({ onClose }) {
           <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
         </div>
 
-        <div style={{ flex:1, overflowY:"auto", padding:"20px 28px" }}>
+        <div style={{ flex:1, overflowY:"auto", padding:"12px 16px" }}>
 
           {/* Status */}
           {status && (
-            <div style={{ background:status.startsWith("✅")?"#f0fdf4":"#fef2f2", border:`1px solid ${status.startsWith("✅")?"#bbf7d0":"#fecaca"}`, borderRadius:10, padding:"10px 16px", marginBottom:16, fontSize:13, fontWeight:600, color:status.startsWith("✅")?"#15803d":"#dc2626" }}>
+            <div style={{ background:status.startsWith("✅")?"#f0fdf4":"#fef2f2", border:`1px solid ${status.startsWith("✅")?"#bbf7d0":"#fecaca"}`, borderRadius:10, padding:"10px 16px", marginBottom:8, fontSize:13, fontWeight:600, color:status.startsWith("✅")?"#15803d":"#dc2626" }}>
               {status}
             </div>
           )}
 
           {/* Preview de importação */}
           {preview && (
-            <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:12, padding:"16px 18px", marginBottom:16 }}>
+            <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:12, padding:"16px 18px", marginBottom:8 }}>
               <div style={{ fontWeight:700, fontSize:14, color:"#92400e", marginBottom:8 }}>⚠️ Confirmar Restauração</div>
               <div style={{ fontSize:12, color:"#78350f", marginBottom:12 }}>
                 Backup de: <strong>{preview.dataBackup}</strong><br/>
                 <strong>Atenção:</strong> os dados atuais serão substituídos pelos dados do backup!
               </div>
-              <div style={{ display:"flex", flexDirection:"column", gap:4, marginBottom:14 }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:4, marginBottom:8 }}>
                 {preview.prev.map(p => (
                   <div key={p.key} style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:"#0f172a" }}>
                     <span>{p.label}</span>
@@ -930,7 +930,7 @@ function PainelBackup({ onClose }) {
           )}
 
           {/* Resumo dos dados atuais */}
-          <div style={{ marginBottom:20 }}>
+          <div style={{ marginBottom:10 }}>
             <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", marginBottom:12 }}>📊 Dados Armazenados Atualmente</div>
             <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:12, overflow:"hidden" }}>
               {resumo.map((r, i) => (
@@ -964,7 +964,7 @@ function PainelBackup({ onClose }) {
             <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:12, padding:"18px 20px" }}>
               <div style={{ fontSize:28, marginBottom:8 }}>⬇️</div>
               <div style={{ fontWeight:700, fontSize:14, color:"#15803d", marginBottom:4 }}>Exportar Backup</div>
-              <div style={{ fontSize:12, color:"#64748b", marginBottom:14, lineHeight:1.5 }}>
+              <div style={{ fontSize:12, color:"#64748b", marginBottom:8, lineHeight:1.5 }}>
                 Baixa um arquivo JSON com todos os seus dados. Guarde em local seguro.
               </div>
               <button onClick={exportarBackup}
@@ -977,7 +977,7 @@ function PainelBackup({ onClose }) {
             <div style={{ background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:12, padding:"18px 20px" }}>
               <div style={{ fontSize:28, marginBottom:8 }}>⬆️</div>
               <div style={{ fontWeight:700, fontSize:14, color:"#1d4ed8", marginBottom:4 }}>Restaurar Backup</div>
-              <div style={{ fontSize:12, color:"#64748b", marginBottom:14, lineHeight:1.5 }}>
+              <div style={{ fontSize:12, color:"#64748b", marginBottom:8, lineHeight:1.5 }}>
                 Selecione um arquivo de backup (.json) para restaurar seus dados.
               </div>
               <label style={{ display:"block", width:"100%", background:"#1d4ed8", border:"none", color:"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:"pointer", fontSize:13, textAlign:"center" }}>
@@ -1107,16 +1107,16 @@ function LoginScreen({ onLogin }) {
       <div style={{ width:"100%", maxWidth:420 }}>
         {/* Logo */}
         <div style={{ textAlign:"center", marginBottom:32 }}>
-          <div style={{ width:64, height:64, borderRadius:18, background:"#ffe000", display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:32, fontWeight:800, color:"#0f172a", marginBottom:16, boxShadow:"0 8px 32px rgba(255,224,0,.3)" }}>M</div>
+          <div style={{ width:64, height:64, borderRadius:18, background:"#ffe000", display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:32, fontWeight:800, color:"#0f172a", marginBottom:8, boxShadow:"0 8px 32px rgba(255,224,0,.3)" }}>M</div>
           <div style={{ fontWeight:800, fontSize:24, color:"#fff", letterSpacing:-0.5 }}>ML Margem</div>
           <div style={{ fontSize:13, color:"#64748b", marginTop:4 }}>Dashboard de Lucratividade</div>
         </div>
 
         {/* Card */}
         <div style={{ background:"#1e293b", borderRadius:20, padding:"32px 36px", boxShadow:"0 20px 60px rgba(0,0,0,.4)", border:"1px solid #334155" }}>
-          <div style={{ fontWeight:700, fontSize:18, color:"#f1f5f9", marginBottom:24 }}>Entrar no sistema</div>
+          <div style={{ fontWeight:700, fontSize:18, color:"#f1f5f9", marginBottom:10 }}>Entrar no sistema</div>
 
-          <div style={{ marginBottom:16 }}>
+          <div style={{ marginBottom:8 }}>
             <div style={{ fontSize:11, color:"#64748b", marginBottom:8, fontWeight:600, letterSpacing:1, textTransform:"uppercase" }}>Usuário</div>
             <input value={usuario} onChange={e => { setUsuario(e.target.value); setErro(""); }}
               onKeyDown={e => e.key==="Enter" && handleLogin()}
@@ -1124,7 +1124,7 @@ function LoginScreen({ onLogin }) {
               style={{ width:"100%", background:"#0f172a", border:`1px solid ${erro?"#dc2626":"#334155"}`, color:"#f1f5f9", padding:"12px 16px", borderRadius:10, fontSize:14, outline:"none", fontFamily:"inherit" }} />
           </div>
 
-          <div style={{ marginBottom:24 }}>
+          <div style={{ marginBottom:10 }}>
             <div style={{ fontSize:11, color:"#64748b", marginBottom:8, fontWeight:600, letterSpacing:1, textTransform:"uppercase" }}>Senha</div>
             <div style={{ position:"relative" }}>
               <input type={showSenha?"text":"password"} value={senha}
@@ -1140,7 +1140,7 @@ function LoginScreen({ onLogin }) {
           </div>
 
           {erro && (
-            <div style={{ background:"#450a0a", border:"1px solid #dc2626", color:"#fca5a5", fontSize:13, padding:"10px 14px", borderRadius:8, marginBottom:16 }}>
+            <div style={{ background:"#450a0a", border:"1px solid #dc2626", color:"#fca5a5", fontSize:13, padding:"10px 14px", borderRadius:8, marginBottom:8 }}>
               ⚠ {erro}
             </div>
           )}
@@ -1198,12 +1198,12 @@ function ModalUsuario({ usuario, onSave, onClose }) {
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.7)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:24 }}>
       <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:520, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.3)", maxHeight:"90vh", overflowY:"auto" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
           <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>{usuario ? "Editar Usuário" : "Novo Usuário"}</div>
           <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
         </div>
 
-        <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:20 }}>
+        <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:10 }}>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
             <div>
               <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Nome completo *</div>
@@ -1260,7 +1260,7 @@ function ModalUsuario({ usuario, onSave, onClose }) {
                 return (
                   <div key={p.key}>
                     {/* Item pai */}
-                    <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", padding:"8px 10px", borderRadius:8,
+                    <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", padding:"5px 8px", borderRadius:8,
                       background: isChecked || subChecked > 0 ? "#eff6ff" : "#fff",
                       border: "1px solid " + (isChecked || subChecked > 0 ? "#2563eb" : "#e2e8f0"),
                       transition:"all .15s" }}>
@@ -1378,7 +1378,7 @@ function AdminTab({ currentUser }) {
 
   return (
     <div>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
         <div>
           <div style={{ fontWeight:800, fontSize:18, color:"#0f172a" }}>⚙️ Administração de Usuários</div>
           <div style={{ fontSize:13, color:"#94a3b8", marginTop:2 }}>Gerencie quem pode acessar o dashboard e o que cada um pode ver</div>
@@ -1408,8 +1408,8 @@ function AdminTab({ currentUser }) {
               )}
             </div>
 
-            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
-              <div style={{ width:42, height:42, borderRadius:12, background:u.admin?"#0f172a":"#f1f5f9", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, fontWeight:800, color:u.admin?"#ffe000":"#64748b" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:12 }}>
+              <div style={{ width:42, height:42, borderRadius:12, background:u.admin?"#0f172a":"#f1f5f9", display:"flex", alignItems:"center", justifyContent:"center", fontSize:15, fontWeight:800, color:u.admin?"#ffe000":"#64748b" }}>
                 {u.nome?.charAt(0).toUpperCase()}
               </div>
               <div>
@@ -1499,7 +1499,7 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
       {/* Impostos */}
       <div style={{ background:"#fff", border:"1px solid #fecaca", borderRadius:14, overflow:"hidden" }}>
-        <div style={{ background:"#fef2f2", padding:"14px 18px", borderBottom:"1px solid #fecaca", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <div style={{ background:"#fef2f2", padding:"10px 14px", borderBottom:"1px solid #fecaca", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
             <div style={{ fontWeight:700, fontSize:14, color:"#dc2626" }}>📋 Impostos</div>
             <div style={{ fontSize:11, color:"#94a3b8", marginTop:1 }}>ICMS, Simples, DAS...</div>
@@ -1520,7 +1520,7 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
 
       {/* Custos Fixos */}
       <div style={{ background:"#fff", border:"1px solid #fde68a", borderRadius:14, overflow:"hidden" }}>
-        <div style={{ background:"#fffbeb", padding:"14px 18px", borderBottom:"1px solid #fde68a", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <div style={{ background:"#fffbeb", padding:"10px 14px", borderBottom:"1px solid #fde68a", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
             <div style={{ fontWeight:700, fontSize:14, color:"#d97706" }}>🏢 Custos Fixos</div>
             <div style={{ fontSize:11, color:"#94a3b8", marginTop:1 }}>Aluguel, salários, assinaturas...</div>
@@ -1609,7 +1609,7 @@ function GraficoMeta({ metaMensal, faturamentoMes, progressoMeta, diasNoMes, dia
   return (
     <div>
       {/* KPIs */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:16 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:8 }}>
         {[
           { label:"Realizado", val: fmt(faturamentoMes), cor: corMeta },
           { label:"Meta", val: fmt(metaMensal), cor: "#0f172a" },
@@ -1629,12 +1629,12 @@ function GraficoMeta({ metaMensal, faturamentoMes, progressoMeta, diasNoMes, dia
       <div style={{ height:8, background:"#e2e8f0", borderRadius:99, overflow:"hidden", marginBottom:6 }}>
         <div style={{ width: Math.min(100, progressoMeta) + "%", height:"100%", background:corMeta, borderRadius:99, transition:"width .5s" }} />
       </div>
-      <div style={{ fontSize:11, color:"#94a3b8", marginBottom:20 }}>
+      <div style={{ fontSize:11, color:"#94a3b8", marginBottom:10 }}>
         Meta diária: {fmt(metaDiaria)} · Ritmo: {fmt(diaDoMes > 0 ? faturamentoMes / diaDoMes : 0)}/dia · {diasNoMes - diaDoMes} dias restantes
       </div>
 
       {/* Gráfico diário */}
-      <div style={{ marginBottom:24 }}>
+      <div style={{ marginBottom:10 }}>
         <div style={{ fontSize:11, fontWeight:700, color:"#64748b", textTransform:"uppercase", marginBottom:8 }}>
           Evolução diária vs meta — {agora.toLocaleDateString("pt-BR", { month:"long", year:"numeric" })}
         </div>
@@ -1688,7 +1688,7 @@ function GraficoMeta({ metaMensal, faturamentoMes, progressoMeta, diasNoMes, dia
             var ok = metaMensal > 0 && m.fat >= metaMensal;
             var pct = metaMensal > 0 ? ((m.fat / metaMensal) * 100).toFixed(0) : null;
             return (
-              <div key={m.mk} style={{ background: ok ? "#f0fdf4" : "#f8fafc", border:"1px solid "+(ok?"#bbf7d0":"#e2e8f0"), borderRadius:8, padding:"8px 10px", textAlign:"center" }}>
+              <div key={m.mk} style={{ background: ok ? "#f0fdf4" : "#f8fafc", border:"1px solid "+(ok?"#bbf7d0":"#e2e8f0"), borderRadius:8, padding:"5px 8px", textAlign:"center" }}>
                 <div style={{ fontSize:10, color:"#64748b", fontWeight:600 }}>{m.label}</div>
                 <div style={{ fontSize:13, fontWeight:700, color: ok ? "#15803d" : "#0f172a" }}>{fmt(m.fat)}</div>
                 {pct && <div style={{ fontSize:10, color: ok ? "#15803d" : "#94a3b8" }}>{pct}% da meta</div>}
@@ -1953,17 +1953,17 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
 
         {/* Meta Mensal */}
         {(metaMensal > 0 || editMeta) && (
-          <div style={{ ...card(), padding:"20px 24px" }}>
+          <div style={{ ...card(), padding:"12px 16px" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
               <div style={{ fontWeight:700, fontSize:15, ...txt }}>🎯 Meta do Mês</div>
-              <button onClick={() => setEditMeta(e=>!e)} style={{ background:"#f1f5f9",border:"none",color:"#64748b",padding:"5px 12px",borderRadius:8,cursor:"pointer",fontSize:12 }}>
+              <button onClick={() => setEditMeta(e=>!e)} style={{ background:"#f1f5f9",border:"none",color:"#64748b",padding:"3px 9px",borderRadius:8,cursor:"pointer",fontSize:12 }}>
                 {editMeta ? "Fechar" : "Editar"}
               </button>
             </div>
             {editMeta && (
-              <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+              <div style={{ display:"flex", gap:8, marginBottom:8 }}>
                 <input type="number" value={metaInput} onChange={e=>setMetaInput(e.target.value)} placeholder="Ex: 50000"
-                  style={{ flex:1,background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"8px 12px",borderRadius:8,fontSize:13,outline:"none" }} />
+                  style={{ flex:1,background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"5px 8px",borderRadius:8,fontSize:13,outline:"none" }} />
                 <button onClick={() => { const v = parseFloat(metaInput)||0; setMetaMensal(v); localStorage.setItem("metaMensal", v); setEditMeta(false); }}
                   style={{ background:"#0f172a",border:"none",color:"#fff",fontWeight:700,padding:"8px 20px",borderRadius:8,cursor:"pointer",fontSize:13 }}>Salvar</button>
               </div>
@@ -1990,8 +1990,8 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
 
         {/* Status dos Pedidos + Anúncios com score baixo */}
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-          <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, boxShadow:"0 1px 3px rgba(15,23,42,.04)", padding:"20px 24px" }}>
-            <div style={{ fontWeight:700, fontSize:14, ...txt, marginBottom:16 }}>Status dos Pedidos (mês)</div>
+          <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, boxShadow:"0 1px 3px rgba(15,23,42,.04)", padding:"12px 16px" }}>
+            <div style={{ fontWeight:700, fontSize:14, ...txt, marginBottom:8 }}>Status dos Pedidos (mês)</div>
             <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
               {[
                 { label:"Ag. Envio", value:statusCount.agEnvio, color:"#d97706", total:totalMes },
@@ -2011,11 +2011,11 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
           </div>
 
           {lowScoreListings.length > 0 && (
-            <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, boxShadow:"0 1px 3px rgba(15,23,42,.04)", padding:"20px 24px" }}>
-              <div style={{ fontWeight:700, fontSize:14, ...txt, marginBottom:16 }}>⚠️ Anúncios com Score Baixo</div>
+            <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, boxShadow:"0 1px 3px rgba(15,23,42,.04)", padding:"12px 16px" }}>
+              <div style={{ fontWeight:700, fontSize:14, ...txt, marginBottom:8 }}>⚠️ Anúncios com Score Baixo</div>
               <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                 {lowScoreListings.map(l => (
-                  <div key={l.id} style={{ display:"flex", alignItems:"center", gap:10, paddingBottom:10, borderBottom:"1px solid #f1f5f9" }}>
+                  <div key={l.id} style={{ display:"flex", alignItems:"center", gap:7, paddingBottom:10, borderBottom:"1px solid #f1f5f9" }}>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize:12,fontWeight:600,...txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{l.title||l.id}</div>
                     </div>
@@ -2040,7 +2040,7 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
       {overviewTab === "dashboard" && (
         <div>
           {/* ── Filtro de Período (sempre visível no dashboard) ── */}
-          <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:16, flexWrap:"wrap" }}>
+          <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:8, flexWrap:"wrap" }}>
             <span style={{ fontSize:12, color:"#64748b", fontWeight:600 }}>Período:</span>
             {[
               { key:"hoje",   label:"Hoje" },
@@ -2155,28 +2155,28 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
                     { l:"Dias com Venda", v:diasComVenda, cor:"#d97706" },
                   ].map(function(k){ return (
                     <div key={k.l} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"14px 16px" }}>
-                      <div style={{ fontSize:10, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:4 }}>{k.l}</div>
-                      <div style={{ fontSize:20, fontWeight:800, color:k.cor }}>{k.v}</div>
+                      <div style={{ fontSize:9, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:3 }}>{k.l}</div>
+                      <div style={{ fontSize:17, fontWeight:800, color:k.cor }}>{k.v}</div>
                     </div>
                   ); })}
                 </div>
                 {/* Vendas por status */}
                 <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"18px 20px" }}>
                   <div style={{ fontWeight:700, fontSize:15, color:"#0f172a", marginBottom:12 }}>Pedidos por Status</div>
-                  <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+                  <div style={{ display:"flex", gap:7, flexWrap:"wrap" }}>
                     {Object.entries(statusCount).map(function(e){
                       var cor=e[0]==="paid"?"#15803d":e[0]==="cancelled"?"#dc2626":"#d97706";
                       var bg=e[0]==="paid"?"#f0fdf4":e[0]==="cancelled"?"#fef2f2":"#fffbeb";
                       return <div key={e[0]} style={{ background:bg, border:"1px solid "+cor+"33", borderRadius:10, padding:"10px 18px", textAlign:"center" }}>
                         <div style={{ fontSize:11, color:cor, fontWeight:600, textTransform:"uppercase" }}>{e[0]}</div>
-                        <div style={{ fontSize:24, fontWeight:800, color:cor }}>{e[1]}</div>
+                        <div style={{ fontSize:17, fontWeight:800, color:cor }}>{e[1]}</div>
                       </div>;
                     })}
                   </div>
                 </div>
                 {/* Top 10 pedidos por valor */}
                 <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
-                  <div style={{ padding:"14px 18px", borderBottom:"1px solid #f1f5f9", fontWeight:700, fontSize:15, color:"#0f172a" }}>Top 10 Pedidos por Valor</div>
+                  <div style={{ padding:"10px 14px", borderBottom:"1px solid #f1f5f9", fontWeight:700, fontSize:15, color:"#0f172a" }}>Top 10 Pedidos por Valor</div>
                   <table style={{ borderCollapse:"collapse", width:"100%" }}>
                     <thead><tr>{["#","Pedido","Data","Produto","Valor"].map(function(h){ return <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", padding:"8px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa" }}>{h}</th>; })}</tr></thead>
                     <tbody>{pedidosPeriodo.sort(function(a,b){return (b.price*(b.qty||1))-(a.price*(a.qty||1));}).slice(0,10).map(function(o,i){
@@ -2221,8 +2221,8 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
                     {l:"Margem Média",v:margemMedia.toFixed(1)+"%",cor:margemMedia>=20?"#15803d":margemMedia>=10?"#d97706":"#dc2626"},
                     {l:"Sem Custo Cad.",v:comCusto.length-comCustoVal.length,cor:"#dc2626"},
                   ].map(function(k){ return <div key={k.l} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"14px 16px" }}>
-                    <div style={{ fontSize:10, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:4 }}>{k.l}</div>
-                    <div style={{ fontSize:20, fontWeight:800, color:k.cor }}>{k.v}</div>
+                    <div style={{ fontSize:9, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:3 }}>{k.l}</div>
+                    <div style={{ fontSize:17, fontWeight:800, color:k.cor }}>{k.v}</div>
                   </div>; })}
                 </div>
                 {(function(){
@@ -2235,7 +2235,7 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
 
                   return (
                     <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
-                      <div style={{ padding:"12px 18px", borderBottom:"1px solid #f1f5f9", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                      <div style={{ padding:"8px 14px", borderBottom:"1px solid #f1f5f9", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                         <span style={{ fontWeight:700, fontSize:15, color:"#0f172a" }}>Margem por Pedido</span>
                         <div style={{ display:"flex", gap:6, alignItems:"center" }}>
                           <span style={{ fontSize:12, color:"#94a3b8" }}>Ordenar:</span>
@@ -2247,7 +2247,7 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
                             var a = sortMargem === op.k;
                             return (
                               <button key={op.k} onClick={function(){ setSortMargem(op.k); }}
-                                style={{ padding:"5px 12px", borderRadius:8, border:"1px solid "+(a?"#0f172a":"#e2e8f0"),
+                                style={{ padding:"3px 9px", borderRadius:8, border:"1px solid "+(a?"#0f172a":"#e2e8f0"),
                                   background:a?"#0f172a":"#fff", color:a?"#fff":"#64748b",
                                   fontWeight:a?700:400, fontSize:12, cursor:"pointer" }}>
                                 {op.l}
@@ -2257,7 +2257,7 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
                         </div>
                       </div>
                       <table style={{ borderCollapse:"collapse", width:"100%" }}>
-                        <thead><tr>{["Pedido","Data","Produto","Bruto","Taxa ML","Frete","Custo","Lucro","Margem"].map(function(h){ return <th key={h} style={{ fontSize:10, color:"#94a3b8", textTransform:"uppercase", padding:"8px 12px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>; })}</tr></thead>
+                        <thead><tr>{["Pedido","Data","Produto","Bruto","Taxa ML","Frete","Custo","Lucro","Margem"].map(function(h){ return <th key={h} style={{ fontSize:10, color:"#94a3b8", textTransform:"uppercase", padding:"5px 8px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>; })}</tr></thead>
                         <tbody>{pedidosOrdenados.slice(0,200).map(function(o,i){
                           var mCor=o.margem>=20?"#15803d":o.margem>=10?"#d97706":"#dc2626";
                           return <tr key={o.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
@@ -2300,12 +2300,12 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
                     {l:"Receita Total",v:fmt(pedidosPeriodo.reduce(function(s,o){return s+o.price*(o.qty||1);},0)),cor:"#15803d"},
                     {l:"Produto #1",v:ranking[0]?.titulo?.slice(0,20)||"—",cor:"#d97706"},
                   ].map(function(k){ return <div key={k.l} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"14px 16px" }}>
-                    <div style={{ fontSize:10, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:4 }}>{k.l}</div>
+                    <div style={{ fontSize:9, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:3 }}>{k.l}</div>
                     <div style={{ fontSize:k.l==="Produto #1"?13:20, fontWeight:800, color:k.cor }}>{k.v}</div>
                   </div>; })}
                 </div>
                 <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
-                  <div style={{ padding:"14px 18px", borderBottom:"1px solid #f1f5f9", fontWeight:700, fontSize:15, color:"#0f172a" }}>Ranking de Produtos por Receita</div>
+                  <div style={{ padding:"10px 14px", borderBottom:"1px solid #f1f5f9", fontWeight:700, fontSize:15, color:"#0f172a" }}>Ranking de Produtos por Receita</div>
                   <table style={{ borderCollapse:"collapse", width:"100%" }}>
                     <thead><tr>{["#","Produto","MLB","Qtd Vendida","Receita","Part. %"].map(function(h){ return <th key={h} style={{ fontSize:10, color:"#94a3b8", textTransform:"uppercase", padding:"8px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa" }}>{h}</th>; })}</tr></thead>
                     <tbody>{(function(){
@@ -2354,12 +2354,12 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
                     {l:"Ticket Médio/Cliente",v:fmt(ranking.length>0?totalReceita/ranking.length:0),cor:"#0891b2"},
                     {l:"Top Cliente",v:ranking[0]?.nick?.slice(0,20)||"—",cor:"#d97706"},
                   ].map(function(k){ return <div key={k.l} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"14px 16px" }}>
-                    <div style={{ fontSize:10, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:4 }}>{k.l}</div>
+                    <div style={{ fontSize:9, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:3 }}>{k.l}</div>
                     <div style={{ fontSize:k.l.includes("Top")?13:20, fontWeight:800, color:k.cor }}>{k.v}</div>
                   </div>; })}
                 </div>
                 <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
-                  <div style={{ padding:"14px 18px", borderBottom:"1px solid #f1f5f9", fontWeight:700, fontSize:15, color:"#0f172a" }}>Top Clientes por Receita</div>
+                  <div style={{ padding:"10px 14px", borderBottom:"1px solid #f1f5f9", fontWeight:700, fontSize:15, color:"#0f172a" }}>Top Clientes por Receita</div>
                   <table style={{ borderCollapse:"collapse", width:"100%" }}>
                     <thead><tr>{["#","Cliente (nickname ML)","Pedidos","Receita Total","Ticket Médio","Part. %"].map(function(h){ return <th key={h} style={{ fontSize:10, color:"#94a3b8", textTransform:"uppercase", padding:"8px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa" }}>{h}</th>; })}</tr></thead>
                     <tbody>{ranking.slice(0,50).map(function(c,i){ return <tr key={c.nick} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
@@ -2405,15 +2405,15 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
                     {l:"Curva B",desc:"Entre 80% e 95% da receita",v:qtdB+" produtos",cor:"#d97706",bg:"#fffbeb"},
                     {l:"Curva C",desc:"Últimos 5% da receita",v:qtdC+" produtos",cor:"#dc2626",bg:"#fef2f2"},
                   ].map(function(k){ return <div key={k.l} style={{ background:k.bg, border:"1px solid "+k.cor+"33", borderRadius:12, padding:"16px 18px" }}>
-                    <div style={{ fontSize:18, fontWeight:800, color:k.cor, marginBottom:4 }}>{k.l}</div>
-                    <div style={{ fontSize:20, fontWeight:800, color:"#0f172a" }}>{k.v}</div>
+                    <div style={{ fontSize:15, fontWeight:800, color:k.cor, marginBottom:4 }}>{k.l}</div>
+                    <div style={{ fontSize:17, fontWeight:800, color:"#0f172a" }}>{k.v}</div>
                     <div style={{ fontSize:11, color:"#64748b", marginTop:4 }}>{k.desc}</div>
                   </div>; })}
                 </div>
                 <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
-                  <div style={{ padding:"14px 18px", borderBottom:"1px solid #f1f5f9", fontWeight:700, fontSize:15, color:"#0f172a" }}>Curva ABC de Produtos</div>
+                  <div style={{ padding:"10px 14px", borderBottom:"1px solid #f1f5f9", fontWeight:700, fontSize:15, color:"#0f172a" }}>Curva ABC de Produtos</div>
                   <table style={{ borderCollapse:"collapse", width:"100%" }}>
-                    <thead><tr>{["#","Curva","Produto","MLB","Qtd","Receita","Part. %","Acum. %"].map(function(h){ return <th key={h} style={{ fontSize:10, color:"#94a3b8", textTransform:"uppercase", padding:"8px 12px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>; })}</tr></thead>
+                    <thead><tr>{["#","Curva","Produto","MLB","Qtd","Receita","Part. %","Acum. %"].map(function(h){ return <th key={h} style={{ fontSize:10, color:"#94a3b8", textTransform:"uppercase", padding:"5px 8px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>; })}</tr></thead>
                     <tbody>{ranking.map(function(p,i){
                       var cor=p.curva==="A"?"#15803d":p.curva==="B"?"#d97706":"#dc2626";
                       var bg=p.curva==="A"?"#f0fdf4":p.curva==="B"?"#fffbeb":"#fef2f2";
@@ -2475,21 +2475,21 @@ function DashboardSubAbas({ fat30, ultimos30, maxFat30, totalFat30, mediaFat30, 
 
       {/* Faturamento 30 dias */}
       {dashTab === "fat30" && (
-        <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:14, padding:"20px 24px" }}>
+        <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:14, padding:"12px 16px" }}>
           <div style={{ fontWeight:700, fontSize:15, color:"#0f172a", marginBottom:4 }}>📅 Faturamento — Últimos 30 dias</div>
-          <div style={{ fontSize:12, color:"#94a3b8", marginBottom:20 }}>Faturamento bruto diário</div>
-          <div style={{ display:"flex", gap:16, marginBottom:16, flexWrap:"wrap" }}>
+          <div style={{ fontSize:12, color:"#94a3b8", marginBottom:10 }}>Faturamento bruto diário</div>
+          <div style={{ display:"flex", gap:16, marginBottom:8, flexWrap:"wrap" }}>
             <div style={{ background:"#f0fdf4", borderRadius:10, padding:"12px 16px" }}>
               <div style={{ fontSize:10, color:"#15803d", fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>Total 30 dias</div>
-              <div style={{ fontSize:20, fontWeight:800, color:"#15803d" }}>{fmt(totalFat30)}</div>
+              <div style={{ fontSize:17, fontWeight:800, color:"#15803d" }}>{fmt(totalFat30)}</div>
             </div>
             <div style={{ background:"#eff6ff", borderRadius:10, padding:"12px 16px" }}>
               <div style={{ fontSize:10, color:"#1d4ed8", fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>Média diária</div>
-              <div style={{ fontSize:20, fontWeight:800, color:"#1d4ed8" }}>{fmt(mediaFat30)}</div>
+              <div style={{ fontSize:17, fontWeight:800, color:"#1d4ed8" }}>{fmt(mediaFat30)}</div>
             </div>
             <div style={{ background:"#f5f3ff", borderRadius:10, padding:"12px 16px" }}>
               <div style={{ fontSize:10, color:"#7c3aed", fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>Melhor dia</div>
-              <div style={{ fontSize:20, fontWeight:800, color:"#7c3aed" }}>{fmt(maxFat30)}</div>
+              <div style={{ fontSize:17, fontWeight:800, color:"#7c3aed" }}>{fmt(maxFat30)}</div>
             </div>
           </div>
           <div style={{ display:"flex", gap:2, alignItems:"flex-end", height:140, marginBottom:8 }}>
@@ -2520,8 +2520,8 @@ function DashboardSubAbas({ fat30, ultimos30, maxFat30, totalFat30, mediaFat30, 
 
       {/* Mais Vendidos */}
       {dashTab === "vendidos" && (
-        <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:14, padding:"20px 24px" }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+        <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:14, padding:"12px 16px" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
             <div style={{ fontWeight:700, fontSize:15, color:"#0f172a" }}>🏆 Mais Vendidos</div>
             {rankingVendas && rankingVendas.length > 0 && (
               <div style={{ display:"flex", gap:4, background:"#f1f5f9", padding:3, borderRadius:8 }}>
@@ -2529,7 +2529,7 @@ function DashboardSubAbas({ fat30, ultimos30, maxFat30, totalFat30, mediaFat30, 
                   var active = sortVendidos === op.k;
                   return (
                     <button key={op.k} onClick={function(){setSortVendidos(op.k);}}
-                      style={{ padding:"5px 12px", borderRadius:6, border:"none", cursor:"pointer", fontFamily:"inherit",
+                      style={{ padding:"3px 9px", borderRadius:6, border:"none", cursor:"pointer", fontFamily:"inherit",
                         fontSize:11, fontWeight:active?700:500,
                         background:active?"#fff":"transparent",
                         color:active?"#0f172a":"#94a3b8",
@@ -2542,7 +2542,7 @@ function DashboardSubAbas({ fat30, ultimos30, maxFat30, totalFat30, mediaFat30, 
             )}
           </div>
           {!rankingVendas || rankingVendas.length === 0 ? (
-            <div style={{ fontSize:13, color:"#94a3b8", textAlign:"center", padding:"20px 0" }}>Sem dados de vendas</div>
+            <div style={{ fontSize:13, color:"#94a3b8", textAlign:"center", padding:"10px 0" }}>Sem dados de vendas</div>
           ) : (function(){
             var lista = rankingVendas.slice();
             if (sortVendidos === "revenue") {
@@ -2556,7 +2556,7 @@ function DashboardSubAbas({ fat30, ultimos30, maxFat30, totalFat30, mediaFat30, 
                   <div style={{ width:28,height:28,borderRadius:8,background:i===0?"#fde68a":i===1?"#e2e8f0":i===2?"#fed7aa":"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:13,color:"#0f172a",flexShrink:0 }}>{i+1}</div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:12,fontWeight:600,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{p.title||p.id}</div>
-                    <div style={{ display:"flex", gap:10, marginTop:3 }}>
+                    <div style={{ display:"flex", gap:7, marginTop:3 }}>
                       <span style={{ fontSize:11,color:"#0891b2",fontWeight:600 }}>{p.qty} vendas</span>
                       <span style={{ fontSize:11,color:"#94a3b8" }}>{fmt(p.revenue)}</span>
                     </div>
@@ -2576,8 +2576,8 @@ function DashboardSubAbas({ fat30, ultimos30, maxFat30, totalFat30, mediaFat30, 
 
       {/* Mais Lucrativos */}
       {dashTab === "lucro" && (
-        <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:14, padding:"20px 24px" }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+        <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:14, padding:"12px 16px" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
             <div style={{ fontWeight:700, fontSize:15, color:"#0f172a" }}>💰 Mais Lucrativos</div>
             {rankingLucro && rankingLucro.length > 0 && (
               <div style={{ display:"flex", gap:4, background:"#f1f5f9", padding:3, borderRadius:8 }}>
@@ -2585,7 +2585,7 @@ function DashboardSubAbas({ fat30, ultimos30, maxFat30, totalFat30, mediaFat30, 
                   var active = sortLucro === op.k;
                   return (
                     <button key={op.k} onClick={function(){setSortLucro(op.k);}}
-                      style={{ padding:"5px 12px", borderRadius:6, border:"none", cursor:"pointer", fontFamily:"inherit",
+                      style={{ padding:"3px 9px", borderRadius:6, border:"none", cursor:"pointer", fontFamily:"inherit",
                         fontSize:11, fontWeight:active?700:500,
                         background:active?"#fff":"transparent",
                         color:active?"#0f172a":"#94a3b8",
@@ -2598,7 +2598,7 @@ function DashboardSubAbas({ fat30, ultimos30, maxFat30, totalFat30, mediaFat30, 
             )}
           </div>
           {!rankingLucro || rankingLucro.length === 0 ? (
-            <div style={{ fontSize:13, color:"#94a3b8", textAlign:"center", padding:"20px 0" }}>Cadastre custos nos anúncios para ver ranking de lucro</div>
+            <div style={{ fontSize:13, color:"#94a3b8", textAlign:"center", padding:"10px 0" }}>Cadastre custos nos anúncios para ver ranking de lucro</div>
           ) : (function(){
             var lista = rankingLucro.slice();
             if (sortLucro === "margem") {
@@ -2616,7 +2616,7 @@ function DashboardSubAbas({ fat30, ultimos30, maxFat30, totalFat30, mediaFat30, 
                   <div style={{ width:28,height:28,borderRadius:8,background:i===0?"#fde68a":i===1?"#e2e8f0":i===2?"#fed7aa":"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:13,color:"#0f172a",flexShrink:0 }}>{i+1}</div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:12,fontWeight:600,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{p.title||p.id}</div>
-                    <div style={{ display:"flex", gap:10, marginTop:3 }}>
+                    <div style={{ display:"flex", gap:7, marginTop:3 }}>
                       <span style={{ fontSize:11,color:"#15803d",fontWeight:600 }}>{fmt(p.profit)}</span>
                       <span style={{ fontSize:11,color:"#94a3b8" }}>{p.qty} venda(s)</span>
                     </div>
@@ -2783,7 +2783,7 @@ function ModalNF({ nf, fornecedores, produtos, categoriasPagar, onSave, onClose 
   }
   function removeDup(idx) { set("duplicatas", form.duplicatas.filter((_,i)=>i!==idx)); }
 
-  const inp = { background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:13, outline:"none", fontFamily:"inherit", width:"100%" };
+  const inp = { background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"5px 8px", borderRadius:8, fontSize:13, outline:"none", fontFamily:"inherit", width:"100%" };
 
   const SUBTABS = [
     { key:"geral", label:"📋 Geral" },
@@ -2796,7 +2796,7 @@ function ModalNF({ nf, fornecedores, produtos, categoriasPagar, onSave, onClose 
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.65)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:16 }}>
       <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:820, maxHeight:"94vh", display:"flex", flexDirection:"column", boxShadow:"0 20px 60px rgba(0,0,0,.2)" }}>
         {/* Header */}
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"18px 28px", borderBottom:"1px solid #f1f5f9" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 16px", borderBottom:"1px solid #f1f5f9" }}>
           <div>
             <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>{nf ? "Editar Nota Fiscal" : "Nova Nota Fiscal de Entrada"}</div>
             <div style={{ fontSize:12, color:"#94a3b8", marginTop:2 }}>NF {form.numero || "s/n"} — {form.fornecedorNome || "Fornecedor não selecionado"}</div>
@@ -2825,7 +2825,7 @@ function ModalNF({ nf, fornecedores, produtos, categoriasPagar, onSave, onClose 
         </div>
 
         {/* Content */}
-        <div style={{ flex:1, overflowY:"auto", padding:"20px 28px" }}>
+        <div style={{ flex:1, overflowY:"auto", padding:"12px 16px" }}>
 
           {/* ── GERAL ── */}
           {subTab === "geral" && (
@@ -2889,7 +2889,7 @@ function ModalNF({ nf, fornecedores, produtos, categoriasPagar, onSave, onClose 
           {/* ── ITENS ── */}
           {subTab === "itens" && (
             <div>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
                 <div style={{ fontSize:13, color:"#64748b" }}>{form.itens.length} item(ns) na nota</div>
                 <button onClick={addItem} style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"7px 16px", borderRadius:8, cursor:"pointer", fontSize:12 }}>+ Adicionar Item</button>
               </div>
@@ -2958,10 +2958,10 @@ function ModalNF({ nf, fornecedores, produtos, categoriasPagar, onSave, onClose 
           {/* ── FINANCEIRO ── */}
           {subTab === "financeiro" && (
             <div>
-              <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:10, padding:"12px 16px", marginBottom:16, fontSize:13, color:"#15803d" }}>
+              <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:10, padding:"12px 16px", marginBottom:8, fontSize:13, color:"#15803d" }}>
                 💡 Cada duplicata (parcela) será lançada como uma conta a pagar no Financeiro.
               </div>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
                 <div style={{ fontWeight:700, fontSize:14, color:"#0f172a" }}>{form.duplicatas.length} duplicata(s) / parcela(s)</div>
                 <button onClick={addDup} style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"7px 16px", borderRadius:8, cursor:"pointer", fontSize:12 }}>+ Adicionar Parcela</button>
               </div>
@@ -2999,14 +2999,14 @@ function ModalNF({ nf, fornecedores, produtos, categoriasPagar, onSave, onClose 
             <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
               {/* Opções gerais */}
               <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                <label style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer", padding:"12px 16px", background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:10 }}>
+                <label style={{ display:"flex", alignItems:"center", gap:7, cursor:"pointer", padding:"12px 16px", background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:10 }}>
                   <input type="checkbox" checked={form.atualizarEstoque} onChange={e=>set("atualizarEstoque",e.target.checked)} style={{ width:16, height:16 }} />
                   <div>
                     <div style={{ fontWeight:700, fontSize:13, color:"#15803d" }}>📦 Atualizar estoque dos produtos</div>
                     <div style={{ fontSize:12, color:"#64748b" }}>Soma a quantidade de cada item vinculado ao seu produto cadastrado</div>
                   </div>
                 </label>
-                <label style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer", padding:"12px 16px", background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:10 }}>
+                <label style={{ display:"flex", alignItems:"center", gap:7, cursor:"pointer", padding:"12px 16px", background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:10 }}>
                   <input type="checkbox" checked={form.gerarContaPagar} onChange={e=>set("gerarContaPagar",e.target.checked)} style={{ width:16, height:16 }} />
                   <div>
                     <div style={{ fontWeight:700, fontSize:13, color:"#1d4ed8" }}>💰 Gerar contas a pagar no Financeiro</div>
@@ -3018,7 +3018,7 @@ function ModalNF({ nf, fornecedores, produtos, categoriasPagar, onSave, onClose 
               {/* Config das contas a pagar */}
               {form.gerarContaPagar && (
                 <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:12, padding:"16px 18px" }}>
-                  <div style={{ fontWeight:700, fontSize:13, color:"#0f172a", marginBottom:14 }}>Configuração das Contas a Pagar</div>
+                  <div style={{ fontWeight:700, fontSize:13, color:"#0f172a", marginBottom:8 }}>Configuração das Contas a Pagar</div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
                     <div>
                       <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Categoria</div>
@@ -3143,7 +3143,7 @@ function MenuAcoes({ nf, produtos, setProdutos, contasPagar, setContasPagar, cat
           <div style={{ position:"absolute", right:0, top:32, background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, boxShadow:"0 8px 24px rgba(0,0,0,.12)", zIndex:300, minWidth:220, overflow:"hidden" }}>
             {/* Lançar Estoque */}
             <button onClick={() => { setAberto(false); setModalEstoque(true); }}
-              style={{ width:"100%", background:"none", border:"none", padding:"12px 16px", textAlign:"left", cursor:"pointer", display:"flex", alignItems:"center", gap:10, fontSize:13, color:"#0f172a" }}
+              style={{ width:"100%", background:"none", border:"none", padding:"12px 16px", textAlign:"left", cursor:"pointer", display:"flex", alignItems:"center", gap:7, fontSize:13, color:"#0f172a" }}
               onMouseEnter={e=>e.currentTarget.style.background="#f0fdf4"}
               onMouseLeave={e=>e.currentTarget.style.background="none"}>
               <span style={{ fontSize:16 }}>📦</span>
@@ -3155,7 +3155,7 @@ function MenuAcoes({ nf, produtos, setProdutos, contasPagar, setContasPagar, cat
             <div style={{ height:1, background:"#f1f5f9" }} />
             {/* Lançar Contas a Pagar */}
             <button onClick={() => { setAberto(false); setModalContas(true); }}
-              style={{ width:"100%", background:"none", border:"none", padding:"12px 16px", textAlign:"left", cursor:"pointer", display:"flex", alignItems:"center", gap:10, fontSize:13, color:"#0f172a" }}
+              style={{ width:"100%", background:"none", border:"none", padding:"12px 16px", textAlign:"left", cursor:"pointer", display:"flex", alignItems:"center", gap:7, fontSize:13, color:"#0f172a" }}
               onMouseEnter={e=>e.currentTarget.style.background="#eff6ff"}
               onMouseLeave={e=>e.currentTarget.style.background="none"}>
               <span style={{ fontSize:16 }}>💰</span>
@@ -3167,7 +3167,7 @@ function MenuAcoes({ nf, produtos, setProdutos, contasPagar, setContasPagar, cat
             <div style={{ height:1, background:"#f1f5f9" }} />
             {/* Lançar Ambos */}
             <button onClick={() => { lancarEstoque(); setTimeout(() => setModalContas(true), 100); }}
-              style={{ width:"100%", background:"none", border:"none", padding:"12px 16px", textAlign:"left", cursor:"pointer", display:"flex", alignItems:"center", gap:10, fontSize:13, color:"#0f172a" }}
+              style={{ width:"100%", background:"none", border:"none", padding:"12px 16px", textAlign:"left", cursor:"pointer", display:"flex", alignItems:"center", gap:7, fontSize:13, color:"#0f172a" }}
               onMouseEnter={e=>e.currentTarget.style.background="#fafafa"}
               onMouseLeave={e=>e.currentTarget.style.background="none"}>
               <span style={{ fontSize:16 }}>⚡</span>
@@ -3185,13 +3185,13 @@ function MenuAcoes({ nf, produtos, setProdutos, contasPagar, setContasPagar, cat
         <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:24 }}>
           <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:480, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
             <div style={{ fontWeight:800, fontSize:17, color:"#0f172a", marginBottom:6 }}>📦 Lançar no Estoque</div>
-            <div style={{ fontSize:13, color:"#64748b", marginBottom:16 }}>Os seguintes produtos terão seu estoque atualizado:</div>
+            <div style={{ fontSize:13, color:"#64748b", marginBottom:8 }}>Os seguintes produtos terão seu estoque atualizado:</div>
             {itensComProduto.length === 0 ? (
-              <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"12px 16px", color:"#dc2626", fontSize:13, marginBottom:16 }}>
+              <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"12px 16px", color:"#dc2626", fontSize:13, marginBottom:8 }}>
                 ⚠ Nenhum item desta NF está vinculado a um produto cadastrado. Edite a NF e vincule os itens.
               </div>
             ) : (
-              <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
+              <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:10, padding:"12px 16px", marginBottom:8 }}>
                 {itensComProduto.map((it, i) => {
                   const prod = produtos.find(p => p.id === it.produtoCadastradoId);
                   return (
@@ -3243,10 +3243,10 @@ function ModalLancarContas({ nf, categoriasPagar, onConfirm, onClose }) {
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:24 }}>
       <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:500, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)", maxHeight:"90vh", overflowY:"auto" }}>
         <div style={{ fontWeight:800, fontSize:17, color:"#0f172a", marginBottom:4 }}>💰 Lançar Contas a Pagar</div>
-        <div style={{ fontSize:13, color:"#64748b", marginBottom:16 }}>NF {nf.numero}/{nf.serie} — {nf.fornecedorNome}</div>
+        <div style={{ fontSize:13, color:"#64748b", marginBottom:8 }}>NF {nf.numero}/{nf.serie} — {nf.fornecedorNome}</div>
 
         {/* Duplicatas */}
-        <div style={{ background:"#f8fafc", borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
+        <div style={{ background:"#f8fafc", borderRadius:10, padding:"12px 16px", marginBottom:8 }}>
           <div style={{ fontWeight:700, fontSize:13, color:"#0f172a", marginBottom:10 }}>{dups.length} duplicata(s) a lançar</div>
           {dups.length === 0 ? (
             <div style={{ fontSize:13, color:"#94a3b8" }}>Nenhuma duplicata cadastrada nesta NF.</div>
@@ -3265,7 +3265,7 @@ function ModalLancarContas({ nf, categoriasPagar, onConfirm, onClose }) {
         </div>
 
         {/* Configuração */}
-        <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:20 }}>
+        <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:10 }}>
           <div>
             <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Categoria</div>
             <select value={cfg.categoria} onChange={e=>set("categoria",e.target.value)}
@@ -3278,7 +3278,7 @@ function ModalLancarContas({ nf, categoriasPagar, onConfirm, onClose }) {
               <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Multa por atraso</div>
               <div style={{ display:"flex", gap:4 }}>
                 <input type="number" value={cfg.multaPct} onChange={e=>set("multaPct",e.target.value)}
-                  style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:13, outline:"none" }} placeholder="2" />
+                  style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"5px 8px", borderRadius:8, fontSize:13, outline:"none" }} placeholder="2" />
                 {["%","R$"].map(t=>(
                   <button key={t} onClick={()=>set("multaTipo",t)}
                     style={{ padding:"0 10px", borderRadius:6, border:"none", cursor:"pointer", fontSize:12, fontWeight:700, background:cfg.multaTipo===t?"#0f172a":"#e2e8f0", color:cfg.multaTipo===t?"#fff":"#64748b" }}>{t}</button>
@@ -3289,7 +3289,7 @@ function ModalLancarContas({ nf, categoriasPagar, onConfirm, onClose }) {
               <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Juros ao dia</div>
               <div style={{ display:"flex", gap:4 }}>
                 <input type="number" value={cfg.jurosDia} onChange={e=>set("jurosDia",e.target.value)}
-                  style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:13, outline:"none" }} placeholder="0.033" />
+                  style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"5px 8px", borderRadius:8, fontSize:13, outline:"none" }} placeholder="0.033" />
                 {["%","R$"].map(t=>(
                   <button key={t} onClick={()=>set("jurosTipo",t)}
                     style={{ padding:"0 10px", borderRadius:6, border:"none", cursor:"pointer", fontSize:12, fontWeight:700, background:cfg.jurosTipo===t?"#0f172a":"#e2e8f0", color:cfg.jurosTipo===t?"#fff":"#64748b" }}>{t}</button>
@@ -3306,12 +3306,12 @@ function ModalLancarContas({ nf, categoriasPagar, onConfirm, onClose }) {
               <div>
                 <div style={{ fontSize:11, color:"#94a3b8", marginBottom:4, fontWeight:600, textTransform:"uppercase" }}>Dias p/ Protesto</div>
                 <input type="number" value={cfg.diasProtesto} onChange={e=>set("diasProtesto",e.target.value)}
-                  style={{ width:"100%", background:"#f8fafc", border:"1px solid #fecaca", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:13, outline:"none" }} placeholder="5" />
+                  style={{ width:"100%", background:"#f8fafc", border:"1px solid #fecaca", color:"#0f172a", padding:"5px 8px", borderRadius:8, fontSize:13, outline:"none" }} placeholder="5" />
               </div>
               <div>
                 <div style={{ fontSize:11, color:"#94a3b8", marginBottom:4, fontWeight:600, textTransform:"uppercase" }}>Cartório</div>
                 <input value={cfg.cartorio||""} onChange={e=>set("cartorio",e.target.value)}
-                  style={{ width:"100%", background:"#f8fafc", border:"1px solid #fecaca", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:13, outline:"none" }} placeholder="1º Cartório..." />
+                  style={{ width:"100%", background:"#f8fafc", border:"1px solid #fecaca", color:"#0f172a", padding:"5px 8px", borderRadius:8, fontSize:13, outline:"none" }} placeholder="1º Cartório..." />
               </div>
             </div>
           )}
@@ -3402,23 +3402,23 @@ function NotasFiscaisTab({ notasFiscais, setNotasFiscais, fornecedores, produtos
   return (
     <div>
       {/* Cards */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:10, marginBottom:16 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:7, marginBottom:8 }}>
         {[
           { label:"Total de NFs", value:String(notasFiscais.length), color:"#0f172a", desc:"lançadas" },
           { label:"Valor Total", value:`R$ ${totalNFs.toFixed(2).replace(".",",")}`, color:"#15803d", desc:"em compras" },
           { label:"Total de Itens", value:String(totalItens), color:"#0891b2", desc:"produtos" },
           { label:"Contas Geradas", value:String(notasFiscais.reduce((s,n)=>s+(n.duplicatas?.length||0),0)), color:"#7c3aed", desc:"duplicatas" },
         ].map(k => (
-          <div key={k.label} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"14px 18px" }}>
+          <div key={k.label} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"10px 14px" }}>
             <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:4 }}>{k.label}</div>
-            <div style={{ fontSize:20, fontWeight:800, color:k.color }}>{k.value}</div>
+            <div style={{ fontSize:17, fontWeight:800, color:k.color }}>{k.value}</div>
             <div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{k.desc}</div>
           </div>
         ))}
       </div>
 
       {/* Toolbar */}
-      <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
+      <div style={{ display:"flex", gap:7, alignItems:"center", marginBottom:8, flexWrap:"wrap" }}>
         <button onClick={() => { setEditingNF(null); setShowModal(true); }}
           style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>
           + Nova Nota Fiscal
@@ -3467,7 +3467,7 @@ function NotasFiscaisTab({ notasFiscais, setNotasFiscais, fornecedores, produtos
             style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px 8px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
         </div>
         <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}
-          style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 12px", borderRadius:8, fontSize:12 }}>
+          style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 8px", borderRadius:8, fontSize:12 }}>
           <option value="all">Todos status</option>
           <option value="Lançada">Lançada</option>
           <option value="Cancelada">Cancelada</option>
@@ -3497,13 +3497,13 @@ function NotasFiscaisTab({ notasFiscais, setNotasFiscais, fornecedores, produtos
                     <div style={{ fontWeight:700, fontSize:13, color:"#0f172a" }}>{n.numero}/{n.serie}</div>
                     <div style={{ fontSize:10, color:"#94a3b8", fontFamily:"monospace" }}>{n.chave?.slice(0,20)}...</div>
                   </td>
-                  <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{n.dataEmissao ? new Date(n.dataEmissao+"T12:00:00").toLocaleDateString("pt-BR") : "—"}</td>
+                  <td style={{ padding:"7px 10px", fontSize:11, color:"#64748b" }}>{n.dataEmissao ? new Date(n.dataEmissao+"T12:00:00").toLocaleDateString("pt-BR") : "—"}</td>
                   <td style={{ padding:"10px 14px" }}>
                     <div style={{ fontSize:13, color:"#0f172a", fontWeight:500 }}>{n.fornecedorNome?.slice(0,30)}</div>
                     <div style={{ fontSize:11, color:"#94a3b8" }}>{n.fornecedorCNPJ}</div>
                   </td>
-                  <td style={{ padding:"10px 14px", fontSize:13, color:"#0f172a", textAlign:"center" }}>{n.itens?.length||0}</td>
-                  <td style={{ padding:"10px 14px", fontSize:13, fontWeight:700, color:"#0f172a" }}>R$ {(n.totais?.vNF||0).toFixed(2).replace(".",",")}</td>
+                  <td style={{ padding:"7px 10px", fontSize:12, color:"#0f172a", textAlign:"center" }}>{n.itens?.length||0}</td>
+                  <td style={{ padding:"7px 10px", fontSize:12, fontWeight:700, color:"#0f172a" }}>R$ {(n.totais?.vNF||0).toFixed(2).replace(".",",")}</td>
                   <td style={{ padding:"10px 14px" }}>
                     {(n.duplicatas||[]).map((d,di) => (
                       <div key={di} style={{ fontSize:11, color:"#64748b" }}>Dup.{d.nDup||di+1} — {d.dVenc ? new Date(d.dVenc+"T12:00:00").toLocaleDateString("pt-BR") : "—"} — R$ {parseFloat(d.vDup||0).toFixed(2).replace(".",",")}</div>
@@ -3604,7 +3604,7 @@ function ModalFornecedor({ fornecedor, tipoPadrao, onSave, onClose }) {
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:24 }}>
       <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:560, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)", maxHeight:"92vh", overflowY:"auto" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
           <div>
             <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>{fornecedor ? "Editar Cadastro" : "Novo Cadastro"}</div>
             <div style={{ fontSize:12, color:"#94a3b8", marginTop:2 }}>Clientes, fornecedores, prestadores e mais</div>
@@ -3613,7 +3613,7 @@ function ModalFornecedor({ fornecedor, tipoPadrao, onSave, onClose }) {
         </div>
 
         {/* Tipo */}
-        <div style={{ marginBottom:20 }}>
+        <div style={{ marginBottom:10 }}>
           <div style={{ fontSize:11, color:"#94a3b8", marginBottom:8, fontWeight:600, textTransform:"uppercase" }}>Tipo de Cadastro *</div>
           <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
             {TIPOS_CADASTRO.map(function(t) {
@@ -3732,11 +3732,11 @@ function ModalFornecedor({ fornecedor, tipoPadrao, onSave, onClose }) {
         </div>
 
         {/* ── Prioridade de Pagamento ── */}
-        <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:12, padding:"16px 18px", marginBottom:16 }}>
+        <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:12, padding:"16px 18px", marginBottom:8 }}>
           <div style={{ fontSize:12, color:"#0f172a", fontWeight:700, marginBottom:12 }}>💰 Prioridade e Condições de Cobrança</div>
 
           {/* Prioridade */}
-          <div style={{ marginBottom:14 }}>
+          <div style={{ marginBottom:8 }}>
             <div style={{ fontSize:11, color:"#94a3b8", marginBottom:8, fontWeight:600, textTransform:"uppercase" }}>Nível de Prioridade</div>
             <div style={{ display:"flex", gap:8 }}>
               {[
@@ -3763,7 +3763,7 @@ function ModalFornecedor({ fornecedor, tipoPadrao, onSave, onClose }) {
           </div>
 
           {/* Multa e juros */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:10, marginBottom:12 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:7, marginBottom:12 }}>
             <div>
               <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4, fontWeight:600, textTransform:"uppercase" }}>Tipo Multa</div>
               <select value={form.multaTipo||"%"} onChange={function(e){ set("multaTipo",e.target.value); }}
@@ -3814,7 +3814,7 @@ function ModalFornecedor({ fornecedor, tipoPadrao, onSave, onClose }) {
         </div>
 
         {/* Observação e status */}
-        <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:10, marginBottom:20, alignItems:"flex-start" }}>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:7, marginBottom:10, alignItems:"flex-start" }}>
           <div>
             <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Observação</div>
             <input value={form.obs} onChange={function(e){ set("obs", e.target.value); }} placeholder="Condições, notas, informações extras..."
@@ -3849,7 +3849,8 @@ function ModalMovEstoque({ produto, movEstoque, onRegistrar, onClose }) {
   const [precoVenda, setPrecoVenda] = useState("");
   const [abaView, setAbaView] = useState("historico");
 
-  var mlbsProd = [produto.mlbVinculado].concat(produto.mlbsVinculados||[]).filter(Boolean);
+  var mlbsAll = [produto.mlbVinculado].concat(produto.mlbsVinculados||[]).filter(Boolean);
+  var mlbsProd = mlbsAll.filter(function(m,i){ return mlbsAll.indexOf(m)===i; }); // deduplicate
   var skuProd = (produto.sku||"").trim().toLowerCase();
   var movsProd = (movEstoque||[]).filter(function(m){
     if (m.produtoId && m.produtoId === produto.id) return true;
@@ -3897,7 +3898,7 @@ function ModalMovEstoque({ produto, movEstoque, onRegistrar, onClose }) {
           <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0 }}>
 
             {/* Sub-abas */}
-            <div style={{ display:"flex", gap:0, borderBottom:"2px solid #f1f5f9", padding:"0 24px" }}>
+            <div style={{ display:"flex", gap:0, borderBottom:"2px solid #f1f5f9", padding:"0 12px" }}>
               {[{k:"historico",l:"Lançamentos"},{k:"registrar",l:"+ Registrar"}].map(function(t){
                 var active = abaView===t.k;
                 return <button key={t.k} onClick={function(){setAbaView(t.k);}}
@@ -3915,11 +3916,11 @@ function ModalMovEstoque({ produto, movEstoque, onRegistrar, onClose }) {
                     <div style={{ fontSize:32, marginBottom:8 }}>📦</div>
                     <div style={{ fontWeight:600, color:"#0f172a", marginBottom:10 }}>Nenhuma movimentação registrada</div>
                     {mlbsProd.length > 0 ? (
-                      <div style={{ fontSize:12, color:"#92400e", background:"#fffbeb", border:"1px solid #fde68a", borderRadius:8, padding:"10px 14px", marginBottom:14, textAlign:"left", maxWidth:440, margin:"0 auto 14px" }}>
+                      <div style={{ fontSize:12, color:"#92400e", background:"#fffbeb", border:"1px solid #fde68a", borderRadius:8, padding:"10px 14px", marginBottom:8, textAlign:"left", maxWidth:440, margin:"0 auto 14px" }}>
                         ⚠️ MLB vinculado: <b>{mlbsProd[0]}</b>. Vá em <b>Produtos → 📋 Movimentações → 🔄 Reprocessar Vendas</b> para importar todas as saídas automáticas.
                       </div>
                     ) : (
-                      <div style={{ fontSize:12, color:"#dc2626", background:"#fef2f2", border:"1px solid #fecaca", borderRadius:8, padding:"10px 14px", marginBottom:14, maxWidth:440, margin:"0 auto 14px" }}>
+                      <div style={{ fontSize:12, color:"#dc2626", background:"#fef2f2", border:"1px solid #fecaca", borderRadius:8, padding:"10px 14px", marginBottom:8, maxWidth:440, margin:"0 auto 14px" }}>
                         ⚠️ Produto sem MLB vinculado. Edite o produto e vincule um MLB para baixa automática de vendas.
                       </div>
                     )}
@@ -3941,38 +3942,43 @@ function ModalMovEstoque({ produto, movEstoque, onRegistrar, onClose }) {
                           return (
                             <tr key={m.id} style={{ borderBottom:"1px solid #f1f5f9", background:i%2===0?"#fff":"#fafafa" }}>
                               {/* Data */}
-                              <td style={{ padding:"10px 12px", fontSize:12, color:"#334155", whiteSpace:"nowrap" }}>
+                              <td style={{ padding:"7px 10px", fontSize:11, color:"#334155", whiteSpace:"nowrap" }}>
                                 <div style={{ fontWeight:500 }}>{fmtDate(m.data)}</div>
                                 {m.hora && m.hora!=="—" && <div style={{ fontSize:10, color:"#94a3b8" }}>{m.hora}</div>}
                               </td>
                               {/* Entrada */}
-                              <td style={{ padding:"10px 12px", fontSize:13, fontWeight:700, color:"#15803d", textAlign:"right" }}>
-                                {isE ? <span>{parseInt(m.qtd||0).toFixed(10).replace(/\.?0+$/, "").replace(".",",").padEnd(13,"0000000000").slice(0,13)}</span> : <span style={{ color:"#94a3b8" }}>—</span>}
+                              <td style={{ padding:"7px 10px", fontSize:12, fontWeight:700, color:"#15803d", textAlign:"right" }}>
+                                {isE ? <span style={{color:"#15803d"}}>+{parseInt(m.qtd||0)}</span> : <span style={{ color:"#94a3b8" }}>—</span>}
                               </td>
                               {/* Saída */}
-                              <td style={{ padding:"10px 12px", fontSize:13, fontWeight:700, color:"#dc2626", textAlign:"right" }}>
-                                {!isE ? <span>{parseInt(m.qtd||0).toFixed(10).replace(/\.?0+$/, "").replace(".",",").padEnd(13,"0000000000").slice(0,13)}</span> : <span style={{ color:"#94a3b8" }}>—</span>}
+                              <td style={{ padding:"7px 10px", fontSize:12, fontWeight:700, color:"#dc2626", textAlign:"right" }}>
+                                {!isE ? <span style={{color:"#dc2626"}}>-{parseInt(m.qtd||0)}</span> : <span style={{ color:"#94a3b8" }}>—</span>}
                               </td>
                               {/* Preço de Venda */}
-                              <td style={{ padding:"10px 12px", fontSize:12, color:"#334155", textAlign:"right" }}>
+                              <td style={{ padding:"7px 10px", fontSize:11, color:"#334155", textAlign:"right" }}>
                                 {m.precoVenda ? fmt2(m.precoVenda) : (isE ? "—" : (produto.precoVenda ? fmt2(produto.precoVenda) : "—"))}
                               </td>
                               {/* Preço de Custo */}
-                              <td style={{ padding:"10px 12px", fontSize:12, color:"#334155", textAlign:"right" }}>
+                              <td style={{ padding:"7px 10px", fontSize:11, color:"#334155", textAlign:"right" }}>
                                 {m.preco ? fmt2(m.preco) : (produto.precoCusto ? fmt2(produto.precoCusto) : "—")}
                               </td>
                               {/* Observação */}
-                              <td style={{ padding:"10px 12px", fontSize:12, color:"#64748b", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                                {m.motivo||"—"}
+                              <td style={{ padding:"7px 10px", fontSize:11, color:"#64748b", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                                {m.saldoInicial
+                                  ? <span style={{color:"#15803d", fontWeight:600}}>{m.motivo}</span>
+                                  : m.motivo||"—"}
                               </td>
-                              {/* Origem */}
-                              <td style={{ padding:"10px 12px", fontSize:11, fontFamily:"monospace" }}>
+                              {/* Origem — Nº do pedido em destaque */}
+                              <td style={{ padding:"6px 9px", fontSize:11 }}>
                                 {m.pedidoId ? (
-                                  <span style={{ background:"#eff6ff", color:"#1d4ed8", padding:"2px 8px", borderRadius:5, fontWeight:600, fontSize:11 }}>
-                                    {m.pedidoId}
-                                  </span>
+                                  <div>
+                                    <span style={{ background:"#eff6ff", color:"#1d4ed8", padding:"2px 7px", borderRadius:5, fontWeight:700, fontSize:11, display:"inline-block" }}>
+                                      #{m.pedidoId}
+                                    </span>
+                                    {m.mlbId && <div style={{fontSize:10,color:"#94a3b8",marginTop:1}}>{m.mlbId}</div>}
+                                  </div>
                                 ) : m.mlbId ? (
-                                  <span style={{ background:"#f0fdf4", color:"#15803d", padding:"2px 8px", borderRadius:5, fontWeight:600, fontSize:11 }}>
+                                  <span style={{ background:"#f0fdf4", color:"#15803d", padding:"2px 7px", borderRadius:5, fontWeight:600, fontSize:11 }}>
                                     {m.mlbId}
                                   </span>
                                 ) : "—"}
@@ -3988,7 +3994,7 @@ function ModalMovEstoque({ produto, movEstoque, onRegistrar, onClose }) {
 
               {/* Registrar movimento */}
               {abaView === "registrar" && (
-                <div style={{ padding:"20px 24px", display:"flex", flexDirection:"column", gap:14 }}>
+                <div style={{ padding:"12px 16px", display:"flex", flexDirection:"column", gap:8 }}>
                   <div style={{ fontWeight:700, fontSize:15, color:"#0f172a" }}>Registrar Lançamento Manual</div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
                     <div>
@@ -4051,7 +4057,7 @@ function ModalMovEstoque({ produto, movEstoque, onRegistrar, onClose }) {
             </div>
             <div style={{ borderTop:"1px solid #f1f5f9", paddingTop:12 }}>
               <div style={{ fontSize:11, color:"#64748b", fontWeight:600, marginBottom:4 }}>Saldo atual</div>
-              <div style={{ fontSize:18, fontWeight:800, color:estoqueAtual>0?"#0f172a":"#dc2626" }}>{estoqueAtual}</div>
+              <div style={{ fontSize:15, fontWeight:800, color:estoqueAtual>0?"#0f172a":"#dc2626" }}>{estoqueAtual}</div>
             </div>
             {mlbsProd.length > 0 && (
               <div style={{ borderTop:"1px solid #f1f5f9", paddingTop:12 }}>
@@ -4126,7 +4132,7 @@ function ModalProduto({ produto, fornecedores, listings, produtos, onSave, onClo
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:16 }}>
       <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:720, maxHeight:"92vh", display:"flex", flexDirection:"column", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
         {/* Header */}
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"20px 28px", borderBottom:"1px solid #f1f5f9" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", borderBottom:"1px solid #f1f5f9" }}>
           <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>{produto ? "Editar Produto" : "Novo Produto"}</div>
           <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
         </div>
@@ -4140,7 +4146,7 @@ function ModalProduto({ produto, fornecedores, listings, produtos, onSave, onClo
           ))}
         </div>
         {/* Content */}
-        <div style={{ flex:1, overflowY:"auto", padding:"20px 28px" }}>
+        <div style={{ flex:1, overflowY:"auto", padding:"12px 16px" }}>
 
           {/* ── GERAL ── */}
           {tab === "geral" && (
@@ -4278,12 +4284,12 @@ function ModalProduto({ produto, fornecedores, listings, produtos, onSave, onClo
                         <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4, fontWeight:600, textTransform:"uppercase" }}>SKU do Componente</div>
                         <input value={novoCompSku} onChange={function(e){setNovoCompSku(e.target.value);}} placeholder="Ex: 1486"
                           onKeyDown={function(e){if(e.key==="Enter") addComponente();}}
-                          style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                          style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"5px 8px", borderRadius:8, fontSize:13, outline:"none" }} />
                       </div>
                       <div style={{ width:80 }}>
                         <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4, fontWeight:600, textTransform:"uppercase" }}>Qtd</div>
                         <input type="number" min="1" value={novoCompQtd} onChange={function(e){setNovoCompQtd(e.target.value);}}
-                          style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
+                          style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"5px 8px", borderRadius:8, fontSize:13, outline:"none" }} />
                       </div>
                       <button onClick={addComponente}
                         style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 18px", borderRadius:8, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>
@@ -4312,14 +4318,14 @@ function ModalProduto({ produto, fornecedores, listings, produtos, onSave, onClo
                             // Buscar produto pelo SKU nos produtos cadastrados
                             return (
                               <tr key={comp.skuComponente} style={{ borderBottom:"1px solid #f1f5f9", background:i%2===0?"#fff":"#fafafa" }}>
-                                <td style={{ padding:"10px 14px", fontSize:12, fontFamily:"monospace", fontWeight:700, color:"#0891b2" }}>{comp.skuComponente}</td>
-                                <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>
+                                <td style={{ padding:"7px 10px", fontSize:11, fontFamily:"monospace", fontWeight:700, color:"#0891b2" }}>{comp.skuComponente}</td>
+                                <td style={{ padding:"7px 10px", fontSize:11, color:"#64748b" }}>
                                   {(function(){
                                     var p = (produtos||[]).find(function(x){ return x.sku && x.sku.trim() === comp.skuComponente.trim(); });
                                     return p ? <span style={{color:"#0f172a"}}>{p.titulo?.slice(0,45)||"—"}</span> : <span style={{color:"#dc2626",fontSize:11}}>⚠ SKU não encontrado</span>;
                                   })()}
                                 </td>
-                                <td style={{ padding:"10px 14px", fontSize:13, fontWeight:700, color:"#0f172a" }}>{comp.qtd}×</td>
+                                <td style={{ padding:"7px 10px", fontSize:12, fontWeight:700, color:"#0f172a" }}>{comp.qtd}×</td>
                                 <td style={{ padding:"10px 14px" }}>
                                   <button onClick={function(){removeComponente(comp.skuComponente);}}
                                     style={{ background:"#fef2f2", border:"none", color:"#dc2626", padding:"4px 10px", borderRadius:6, cursor:"pointer", fontSize:12 }}>✕</button>
@@ -4419,11 +4425,11 @@ function ModalProduto({ produto, fornecedores, listings, produtos, onSave, onClo
           {/* ── FOTOS ── */}
           {tab === "fotos" && (
             <div>
-              <div style={{ fontSize:13, color:"#64748b", marginBottom:14 }}>
+              <div style={{ fontSize:13, color:"#64748b", marginBottom:8 }}>
                 {form.imagens.length}/10 fotos adicionadas
               </div>
               {form.imagens.length < 10 && (
-                <label style={{ display:"block", border:"2px dashed #e2e8f0", borderRadius:12, padding:"24px", textAlign:"center", cursor:"pointer", marginBottom:16, background:"#f8fafc" }}>
+                <label style={{ display:"block", border:"2px dashed #e2e8f0", borderRadius:12, padding:"24px", textAlign:"center", cursor:"pointer", marginBottom:8, background:"#f8fafc" }}>
                   <input type="file" accept="image/*" multiple style={{ display:"none" }} onChange={e => handleImages(e.target.files)} />
                   <div style={{ fontSize:32, marginBottom:8 }}>📷</div>
                   <div style={{ fontSize:14, fontWeight:600, color:"#0f172a" }}>{uploading ? "Carregando..." : "Clique para adicionar fotos"}</div>
@@ -4445,7 +4451,7 @@ function ModalProduto({ produto, fornecedores, listings, produtos, onSave, onClo
 
           {/* ── ML ── */}
           {tab === "ml" && (
-            <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
               <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:10, padding:"12px 16px", fontSize:13, color:"#92400e" }}>
                 💡 Vincule este produto a um anúncio do ML pelo SKU. O estoque e custo serão sincronizados automaticamente.
               </div>
@@ -4511,11 +4517,11 @@ function ModalDeposito({ deposito, onSave, onClose }) {
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:24 }}>
       <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:460, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
           <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>{deposito ? "Editar Depósito" : "Novo Depósito"}</div>
           <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
         </div>
-        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
           <div style={{ display:"flex", alignItems:"center", gap:12, background:"#f8fafc", borderRadius:12, padding:"12px 16px" }}>
             <div style={{ width:48, height:48, borderRadius:12, background:form.cor, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24 }}>{form.icone}</div>
             <div>
@@ -4587,14 +4593,14 @@ function ModalTransfEstoque({ produto, depositos, estoqueDepositos, onConfirm, o
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:24 }}>
       <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:460, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
           <div>
             <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>⇄ Transferência de Estoque</div>
             <div style={{ fontSize:12, color:"#94a3b8", marginTop:2, maxWidth:340, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{produto.titulo}</div>
           </div>
           <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
         </div>
-        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
             <div style={{ flex:1 }}>
               <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>De (Origem)</div>
@@ -4627,11 +4633,11 @@ function ModalTransfEstoque({ produto, depositos, estoqueDepositos, onConfirm, o
             {origem && <div style={{ fontSize:11, color:"#94a3b8", marginTop:4 }}>Disponível na origem: {dispOrigem} un</div>}
           </div>
           {qtd && parseInt(qtd)>0 && !erro && origem && destino && origem!==destino && (
-            <div style={{ background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:10, padding:"10px 14px", fontSize:13, color:"#1d4ed8", fontWeight:600 }}>
+            <div style={{ background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:10, padding:"7px 10px", fontSize:12, color:"#1d4ed8", fontWeight:600 }}>
               {qtd} un: {depositos.find(function(d){return d.id===origem;})?.nome} → {depositos.find(function(d){return d.id===destino;})?.nome}
             </div>
           )}
-          {erro && <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#dc2626", fontWeight:600 }}>⚠️ {erro}</div>}
+          {erro && <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:8, padding:"5px 8px", fontSize:12, color:"#dc2626", fontWeight:600 }}>⚠️ {erro}</div>}
         </div>
         <div style={{ display:"flex", gap:8, marginTop:20 }}>
           <button onClick={onClose} style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
@@ -4709,7 +4715,7 @@ function PedidosCompraTab({ produtos, fornecedores, setProdutos, exportarCSV, ex
 
   return (
     <div>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
         <div>
           <div style={{ fontWeight:800, fontSize:18, color:"#0f172a" }}>🛒 Pedidos de Compra</div>
           <div style={{ fontSize:13, color:"#94a3b8", marginTop:2 }}>Gerencie pedidos de compra para seus fornecedores</div>
@@ -4752,7 +4758,7 @@ function PedidosCompraTab({ produtos, fornecedores, setProdutos, exportarCSV, ex
       </div>
 
       {/* Cards */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:10, marginBottom:16 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:7, marginBottom:8 }}>
         {[
           { l:"Total de Pedidos", v:pedidos.length, cor:"#0f172a" },
           { l:"Em Aberto", v:pedidos.filter(function(p){return p.status==="Em aberto";}).length, cor:"#d97706" },
@@ -4762,15 +4768,15 @@ function PedidosCompraTab({ produtos, fornecedores, setProdutos, exportarCSV, ex
         ].map(function(k){
           return (
             <div key={k.l} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"12px 16px" }}>
-              <div style={{ fontSize:10, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:4 }}>{k.l}</div>
-              <div style={{ fontSize:18, fontWeight:800, color:k.cor }}>{k.v}</div>
+              <div style={{ fontSize:9, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:3 }}>{k.l}</div>
+              <div style={{ fontSize:15, fontWeight:800, color:k.cor }}>{k.v}</div>
             </div>
           );
         })}
       </div>
 
       {/* Filtros */}
-      <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"12px 14px", marginBottom:14 }}>
+      <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"12px 14px", marginBottom:8 }}>
         <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
           <div style={{ position:"relative", flex:1, minWidth:200 }}>
             <span style={{ position:"absolute", left:8, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
@@ -4787,7 +4793,7 @@ function PedidosCompraTab({ produtos, fornecedores, setProdutos, exportarCSV, ex
               var a = filterStatus===s;
               var cfg = STATUS_CFG[s];
               return <button key={s} onClick={function(){setFilterStatus(s);}}
-                style={{ padding:"5px 12px", borderRadius:20, border:"none", cursor:"pointer", fontSize:11, fontWeight:a?700:400,
+                style={{ padding:"3px 9px", borderRadius:20, border:"none", cursor:"pointer", fontSize:11, fontWeight:a?700:400,
                   background:a?(cfg?cfg.bg:"#0f172a"):"#f1f5f9", color:a?(cfg?cfg.cor:"#fff"):"#64748b" }}>
                 {s==="todos"?"Todos":s}
               </button>;
@@ -4821,8 +4827,8 @@ function PedidosCompraTab({ produtos, fornecedores, setProdutos, exportarCSV, ex
                 <span style={{ fontSize:11, fontWeight:700, color:cfg.cor, background:"#fff", padding:"2px 10px", borderRadius:20, border:"1px solid "+cfg.cor+"44" }}>{ped.status}</span>
               </div>
               <div style={{ display:"flex", gap:6 }}>
-                {ped.status==="Em aberto" && <button onClick={function(){mudarStatus(ped.id,"Enviado");}} style={{ background:"#0891b2", border:"none", color:"#fff", fontWeight:700, padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>🚛 Marcar Enviado</button>}
-                {ped.status==="Enviado" && <button onClick={function(){mudarStatus(ped.id,"Recebido");}} style={{ background:"#15803d", border:"none", color:"#fff", fontWeight:700, padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✅ Confirmar Recebimento</button>}
+                {ped.status==="Em aberto" && <button onClick={function(){mudarStatus(ped.id,"Enviado");}} style={{ background:"#0891b2", border:"none", color:"#fff", fontWeight:700, padding:"4px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>🚛 Marcar Enviado</button>}
+                {ped.status==="Enviado" && <button onClick={function(){mudarStatus(ped.id,"Recebido");}} style={{ background:"#15803d", border:"none", color:"#fff", fontWeight:700, padding:"4px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✅ Confirmar Recebimento</button>}
                 <button onClick={function(){setEditing(ped);setShowModal(true);}} style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"6px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✏️</button>
                 <button onClick={function(){excluir(ped.id);}} style={{ background:"#fef2f2", border:"1px solid #fecaca", color:"#dc2626", padding:"6px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>🗑</button>
               </div>
@@ -4915,14 +4921,14 @@ function ModalPedidoCompra({ pedido, produtos, fornecedores, onSave, onClose }) 
   return (
     <div style={{ position:"fixed",inset:0,background:"rgba(15,23,42,.65)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:600,padding:24 }}>
       <div style={{ background:"#fff",borderRadius:16,width:"100%",maxWidth:820,maxHeight:"94vh",display:"flex",flexDirection:"column",boxShadow:"0 24px 64px rgba(0,0,0,.2)" }}>
-        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"18px 28px",borderBottom:"1px solid #f1f5f9" }}>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 16px",borderBottom:"1px solid #f1f5f9" }}>
           <div style={{ fontWeight:800,fontSize:17,color:"#0f172a" }}>{pedido?"Editar Pedido de Compra":"Novo Pedido de Compra"}</div>
           <button onClick={onClose} style={{ background:"#f1f5f9",border:"none",color:"#64748b",width:32,height:32,borderRadius:8,cursor:"pointer",fontSize:16 }}>✕</button>
         </div>
-        <div style={{ flex:1,overflowY:"auto",padding:"20px 28px" }}>
+        <div style={{ flex:1,overflowY:"auto",padding:"12px 16px" }}>
           {/* ── FORNECEDOR ── */}
           <div style={{ fontSize:12,fontWeight:700,color:"#0f172a",marginBottom:8,paddingBottom:6,borderBottom:"1px solid #f1f5f9" }}>Fornecedor</div>
-          <div style={{ display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:10,marginBottom:14 }}>
+          <div style={{ display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:7,marginBottom:8 }}>
             <div>
               <div style={{ fontSize:11,color:"#94a3b8",marginBottom:4,fontWeight:600,textTransform:"uppercase" }}>Fornecedor *</div>
               <select value={form.fornecedorId} onChange={function(e){
@@ -4949,7 +4955,7 @@ function ModalPedidoCompra({ pedido, produtos, fornecedores, onSave, onClose }) 
           {/* ── ITENS DO PEDIDO ── */}
           <div style={{ fontSize:12,fontWeight:700,color:"#0f172a",marginBottom:8,paddingBottom:6,borderBottom:"1px solid #f1f5f9" }}>Itens do Pedido de Compra</div>
           {/* Busca produto */}
-          <div style={{ marginBottom:14,position:"relative" }}>
+          <div style={{ marginBottom:8,position:"relative" }}>
             <div style={{ fontSize:13,fontWeight:700,color:"#0f172a",marginBottom:8 }}>Adicionar Produtos</div>
             <span style={{ position:"absolute",left:10,top:36,color:"#94a3b8" }}>🔍</span>
             <input value={busca} onChange={function(e){buscarProds(e.target.value);}} placeholder="Buscar produto por nome ou SKU..."
@@ -4977,7 +4983,7 @@ function ModalPedidoCompra({ pedido, produtos, fornecedores, onSave, onClose }) 
               <table style={{ borderCollapse:"collapse",width:"100%" }}>
                 <thead>
                   <tr>{["Item","Produto","Código SKU","Un","Qtde","Preço un","IPI %","Preço total","Obs",""].map(function(h){
-                    return <th key={h} style={{ fontSize:10,color:"#94a3b8",textTransform:"uppercase",padding:"8px 10px",borderBottom:"1px solid #f1f5f9",textAlign:"left",fontWeight:600,background:"#fafafa" }}>{h}</th>;
+                    return <th key={h} style={{ fontSize:10,color:"#94a3b8",textTransform:"uppercase",padding:"5px 8px",borderBottom:"1px solid #f1f5f9",textAlign:"left",fontWeight:600,background:"#fafafa" }}>{h}</th>;
                   })}</tr>
                 </thead>
                 <tbody>
@@ -5002,8 +5008,8 @@ function ModalPedidoCompra({ pedido, produtos, fornecedores, onSave, onClose }) 
                 </tbody>
                 <tfoot>
                   <tr style={{ background:"#f1f5f9" }}>
-                    <td colSpan={5} style={{ padding:"8px 10px",fontWeight:700,fontSize:13 }}>TOTAL DO PEDIDO</td>
-                    <td style={{ padding:"8px 10px",fontWeight:800,fontSize:14,color:"#0f172a" }}>{fmt2(total)}</td>
+                    <td colSpan={5} style={{ padding:"5px 8px",fontWeight:700,fontSize:13 }}>TOTAL DO PEDIDO</td>
+                    <td style={{ padding:"5px 8px",fontWeight:800,fontSize:14,color:"#0f172a" }}>{fmt2(total)}</td>
                     <td colSpan={2}/>
                   </tr>
                 </tfoot>
@@ -5012,7 +5018,7 @@ function ModalPedidoCompra({ pedido, produtos, fornecedores, onSave, onClose }) 
           )}
           {/* ── TOTAIS DA COMPRA ── */}
           <div style={{ fontSize:12,fontWeight:700,color:"#0f172a",marginBottom:8,marginTop:14,paddingBottom:6,borderBottom:"1px solid #f1f5f9" }}>Totais da Compra</div>
-          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10,marginBottom:14 }}>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:7,marginBottom:8 }}>
             <div>
               <div style={{ fontSize:10,color:"#94a3b8",marginBottom:4,fontWeight:600,textTransform:"uppercase" }}>Total dos Produtos</div>
               <div style={{ background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 11px",fontSize:13,fontWeight:700,color:"#0f172a" }}>
@@ -5039,7 +5045,7 @@ function ModalPedidoCompra({ pedido, produtos, fornecedores, onSave, onClose }) 
 
           {/* ── DETALHES DA COMPRA ── */}
           <div style={{ fontSize:12,fontWeight:700,color:"#0f172a",marginBottom:8,paddingBottom:6,borderBottom:"1px solid #f1f5f9" }}>Detalhes da Compra</div>
-          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10,marginBottom:14 }}>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:7,marginBottom:8 }}>
             <div>
               <div style={{ fontSize:10,color:"#94a3b8",marginBottom:4,fontWeight:600,textTransform:"uppercase" }}>Data da Compra</div>
               <input type="date" value={form.dataCriacao||""} onChange={function(e){set("dataCriacao",e.target.value);}}
@@ -5064,7 +5070,7 @@ function ModalPedidoCompra({ pedido, produtos, fornecedores, onSave, onClose }) 
 
           {/* ── TRANSPORTADOR ── */}
           <div style={{ fontSize:12,fontWeight:700,color:"#0f172a",marginBottom:8,paddingBottom:6,borderBottom:"1px solid #f1f5f9" }}>Transportador</div>
-          <div style={{ display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",gap:10,marginBottom:14 }}>
+          <div style={{ display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",gap:7,marginBottom:8 }}>
             <div>
               <div style={{ fontSize:10,color:"#94a3b8",marginBottom:4,fontWeight:600,textTransform:"uppercase" }}>Nome</div>
               <input value={form.transportador||""} onChange={function(e){set("transportador",e.target.value);}} placeholder="Nome da transportadora"
@@ -5154,10 +5160,10 @@ function RelatoriosEstoqueTab({ produtos, fornecedores, movEstoque, listings }) 
   return (
     <div>
       <div style={{ fontWeight:800,fontSize:18,color:"#0f172a",marginBottom:4 }}>📊 Relatórios de Estoque</div>
-      <div style={{ fontSize:13,color:"#94a3b8",marginBottom:20 }}>Análises e relatórios completos do seu estoque</div>
+      <div style={{ fontSize:13,color:"#94a3b8",marginBottom:10 }}>Análises e relatórios completos do seu estoque</div>
 
       {/* Lista de relatórios disponíveis */}
-      <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:12,marginBottom:24 }}>
+      <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:12,marginBottom:10 }}>
         {RELATORIOS.map(function(r){
           var isAtivo=relAtivo===r.key;
           return (
@@ -5179,7 +5185,7 @@ function RelatoriosEstoqueTab({ produtos, fornecedores, movEstoque, listings }) 
 
       {/* Filtros para o relatório */}
       {relAtivo && (
-        <div style={{ background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 16px",marginBottom:16 }}>
+        <div style={{ background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 16px",marginBottom:8 }}>
           <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
             <span style={{ fontSize:12,color:"#64748b",fontWeight:600 }}>Período:</span>
             <input type="date" value={filtroDe} onChange={function(e){setFiltroDe(e.target.value);}}
@@ -5197,7 +5203,7 @@ function RelatoriosEstoqueTab({ produtos, fornecedores, movEstoque, listings }) 
       {/* Conteúdo do relatório */}
       {relAtivo === "entradas_saidas" && (
         <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"auto" }}>
-          <div style={{ padding:"14px 18px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+          <div style={{ padding:"10px 14px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
             <div style={{ fontWeight:700,fontSize:15,color:"#0f172a" }}>Entradas e Saídas de Estoque</div>
             <div style={{ fontSize:12,color:"#94a3b8" }}>{movsFiltradas.length} movimentações</div>
           </div>
@@ -5228,7 +5234,7 @@ function RelatoriosEstoqueTab({ produtos, fornecedores, movEstoque, listings }) 
 
       {relAtivo === "saldo_atual" && (
         <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"auto" }}>
-          <div style={{ padding:"14px 18px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+          <div style={{ padding:"10px 14px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
             <div style={{ fontWeight:700,fontSize:15,color:"#0f172a" }}>Saldo Atual de Estoque</div>
             <div style={{ display:"flex",gap:16 }}>
               <div style={{ textAlign:"right" }}>
@@ -5242,7 +5248,7 @@ function RelatoriosEstoqueTab({ produtos, fornecedores, movEstoque, listings }) 
             </div>
           </div>
           <table style={{ borderCollapse:"collapse",width:"100%" }}>
-            <thead><tr>{["Produto","SKU","Categoria","Estoque","Mín","Vlr Custo","Vlr Venda","Total Custo","Total Venda","Status"].map(function(h){return <th key={h} style={{ fontSize:10,color:"#94a3b8",textTransform:"uppercase",padding:"8px 12px",borderBottom:"1px solid #f1f5f9",textAlign:"left",fontWeight:600,background:"#fafafa",whiteSpace:"nowrap" }}>{h}</th>;})}</tr></thead>
+            <thead><tr>{["Produto","SKU","Categoria","Estoque","Mín","Vlr Custo","Vlr Venda","Total Custo","Total Venda","Status"].map(function(h){return <th key={h} style={{ fontSize:10,color:"#94a3b8",textTransform:"uppercase",padding:"5px 8px",borderBottom:"1px solid #f1f5f9",textAlign:"left",fontWeight:600,background:"#fafafa",whiteSpace:"nowrap" }}>{h}</th>;})}</tr></thead>
             <tbody>
               {produtos.filter(function(p){return !filtroProd||(p.titulo||"").toLowerCase().includes(filtroProd.toLowerCase())||(p.sku||"").toLowerCase().includes(filtroProd.toLowerCase());}).map(function(p,i){
                 var est=parseInt(p.estoqueAtual||0),min=parseInt(p.estoqueMinimo||0);
@@ -5250,19 +5256,19 @@ function RelatoriosEstoqueTab({ produtos, fornecedores, movEstoque, listings }) 
                 var cor=zerado?"#dc2626":critico?"#d97706":"#15803d";
                 return (
                   <tr key={p.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
-                    <td style={{ padding:"8px 12px",fontSize:12,color:"#0f172a",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{p.titulo}</td>
-                    <td style={{ padding:"8px 12px",fontSize:11,color:"#64748b",fontFamily:"monospace" }}>
+                    <td style={{ padding:"5px 8px",fontSize:12,color:"#0f172a",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{p.titulo}</td>
+                    <td style={{ padding:"5px 8px",fontSize:11,color:"#64748b",fontFamily:"monospace" }}>
                       {p.sku||"—"}
                       {p.tipoProduto==="composto" && <span style={{ marginLeft:5,fontSize:9,fontWeight:700,background:"#ede9fe",color:"#7c3aed",padding:"1px 5px",borderRadius:4 }}>KIT</span>}
                     </td>
-                    <td style={{ padding:"8px 12px",fontSize:12,color:"#64748b" }}>{p.categoria||"—"}</td>
-                    <td style={{ padding:"8px 12px",textAlign:"center",fontWeight:800,fontSize:13,color:cor }}>{est}</td>
-                    <td style={{ padding:"8px 12px",textAlign:"center",fontSize:12,color:"#94a3b8" }}>{min||"—"}</td>
-                    <td style={{ padding:"8px 12px",fontSize:12,color:"#64748b" }}>{p.precoCusto?fmt2(p.precoCusto):"—"}</td>
-                    <td style={{ padding:"8px 12px",fontSize:12,color:"#64748b" }}>{p.precoVenda?fmt2(p.precoVenda):"—"}</td>
-                    <td style={{ padding:"8px 12px",fontSize:12,fontWeight:700,color:"#0f172a" }}>{p.precoCusto?fmt2(parseFloat(p.precoCusto)*est):"—"}</td>
-                    <td style={{ padding:"8px 12px",fontSize:12,fontWeight:700,color:"#15803d" }}>{p.precoVenda?fmt2(parseFloat(p.precoVenda)*est):"—"}</td>
-                    <td style={{ padding:"8px 12px" }}><span style={{ fontSize:10,fontWeight:600,color:cor,background:cor+"11",padding:"2px 7px",borderRadius:5 }}>{zerado?"Zerado":critico?"Crítico":"OK"}</span></td>
+                    <td style={{ padding:"5px 8px",fontSize:12,color:"#64748b" }}>{p.categoria||"—"}</td>
+                    <td style={{ padding:"5px 8px",textAlign:"center",fontWeight:800,fontSize:13,color:cor }}>{est}</td>
+                    <td style={{ padding:"5px 8px",textAlign:"center",fontSize:12,color:"#94a3b8" }}>{min||"—"}</td>
+                    <td style={{ padding:"5px 8px",fontSize:12,color:"#64748b" }}>{p.precoCusto?fmt2(p.precoCusto):"—"}</td>
+                    <td style={{ padding:"5px 8px",fontSize:12,color:"#64748b" }}>{p.precoVenda?fmt2(p.precoVenda):"—"}</td>
+                    <td style={{ padding:"5px 8px",fontSize:12,fontWeight:700,color:"#0f172a" }}>{p.precoCusto?fmt2(parseFloat(p.precoCusto)*est):"—"}</td>
+                    <td style={{ padding:"5px 8px",fontSize:12,fontWeight:700,color:"#15803d" }}>{p.precoVenda?fmt2(parseFloat(p.precoVenda)*est):"—"}</td>
+                    <td style={{ padding:"5px 8px" }}><span style={{ fontSize:10,fontWeight:600,color:cor,background:cor+"11",padding:"2px 7px",borderRadius:5 }}>{zerado?"Zerado":critico?"Crítico":"OK"}</span></td>
                   </tr>
                 );
               })}
@@ -5273,23 +5279,23 @@ function RelatoriosEstoqueTab({ produtos, fornecedores, movEstoque, listings }) 
 
       {relAtivo === "abaixo_minimo" && (
         <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"auto" }}>
-          <div style={{ padding:"14px 18px",borderBottom:"1px solid #f1f5f9",fontWeight:700,fontSize:15,color:"#dc2626" }}>⚠️ Produtos Abaixo do Estoque Mínimo</div>
+          <div style={{ padding:"10px 14px",borderBottom:"1px solid #f1f5f9",fontWeight:700,fontSize:15,color:"#dc2626" }}>⚠️ Produtos Abaixo do Estoque Mínimo</div>
           <table style={{ borderCollapse:"collapse",width:"100%" }}>
-            <thead><tr>{["Produto","SKU","Fornecedor","Estoque Atual","Estoque Mínimo","Diferença","Custo Unit.","Custo Reposição"].map(function(h){return <th key={h} style={{ fontSize:10,color:"#94a3b8",textTransform:"uppercase",padding:"8px 12px",borderBottom:"1px solid #f1f5f9",textAlign:"left",fontWeight:600,background:"#fafafa",whiteSpace:"nowrap" }}>{h}</th>;})}</tr></thead>
+            <thead><tr>{["Produto","SKU","Fornecedor","Estoque Atual","Estoque Mínimo","Diferença","Custo Unit.","Custo Reposição"].map(function(h){return <th key={h} style={{ fontSize:10,color:"#94a3b8",textTransform:"uppercase",padding:"5px 8px",borderBottom:"1px solid #f1f5f9",textAlign:"left",fontWeight:600,background:"#fafafa",whiteSpace:"nowrap" }}>{h}</th>;})}</tr></thead>
             <tbody>
               {produtos.filter(function(p){return p.estoqueMinimo&&parseInt(p.estoqueAtual||0)<=parseInt(p.estoqueMinimo||0);}).map(function(p,i){
                 var est=parseInt(p.estoqueAtual||0),min=parseInt(p.estoqueMinimo||0),diff=min-est;
                 var forn=fornecedores.find(function(f){return f.id===p.fornecedorId;});
                 return (
                   <tr key={p.id} style={{ background:i%2===0?"#fff9f9":"#fff" }}>
-                    <td style={{ padding:"8px 12px",fontSize:12,color:"#0f172a",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{p.titulo}</td>
-                    <td style={{ padding:"8px 12px",fontSize:11,color:"#64748b",fontFamily:"monospace" }}>{p.sku||"—"}</td>
-                    <td style={{ padding:"8px 12px",fontSize:12,color:"#64748b" }}>{forn?.nome||"—"}</td>
-                    <td style={{ padding:"8px 12px",textAlign:"center",fontWeight:800,fontSize:13,color:est<=0?"#dc2626":"#d97706" }}>{est}</td>
-                    <td style={{ padding:"8px 12px",textAlign:"center",fontSize:12,color:"#94a3b8" }}>{min}</td>
-                    <td style={{ padding:"8px 12px",textAlign:"center",fontWeight:800,fontSize:13,color:"#dc2626" }}>-{diff}</td>
-                    <td style={{ padding:"8px 12px",fontSize:12,color:"#64748b" }}>{p.precoCusto?fmt2(p.precoCusto):"—"}</td>
-                    <td style={{ padding:"8px 12px",fontSize:12,fontWeight:700,color:"#dc2626" }}>{p.precoCusto?fmt2(parseFloat(p.precoCusto)*diff):"—"}</td>
+                    <td style={{ padding:"5px 8px",fontSize:12,color:"#0f172a",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{p.titulo}</td>
+                    <td style={{ padding:"5px 8px",fontSize:11,color:"#64748b",fontFamily:"monospace" }}>{p.sku||"—"}</td>
+                    <td style={{ padding:"5px 8px",fontSize:12,color:"#64748b" }}>{forn?.nome||"—"}</td>
+                    <td style={{ padding:"5px 8px",textAlign:"center",fontWeight:800,fontSize:13,color:est<=0?"#dc2626":"#d97706" }}>{est}</td>
+                    <td style={{ padding:"5px 8px",textAlign:"center",fontSize:12,color:"#94a3b8" }}>{min}</td>
+                    <td style={{ padding:"5px 8px",textAlign:"center",fontWeight:800,fontSize:13,color:"#dc2626" }}>-{diff}</td>
+                    <td style={{ padding:"5px 8px",fontSize:12,color:"#64748b" }}>{p.precoCusto?fmt2(p.precoCusto):"—"}</td>
+                    <td style={{ padding:"5px 8px",fontSize:12,fontWeight:700,color:"#dc2626" }}>{p.precoCusto?fmt2(parseFloat(p.precoCusto)*diff):"—"}</td>
                   </tr>
                 );
               })}
@@ -5300,7 +5306,7 @@ function RelatoriosEstoqueTab({ produtos, fornecedores, movEstoque, listings }) 
 
       {relAtivo === "visao_financeira" && (
         <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"auto" }}>
-          <div style={{ padding:"14px 18px",borderBottom:"1px solid #f1f5f9",fontWeight:700,fontSize:15,color:"#0f172a" }}>💰 Visão Financeira do Estoque</div>
+          <div style={{ padding:"10px 14px",borderBottom:"1px solid #f1f5f9",fontWeight:700,fontSize:15,color:"#0f172a" }}>💰 Visão Financeira do Estoque</div>
           {(function(){
             var totalCusto=0,totalVenda=0,totalLucro=0;
             var rows=produtos.filter(function(p){return parseInt(p.estoqueAtual||0)>0;}).map(function(p){
@@ -5314,13 +5320,13 @@ function RelatoriosEstoqueTab({ produtos, fornecedores, movEstoque, listings }) 
             }).sort(function(a,b){return b.custo-a.custo;});
             return (
               <>
-                <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,padding:"14px 18px",borderBottom:"1px solid #f1f5f9" }}>
+                <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,padding:"10px 14px",borderBottom:"1px solid #f1f5f9" }}>
                   {[{l:"Valor de Custo",v:fmt2(totalCusto),c:"#dc2626"},{l:"Valor de Venda",v:fmt2(totalVenda),c:"#15803d"},{l:"Lucro Potencial",v:fmt2(totalLucro),c:totalLucro>=0?"#0891b2":"#dc2626"}].map(function(k){
                     return <div key={k.l} style={{ background:"#f8fafc",borderRadius:10,padding:"12px 16px" }}><div style={{ fontSize:11,color:"#94a3b8",marginBottom:4 }}>{k.l}</div><div style={{ fontSize:18,fontWeight:800,color:k.c }}>{k.v}</div></div>;
                   })}
                 </div>
                 <table style={{ borderCollapse:"collapse",width:"100%" }}>
-                  <thead><tr>{["Produto","SKU","Estoque","Custo Unit.","Venda Unit.","Total Custo","Total Venda","Lucro","Margem"].map(function(h){return <th key={h} style={{ fontSize:10,color:"#94a3b8",textTransform:"uppercase",padding:"8px 12px",borderBottom:"1px solid #f1f5f9",textAlign:"left",fontWeight:600,background:"#fafafa",whiteSpace:"nowrap" }}>{h}</th>;})}</tr></thead>
+                  <thead><tr>{["Produto","SKU","Estoque","Custo Unit.","Venda Unit.","Total Custo","Total Venda","Lucro","Margem"].map(function(h){return <th key={h} style={{ fontSize:10,color:"#94a3b8",textTransform:"uppercase",padding:"5px 8px",borderBottom:"1px solid #f1f5f9",textAlign:"left",fontWeight:600,background:"#fafafa",whiteSpace:"nowrap" }}>{h}</th>;})}</tr></thead>
                   <tbody>
                     {rows.map(function(r,i){
                       return <tr key={r.p.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
@@ -5351,22 +5357,22 @@ function RelatoriosEstoqueTab({ produtos, fornecedores, movEstoque, listings }) 
           : produtos.filter(function(p){return movsProd[p.id]>0;}).sort(function(a,b){return (movsProd[b.id]||0)-(movsProd[a.id]||0);}).slice(0,50);
         return (
           <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"auto" }}>
-            <div style={{ padding:"14px 18px",borderBottom:"1px solid #f1f5f9",fontWeight:700,fontSize:15,color:"#0f172a" }}>
+            <div style={{ padding:"10px 14px",borderBottom:"1px solid #f1f5f9",fontWeight:700,fontSize:15,color:"#0f172a" }}>
               {relAtivo==="sem_movimentacao"?"📦 Produtos sem Movimentação":"🏆 Produtos com Maior Circulação"}
               <span style={{ marginLeft:10,fontSize:12,color:"#94a3b8",fontWeight:400 }}>{prods.length} produtos</span>
             </div>
             {prods.length===0?<div style={{ padding:32,textAlign:"center",color:"#94a3b8" }}>Nenhum produto encontrado</div>:(
               <table style={{ borderCollapse:"collapse",width:"100%" }}>
-                <thead><tr>{["#","Produto","SKU","Estoque Atual","Movimentação Total","Custo Unit."].map(function(h){return <th key={h} style={{ fontSize:10,color:"#94a3b8",textTransform:"uppercase",padding:"8px 12px",borderBottom:"1px solid #f1f5f9",textAlign:"left",fontWeight:600,background:"#fafafa" }}>{h}</th>;})}</tr></thead>
+                <thead><tr>{["#","Produto","SKU","Estoque Atual","Movimentação Total","Custo Unit."].map(function(h){return <th key={h} style={{ fontSize:10,color:"#94a3b8",textTransform:"uppercase",padding:"5px 8px",borderBottom:"1px solid #f1f5f9",textAlign:"left",fontWeight:600,background:"#fafafa" }}>{h}</th>;})}</tr></thead>
                 <tbody>
                   {prods.map(function(p,i){return (
                     <tr key={p.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
-                      <td style={{ padding:"8px 12px",fontSize:13,fontWeight:700,color:"#94a3b8" }}>{i+1}</td>
-                      <td style={{ padding:"8px 12px",fontSize:12,color:"#0f172a",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{p.titulo}</td>
-                      <td style={{ padding:"8px 12px",fontSize:11,color:"#64748b",fontFamily:"monospace" }}>{p.sku||"—"}</td>
-                      <td style={{ padding:"8px 12px",textAlign:"center",fontWeight:700 }}>{p.estoqueAtual||0}</td>
-                      <td style={{ padding:"8px 12px",textAlign:"center",fontWeight:800,color:relAtivo==="maior_circulacao"?"#0891b2":"#94a3b8" }}>{movsProd[p.id]||0}</td>
-                      <td style={{ padding:"8px 12px",fontSize:12,color:"#64748b" }}>{p.precoCusto?fmt2(p.precoCusto):"—"}</td>
+                      <td style={{ padding:"5px 8px",fontSize:13,fontWeight:700,color:"#94a3b8" }}>{i+1}</td>
+                      <td style={{ padding:"5px 8px",fontSize:12,color:"#0f172a",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{p.titulo}</td>
+                      <td style={{ padding:"5px 8px",fontSize:11,color:"#64748b",fontFamily:"monospace" }}>{p.sku||"—"}</td>
+                      <td style={{ padding:"5px 8px",textAlign:"center",fontWeight:700 }}>{p.estoqueAtual||0}</td>
+                      <td style={{ padding:"5px 8px",textAlign:"center",fontWeight:800,color:relAtivo==="maior_circulacao"?"#0891b2":"#94a3b8" }}>{movsProd[p.id]||0}</td>
+                      <td style={{ padding:"5px 8px",fontSize:12,color:"#64748b" }}>{p.precoCusto?fmt2(p.precoCusto):"—"}</td>
                     </tr>
                   );}).slice(0,100)}
                 </tbody>
@@ -5423,11 +5429,11 @@ function SugestaoComprasTab({ produtos, fornecedores, rawOrders, exportarCSV, ex
   return (
     <div>
       <div style={{ fontWeight:800,fontSize:18,color:"#0f172a",marginBottom:4 }}>💡 Sugestão de Compras</div>
-      <div style={{ fontSize:13,color:"#94a3b8",marginBottom:20 }}>Baseado no histórico de vendas e estoque atual</div>
+      <div style={{ fontSize:13,color:"#94a3b8",marginBottom:10 }}>Baseado no histórico de vendas e estoque atual</div>
 
       {/* Parâmetros */}
-      <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px 20px",marginBottom:20 }}>
-        <div style={{ fontWeight:700,fontSize:14,color:"#0f172a",marginBottom:14 }}>⚙️ Parâmetros de Cálculo</div>
+      <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px 20px",marginBottom:10 }}>
+        <div style={{ fontWeight:700,fontSize:14,color:"#0f172a",marginBottom:8 }}>⚙️ Parâmetros de Cálculo</div>
         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:16 }}>
           <div>
             <div style={{ fontSize:11,color:"#94a3b8",marginBottom:5,fontWeight:600,textTransform:"uppercase" }}>Período de Venda (dias)</div>
@@ -5465,7 +5471,7 @@ function SugestaoComprasTab({ produtos, fornecedores, rawOrders, exportarCSV, ex
       {gerado && (
         <>
           {/* Cards resumo */}
-          <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:16 }}>
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:7,marginBottom:8 }}>
             {[
               {l:"Produtos p/ Comprar",v:sugestoes.filter(function(s){return s.sugestaoQtd>0;}).length,c:"#0f172a"},
               {l:"Total de Unidades",v:totalSugestao,c:"#0891b2"},
@@ -5483,7 +5489,7 @@ function SugestaoComprasTab({ produtos, fornecedores, rawOrders, exportarCSV, ex
             </div>
           ):(
             <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"auto" }}>
-              <div style={{ padding:"14px 18px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+              <div style={{ padding:"10px 14px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
                 <div>
                   <div style={{ fontWeight:700,fontSize:15,color:"#0f172a" }}>Dashboard Sugestão de Compras</div>
                   <div style={{ fontSize:12,color:"#94a3b8" }}>Período: últimos {periodoVenda} dias · Cobertura: {coberturaEstoque} dias</div>
@@ -5518,19 +5524,19 @@ function SugestaoComprasTab({ produtos, fornecedores, rawOrders, exportarCSV, ex
                     var urgente=s.diasEstoque<7,atencao=s.diasEstoque<15;
                     return (
                       <tr key={s.p.id} style={{ background:urgente?"#fff9f9":i%2===0?"#f8fafc":"#fff" }}>
-                        <td style={{ padding:"8px 12px",fontSize:11,color:"#64748b",fontFamily:"monospace" }}>{s.p.sku||"—"}</td>
-                        <td style={{ padding:"8px 12px",fontSize:12,color:"#0f172a",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{s.p.titulo}</td>
-                        <td style={{ padding:"8px 12px",fontSize:12,color:"#64748b" }}>{forn?.nome||"—"}</td>
-                        <td style={{ padding:"8px 12px",textAlign:"center",fontWeight:700,fontSize:13,color:"#0891b2" }}>{s.vendas}</td>
-                        <td style={{ padding:"8px 12px",textAlign:"center",fontWeight:800,fontSize:13,color:s.estAtual<=0?"#dc2626":atencao?"#d97706":"#15803d" }}>{s.estAtual}</td>
-                        <td style={{ padding:"8px 12px",textAlign:"center",fontSize:12,color:"#64748b" }}>{s.mediaDia.toFixed(1)}</td>
-                        <td style={{ padding:"8px 12px",textAlign:"center" }}>
+                        <td style={{ padding:"5px 8px",fontSize:11,color:"#64748b",fontFamily:"monospace" }}>{s.p.sku||"—"}</td>
+                        <td style={{ padding:"5px 8px",fontSize:12,color:"#0f172a",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{s.p.titulo}</td>
+                        <td style={{ padding:"5px 8px",fontSize:12,color:"#64748b" }}>{forn?.nome||"—"}</td>
+                        <td style={{ padding:"5px 8px",textAlign:"center",fontWeight:700,fontSize:13,color:"#0891b2" }}>{s.vendas}</td>
+                        <td style={{ padding:"5px 8px",textAlign:"center",fontWeight:800,fontSize:13,color:s.estAtual<=0?"#dc2626":atencao?"#d97706":"#15803d" }}>{s.estAtual}</td>
+                        <td style={{ padding:"5px 8px",textAlign:"center",fontSize:12,color:"#64748b" }}>{s.mediaDia.toFixed(1)}</td>
+                        <td style={{ padding:"5px 8px",textAlign:"center" }}>
                           <span style={{ fontSize:12,fontWeight:700,color:urgente?"#dc2626":atencao?"#d97706":"#0f172a",background:urgente?"#fef2f2":atencao?"#fffbeb":"#f8fafc",padding:"3px 8px",borderRadius:6 }}>
                             {s.diasEstoque>=999?"∞":s.diasEstoque+" dias"}
                           </span>
                         </td>
-                        <td style={{ padding:"8px 12px",textAlign:"center",fontWeight:800,fontSize:14,color:s.sugestaoQtd>0?"#dc2626":"#94a3b8" }}>{s.sugestaoQtd>0?s.sugestaoQtd:"—"}</td>
-                        <td style={{ padding:"8px 12px",fontSize:12,fontWeight:700,color:"#0f172a" }}>{s.valorEst>0?fmt2(s.valorEst):"—"}</td>
+                        <td style={{ padding:"5px 8px",textAlign:"center",fontWeight:800,fontSize:14,color:s.sugestaoQtd>0?"#dc2626":"#94a3b8" }}>{s.sugestaoQtd>0?s.sugestaoQtd:"—"}</td>
+                        <td style={{ padding:"5px 8px",fontSize:12,fontWeight:700,color:"#0f172a" }}>{s.valorEst>0?fmt2(s.valorEst):"—"}</td>
                       </tr>
                     );
                   })}
@@ -5854,7 +5860,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
   return (
     <div>
       {/* Sub-tabs */}
-      <div style={{ display:"flex", gap:2, marginBottom:16, background:"#f1f5f9", padding:4, borderRadius:10, width:"fit-content" }}>
+      <div style={{ display:"flex", gap:2, marginBottom:8, background:"#f1f5f9", padding:4, borderRadius:10, width:"fit-content" }}>
         {[
           { key:"lista",      label:"📦 Produtos" },
           { key:"depositos",  label:"🏪 Depósitos" },
@@ -5877,7 +5883,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
       {prodTab === "lista" && (
         <div>
           {estoqueBaixo.length > 0 && (
-            <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"12px 16px", marginBottom:14, display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"12px 16px", marginBottom:8, display:"flex", alignItems:"center", gap:10 }}>
               <span style={{ fontSize:18 }}>⚠️</span>
               <div>
                 <div style={{ fontWeight:700, color:"#dc2626", fontSize:13 }}>Estoque crítico em {estoqueBaixo.length} produto(s)</div>
@@ -5990,19 +5996,19 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                 if (!window.confirm("Excluir " + prodSel.length + " produto(s)?")) return;
                 var upd = produtos.filter(function(p){ return !prodSel.includes(p.id); });
                 setProdutos(upd); saveProdutos(upd); setProdSel([]);
-              }} style={{ background:"#dc2626", border:"none", color:"#fff", fontWeight:700, padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+              }} style={{ background:"#dc2626", border:"none", color:"#fff", fontWeight:700, padding:"4px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
                 🗑 Excluir Selecionados
               </button>
               <button onClick={function(){
                 var upd = produtos.map(function(p){ return prodSel.includes(p.id) ? Object.assign({},p,{status:"Inativo"}) : p; });
                 setProdutos(upd); saveProdutos(upd); setProdSel([]);
-              }} style={{ background:"#d97706", border:"none", color:"#fff", fontWeight:700, padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+              }} style={{ background:"#d97706", border:"none", color:"#fff", fontWeight:700, padding:"4px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
                 ⏸ Inativar
               </button>
               <button onClick={function(){
                 var upd = produtos.map(function(p){ return prodSel.includes(p.id) ? Object.assign({},p,{status:"Ativo"}) : p; });
                 setProdutos(upd); saveProdutos(upd); setProdSel([]);
-              }} style={{ background:"#15803d", border:"none", color:"#fff", fontWeight:700, padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+              }} style={{ background:"#15803d", border:"none", color:"#fff", fontWeight:700, padding:"4px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
                 ▶ Ativar
               </button>
               <button onClick={function(){ setProdSel([]); }}
@@ -6064,7 +6070,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                           <div style={{ fontSize:12, fontFamily:"monospace", fontWeight:600, color:"#334155" }}>{p.sku || "—"}</div>
                           {p.ean && <div style={{ fontSize:10, color:"#94a3b8" }}>{p.ean}</div>}
                         </td>
-                        <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>
+                        <td style={{ padding:"7px 10px", fontSize:11, color:"#64748b" }}>
                           <div>{forn?.nome || "—"}</div>
                           {p.codigoFornecedor && <div style={{ fontSize:10, color:"#94a3b8" }}>{p.codigoFornecedor}</div>}
                         </td>
@@ -6078,7 +6084,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                             <span style={{ fontSize:12, color:"#94a3b8" }}>— insira custo</span>
                           )}
                         </td>
-                        <td style={{ padding:"10px 14px", fontSize:13, fontWeight:600, color:"#15803d" }}>
+                        <td style={{ padding:"7px 10px", fontSize:12, fontWeight:600, color:"#15803d" }}>
                           {p.precoVenda ? `R$ ${parseFloat(p.precoVenda).toFixed(2).replace(".",",")}` : "—"}
                         </td>
                         <td style={{ padding:"10px 14px" }}>
@@ -6146,7 +6152,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
       {/* ── DEPÓSITOS ── */}
       {prodTab === "depositos" && (
         <div>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
             <div>
               <div style={{ fontWeight:800, fontSize:18, color:"#0f172a" }}>🏪 Depósitos de Estoque</div>
               <div style={{ fontSize:13, color:"#94a3b8", marginTop:2 }}>Gerencie múltiplos locais de armazenamento e transfira produtos entre eles</div>
@@ -6196,7 +6202,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
             <div style={{ background:"#f8fafc", border:"2px dashed #e2e8f0", borderRadius:16, padding:60, textAlign:"center", color:"#94a3b8" }}>
               <div style={{ fontSize:48, marginBottom:12 }}>🏪</div>
               <div style={{ fontWeight:700, fontSize:16, color:"#0f172a", marginBottom:6 }}>Nenhum depósito cadastrado</div>
-              <div style={{ fontSize:13, marginBottom:20 }}>Crie depósitos para organizar seu estoque por localização</div>
+              <div style={{ fontSize:13, marginBottom:10 }}>Crie depósitos para organizar seu estoque por localização</div>
               <button onClick={function(){ setEditingDeposito(null); setShowModalDeposito(true); }}
                 style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"11px 28px", borderRadius:10, cursor:"pointer", fontSize:14 }}>
                 + Criar Primeiro Depósito
@@ -6204,7 +6210,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
             </div>
           ) : (
             <div>
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:14, marginBottom:24 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:8, marginBottom:10 }}>
                 {depositos.map(function(dep) {
                   var totalProdutos = estoqueDepositos.filter(function(e){return e.depositoId===dep.id&&parseInt(e.qtd||0)>0;}).length;
                   var totalUnidades = estoqueDepositos.filter(function(e){return e.depositoId===dep.id;}).reduce(function(s,e){return s+parseInt(e.qtd||0);},0);
@@ -6219,12 +6225,12 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                       </div>
                       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr" }}>
                         <div style={{ padding:"12px 16px", borderRight:"1px solid #f1f5f9" }}>
-                          <div style={{ fontSize:10, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:4 }}>Produtos</div>
-                          <div style={{ fontSize:20, fontWeight:800, color:dep.cor }}>{totalProdutos}</div>
+                          <div style={{ fontSize:9, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:3 }}>Produtos</div>
+                          <div style={{ fontSize:17, fontWeight:800, color:dep.cor }}>{totalProdutos}</div>
                         </div>
                         <div style={{ padding:"12px 16px" }}>
-                          <div style={{ fontSize:10, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:4 }}>Unidades</div>
-                          <div style={{ fontSize:20, fontWeight:800, color:dep.cor }}>{totalUnidades}</div>
+                          <div style={{ fontSize:9, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:3 }}>Unidades</div>
+                          <div style={{ fontSize:17, fontWeight:800, color:dep.cor }}>{totalUnidades}</div>
                         </div>
                       </div>
                       <div style={{ display:"flex", borderTop:"1px solid #f1f5f9" }}>
@@ -6349,10 +6355,12 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                   // Criar entradas iniciais: saldo ML atual + todas as saídas que ocorreram
                   var movsIniciais = [];
                   var produtosUpd = prodAtual.map(function(p) {
-                    var mlbs = [p.mlbVinculado].concat(p.mlbsVinculados||[]).filter(Boolean);
-                    // Soma vendas de todos os MLB do produto
+                    // Deduplicate MLBs to avoid double counting
+                    var mlbsRaw = [p.mlbVinculado].concat(p.mlbsVinculados||[]).filter(Boolean);
+                    var mlbs = mlbsRaw.filter(function(m,i){ return mlbsRaw.indexOf(m)===i; });
+                    // Soma vendas de todos os MLB únicos do produto
                     var totalSaidas = mlbs.reduce(function(s,m){ return s+(vendasPorMlb[m]||0); },0);
-                    // Saldo atual no ML
+                    // Saldo atual no ML (soma dos estoques de cada MLB único)
                     var saldoAtualMl = mlbs.reduce(function(s,m){ return s+(saldoMlb[m]||0); },0);
                     // Se tem MLB, usa saldo ML + saídas; senão usa estoqueAtual cadastrado
                     var saldoInicial = mlbs.length>0 ? (saldoAtualMl + totalSaidas) : parseInt(p.estoqueAtual||0);
@@ -6440,21 +6448,21 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
             />
             </div>
           </div>
-          <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, flexWrap:"wrap", marginTop:12 }}>
+          <div style={{ display:"flex", gap:7, alignItems:"center", marginBottom:8, flexWrap:"wrap", marginTop:12 }}>
             <div style={{ position:"relative", flex:1, minWidth:220 }}>
               <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
               <input value={searchEstoque} onChange={function(e){setSearchEstoque(e.target.value);}} placeholder="Buscar por produto, SKU, motivo..."
                 style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px 8px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
             </div>
             <select value={filterDepositoEst} onChange={function(e){setFilterDepositoEst(e.target.value);}}
-              style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 12px", borderRadius:8, fontSize:12 }}>
+              style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 8px", borderRadius:8, fontSize:12 }}>
               <option value="todos">Todos os depósitos</option>
               {depositos.map(function(d){ return <option key={d.id} value={d.id}>{d.icone} {d.nome}</option>; })}
               <option value="sem_deposito">Sem depósito</option>
             </select>
           </div>
           {depositos.length > 0 && (
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10, marginBottom:16 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:7, marginBottom:8 }}>
               {depositos.map(function(dep){
                 var movsDep = movEstoque.filter(function(m){return m.depositoId===dep.id;});
                 var entradas = movsDep.filter(function(m){return m.tipo==="entrada";}).reduce(function(s,m){return s+m.qtd;},0);
@@ -6466,7 +6474,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                       <div style={{ width:32, height:32, borderRadius:8, background:dep.cor, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>{dep.icone}</div>
                       <div style={{ fontWeight:700, fontSize:13, color:"#0f172a" }}>{dep.nome}</div>
                     </div>
-                    <div style={{ fontSize:20, fontWeight:800, color:dep.cor, marginBottom:4 }}>{totalAtual} un</div>
+                    <div style={{ fontSize:17, fontWeight:800, color:dep.cor, marginBottom:4 }}>{totalAtual} un</div>
                     <div style={{ display:"flex", gap:8, fontSize:11 }}>
                       <span style={{ color:"#15803d" }}>↑ {entradas}</span>
                       <span style={{ color:"#dc2626" }}>↓ {saidas}</span>
@@ -6509,11 +6517,11 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                       var isEntrada = m.tipo==="entrada";
                       return (
                         <tr key={m.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
-                          <td style={{ padding:"10px 14px", fontSize:11, color:"#64748b", whiteSpace:"nowrap" }}>
+                          <td style={{ padding:"6px 9px", fontSize:11, color:"#64748b", whiteSpace:"nowrap" }}>
                             <div>{fmtDate(m.data)}</div><div style={{ fontSize:10, color:"#94a3b8" }}>{m.hora}</div>
                           </td>
-                          <td style={{ padding:"10px 14px", fontSize:12, color:"#0f172a", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{prod?.titulo||"—"}</td>
-                          <td style={{ padding:"10px 14px", fontSize:11, color:"#64748b", fontFamily:"monospace" }}>{prod?.sku||"—"}</td>
+                          <td style={{ padding:"7px 10px", fontSize:11, color:"#0f172a", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{prod?.titulo||"—"}</td>
+                          <td style={{ padding:"6px 9px", fontSize:11, color:"#64748b", fontFamily:"monospace" }}>{prod?.sku||"—"}</td>
                           <td style={{ padding:"10px 14px" }}>
                             {dep ? <span style={{ fontSize:12, fontWeight:600, color:dep.cor }}>{dep.icone} {dep.nome}</span>
                                  : <span style={{ fontSize:12, color:"#94a3b8" }}>—</span>}
@@ -6524,8 +6532,8 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                             </span>
                           </td>
                           <td style={{ padding:"10px 14px", fontSize:14, fontWeight:800, color:isEntrada?"#15803d":"#dc2626" }}>{isEntrada?"+":"-"}{m.qtd}</td>
-                          <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{m.motivo||"—"}</td>
-                          <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{m.preco?("R$ "+m.preco.toFixed(2).replace(".",",")):"—"}</td>
+                          <td style={{ padding:"7px 10px", fontSize:11, color:"#64748b" }}>{m.motivo||"—"}</td>
+                          <td style={{ padding:"7px 10px", fontSize:11, color:"#64748b" }}>{m.preco?("R$ "+m.preco.toFixed(2).replace(".",",")):"—"}</td>
                         </tr>
                       );
                     })}
@@ -6579,7 +6587,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
         <div>
           {/* Filtros e ações */}
           {/* Toolbar Cadastros: busca centro | ações direita */}
-          <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
+          <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:8, flexWrap:"wrap" }}>
             {/* Busca — centro */}
             <div style={{ position:"relative", flex:1, minWidth:180 }}>
               <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
@@ -6614,7 +6622,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
           </div>
 
           {/* Filtro por tipo */}
-          <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
+          <div style={{ display:"flex", gap:6, marginBottom:8, flexWrap:"wrap" }}>
             {[
               { key:"todos",                label:"Todos",              icon:"🗂️" },
               { key:"Fornecedor",           label:"Fornecedores",       icon:"🏭" },
@@ -6629,7 +6637,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
               if (count === 0 && t.key !== "todos") return null;
               return (
                 <button key={t.key} onClick={function(){ setFiltroTipo(t.key); }}
-                  style={{ padding:"6px 14px", borderRadius:20, border: active ? "2px solid #0f172a" : "1px solid #e2e8f0",
+                  style={{ padding:"4px 10px", borderRadius:20, border: active ? "2px solid #0f172a" : "1px solid #e2e8f0",
                     background: active ? "#0f172a" : "#f8fafc", color: active ? "#fff" : "#64748b",
                     fontWeight:600, fontSize:12, cursor:"pointer" }}>
                   {t.icon} {t.label} <span style={{ opacity:0.7, fontSize:11 }}>({count})</span>
@@ -6640,9 +6648,9 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
 
           {/* Cards de ação rápida para criar */}
           {fornecedores.length === 0 && (
-            <div style={{ marginBottom:20 }}>
+            <div style={{ marginBottom:10 }}>
               <div style={{ fontSize:13, color:"#64748b", marginBottom:12, fontWeight:600 }}>Criar novo cadastro:</div>
-              <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+              <div style={{ display:"flex", gap:7, flexWrap:"wrap" }}>
                 {[
                   { tipo:"Fornecedor",           icon:"🏭", cor:"#0891b2" },
                   { tipo:"Cliente",              icon:"🧑‍💼", cor:"#15803d" },
@@ -7148,9 +7156,9 @@ function PainelIAPagamentos({ contasPagar=[], contasBancarias=[], lancamentos=[]
   ];
 
   return (
-    <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"24px 28px", marginBottom:20, boxShadow:"0 1px 3px rgba(0,0,0,.06)" }}>
+    <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"24px 28px", marginBottom:10, boxShadow:"0 1px 3px rgba(0,0,0,.06)" }}>
       {/* Header */}
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, marginBottom:16 }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:7, marginBottom:8 }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <div style={{ width:44, height:44, borderRadius:12, background:"linear-gradient(135deg,#667eea,#764ba2)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>✦</div>
           <div>
@@ -7166,7 +7174,7 @@ function PainelIAPagamentos({ contasPagar=[], contasBancarias=[], lancamentos=[]
       </div>
 
       {/* Dashboard de situação atual */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:8, marginBottom:16 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:8, marginBottom:8 }}>
         {[
           { label:"Saldo em Caixa",   value: "R$ " + saldoTotal.toFixed(2).replace(".",","),       color: saldoTotal > 0 ? "#15803d" : "#dc2626", bg: saldoTotal > 0 ? "#f0fdf4" : "#fef2f2" },
           { label:"Total Pendente",   value: "R$ " + totalPendente.toFixed(2).replace(".",","),    color: "#d97706", bg:"#fffbeb" },
@@ -7184,7 +7192,7 @@ function PainelIAPagamentos({ contasPagar=[], contasBancarias=[], lancamentos=[]
       </div>
 
       {/* Cards de situação */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:10, marginBottom:20 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:7, marginBottom:10 }}>
         {[
           { label:"Saldo Total", value:"R$ " + saldoTotal.toFixed(2).replace(".",","), color: saldoTotal>=0?"#15803d":"#dc2626", bg: saldoTotal>=0?"#f0fdf4":"#fef2f2" },
           { label:"Vencidas", value: contasVencidas.length + " contas", sub:"R$ " + totalVencido.toFixed(2).replace(".",","), color:"#dc2626", bg:"#fef2f2" },
@@ -7203,12 +7211,12 @@ function PainelIAPagamentos({ contasPagar=[], contasBancarias=[], lancamentos=[]
       </div>
 
       {/* Abas */}
-      <div style={{ display:"flex", gap:4, marginBottom:20, background:"#f1f5f9", padding:4, borderRadius:10, flexWrap:"wrap" }}>
+      <div style={{ display:"flex", gap:4, marginBottom:10, background:"#f1f5f9", padding:4, borderRadius:10, flexWrap:"wrap" }}>
         {ABAS.map(function(a) {
           var active = aba === a.key;
           return (
             <button key={a.key} onClick={function(){ setAba(a.key); setState("idle"); setResult(null); setErrorMsg(""); }}
-              style={{ flex:1, padding:"8px 12px", borderRadius:8, border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight: active?700:500,
+              style={{ flex:1, padding:"5px 8px", borderRadius:8, border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight: active?700:500,
                 background: active?"#fff":"transparent", color: active?"#0f172a":"#94a3b8",
                 boxShadow: active?"0 1px 3px rgba(0,0,0,.08)":"none", whiteSpace:"nowrap" }}>
               {a.label}
@@ -7219,7 +7227,7 @@ function PainelIAPagamentos({ contasPagar=[], contasBancarias=[], lancamentos=[]
 
       {/* Erro */}
       {state === "error" && (
-        <div style={{ marginBottom:16 }}>
+        <div style={{ marginBottom:8 }}>
           <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"12px 16px", color:"#dc2626", fontSize:13, marginBottom:10 }}>⚠ {errorMsg}</div>
           <button onClick={function(){ setState("idle"); }} style={{ background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", fontWeight:600, padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13 }}>Voltar</button>
         </div>
@@ -7240,7 +7248,7 @@ function PainelIAPagamentos({ contasPagar=[], contasBancarias=[], lancamentos=[]
       {/* ── ABA: PRIORIDADE ── */}
       {state === "idle" && aba === "prioridade" && (
         <div>
-          <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:10, padding:"14px 16px", marginBottom:14 }}>
+          <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:10, padding:"14px 16px", marginBottom:8 }}>
             <div style={{ fontWeight:700, fontSize:13, color:"#0369a1", marginBottom:4 }}>🤖 Análise automática ativada</div>
             <div style={{ fontSize:12, color:"#0369a1" }}>
               Usando saldo real: <strong>R$ {saldoTotal.toFixed(2).replace(".",",")}</strong> em {contasBancarias.length} conta(s) bancária(s) · {contasPendentes.length} contas pendentes para analisar.
@@ -7257,16 +7265,16 @@ function PainelIAPagamentos({ contasPagar=[], contasBancarias=[], lancamentos=[]
       {state === "idle" && aba === "emprestimo" && (
         <div>
           {contasVencidas.length === 0 && contasProtestadas.length === 0 && (
-            <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:10, padding:"12px 16px", marginBottom:16, fontSize:13, color:"#15803d" }}>
+            <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:10, padding:"12px 16px", marginBottom:8, fontSize:13, color:"#15803d" }}>
               ✓ Nenhuma conta vencida ou protestada. A análise vai considerar suas contas pendentes.
             </div>
           )}
           {(contasVencidas.length > 0 || contasProtestadas.length > 0) && (
-            <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"12px 16px", marginBottom:16, fontSize:13, color:"#dc2626" }}>
+            <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"12px 16px", marginBottom:8, fontSize:13, color:"#dc2626" }}>
               🚨 {contasVencidas.length} conta(s) vencida(s) e {contasProtestadas.length} protestada(s) — custo total de encargos: R$ {totalEncargos.toFixed(2).replace(".",",")}
             </div>
           )}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:16 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:10 }}>
             <div>
               <div style={{ fontSize:11, color:"#94a3b8", marginBottom:6, fontWeight:600, textTransform:"uppercase" }}>Valor (deixe vazio para usar sugerido)</div>
               <input type="number" value={valorEmprestimo} onChange={function(e){ setValorEmprestimo(e.target.value); }}
@@ -7289,18 +7297,18 @@ function PainelIAPagamentos({ contasPagar=[], contasBancarias=[], lancamentos=[]
             var parcela = v * t / (1 - Math.pow(1+t, -p));
             var custo = parcela * p;
             return (
-              <div style={{ background:"#f8fafc", borderRadius:10, padding:"12px 14px", marginBottom:16, display:"flex", gap:20 }}>
+              <div style={{ background:"#f8fafc", borderRadius:10, padding:"12px 14px", marginBottom:8, display:"flex", gap:20 }}>
                 <div>
                   <div style={{ fontSize:11, color:"#94a3b8" }}>Parcela estimada</div>
-                  <div style={{ fontSize:16, fontWeight:800, color:"#0f172a" }}>R$ {parcela.toFixed(2).replace(".",",")}/mês</div>
+                  <div style={{ fontSize:14, fontWeight:800, color:"#0f172a" }}>R$ {parcela.toFixed(2).replace(".",",")}/mês</div>
                 </div>
                 <div>
                   <div style={{ fontSize:11, color:"#94a3b8" }}>Custo total</div>
-                  <div style={{ fontSize:16, fontWeight:800, color:"#dc2626" }}>R$ {custo.toFixed(2).replace(".",",")}</div>
+                  <div style={{ fontSize:14, fontWeight:800, color:"#dc2626" }}>R$ {custo.toFixed(2).replace(".",",")}</div>
                 </div>
                 <div>
                   <div style={{ fontSize:11, color:"#94a3b8" }}>Juros totais</div>
-                  <div style={{ fontSize:16, fontWeight:800, color:"#d97706" }}>R$ {(custo - v).toFixed(2).replace(".",",")}</div>
+                  <div style={{ fontSize:14, fontWeight:800, color:"#d97706" }}>R$ {(custo - v).toFixed(2).replace(".",",")}</div>
                 </div>
               </div>
             );
@@ -7315,7 +7323,7 @@ function PainelIAPagamentos({ contasPagar=[], contasBancarias=[], lancamentos=[]
       {/* ── ABA: CONSULTOR CFO ── */}
       {state === "idle" && aba === "consultor" && (
         <div>
-          <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:10, padding:"12px 16px", marginBottom:16, fontSize:13, color:"#0369a1" }}>
+          <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:10, padding:"12px 16px", marginBottom:8, fontSize:13, color:"#0369a1" }}>
             🧠 Faça qualquer pergunta sobre sua situação financeira. O CFO virtual analisará seus dados reais e dará orientações práticas.
           </div>
           <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:12 }}>
@@ -7351,8 +7359,8 @@ function PainelIAPagamentos({ contasPagar=[], contasBancarias=[], lancamentos=[]
 
       {/* ── RESULTADO: PRIORIDADE ── */}
       {state === "done" && result && aba === "prioridade" && (
-        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-          <div style={{ background:"linear-gradient(135deg,#667eea22,#764ba222)", border:"1px solid #667eea44", borderRadius:12, padding:"14px 18px" }}>
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          <div style={{ background:"linear-gradient(135deg,#667eea22,#764ba222)", border:"1px solid #667eea44", borderRadius:12, padding:"10px 14px" }}>
             <div style={{ fontSize:13, color:"#0f172a", lineHeight:1.6 }}>{result.resumo}</div>
           </div>
           {result.alerta_critico && result.alerta_critico !== "null" && (
@@ -7387,7 +7395,7 @@ function PainelIAPagamentos({ contasPagar=[], contasBancarias=[], lancamentos=[]
               })}
             </div>
           </div>
-          <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:12, padding:"14px 18px" }}>
+          <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:12, padding:"10px 14px" }}>
             <div style={{ fontSize:11, color:"#92400e", fontWeight:700, textTransform:"uppercase", marginBottom:6 }}>✦ Recomendação Final</div>
             <div style={{ fontSize:13, color:"#1c1917", lineHeight:1.6 }}>{result.recomendacao_final}</div>
           </div>
@@ -7397,11 +7405,11 @@ function PainelIAPagamentos({ contasPagar=[], contasBancarias=[], lancamentos=[]
 
       {/* ── RESULTADO: EMPRÉSTIMO ── */}
       {state === "done" && result && aba === "emprestimo" && (
-        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
           <div style={{ background: result.viavel ? "#f0fdf4" : "#fef2f2", border:"1px solid " + (result.viavel ? "#bbf7d0" : "#fecaca"), borderRadius:12, padding:"16px 20px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <div>
               <div style={{ fontSize:11, color: result.viavel?"#15803d":"#dc2626", fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>Veredito da IA</div>
-              <div style={{ fontSize:20, fontWeight:800, color: result.viavel?"#15803d":"#dc2626" }}>{result.viavel ? "✅ Empréstimo Recomendado" : "⚠️ Cautela — Avalie Alternativas"}</div>
+              <div style={{ fontSize:17, fontWeight:800, color: result.viavel?"#15803d":"#dc2626" }}>{result.viavel ? "✅ Empréstimo Recomendado" : "⚠️ Cautela — Avalie Alternativas"}</div>
             </div>
             <div style={{ textAlign:"right" }}>
               <div style={{ fontSize:11, color:"#94a3b8", marginBottom:4 }}>Risco</div>
@@ -7416,7 +7424,7 @@ function PainelIAPagamentos({ contasPagar=[], contasBancarias=[], lancamentos=[]
               <span style={{ fontSize:17, fontWeight:800, color:"#15803d" }}>R$ {result.economia_estimada.toFixed(2).replace(".",",")}</span>
             </div>
           )}
-          <div style={{ background:"#f8fafc", borderRadius:12, padding:"14px 18px" }}>
+          <div style={{ background:"#f8fafc", borderRadius:12, padding:"10px 14px" }}>
             <div style={{ fontSize:11, color:"#94a3b8", fontWeight:700, textTransform:"uppercase", marginBottom:8 }}>📊 Custo x Benefício</div>
             <div style={{ fontSize:13, color:"#0f172a", lineHeight:1.7 }}>{result.analise_custo_beneficio}</div>
           </div>
@@ -7430,7 +7438,7 @@ function PainelIAPagamentos({ contasPagar=[], contasBancarias=[], lancamentos=[]
               <div style={{ fontSize:12, color:"#4c1d95", lineHeight:1.6 }}>{result.impacto_protesto}</div>
             </div>
           </div>
-          <div style={{ background:"#f8fafc", borderRadius:12, padding:"14px 18px" }}>
+          <div style={{ background:"#f8fafc", borderRadius:12, padding:"10px 14px" }}>
             <div style={{ fontSize:11, color:"#94a3b8", fontWeight:700, textTransform:"uppercase", marginBottom:10 }}>🔀 Alternativas ao Empréstimo</div>
             <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
               {(result.alternativas||[]).map(function(a, i) {
@@ -7438,16 +7446,16 @@ function PainelIAPagamentos({ contasPagar=[], contasBancarias=[], lancamentos=[]
               })}
             </div>
           </div>
-          <div style={{ background:"linear-gradient(135deg,#667eea22,#764ba222)", border:"1px solid #667eea44", borderRadius:12, padding:"14px 18px" }}>
+          <div style={{ background:"linear-gradient(135deg,#667eea22,#764ba222)", border:"1px solid #667eea44", borderRadius:12, padding:"10px 14px" }}>
             <div style={{ fontSize:11, color:"#4338ca", fontWeight:700, textTransform:"uppercase", marginBottom:6 }}>✦ Recomendação</div>
             <div style={{ fontSize:13, color:"#0f172a", lineHeight:1.6 }}>{result.recomendacao}</div>
           </div>
-          <div style={{ background:"#f8fafc", borderRadius:12, padding:"14px 18px" }}>
+          <div style={{ background:"#f8fafc", borderRadius:12, padding:"10px 14px" }}>
             <div style={{ fontSize:11, color:"#94a3b8", fontWeight:700, textTransform:"uppercase", marginBottom:10 }}>🗒️ Plano de Ação</div>
             <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
               {(result.plano_acao||[]).map(function(p, i) {
                 return (
-                  <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
+                  <div key={i} style={{ display:"flex", gap:7, alignItems:"flex-start" }}>
                     <div style={{ width:22, height:22, borderRadius:6, background:"#0f172a", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, flexShrink:0 }}>{i+1}</div>
                     <span style={{ fontSize:13, color:"#0f172a", lineHeight:1.5 }}>{p}</span>
                   </div>
@@ -7461,11 +7469,11 @@ function PainelIAPagamentos({ contasPagar=[], contasBancarias=[], lancamentos=[]
 
       {/* ── RESULTADO: CONSULTOR CFO ── */}
       {state === "done" && result && aba === "consultor" && (
-        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-          <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:10, padding:"10px 14px", fontSize:12, color:"#0369a1" }}>
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:10, padding:"7px 10px", fontSize:11, color:"#0369a1" }}>
             💬 "{pergunta}"
           </div>
-          <div style={{ background: situacaoBg(result.situacao), border:"1px solid " + situacaoCor(result.situacao) + "44", borderRadius:12, padding:"14px 18px" }}>
+          <div style={{ background: situacaoBg(result.situacao), border:"1px solid " + situacaoCor(result.situacao) + "44", borderRadius:12, padding:"10px 14px" }}>
             <div style={{ fontSize:11, color:situacaoCor(result.situacao), fontWeight:700, textTransform:"uppercase", marginBottom:8 }}>
               {result.situacao==="critica"?"🚨 Situação Crítica":result.situacao==="atencao"?"⚠️ Atenção Necessária":result.situacao==="estavel"?"✅ Situação Estável":"🟢 Situação Ótima"}
             </div>
@@ -7476,7 +7484,7 @@ function PainelIAPagamentos({ contasPagar=[], contasBancarias=[], lancamentos=[]
               {result.indicadores.map(function(ind, i) {
                 return (
                   <div key={i} style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 12px" }}>
-                    <div style={{ fontSize:10, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:4 }}>{ind.label}</div>
+                    <div style={{ fontSize:9, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:3 }}>{ind.label}</div>
                     <div style={{ fontSize:15, fontWeight:800, color:statusCor(ind.status) }}>{ind.valor}</div>
                   </div>
                 );
@@ -7484,12 +7492,12 @@ function PainelIAPagamentos({ contasPagar=[], contasBancarias=[], lancamentos=[]
             </div>
           )}
           {(result.acoes_imediatas||[]).length > 0 && (
-            <div style={{ background:"#f8fafc", borderRadius:12, padding:"14px 18px" }}>
+            <div style={{ background:"#f8fafc", borderRadius:12, padding:"10px 14px" }}>
               <div style={{ fontSize:11, color:"#94a3b8", fontWeight:700, textTransform:"uppercase", marginBottom:10 }}>⚡ Ações Imediatas</div>
               <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                 {result.acoes_imediatas.map(function(a, i) {
                   return (
-                    <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
+                    <div key={i} style={{ display:"flex", gap:7, alignItems:"flex-start" }}>
                       <div style={{ width:22, height:22, borderRadius:6, background:"linear-gradient(135deg,#667eea,#764ba2)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, flexShrink:0 }}>{i+1}</div>
                       <span style={{ fontSize:13, color:"#0f172a", lineHeight:1.5 }}>{a}</span>
                     </div>
@@ -7555,7 +7563,7 @@ function ModalTransferencia({ contasBancarias, onConfirm, onClose }) {
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:24 }}>
       <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:480, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
         {/* Header */}
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
           <div>
             <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>⇄ Transferência entre Contas</div>
             <div style={{ fontSize:12, color:"#94a3b8", marginTop:3 }}>Mova valores entre suas contas bancárias</div>
@@ -7564,7 +7572,7 @@ function ModalTransferencia({ contasBancarias, onConfirm, onClose }) {
         </div>
 
         {/* Seleção visual de contas */}
-        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:10 }}>
           <div style={{ flex:1 }}>
             <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:6 }}>De (Origem)</div>
             <select value={origem} onChange={function(e){ setOrigem(e.target.value); setErro(""); }}
@@ -7590,7 +7598,7 @@ function ModalTransferencia({ contasBancarias, onConfirm, onClose }) {
 
         {/* Resumo visual */}
         {contaOrigem && contaDestino && origem !== destino && (
-          <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:10, padding:"12px 16px", marginBottom:16, display:"flex", alignItems:"center", gap:12 }}>
+          <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:10, padding:"12px 16px", marginBottom:8, display:"flex", alignItems:"center", gap:12 }}>
             <div style={{ flex:1, textAlign:"center" }}>
               <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6, marginBottom:4 }}>
                 <div style={{ width:8, height:8, borderRadius:"50%", background:contaOrigem.cor||"#64748b" }} />
@@ -7610,7 +7618,7 @@ function ModalTransferencia({ contasBancarias, onConfirm, onClose }) {
         )}
 
         {/* Campos */}
-        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
           <div>
             <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:6 }}>Valor (R$) *</div>
             <input type="number" step="0.01" value={valor} onChange={function(e){ setValor(e.target.value); setErro(""); }}
@@ -7639,7 +7647,7 @@ function ModalTransferencia({ contasBancarias, onConfirm, onClose }) {
         )}
 
         {/* Ações */}
-        <div style={{ display:"flex", gap:10, marginTop:22 }}>
+        <div style={{ display:"flex", gap:7, marginTop:22 }}>
           <button onClick={onClose}
             style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"12px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
             Cancelar
@@ -7665,11 +7673,11 @@ function ModalContaBancaria({ conta, onSave, onClose }) {
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:500, padding:24 }}>
       <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:440, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
           <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>{conta ? "Editar Conta" : "Nova Conta"}</div>
           <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
         </div>
-        <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:16 }}>
+        <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:10 }}>
           <div>
             <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Nome da conta *</div>
             <input value={form.nome} onChange={e => set("nome", e.target.value)} placeholder="Ex: Mercado Pago Filial SP"
@@ -7731,16 +7739,16 @@ function ModalBaixa({ conta, contasBancarias, onConfirm, onClose }) {
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:500, padding:24 }}>
       <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:440, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
           <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>💸 Dar Baixa</div>
           <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
         </div>
-        <div style={{ background:"#f8fafc", borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
+        <div style={{ background:"#f8fafc", borderRadius:10, padding:"12px 16px", marginBottom:8 }}>
           <div style={{ fontSize:12, color:"#94a3b8", marginBottom:2 }}>Conta a pagar</div>
           <div style={{ fontSize:14, fontWeight:700, color:"#0f172a" }}>{conta.descricao}</div>
-          <div style={{ fontSize:16, fontWeight:800, color:"#dc2626", marginTop:4 }}>R$ {valorTotal.toFixed(2).replace(".",",")}</div>
+          <div style={{ fontSize:14, fontWeight:800, color:"#dc2626", marginTop:4 }}>R$ {valorTotal.toFixed(2).replace(".",",")}</div>
         </div>
-        <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:16 }}>
+        <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:10 }}>
           <div>
             <div style={{ fontSize:11, color:"#94a3b8", marginBottom:8, fontWeight:600, textTransform:"uppercase" }}>Tipo de pagamento</div>
             <div style={{ display:"flex", gap:8 }}>
@@ -7798,7 +7806,7 @@ function ModalBaixa({ conta, contasBancarias, onConfirm, onClose }) {
           </div>
           <div style={{ background: tipoPagamento==="total" ? "#f0fdf4" : "#fffbeb", border:"1px solid", borderColor: tipoPagamento==="total" ? "#bbf7d0" : "#fde68a", borderRadius:8, padding:"10px 14px" }}>
             <div style={{ fontSize:11, color:"#94a3b8", marginBottom:2 }}>Valor a ser baixado</div>
-            <div style={{ fontSize:18, fontWeight:800, color: tipoPagamento==="total" ? "#15803d" : "#d97706" }}>
+            <div style={{ fontSize:15, fontWeight:800, color: tipoPagamento==="total" ? "#15803d" : "#d97706" }}>
               R$ {valorFinal.toFixed(2).replace(".",",")}
             </div>
           </div>
@@ -7827,11 +7835,11 @@ function ModalMultiBaixa({ contas, contasBancarias, onConfirm, onClose }) {
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:500, padding:24 }}>
       <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:480, maxHeight:"90vh", overflowY:"auto", padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
           <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>💸 Baixa em Lote</div>
           <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
         </div>
-        <div style={{ background:"#f8fafc", borderRadius:10, padding:"12px 16px", marginBottom:16, maxHeight:160, overflowY:"auto" }}>
+        <div style={{ background:"#f8fafc", borderRadius:10, padding:"12px 16px", marginBottom:8, maxHeight:160, overflowY:"auto" }}>
           <div style={{ fontSize:11, color:"#94a3b8", marginBottom:8, fontWeight:600 }}>{contas.length} CONTA(S) SELECIONADA(S)</div>
           {contas.map(function(c) {
             return (
@@ -7842,11 +7850,11 @@ function ModalMultiBaixa({ contas, contasBancarias, onConfirm, onClose }) {
             );
           })}
         </div>
-        <div style={{ background:"#fef2f2", borderRadius:8, padding:"10px 14px", marginBottom:16, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <div style={{ background:"#fef2f2", borderRadius:8, padding:"10px 14px", marginBottom:8, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <span style={{ fontSize:13, fontWeight:600, color:"#dc2626" }}>Total a pagar</span>
-          <span style={{ fontSize:20, fontWeight:800, color:"#dc2626" }}>R$ {total.toFixed(2).replace(".",",")}</span>
+          <span style={{ fontSize:17, fontWeight:800, color:"#dc2626" }}>R$ {total.toFixed(2).replace(".",",")}</span>
         </div>
-        <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:16 }}>
+        <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:10 }}>
           <div>
             <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Pagar com qual conta *</div>
             {contasBancarias.length === 0 ? (
@@ -7901,11 +7909,11 @@ function ModalBaixaML({ order, paymentInfo, contasBancarias, onConfirm, onClose 
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:500, padding:24 }}>
       <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:400, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
           <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>Registrar Recebimento</div>
           <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
         </div>
-        <div style={{ background: isValorReal?"#f0fdf4":isValorCalc?"#eff6ff":"#fffbeb", borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
+        <div style={{ background: isValorReal?"#f0fdf4":isValorCalc?"#eff6ff":"#fffbeb", borderRadius:10, padding:"12px 16px", marginBottom:8 }}>
           <div style={{ fontSize:12, color:"#94a3b8", marginBottom:2 }}>Pedido #{order.id}</div>
           <div style={{ fontSize:13, color:"#0f172a", marginBottom:6, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{order.title||"—"}</div>
           <div style={{ display:"flex", gap:16, alignItems:"flex-end", flexWrap:"wrap" }}>
@@ -7929,13 +7937,13 @@ function ModalBaixaML({ order, paymentInfo, contasBancarias, onConfirm, onClose 
               <div style={{ fontSize:10, color: isValorReal?"#15803d":"#0891b2", marginBottom:2, fontWeight:600 }}>
                 {isValorReal ? "✓ Líquido real (API ML)" : "= Líquido calculado"}
               </div>
-              <div style={{ fontSize:20, fontWeight:800, color: isValorReal?"#15803d":"#0891b2" }}>
+              <div style={{ fontSize:17, fontWeight:800, color: isValorReal?"#15803d":"#0891b2" }}>
                 R$ {valor.toFixed(2).replace(".",",")}
               </div>
             </div>
           </div>
         </div>
-        <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:16 }}>
+        <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:10 }}>
           <div>
             <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Registrar na conta *</div>
             {contasBancarias.length === 0 ? (
@@ -8007,7 +8015,7 @@ function AnexosUpload({ anexos, onChange }) {
             var icon = isImg ? "🖼️" : a.tipo === "application/pdf" ? "📄" : "📎";
             var kb = (a.tamanho / 1024).toFixed(1);
             return (
-              <div key={i} style={{ display:"flex", alignItems:"center", gap:10, background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:8, padding:"8px 12px" }}>
+              <div key={i} style={{ display:"flex", alignItems:"center", gap:7, background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:8, padding:"5px 8px" }}>
                 <span style={{ fontSize:18 }}>{icon}</span>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:12, fontWeight:600, color:"#0f172a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{a.nome}</div>
@@ -8120,12 +8128,12 @@ function ModalConta({ conta, categoriasPagar, fornecedores, contasPagar, onSave,
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:400, padding:24 }}>
       <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:520, maxHeight:"90vh", overflowY:"auto", padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
 
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
           <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>{conta ? "Editar Conta" : "Nova Conta a Pagar"}</div>
           <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
         </div>
 
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10 }}>
 
           {/* Descrição */}
           <div style={{ gridColumn:"1/-1", position:"relative" }}>
@@ -8165,7 +8173,7 @@ function ModalConta({ conta, categoriasPagar, fornecedores, contasPagar, onSave,
                     </div>
                   );
                 })}
-                <div style={{ padding:"6px 14px", background:"#f8fafc", borderTop:"1px solid #f1f5f9", fontSize:11, color:"#94a3b8" }}>
+                <div style={{ padding:"4px 10px", background:"#f8fafc", borderTop:"1px solid #f1f5f9", fontSize:11, color:"#94a3b8" }}>
                   🤖 Selecione para preencher multa, juros e protesto automaticamente
                 </div>
               </div>
@@ -8218,7 +8226,7 @@ function ModalConta({ conta, categoriasPagar, fornecedores, contasPagar, onSave,
                 var active = (form.recorrencia || "unica") === key;
                 return (
                   <button key={key} onClick={function() { set("recorrencia", key); }}
-                    style={{ padding:"6px 14px", borderRadius:20, border:"none", cursor:"pointer", fontSize:12, fontWeight:600,
+                    style={{ padding:"4px 10px", borderRadius:20, border:"none", cursor:"pointer", fontSize:12, fontWeight:600,
                       background: active ? "#0f172a" : "#f1f5f9", color: active ? "#fff" : "#64748b" }}>
                     {labels[key]}
                   </button>
@@ -8250,7 +8258,7 @@ function ModalConta({ conta, categoriasPagar, fornecedores, contasPagar, onSave,
                 </div>
               </div>
               {form.totalParcelas && form.valor && form.vencimento && (
-                <div style={{ marginTop:10, background:"#eff6ff", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#1d4ed8" }}>
+                <div style={{ marginTop:10, background:"#eff6ff", borderRadius:8, padding:"5px 8px", fontSize:12, color:"#1d4ed8" }}>
                   Serão geradas {form.totalParcelas} parcelas de R$ {(parseFloat(form.valor) / parseInt(form.totalParcelas)).toFixed(2).replace(".", ",")} cada
                 </div>
               )}
@@ -8271,13 +8279,13 @@ function ModalConta({ conta, categoriasPagar, fornecedores, contasPagar, onSave,
               else{var m=mesesMap[form.recorrencia]||1;dataAt=new Date(dataAt);dataAt.setMonth(dataAt.getMonth()+m);}
             }
             return (
-              <div style={{ background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#1d4ed8", fontWeight:600, marginBottom:4 }}>
+              <div style={{ background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:8, padding:"5px 8px", fontSize:12, color:"#1d4ed8", fontWeight:600, marginBottom:4 }}>
                 ℹ️ Serão geradas <strong>{count} ocorrências</strong> automaticamente (cobertura de 2 anos a partir do primeiro vencimento)
               </div>
             );
           })()}
           {false && form.recorrencia && form.recorrencia !== "unica" && form.recorrencia !== "parcelada" && form.vencimento && (
-            <div style={{ gridColumn:"1/-1", background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#15803d" }}>
+            <div style={{ gridColumn:"1/-1", background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:8, padding:"5px 8px", fontSize:12, color:"#15803d" }}>
               Esta conta se repetirá automaticamente — a próxima será criada ao dar baixa nesta.
             </div>
           )}
@@ -8289,7 +8297,7 @@ function ModalConta({ conta, categoriasPagar, fornecedores, contasPagar, onSave,
               <div>
                 <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Tipo Multa</div>
                 <select value={form.multaTipo || "%"} onChange={function(e){ set("multaTipo", e.target.value); }}
-                  style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 10px", borderRadius:8, fontSize:13 }}>
+                  style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 8px", borderRadius:8, fontSize:13 }}>
                   <option value="%">%</option>
                   <option value="R$">R$</option>
                 </select>
@@ -8297,12 +8305,12 @@ function ModalConta({ conta, categoriasPagar, fornecedores, contasPagar, onSave,
               <div>
                 <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Multa ({form.multaTipo||"%"})</div>
                 <input type="number" step="0.01" value={form.multaPct || ""} onChange={function(e){ set("multaPct", e.target.value); }} placeholder={form.multaTipo==="%"?"Ex: 2":"Ex: 10,00"}
-                  style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
+                  style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"5px 8px", borderRadius:8, fontSize:13, outline:"none" }} />
               </div>
               <div>
                 <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Tipo Juros</div>
                 <select value={form.jurosTipo || "%"} onChange={function(e){ set("jurosTipo", e.target.value); }}
-                  style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 10px", borderRadius:8, fontSize:13 }}>
+                  style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 8px", borderRadius:8, fontSize:13 }}>
                   <option value="%">% ao dia</option>
                   <option value="R$">R$ ao dia</option>
                 </select>
@@ -8310,33 +8318,33 @@ function ModalConta({ conta, categoriasPagar, fornecedores, contasPagar, onSave,
               <div>
                 <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Juros/dia ({form.jurosTipo||"%"})</div>
                 <input type="number" step="0.001" value={form.jurosDia || ""} onChange={function(e){ set("jurosDia", e.target.value); }} placeholder={form.jurosTipo==="%"?"Ex: 0.033":"Ex: 1,50"}
-                  style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
+                  style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"5px 8px", borderRadius:8, fontSize:13, outline:"none" }} />
               </div>
             </div>
           </div>
 
           {/* Protesto */}
           <div style={{ gridColumn:"1/-1", background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"14px" }}>
-            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom: form.temProtesto ? 10 : 0 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom: form.temProtesto ? 10 : 0 }}>
               <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer" }}>
                 <input type="checkbox" checked={!!form.temProtesto} onChange={function(e){ set("temProtesto", e.target.checked); }} />
                 <span style={{ fontSize:13, fontWeight:700, color:"#7c3aed" }}>⚖️ Sujeito a Protesto</span>
               </label>
             </div>
             {form.temProtesto && (
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginTop:8 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:7, marginTop:8 }}>
                 <div>
                   <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Dias para Protesto (após venc.)</div>
                   <input type="number" min="1" value={form.diasProtesto || ""} onChange={function(e){ set("diasProtesto", e.target.value); }} placeholder="Ex: 5"
-                    style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
+                    style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"5px 8px", borderRadius:8, fontSize:13, outline:"none" }} />
                 </div>
                 <div>
                   <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Cartório</div>
                   <input value={form.cartorio || ""} onChange={function(e){ set("cartorio", e.target.value); }} placeholder="Nome do cartório (opcional)"
-                    style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
+                    style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"5px 8px", borderRadius:8, fontSize:13, outline:"none" }} />
                 </div>
                 {form.vencimento && form.diasProtesto && (
-                  <div style={{ gridColumn:"1/-1", background:"#fef2f2", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#dc2626" }}>
+                  <div style={{ gridColumn:"1/-1", background:"#fef2f2", borderRadius:8, padding:"5px 8px", fontSize:12, color:"#dc2626" }}>
                     ⚠️ Protesto previsto para: {(function(){
                       var d = new Date(form.vencimento + "T00:00:00");
                       d.setDate(d.getDate() + parseInt(form.diasProtesto||0));
@@ -8890,7 +8898,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
   return (
     <div>
       {/* Sub-tabs */}
-      <div style={{ display:"flex", gap:2, marginBottom:20, background:"#f1f5f9", padding:4, borderRadius:10, width:"fit-content", flexWrap:"wrap" }}>
+      <div style={{ display:"flex", gap:2, marginBottom:10, background:"#f1f5f9", padding:4, borderRadius:10, width:"fit-content", flexWrap:"wrap" }}>
         {[
           { key:"resumo",  label:"📊 Resumo",           perm:"fin_resumo" },
           { key:"fluxo",   label:"📈 Fluxo de Caixa",   perm:"fin_fluxo" },
@@ -8929,7 +8937,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
             ].map(k => (
               <div key={k.label} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"16px 18px", boxShadow:"0 1px 2px rgba(0,0,0,.04)" }}>
                 <div style={{ fontSize:11, color:"#94a3b8", marginBottom:6, fontWeight:600, textTransform:"uppercase", letterSpacing:0.8 }}>{k.label}</div>
-                <div style={{ fontSize:20, fontWeight:800, color:k.color }}>{k.value}</div>
+                <div style={{ fontSize:17, fontWeight:800, color:k.color }}>{k.value}</div>
                 <div style={{ fontSize:11, color:"#94a3b8", marginTop:4 }}>{k.desc}</div>
               </div>
             ))}
@@ -8937,8 +8945,8 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
 
           {/* Saldo por conta */}
           {contasBancarias.length > 0 && (
-            <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"20px 24px" }}>
-              <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", marginBottom:14 }}>🏦 Saldo por Conta</div>
+            <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"12px 16px" }}>
+              <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", marginBottom:8 }}>🏦 Saldo por Conta</div>
               <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))", gap:10 }}>
                 {contasBancarias.map(cb => {
                   const saldo = getSaldoConta(cb.id);
@@ -8949,7 +8957,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
                         <div style={{ fontSize:12, fontWeight:700, color:"#0f172a" }}>{cb.nome}</div>
                       </div>
                       <div style={{ fontSize:11, color:"#94a3b8", marginBottom:4 }}>{cb.tipo}</div>
-                      <div style={{ fontSize:18, fontWeight:800, color:saldo>=0?"#15803d":"#dc2626" }}>{fmt(saldo)}</div>
+                      <div style={{ fontSize:15, fontWeight:800, color:saldo>=0?"#15803d":"#dc2626" }}>{fmt(saldo)}</div>
                     </div>
                   );
                 })}
@@ -8975,8 +8983,8 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
 
           {/* Gráfico */}
           {meses.length > 0 && (
-            <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"20px 24px" }}>
-              <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", marginBottom:16 }}>Entradas vs Saídas por Mês</div>
+            <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"12px 16px" }}>
+              <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", marginBottom:8 }}>Entradas vs Saídas por Mês</div>
               <div style={{ display:"flex", gap:8, alignItems:"flex-end", height:140 }}>
                 {meses.map(mes => {
                   const rec = recebPorMes[mes]||0;
@@ -9127,7 +9135,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
         return (
           <div>
             {/* Filtro de período */}
-            <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px", marginBottom:14 }}>
+            <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px", marginBottom:8 }}>
               <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", marginBottom:8 }}>
                 <span style={{ fontSize:12, color:"#64748b", fontWeight:600 }}>📅 Período:</span>
                 <BotoesPeriodo de={fluxoDe} ate={fluxoAte} onChangeDe={setFluxoDe} onChangeAte={setFluxoAte} />
@@ -9149,7 +9157,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
             <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:10 }}>
               <BotaoExportar onCSV={function(){exportarFluxo("csv");}} onXLS={function(){exportarFluxo("xls");}} onPDF={function(){exportarFluxo("pdf");}} />
             </div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:16 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:8, marginBottom:10 }}>
               {[
                 { label:"Total Entradas", value:fmt(totalEntradas), color:"#15803d", bg:"#f0fdf4" },
                 { label:"Total Saídas",   value:fmt(totalSaidas),   color:"#dc2626", bg:"#fef2f2" },
@@ -9157,12 +9165,12 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
               ].map(k => (
                 <div key={k.label} style={{ background:k.bg, borderRadius:12, padding:"16px 18px", border:`1px solid ${k.bg}` }}>
                   <div style={{ fontSize:11, color:k.color, fontWeight:700, textTransform:"uppercase", marginBottom:6 }}>{k.label}</div>
-                  <div style={{ fontSize:20, fontWeight:800, color:k.color }}>{k.value}</div>
+                  <div style={{ fontSize:17, fontWeight:800, color:k.color }}>{k.value}</div>
                 </div>
               ))}
             </div>
 
-            <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:10, padding:"10px 14px", marginBottom:14, fontSize:12, color:"#92400e" }}>
+            <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:10, padding:"10px 14px", marginBottom:8, fontSize:12, color:"#92400e" }}>
               💡 Itens marcados como <b>[PREVISTO]</b> são futuros — contas a vencer e recebimentos ML com data prevista.
             </div>
 
@@ -9408,7 +9416,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
               </>
             );
           })()}
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, marginBottom:14 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:10 }}>
             {[
               { label:"Pendente", value:fmt(contasPagar.filter(c=>c.status==="Pendente").reduce((s,c)=>s+parseFloat(c.valor||0),0)), color:"#d97706", bg:"#fffbeb" },
               { label:"Vencido",  value:fmt(totalVencido), color:"#dc2626", bg:"#fef2f2" },
@@ -9416,13 +9424,13 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
             ].map(k => (
               <div key={k.label} style={{ background:k.bg, borderRadius:10, padding:"12px 16px" }}>
                 <div style={{ fontSize:11, color:k.color, fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>{k.label}</div>
-                <div style={{ fontSize:18, fontWeight:800, color:k.color }}>{k.value}</div>
+                <div style={{ fontSize:15, fontWeight:800, color:k.color }}>{k.value}</div>
               </div>
             ))}
           </div>
           {selecionadas.length > 0 && (
             <div style={{ background:"#0f172a", borderRadius:12, padding:"12px 16px", marginBottom:10 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:7, flexWrap:"wrap" }}>
                 <span style={{ color:"#fff", fontWeight:700, fontSize:13 }}>{selecionadas.length} conta(s) selecionada(s)</span>
                 <span style={{ color:"#94a3b8", fontSize:12 }}>
                   Total: {fmt(contasFiltradas.filter(function(c) { return selecionadas.includes(c.id); }).reduce(function(s,c) { return s + parseFloat(c.valor||0); }, 0))}
@@ -9533,7 +9541,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
                           );
                         })()}
                       </td>
-                      <td style={{ padding:"10px 14px", fontSize:13, color:"#0f172a", fontWeight:500 }}>
+                      <td style={{ padding:"7px 10px", fontSize:12, color:"#0f172a", fontWeight:500 }}>
                         <div>{c.descricao}
                           {isVencendo&&<span style={{ fontSize:10, background:"#fde68a", color:"#92400e", padding:"1px 6px", borderRadius:4, marginLeft:6, fontWeight:600 }}>Vence em {days}d</span>}
                         </div>
@@ -9550,7 +9558,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
                           );
                         })()}
                       </td>
-                      <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{c.categoria}</td>
+                      <td style={{ padding:"7px 10px", fontSize:11, color:"#64748b" }}>{c.categoria}</td>
                       <td style={{ padding:"10px 14px" }}>
                         {(function() {
                           var valor = parseFloat(c.valor || 0);
@@ -9576,7 +9584,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
                           );
                         })()}
                       </td>
-                      <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{fmtDate(c.vencimento)}</td>
+                      <td style={{ padding:"7px 10px", fontSize:11, color:"#64748b" }}>{fmtDate(c.vencimento)}</td>
                       <td style={{ padding:"10px 14px" }}>
                         <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
                           <span style={{ fontSize:11, fontWeight:600, color:statusColor(c.status), background:statusBg(c.status), padding:"3px 8px", borderRadius:6, display:"inline-block" }}>{c.status}</span>
@@ -9594,7 +9602,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
                           })()}
                         </div>
                       </td>
-                      <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>
+                      <td style={{ padding:"7px 10px", fontSize:11, color:"#64748b" }}>
                         {contaBanc ? <span style={{ display:"flex", alignItems:"center", gap:4 }}><div style={{ width:8, height:8, borderRadius:"50%", background:contaBanc.cor }} />{contaBanc.nome}</span> : "—"}
                       </td>
                       <td style={{ padding:"10px 14px" }}>
@@ -9703,7 +9711,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
         return (
         <div>
           {/* Cards de resumo */}
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:10, marginBottom:16 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:7, marginBottom:8 }}>
             {[
               { label:"A Receber (líq.)", value:fmt(totalLiq), color:"#0891b2", bg:"#ecfeff",
                 desc: aReceber.length + " pedido(s)" },
@@ -9713,9 +9721,9 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
               { label:"Já Registrado", value:fmt(totalRecebidoMesLiq), color:"#15803d", bg:"#f0fdf4", desc: recebidoMes.length + " entregue(s)" },
             ].map(function(k) {
               return (
-                <div key={k.label} style={{ background:k.bg, borderRadius:10, padding:"14px 18px" }}>
+                <div key={k.label} style={{ background:k.bg, borderRadius:10, padding:"10px 14px" }}>
                   <div style={{ fontSize:10, color:k.color, fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>{k.label}</div>
-                  <div style={{ fontSize:18, fontWeight:800, color:k.color }}>{k.value}</div>
+                  <div style={{ fontSize:15, fontWeight:800, color:k.color }}>{k.value}</div>
                   <div style={{ fontSize:11, color:k.color, opacity:0.7, marginTop:2 }}>{k.desc}</div>
                 </div>
               );
@@ -9724,7 +9732,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
 
           {/* Aviso sobre dados estimados */}
           {semPrevisao.length > 0 && (
-            <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:10, padding:"10px 14px", marginBottom:14, fontSize:12, color:"#92400e", display:"flex", alignItems:"center", gap:8 }}>
+            <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:10, padding:"10px 14px", marginBottom:8, fontSize:12, color:"#92400e", display:"flex", alignItems:"center", gap:8 }}>
               <span style={{ fontSize:16 }}>ℹ️</span>
               <div>
                 <strong>{semPrevisao.length} pedido(s)</strong> ainda sem dados de pagamento da API do ML — o valor líquido é estimado com ~13% de taxa.
@@ -9735,7 +9743,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
 
           {/* Alertas de liberação próxima */}
           {proximosLiberados.length > 0 && (
-            <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:10, padding:"10px 14px", marginBottom:14, display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:10, padding:"10px 14px", marginBottom:8, display:"flex", alignItems:"center", gap:10 }}>
               <span style={{ fontSize:18 }}>💰</span>
               <div>
                 <div style={{ fontWeight:700, color:"#15803d", fontSize:13 }}>{proximosLiberados.length} pagamento(s) liberando nos próximos 7 dias</div>
@@ -9760,7 +9768,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
             </div>
           </div>
           {/* Filtros */}
-          <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:10, flexWrap:"wrap" }}>
+          <div style={{ display:"flex", gap:7, alignItems:"center", marginBottom:10, flexWrap:"wrap" }}>
             <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", whiteSpace:"nowrap" }}>
               {receberVista === "recebido" ? "✅ Pedidos Registrados" : receberVista === "todos" ? "📋 Todos os Pedidos" : "📥 Pedidos a Receber"}
             </div>
@@ -9775,7 +9783,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
                 style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"7px 12px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕ Limpar</button>
             )}
           </div>
-          <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px", marginBottom:14 }}>
+          <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px", marginBottom:8 }}>
             <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", marginBottom:8 }}>
               <span style={{ fontSize:12, color:"#64748b", fontWeight:600 }}>📅 Data da venda:</span>
               <BotoesPeriodo de={receberDe} ate={receberAte} onChangeDe={setReceberDe} onChangeAte={setReceberAte} />
@@ -9795,7 +9803,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
 
           {/* Tabela */}
           {/* Filtro de visão */}
-          <div style={{ display:"flex", gap:4, marginBottom:14, background:"#f1f5f9", padding:4, borderRadius:10, width:"fit-content" }}>
+          <div style={{ display:"flex", gap:4, marginBottom:8, background:"#f1f5f9", padding:4, borderRadius:10, width:"fit-content" }}>
             {[
               { key:"areceber", label:"📥 A Receber",  count: aReceber.length },
               { key:"recebido", label:"✅ Registrados", count: recebidoMes.length },
@@ -9821,14 +9829,14 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
                 if (!window.confirm("Excluir lançamentos dos " + receberSel.length + " pedido(s) selecionados?")) return;
                 var upd = lancamentos.filter(function(l){ return !receberSel.some(function(id){ return String(l.pedidoId)===String(id); }); });
                 setLancamentos(upd); saveLS("lancamentos", upd); setReceberSel([]);
-              }} style={{ background:"#dc2626", border:"none", color:"#fff", fontWeight:700, padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+              }} style={{ background:"#dc2626", border:"none", color:"#fff", fontWeight:700, padding:"4px 10px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
                 🗑 Excluir Lançamentos
               </button>
               <button onClick={function(){ setReceberSel([]); }}
                 style={{ background:"#334155", border:"none", color:"#94a3b8", padding:"6px 12px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕ Cancelar</button>
             </div>
           )}
-          <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto", marginBottom:20 }}>
+          <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto", marginBottom:10 }}>
             <table style={{ borderCollapse:"collapse", width:"100%" }}>
               <thead>
                 <tr>
@@ -9930,11 +9938,11 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
                             onChange={function(e){ setReceberSel(e.target.checked ? [...receberSel,o.id] : receberSel.filter(function(x){return x!==o.id;})); }}
                             style={{ cursor:"pointer" }} />
                         </td>
-                        <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", fontFamily:"monospace", fontWeight:600 }}>#{o.id}</td>
-                        <td style={{ padding:"10px 14px", fontSize:12, color:"#334155", maxWidth:100, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{o.buyerName||"—"}</td>
-                        <td style={{ padding:"10px 14px", fontSize:12, color:"#0f172a", maxWidth:180, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={o.title}>{o.title||"—"}</td>
-                        <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", whiteSpace:"nowrap" }}>{fmtDate(o.date)}</td>
-                        <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", whiteSpace:"nowrap" }}>{fmt(bruto)}</td>
+                        <td style={{ padding:"7px 10px", fontSize:11, color:"#64748b", fontFamily:"monospace", fontWeight:600 }}>#{o.id}</td>
+                        <td style={{ padding:"7px 10px", fontSize:11, color:"#334155", maxWidth:100, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{o.buyerName||"—"}</td>
+                        <td style={{ padding:"7px 10px", fontSize:11, color:"#0f172a", maxWidth:180, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={o.title}>{o.title||"—"}</td>
+                        <td style={{ padding:"7px 10px", fontSize:11, color:"#64748b", whiteSpace:"nowrap" }}>{fmtDate(o.date)}</td>
+                        <td style={{ padding:"7px 10px", fontSize:11, color:"#64748b", whiteSpace:"nowrap" }}>{fmt(bruto)}</td>
                         <td style={{ padding:"10px 14px", whiteSpace:"nowrap" }}>
                           {tarifaExib > 0 ? (
                             <span style={{ fontSize:13, fontWeight:700, color:"#d97706" }}>{fmt(tarifaExib)}</span>
@@ -10025,15 +10033,15 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
                   var taxa = bruto > 0 ? ((bruto - netFinal) / bruto * 100) : 0;
                   return (
                     <tr key={o.id} style={{ background: i%2===0?"#f8fafc":"#fff" }}>
-                      <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", fontFamily:"monospace", fontWeight:600 }}>#{o.id}</td>
-                      <td style={{ padding:"10px 14px", fontSize:12, color:"#0f172a", maxWidth:260, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{o.title||"—"}</td>
-                      <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{fmtDate(o.date)}</td>
-                      <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{fmt(bruto)}</td>
+                      <td style={{ padding:"7px 10px", fontSize:11, color:"#64748b", fontFamily:"monospace", fontWeight:600 }}>#{o.id}</td>
+                      <td style={{ padding:"7px 10px", fontSize:11, color:"#0f172a", maxWidth:260, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{o.title||"—"}</td>
+                      <td style={{ padding:"7px 10px", fontSize:11, color:"#64748b" }}>{fmtDate(o.date)}</td>
+                      <td style={{ padding:"7px 10px", fontSize:11, color:"#64748b" }}>{fmt(bruto)}</td>
                       <td style={{ padding:"10px 14px" }}>
                         <div style={{ fontSize:13, fontWeight:700, color: net ? "#15803d" : "#d97706" }}>{fmt(netFinal)}</div>
                         {!net && <div style={{ fontSize:9, color:"#94a3b8", fontStyle:"italic" }}>~estimado</div>}
                       </td>
-                      <td style={{ padding:"10px 14px", fontSize:12, fontWeight:600, color: taxa > 15 ? "#dc2626" : taxa > 10 ? "#d97706" : "#15803d" }}>
+                      <td style={{ padding:"7px 10px", fontSize:11, fontWeight:600, color: taxa > 15 ? "#dc2626" : taxa > 10 ? "#d97706" : "#15803d" }}>
                         {taxa.toFixed(1)}%{!net && <span style={{ fontSize:9, color:"#94a3b8" }}> *</span>}
                       </td>
                     </tr>
@@ -10052,7 +10060,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
       {/* ── CAIXAS E BANCOS ── */}
       {finTab === "contas" && (
         <div>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
             <div style={{ fontWeight:700, fontSize:15, color:"#0f172a" }}>Contas Cadastradas</div>
             <div style={{ display:"flex", gap:8 }}>
               <BotaoExportar
@@ -10108,7 +10116,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
                     {/* Saldo */}
                     <div style={{ padding:"16px", borderBottom:"1px solid #f1f5f9" }}>
                       <div style={{ fontSize:11, color:"#94a3b8", marginBottom:4, fontWeight:600, textTransform:"uppercase", letterSpacing:0.5 }}>Saldo atual</div>
-                      <div style={{ fontSize:22, fontWeight:800, color:saldo>=0?"#15803d":"#dc2626" }}>{fmt(saldo)}</div>
+                      <div style={{ fontSize:15, fontWeight:800, color:saldo>=0?"#15803d":"#dc2626" }}>{fmt(saldo)}</div>
                       <div style={{ display:"flex", gap:12, fontSize:11, marginTop:6 }}>
                         <span style={{ color:"#15803d", fontWeight:600 }}>↑ {fmt(entradas)}</span>
                         <span style={{ color:"#dc2626", fontWeight:600 }}>↓ {fmt(saidas)}</span>
@@ -10196,7 +10204,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
                     ].map(function(t){
                       var active = extratoTipo === t.k;
                       return <button key={t.k} onClick={function(){ setExtratoTipo(t.k); setExtratoSel([]); }}
-                        style={{ padding:"5px 12px", borderRadius:20, border: active?"2px solid #0f172a":"1px solid #e2e8f0",
+                        style={{ padding:"3px 9px", borderRadius:20, border: active?"2px solid #0f172a":"1px solid #e2e8f0",
                           background: active?"#0f172a":"#f8fafc", color: active?"#fff":"#64748b",
                           fontWeight: active?700:500, fontSize:12, cursor:"pointer" }}>{t.l}</button>;
                     })}
@@ -10209,13 +10217,13 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
                     {extratoSearch && <button onClick={function(){ setExtratoSearch(""); }} style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"5px 8px", borderRadius:8, cursor:"pointer", fontSize:12 }}>✕</button>}
                   </div>
                   {extratoSel.length > 0 && (
-                    <div style={{ display:"flex", gap:8, alignItems:"center", marginTop:8, background:"#0f172a", borderRadius:8, padding:"8px 12px", flexWrap:"wrap" }}>
+                    <div style={{ display:"flex", gap:8, alignItems:"center", marginTop:8, background:"#0f172a", borderRadius:8, padding:"5px 8px", flexWrap:"wrap" }}>
                       <span style={{ color:"#fff", fontWeight:700, fontSize:12 }}>{extratoSel.length} selecionado(s)</span>
                       <button onClick={function(){
                         if (!window.confirm("Excluir " + extratoSel.length + " lançamento(s)?")) return;
                         var upd = lancamentos.filter(function(x){ return !extratoSel.includes(x.id); });
                         setLancamentos(upd); saveLS("lancamentos", upd); setExtratoSel([]);
-                      }} style={{ background:"#dc2626", border:"none", color:"#fff", fontWeight:700, padding:"5px 12px", borderRadius:6, cursor:"pointer", fontSize:12 }}>
+                      }} style={{ background:"#dc2626", border:"none", color:"#fff", fontWeight:700, padding:"3px 9px", borderRadius:6, cursor:"pointer", fontSize:12 }}>
                         🗑 Excluir Selecionados
                       </button>
                       <button onClick={function(){ setExtratoSel([]); }}
@@ -10310,9 +10318,9 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
                       const cb = contasBancarias.find(c=>c.id===l.contaBancariaId);
                       return (
                         <tr key={l.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
-                          <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{fmtDate(l.data)}</td>
-                          <td style={{ padding:"10px 14px", fontSize:13, color:"#0f172a" }}>{l.descricao}</td>
-                          <td style={{ padding:"10px 14px", fontSize:12 }}>
+                          <td style={{ padding:"7px 10px", fontSize:11, color:"#64748b" }}>{fmtDate(l.data)}</td>
+                          <td style={{ padding:"7px 10px", fontSize:12, color:"#0f172a" }}>{l.descricao}</td>
+                          <td style={{ padding:"7px 10px", fontSize:11 }}>
                             {cb ? <span style={{ display:"flex", alignItems:"center", gap:4 }}><div style={{ width:8,height:8,borderRadius:"50%",background:cb.cor }}/>{cb.nome}</span> : "—"}
                           </td>
                           <td style={{ padding:"10px 14px" }}>
@@ -10320,7 +10328,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
                               {l.tipo==="recebimento"?"↑ Entrada":"↓ Saída"}
                             </span>
                           </td>
-                          <td style={{ padding:"10px 14px", fontSize:13, fontWeight:700, color:l.tipo==="recebimento"?"#15803d":"#dc2626" }}>
+                          <td style={{ padding:"7px 10px", fontSize:12, fontWeight:700, color:l.tipo==="recebimento"?"#15803d":"#dc2626" }}>
                             {l.tipo==="recebimento"?"+":"-"}{fmt(l.valor)}
                           </td>
                         </tr>
@@ -10338,7 +10346,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
       {finTab === "config" && (
         <div style={{ maxWidth:700 }}>
           {/* Painel compacto de Impostos e Custos Fixos */}
-          <div style={{ marginBottom:24 }}>
+          <div style={{ marginBottom:10 }}>
             <div style={{ fontWeight:700, fontSize:15, color:"#0f172a", marginBottom:4 }}>Impostos e Custos Fixos</div>
             <div style={{ fontSize:12, color:"#94a3b8", marginBottom:12 }}>Usados para calcular o Lucro Real no painel principal</div>
             <ImpostosCompacto
@@ -10356,7 +10364,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
             {fornecedores.length} fornecedor(es) — aparecem no autocomplete das contas a pagar.
             Cadastre mais em <strong>🛍️ Produtos → 🏭 Fornecedores</strong>.
           </div>
-          <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:20 }}>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:10 }}>
             {fornecedores.length === 0
               ? <span style={{ fontSize:12, color:"#94a3b8" }}>Nenhum fornecedor cadastrado ainda.</span>
               : fornecedores.map(f => (
@@ -10367,13 +10375,13 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
             }
           </div>
 
-          <div style={{ fontWeight:700, fontSize:15, color:"#0f172a", marginBottom:14 }}>Categorias de Contas a Pagar</div>
-          <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"16px 20px", marginBottom:16 }}>
-            <div style={{ display:"flex", gap:8, marginBottom:14 }}>
+          <div style={{ fontWeight:700, fontSize:15, color:"#0f172a", marginBottom:8 }}>Categorias de Contas a Pagar</div>
+          <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"16px 20px", marginBottom:8 }}>
+            <div style={{ display:"flex", gap:8, marginBottom:8 }}>
               <input value={novaCat} onChange={e=>setNovaCat(e.target.value)}
                 onKeyDown={e=>e.key==="Enter"&&addCategoria()}
                 placeholder="Nova categoria..."
-                style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"5px 8px", borderRadius:8, fontSize:13, outline:"none" }} />
               <button onClick={addCategoria} disabled={!novaCat.trim()}
                 style={{ background:novaCat.trim()?"#0f172a":"#f1f5f9", border:"none", color:novaCat.trim()?"#fff":"#94a3b8", fontWeight:700, padding:"8px 16px", borderRadius:8, cursor:novaCat.trim()?"pointer":"not-allowed", fontSize:13 }}>
                 Adicionar
@@ -10381,7 +10389,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
             </div>
             <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
               {categoriasPagar.map(cat => (
-                <div key={cat} style={{ display:"flex", alignItems:"center", gap:6, background:"#f1f5f9", border:"1px solid #e2e8f0", borderRadius:20, padding:"5px 12px" }}>
+                <div key={cat} style={{ display:"flex", alignItems:"center", gap:6, background:"#f1f5f9", border:"1px solid #e2e8f0", borderRadius:20, padding:"3px 9px" }}>
                   <span style={{ fontSize:13, color:"#334155", fontWeight:500 }}>{cat}</span>
                   <button onClick={()=>removeCategoria(cat)}
                     style={{ background:"none", border:"none", color:"#94a3b8", cursor:"pointer", fontSize:12, padding:0, lineHeight:1 }}>✕</button>
@@ -10396,7 +10404,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
       {/* Modais */}
       {finTab === "ia" && (
         <div>
-          <div style={{ marginBottom:16 }}>
+          <div style={{ marginBottom:8 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
               <div>
                 <div style={{ fontWeight:800, fontSize:18, color:"#0f172a", marginBottom:4 }}>✦ Consultoria Financeira com IA</div>
@@ -10621,7 +10629,7 @@ function NfSaidaTab({ enrichedOrders, nfeSaida, setNfeSaida, loadingNfe, setLoad
   return (
     <div>
       {/* Header */}
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16, flexWrap:"wrap", gap:10 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8, flexWrap:"wrap", gap:10 }}>
         <div>
           <div style={{ fontWeight:800, fontSize:18, color:"#0f172a" }}>🧾 Notas Fiscais de Saída</div>
           <div style={{ fontSize:12, color:"#94a3b8", marginTop:2 }}>Notas fiscais emitidas pelo Mercado Livre para suas vendas</div>
@@ -10636,7 +10644,7 @@ function NfSaidaTab({ enrichedOrders, nfeSaida, setNfeSaida, loadingNfe, setLoad
 
       {/* Cards resumo */}
       {Object.keys(nfeSaida).length > 0 && (
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10, marginBottom:16 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:7, marginBottom:8 }}>
           {[
             { label:"Total buscados", value: Object.keys(nfeSaida).length, color:"#0f172a", bg:"#f8fafc" },
             { label:"Com NF emitida", value: comNF, color:"#15803d", bg:"#f0fdf4" },
@@ -10645,7 +10653,7 @@ function NfSaidaTab({ enrichedOrders, nfeSaida, setNfeSaida, loadingNfe, setLoad
             return (
               <div key={k.label} style={{ background:k.bg, borderRadius:10, padding:"12px 16px" }}>
                 <div style={{ fontSize:10, color:k.color, fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>{k.label}</div>
-                <div style={{ fontSize:22, fontWeight:800, color:k.color }}>{k.value}</div>
+                <div style={{ fontSize:15, fontWeight:800, color:k.color }}>{k.value}</div>
               </div>
             );
           })}
@@ -10681,10 +10689,10 @@ function NfSaidaTab({ enrichedOrders, nfeSaida, setNfeSaida, loadingNfe, setLoad
 
       {/* Aviso inicial */}
       {Object.keys(nfeSaida).length === 0 && (
-        <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:12, padding:"32px", textAlign:"center", marginBottom:20 }}>
+        <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:12, padding:"32px", textAlign:"center", marginBottom:10 }}>
           <div style={{ fontSize:36, marginBottom:12 }}>🧾</div>
           <div style={{ fontWeight:700, fontSize:16, color:"#0f172a", marginBottom:8 }}>Buscar Notas Fiscais do ML</div>
-          <div style={{ fontSize:13, color:"#64748b", marginBottom:16, maxWidth:500, margin:"0 auto 16px" }}>
+          <div style={{ fontSize:13, color:"#64748b", marginBottom:8, maxWidth:500, margin:"0 auto 16px" }}>
             O Mercado Livre emite notas fiscais para as vendas. Clique em "Buscar NFs no ML" para carregar os dados fiscais de cada pedido.
           </div>
           <button onClick={buscarNFs} disabled={loadingNfe}
@@ -10711,14 +10719,14 @@ function NfSaidaTab({ enrichedOrders, nfeSaida, setNfeSaida, loadingNfe, setLoad
                 var temNF = nf && !nf.semNF && (nf.numero || nf.chave);
                 return (
                   <tr key={o.id} style={{ background: i%2===0?"#f8fafc":"#fff" }}>
-                    <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", fontFamily:"monospace", fontWeight:600 }}>#{o.id}</td>
-                    <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", whiteSpace:"nowrap" }}>{fmtDate(o.date)}</td>
-                    <td style={{ padding:"10px 14px", fontSize:12, color:"#334155", maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                    <td style={{ padding:"7px 10px", fontSize:11, color:"#64748b", fontFamily:"monospace", fontWeight:600 }}>#{o.id}</td>
+                    <td style={{ padding:"7px 10px", fontSize:11, color:"#64748b", whiteSpace:"nowrap" }}>{fmtDate(o.date)}</td>
+                    <td style={{ padding:"7px 10px", fontSize:11, color:"#334155", maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                       {o.buyerName || "—"}
                       {o.buyerUF && <span style={{ marginLeft:4, fontSize:10, background:"#f1f5f9", padding:"1px 5px", borderRadius:4, color:"#64748b" }}>{o.buyerUF}</span>}
                     </td>
-                    <td style={{ padding:"10px 14px", fontSize:12, color:"#0f172a", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{o.title||"—"}</td>
-                    <td style={{ padding:"10px 14px", fontSize:13, fontWeight:700, color:"#0f172a", whiteSpace:"nowrap" }}>R$ {(o.price*o.qty).toFixed(2).replace(".",",")}</td>
+                    <td style={{ padding:"7px 10px", fontSize:11, color:"#0f172a", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{o.title||"—"}</td>
+                    <td style={{ padding:"7px 10px", fontSize:12, fontWeight:700, color:"#0f172a", whiteSpace:"nowrap" }}>R$ {(o.price*o.qty).toFixed(2).replace(".",",")}</td>
                     <td style={{ padding:"10px 14px" }}>
                       {!nf ? (
                         <span style={{ fontSize:11, color:"#94a3b8" }}>—</span>
@@ -10728,8 +10736,8 @@ function NfSaidaTab({ enrichedOrders, nfeSaida, setNfeSaida, loadingNfe, setLoad
                         <span style={{ fontSize:11, color:"#d97706", fontWeight:600 }}>⏳ Pendente</span>
                       )}
                     </td>
-                    <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>{nf?.serie || "—"}</td>
-                    <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b", whiteSpace:"nowrap" }}>{nf?.dataEmissao ? fmtDate(nf.dataEmissao.slice(0,10)) : "—"}</td>
+                    <td style={{ padding:"7px 10px", fontSize:11, color:"#64748b" }}>{nf?.serie || "—"}</td>
+                    <td style={{ padding:"7px 10px", fontSize:11, color:"#64748b", whiteSpace:"nowrap" }}>{nf?.dataEmissao ? fmtDate(nf.dataEmissao.slice(0,10)) : "—"}</td>
                     <td style={{ padding:"10px 14px" }}>
                       {nf?.chave ? (
                         <div style={{ display:"flex", alignItems:"center", gap:4 }}>
@@ -10846,7 +10854,7 @@ function BotoesPeriodo({ de, ate, onChangeDe, onChangeAte }) {
               onChangeAte(per.ate);
               setShowPicker(false);
             }}
-            style={{ padding:"5px 12px", borderRadius:20, border: isAtivo ? "2px solid #0f172a" : "1px solid #e2e8f0",
+            style={{ padding:"3px 9px", borderRadius:20, border: isAtivo ? "2px solid #0f172a" : "1px solid #e2e8f0",
               background: isAtivo ? "#0f172a" : "#f8fafc",
               color: isAtivo ? "#fff" : "#64748b",
               fontWeight: isAtivo ? 700 : 500, fontSize:12, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }}>
@@ -10858,7 +10866,7 @@ function BotoesPeriodo({ de, ate, onChangeDe, onChangeAte }) {
       {/* Seletor de mês específico */}
       <div style={{ position:"relative" }}>
         <button onClick={function(){ setShowPicker(function(v){return !v;}); }}
-          style={{ padding:"5px 12px", borderRadius:20, fontSize:12, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap",
+          style={{ padding:"3px 9px", borderRadius:20, fontSize:12, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap",
             border: ativo==="mesSel" ? "2px solid #0891b2" : "1px solid #e2e8f0",
             background: ativo==="mesSel" ? "#0891b2" : "#f8fafc",
             color: ativo==="mesSel" ? "#fff" : "#64748b",
@@ -10962,7 +10970,7 @@ function EnviosFULLTab({ produtos, listings, estoqueDepositos, depositos }) {
   return (
     <div style={{ maxWidth:1440, margin:"0 auto", padding:"24px 32px" }}>
       {/* Header */}
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
         <div>
           <div style={{ fontWeight:800, fontSize:22, color:"#0f172a", marginBottom:4 }}>⚡ Envios FULL</div>
           <div style={{ fontSize:13, color:"#94a3b8" }}>Monte caixas para envio ao centro de distribuição do Mercado Livre Full</div>
@@ -10974,7 +10982,7 @@ function EnviosFULLTab({ produtos, listings, estoqueDepositos, depositos }) {
       </div>
 
       {/* Cards resumo */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:20 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:10 }}>
         {[
           { label:"Total de Envios",  value: envios.length,        cor:"#0f172a" },
           { label:"Montando",         value: envios.filter(function(e){return e.status==="Montando";}).length,  cor:"#d97706" },
@@ -10983,16 +10991,16 @@ function EnviosFULLTab({ produtos, listings, estoqueDepositos, depositos }) {
           { label:"Total de Itens",   value: totalItens + " un",    cor:"#7c3aed" },
         ].map(function(k){
           return (
-            <div key={k.label} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"14px 18px" }}>
-              <div style={{ fontSize:10, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:4 }}>{k.label}</div>
-              <div style={{ fontSize:22, fontWeight:800, color:k.cor }}>{k.value}</div>
+            <div key={k.label} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"10px 14px" }}>
+              <div style={{ fontSize:9, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:3 }}>{k.label}</div>
+              <div style={{ fontSize:15, fontWeight:800, color:k.cor }}>{k.value}</div>
             </div>
           );
         })}
       </div>
 
       {/* Filtros */}
-      <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:16, flexWrap:"wrap" }}>
+      <div style={{ display:"flex", gap:7, alignItems:"center", marginBottom:8, flexWrap:"wrap" }}>
         <div style={{ position:"relative", flex:1, minWidth:220 }}>
           <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8" }}>🔍</span>
           <input value={search} onChange={function(e){setSearch(e.target.value);}} placeholder="Buscar por nome do envio ou produto..."
@@ -11004,7 +11012,7 @@ function EnviosFULLTab({ produtos, listings, estoqueDepositos, depositos }) {
             var cfg = STATUS_CFG[s];
             return (
               <button key={s} onClick={function(){setFilterStatus(s);}}
-                style={{ padding:"6px 14px", borderRadius:20, border:"none", cursor:"pointer", fontSize:12, fontWeight:active?700:500,
+                style={{ padding:"4px 10px", borderRadius:20, border:"none", cursor:"pointer", fontSize:12, fontWeight:active?700:500,
                   background:active?(cfg?cfg.bg:"#0f172a"):("#f8fafc"),
                   color:active?(cfg?cfg.cor:"#fff"):"#64748b" }}>
                 {cfg?cfg.icone+" ":""}{s==="todos"?"Todos":s}
@@ -11019,14 +11027,14 @@ function EnviosFULLTab({ produtos, listings, estoqueDepositos, depositos }) {
         <div style={{ background:"#f8fafc", border:"2px dashed #e2e8f0", borderRadius:16, padding:60, textAlign:"center", color:"#94a3b8" }}>
           <div style={{ fontSize:48, marginBottom:12 }}>⚡</div>
           <div style={{ fontWeight:700, fontSize:16, color:"#0f172a", marginBottom:6 }}>Nenhum envio FULL cadastrado</div>
-          <div style={{ fontSize:13, marginBottom:20 }}>Crie um envio para organizar os produtos que serão enviados ao galpão ML</div>
+          <div style={{ fontSize:13, marginBottom:10 }}>Crie um envio para organizar os produtos que serão enviados ao galpão ML</div>
           <button onClick={function(){ setEditingEnvio(null); setShowNovoEnvio(true); }}
             style={{ background:"#ffe000", border:"none", color:"#0f172a", fontWeight:800, padding:"11px 28px", borderRadius:10, cursor:"pointer", fontSize:14 }}>
             + Criar Primeiro Envio
           </button>
         </div>
       ) : (
-        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
           {enviosFiltrados.map(function(envio) {
             var cfg = STATUS_CFG[envio.status] || STATUS_CFG["Montando"];
             var totalQtd = (envio.itens||[]).reduce(function(s,it){return s+parseInt(it.qtd||0);},0);
@@ -11039,7 +11047,7 @@ function EnviosFULLTab({ produtos, listings, estoqueDepositos, depositos }) {
                     <div style={{ fontSize:22 }}>{cfg.icone}</div>
                     <div>
                       <div style={{ fontWeight:700, fontSize:16, color:"#0f172a" }}>{envio.nome}</div>
-                      <div style={{ display:"flex", gap:10, marginTop:2, flexWrap:"wrap" }}>
+                      <div style={{ display:"flex", gap:7, marginTop:2, flexWrap:"wrap" }}>
                         <span style={{ fontSize:11, fontWeight:700, color:cfg.cor, background:"#fff", padding:"2px 8px", borderRadius:20, border:"1px solid "+cfg.cor+"44" }}>{envio.status}</span>
                         <span style={{ fontSize:11, color:"#64748b" }}>{(envio.itens||[]).length} produto(s) · {totalQtd} unidades</span>
                         {totalPeso > 0 && <span style={{ fontSize:11, color:"#64748b" }}>~{totalPeso.toFixed(1)} kg</span>}
@@ -11081,7 +11089,7 @@ function EnviosFULLTab({ produtos, listings, estoqueDepositos, depositos }) {
                       <thead>
                         <tr>
                           {["Produto","SKU","MLB","Qtd. a Enviar","Estoque Atual","Peso unit.","Total KG","Obs"].map(function(h){
-                            return <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", padding:"8px 10px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, whiteSpace:"nowrap" }}>{h}</th>;
+                            return <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", padding:"5px 8px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, whiteSpace:"nowrap" }}>{h}</th>;
                           })}
                         </tr>
                       </thead>
@@ -11092,27 +11100,27 @@ function EnviosFULLTab({ produtos, listings, estoqueDepositos, depositos }) {
                           var ok = parseInt(it.qtd||0) <= estAtual;
                           return (
                             <tr key={i} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
-                              <td style={{ padding:"8px 10px", fontSize:13, color:"#0f172a", maxWidth:220, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{it.titulo||"—"}</td>
-                              <td style={{ padding:"8px 10px", fontSize:11, color:"#64748b", fontFamily:"monospace" }}>{it.sku||"—"}</td>
-                              <td style={{ padding:"8px 10px", fontSize:11, color:"#0891b2", fontFamily:"monospace" }}>{it.mlb||"—"}</td>
-                              <td style={{ padding:"8px 10px", textAlign:"center" }}>
+                              <td style={{ padding:"5px 8px", fontSize:13, color:"#0f172a", maxWidth:220, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{it.titulo||"—"}</td>
+                              <td style={{ padding:"5px 8px", fontSize:11, color:"#64748b", fontFamily:"monospace" }}>{it.sku||"—"}</td>
+                              <td style={{ padding:"5px 8px", fontSize:11, color:"#0891b2", fontFamily:"monospace" }}>{it.mlb||"—"}</td>
+                              <td style={{ padding:"5px 8px", textAlign:"center" }}>
                                 <span style={{ fontSize:14, fontWeight:800, color:ok?"#15803d":"#dc2626" }}>{it.qtd}</span>
                                 {!ok && <div style={{ fontSize:10, color:"#dc2626" }}>⚠ insuf.</div>}
                               </td>
-                              <td style={{ padding:"8px 10px", textAlign:"center", fontSize:13, color:estAtual>0?"#0f172a":"#94a3b8" }}>{estAtual} un</td>
-                              <td style={{ padding:"8px 10px", textAlign:"center", fontSize:12, color:"#64748b" }}>{it.peso?it.peso+"kg":"—"}</td>
-                              <td style={{ padding:"8px 10px", textAlign:"center", fontSize:12, color:"#64748b" }}>{it.peso&&it.qtd?(parseFloat(it.peso)*parseInt(it.qtd)).toFixed(2)+"kg":"—"}</td>
-                              <td style={{ padding:"8px 10px", fontSize:12, color:"#94a3b8" }}>{it.obs||"—"}</td>
+                              <td style={{ padding:"5px 8px", textAlign:"center", fontSize:13, color:estAtual>0?"#0f172a":"#94a3b8" }}>{estAtual} un</td>
+                              <td style={{ padding:"5px 8px", textAlign:"center", fontSize:12, color:"#64748b" }}>{it.peso?it.peso+"kg":"—"}</td>
+                              <td style={{ padding:"5px 8px", textAlign:"center", fontSize:12, color:"#64748b" }}>{it.peso&&it.qtd?(parseFloat(it.peso)*parseInt(it.qtd)).toFixed(2)+"kg":"—"}</td>
+                              <td style={{ padding:"5px 8px", fontSize:12, color:"#94a3b8" }}>{it.obs||"—"}</td>
                             </tr>
                           );
                         })}
                       </tbody>
                       <tfoot>
                         <tr style={{ background:"#f1f5f9" }}>
-                          <td colSpan={3} style={{ padding:"8px 10px", fontWeight:700, fontSize:13, color:"#0f172a" }}>TOTAL</td>
-                          <td style={{ padding:"8px 10px", textAlign:"center", fontWeight:800, fontSize:14, color:"#0f172a" }}>{totalQtd} un</td>
+                          <td colSpan={3} style={{ padding:"5px 8px", fontWeight:700, fontSize:13, color:"#0f172a" }}>TOTAL</td>
+                          <td style={{ padding:"5px 8px", textAlign:"center", fontWeight:800, fontSize:14, color:"#0f172a" }}>{totalQtd} un</td>
                           <td colSpan={2} />
-                          <td style={{ padding:"8px 10px", textAlign:"center", fontWeight:700, fontSize:13, color:"#0f172a" }}>{totalPeso.toFixed(2)} kg</td>
+                          <td style={{ padding:"5px 8px", textAlign:"center", fontWeight:700, fontSize:13, color:"#0f172a" }}>{totalPeso.toFixed(2)} kg</td>
                           <td />
                         </tr>
                       </tfoot>
@@ -11199,7 +11207,7 @@ function ModalNovoEnvioFull({ envio, produtos, listings, onSave, onClose }) {
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.65)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:24 }}>
       <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:820, maxHeight:"94vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 64px rgba(0,0,0,.2)" }}>
         {/* Header */}
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"20px 28px", borderBottom:"1px solid #f1f5f9" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", borderBottom:"1px solid #f1f5f9" }}>
           <div>
             <div style={{ fontWeight:800, fontSize:18, color:"#0f172a" }}>{envio?"Editar Envio FULL":"Novo Envio FULL"}</div>
             <div style={{ fontSize:12, color:"#94a3b8", marginTop:2 }}>Monte a caixa com os produtos para envio ao centro de distribuição ML</div>
@@ -11207,9 +11215,9 @@ function ModalNovoEnvioFull({ envio, produtos, listings, onSave, onClose }) {
           <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
         </div>
 
-        <div style={{ flex:1, overflowY:"auto", padding:"20px 28px" }}>
+        <div style={{ flex:1, overflowY:"auto", padding:"12px 16px" }}>
           {/* Dados do envio */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:20 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:10 }}>
             <div>
               <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Nome do Envio *</div>
               <input value={form.nome} onChange={function(e){set("nome",e.target.value);}} placeholder="Ex: Caixa #01 - Junho 2026"
@@ -11230,7 +11238,7 @@ function ModalNovoEnvioFull({ envio, produtos, listings, onSave, onClose }) {
           </div>
 
           {/* Busca de produtos */}
-          <div style={{ marginBottom:16 }}>
+          <div style={{ marginBottom:8 }}>
             <div style={{ fontSize:13, fontWeight:700, color:"#0f172a", marginBottom:8 }}>Adicionar Produtos</div>
             <div style={{ position:"relative" }}>
               <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8" }}>🔍</span>
@@ -11294,28 +11302,28 @@ function ModalNovoEnvioFull({ envio, produtos, listings, onSave, onClose }) {
                       var semEstoque = parseInt(it.qtd||0) > estAtual;
                       return (
                         <tr key={i} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
-                          <td style={{ padding:"8px 12px", fontSize:12, color:"#0f172a", maxWidth:180, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={it.titulo}>{it.titulo}</td>
-                          <td style={{ padding:"8px 12px", fontSize:11, color:"#64748b", fontFamily:"monospace" }}>{it.sku||"—"}</td>
-                          <td style={{ padding:"8px 12px", fontSize:11, color:"#0891b2", fontFamily:"monospace" }}>{it.mlb||"—"}</td>
-                          <td style={{ padding:"8px 12px" }}>
+                          <td style={{ padding:"5px 8px", fontSize:12, color:"#0f172a", maxWidth:180, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={it.titulo}>{it.titulo}</td>
+                          <td style={{ padding:"5px 8px", fontSize:11, color:"#64748b", fontFamily:"monospace" }}>{it.sku||"—"}</td>
+                          <td style={{ padding:"5px 8px", fontSize:11, color:"#0891b2", fontFamily:"monospace" }}>{it.mlb||"—"}</td>
+                          <td style={{ padding:"5px 8px" }}>
                             <div style={{ display:"flex", alignItems:"center", gap:4 }}>
                               <input type="number" min="1" value={it.qtd} onChange={function(e){updateItem(i,"qtd",e.target.value);}}
                                 style={{ width:60, textAlign:"center", background:semEstoque?"#fef2f2":"#f0fdf4", border:"1px solid "+(semEstoque?"#fecaca":"#bbf7d0"), color:semEstoque?"#dc2626":"#15803d", padding:"5px 6px", borderRadius:6, fontSize:13, fontWeight:700, outline:"none" }} />
                               <span style={{ fontSize:10, color:"#94a3b8" }}>/{estAtual}</span>
                             </div>
                           </td>
-                          <td style={{ padding:"8px 12px" }}>
+                          <td style={{ padding:"5px 8px" }}>
                             <input type="number" step="0.001" value={it.peso} onChange={function(e){updateItem(i,"peso",e.target.value);}} placeholder="0.000"
                               style={{ width:70, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"5px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
                           </td>
-                          <td style={{ padding:"8px 12px", fontSize:12, color:"#64748b", textAlign:"center" }}>
+                          <td style={{ padding:"5px 8px", fontSize:12, color:"#64748b", textAlign:"center" }}>
                             {it.peso&&it.qtd?(parseFloat(it.peso)*parseInt(it.qtd)).toFixed(3):"—"}
                           </td>
-                          <td style={{ padding:"8px 12px" }}>
+                          <td style={{ padding:"5px 8px" }}>
                             <input value={it.obs||""} onChange={function(e){updateItem(i,"obs",e.target.value);}} placeholder="Obs..."
                               style={{ width:100, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"5px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
                           </td>
-                          <td style={{ padding:"8px 12px", textAlign:"center" }}>
+                          <td style={{ padding:"5px 8px", textAlign:"center" }}>
                             <button onClick={function(){removeItem(i);}}
                               style={{ background:"#fef2f2", border:"none", color:"#dc2626", width:26, height:26, borderRadius:6, cursor:"pointer", fontSize:12 }}>✕</button>
                           </td>
@@ -11351,12 +11359,12 @@ function LayoutFiltros({ filtros, busca, acoes, children }) {
     <div style={{ display:"flex", gap:0, minHeight:"calc(100vh - 180px)" }}>
       {/* Painel lateral — mais estreito e delicado */}
       {filtros && (
-        <div style={{ width:168, flexShrink:0, background:"#fafafa", borderRight:"1px solid #f0f0f0", padding:"12px 10px", display:"flex", flexDirection:"column", gap:10 }}>
+        <div style={{ width:168, flexShrink:0, background:"#fafafa", borderRight:"1px solid #f0f0f0", padding:"8px 8px", display:"flex", flexDirection:"column", gap:10 }}>
           {filtros}
         </div>
       )}
       {/* Área principal */}
-      <div style={{ flex:1, minWidth:0, padding:"14px 18px", display:"flex", flexDirection:"column", gap:10 }}>
+      <div style={{ flex:1, minWidth:0, padding:"10px 14px", display:"flex", flexDirection:"column", gap:10 }}>
         {(busca || acoes) && (
           <div style={{ display:"flex", gap:8, alignItems:"center" }}>
             {busca && <div style={{ flex:1 }}>{busca}</div>}
@@ -11583,7 +11591,7 @@ function IAChatTab({ enriched, rawOrders, produtos, contasPagar, token }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"calc(100vh - 130px)", maxWidth:900, margin:"0 auto", padding:"0 20px" }}>
       {/* Header */}
-      <div style={{ padding:"20px 0 14px", borderBottom:"1px solid #e2e8f0", marginBottom:16 }}>
+      <div style={{ padding:"12px 0 8px", borderBottom:"1px solid #e2e8f0", marginBottom:8 }}>
         <div style={{ fontWeight:800, fontSize:20, color:"#0f172a", marginBottom:4 }}>✦ Assistente IA</div>
         <div style={{ fontSize:13, color:"#64748b" }}>Converse com sua IA de negócios — com acesso aos dados reais do seu ML Margem</div>
       </div>
@@ -11635,7 +11643,7 @@ function IAChatTab({ enriched, rawOrders, produtos, contasPagar, token }) {
       )}
 
       {/* Input */}
-      <div style={{ display:"flex", gap:10, padding:"12px 0 16px", borderTop:"1px solid #e2e8f0" }}>
+      <div style={{ display:"flex", gap:7, padding:"12px 0 16px", borderTop:"1px solid #e2e8f0" }}>
         <textarea value={input} onChange={function(e){setInput(e.target.value);}} onKeyDown={handleKey}
           placeholder="Pergunte sobre suas vendas, estoque, finanças... (Enter para enviar)"
           rows={2} disabled={loading}
@@ -11719,12 +11727,12 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
 
   return (
     <div style={{ padding:"0 20px" }}>
-      <div style={{ padding:"20px 0 14px", borderBottom:"1px solid #e2e8f0", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+      <div style={{ padding:"12px 0 8px", borderBottom:"1px solid #e2e8f0", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         <div>
           <div style={{ fontWeight:800, fontSize:20, color:"#0f172a", marginBottom:4 }}>💲 Precificação</div>
           <div style={{ fontSize:13, color:"#64748b" }}>Calcule o preço ideal para cada anúncio com base na margem desejada</div>
         </div>
-        <div style={{ display:"flex", alignItems:"center", gap:10, background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 16px" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:7, background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 16px" }}>
           <span style={{ fontSize:13, color:"#64748b", fontWeight:600 }}>Margem alvo:</span>
           <input type="number" min="1" max="99" value={margemAlvo} onChange={function(e){setMargemAlvo(parseFloat(e.target.value)||20);}}
             style={{ width:60, background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"6px 10px", borderRadius:8, fontSize:15, fontWeight:700, outline:"none", textAlign:"center" }} />
@@ -11733,7 +11741,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
       </div>
 
       {/* Busca */}
-      <div style={{ display:"flex", gap:10, margin:"14px 0" }}>
+      <div style={{ display:"flex", gap:7, margin:"14px 0" }}>
         <div style={{ position:"relative", flex:1 }}>
           <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:14 }}>🔍</span>
           <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar por título ou MLB..."
@@ -11757,267 +11765,228 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
         <table style={{ borderCollapse:"collapse", width:"100%", minWidth:900 }}>
           <thead>
             <tr style={{ background:"#f8fafc" }}>
-              {["SKU","Tipo","Anúncio","MLB","Preço Atual","Preço Médio Vendas","Custo","Taxa ML","Frete Config.","Frete Real","⚠ Frete","💡 Preço Venda Simulado","Lucro Simulado","Margem Simulada","Preço Sugerido","🏷 % Desc. Promoção","Preço c/ Desc.","Margem c/ Desc.","Ação"].map(function(h){
-                var isSimul = h === "💡 Preço Venda Simulado" || h === "Lucro Simulado" || h === "Margem Simulada";
-                return <th key={h} style={{ fontSize:10, color: isSimul?"#7c3aed":"#64748b", fontWeight:600, textTransform:"uppercase", padding:"10px 12px", borderBottom:"1px solid #e2e8f0", textAlign:"left", whiteSpace:"nowrap", background: isSimul?"#faf5ff":"transparent" }}>{h}</th>;
+              {[
+                "SKU","MLB","Tipo","Anúncio",
+                "Preço Atual","Frete Real",
+                "💡 Preço Venda Simulado","🏷 % Desc. Promoção",
+                "Taxa ML (s/ desconto)","Frete Config.","Custo",
+                "Lucro Simulado","Margem Simulada","Ação"
+              ].map(function(h){
+                var isSimul = ["💡 Preço Venda Simulado","Lucro Simulado","Margem Simulada","Taxa ML (s/ desconto)"].includes(h);
+                return <th key={h} style={{ fontSize:10, color: isSimul?"#7c3aed":"#64748b", fontWeight:600, textTransform:"uppercase", padding:"8px 10px", borderBottom:"1px solid #e2e8f0", textAlign:"left", whiteSpace:"nowrap", background: isSimul?"#faf5ff":"transparent" }}>{h}</th>;
               })}
             </tr>
           </thead>
           <tbody>
-            {listsFiltrados.slice(0,100).map(function(l, i) {
+            {listsFiltrados.slice(0,200).map(function(l, i) {
               var custo = custosLocais[l.id] !== undefined ? custosLocais[l.id] : (costs[l.id]||0);
               var bruto = l.price || 0;
               var taxa = l.fee || bruto * 0.13;
               var freteReal = l.freteSeller || 0;
               var freteConfig = parseFloat(fretesConfig&&fretesConfig[l.id]||0);
               var frete = freteConfig > 0 ? freteConfig : freteReal;
-              var freteAlerta = freteConfig > 0 && freteReal > freteConfig;
-              // Preço de venda simulado (digitado pelo usuário)
               var precoVendaSimul = parseFloat(precosVendaConfig&&precosVendaConfig[l.id]||0);
-              // Calcular com base no preço simulado se existir, senão usa preço atual
-              var calc = calcPrecos(bruto, custo, frete, taxa, precoVendaSimul);
-              var pmv = precoMedioVendas(l.id);
-              var mCor = calc.margem >= margemAlvo ? "#15803d" : calc.margem >= margemAlvo*0.6 ? "#d97706" : "#dc2626";
+              var descPct = parseFloat(descontosConfig&&descontosConfig[l.id]||0);
+
+              // Preço base: simulado > atual
+              var precoBase = precoVendaSimul > 0 ? precoVendaSimul : bruto;
+              // Preço após desconto de promoção
+              var precoComDesc = descPct > 0 ? precoBase * (1 - descPct/100) : precoBase;
+              // Taxa ML calculada sobre o preço COM desconto (promoção)
+              var feeRate = taxa > 0 && bruto > 0 ? taxa/bruto : (l.feeRate||0.12);
+              var taxaSobreDesc = precoComDesc * feeRate;
+              // Lucro e margem com desconto e frete
+              var lucroFinal = precoComDesc - custo - frete - taxaSobreDesc;
+              var margemFinal = precoComDesc > 0 ? (lucroFinal/precoComDesc)*100 : 0;
+              var mCor = margemFinal >= margemAlvo ? "#15803d" : margemFinal >= margemAlvo*0.6 ? "#d97706" : "#dc2626";
               var isEditing = selectedId === l.id;
+              var t = l.listing_type_id||"";
+              var isPremium = t==="gold_premium"||t==="gold_pro";
 
               return (
                 <tr key={l.id} style={{ borderBottom:"1px solid #f1f5f9", background:i%2===0?"#fff":"#fafafa" }}>
+
                   {/* SKU */}
-                  <td style={{ padding:"10px 12px" }}>
-                    <span style={{ fontSize:11, fontFamily:"monospace", fontWeight:700, color:"#334155", background:"#f1f5f9", padding:"3px 8px", borderRadius:5, whiteSpace:"nowrap" }}>
+                  <td style={{ padding:"6px 8px" }}>
+                    <span style={{ fontSize:11, fontFamily:"monospace", fontWeight:700, color:"#334155", background:"#f1f5f9", padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
                       {l.seller_sku||l.sku||"—"}
                     </span>
                   </td>
-                  {/* Tipo (Clássico / Premium) */}
-                  <td style={{ padding:"10px 12px" }}>
-                    {(function(){
-                      var t = l.listing_type_id||"";
-                      // ML Brasil: gold_premium = Premium | gold_special = Clássico
-                      var isPremium = t==="gold_premium"||t==="gold_pro";
-                      return (
-                        <span style={{ fontSize:10, fontWeight:700, padding:"3px 8px", borderRadius:6, whiteSpace:"nowrap",
-                          background: isPremium?"#f5f3ff":"#eff6ff",
-                          color: isPremium?"#7c3aed":"#1d4ed8",
-                          border: "1px solid "+(isPremium?"#ddd6fe":"#bfdbfe") }}>
-                          {isPremium?"⭐ Premium":"📋 Clássico"}
-                        </span>
-                      );
-                    })()}
+
+                  {/* MLB */}
+                  <td style={{ padding:"6px 8px", fontSize:11, color:"#0891b2", fontFamily:"monospace" }}>
+                    {l.id}
                   </td>
+
+                  {/* Tipo */}
+                  <td style={{ padding:"6px 8px" }}>
+                    <span style={{ fontSize:10, fontWeight:700, padding:"2px 6px", borderRadius:5, whiteSpace:"nowrap",
+                      background: isPremium?"#f5f3ff":"#eff6ff",
+                      color: isPremium?"#7c3aed":"#1d4ed8",
+                      border:"1px solid "+(isPremium?"#ddd6fe":"#bfdbfe") }}>
+                      {isPremium?"⭐ Premium":"📋 Clássico"}
+                    </span>
+                  </td>
+
                   {/* Anúncio */}
-                  <td style={{ padding:"10px 12px", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                  <td style={{ padding:"6px 8px", maxWidth:220, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                     <div style={{ fontSize:12, fontWeight:600, color:"#0f172a" }}>{l.title}</div>
                   </td>
-                  <td style={{ padding:"10px 12px", fontSize:11, color:"#0891b2", fontFamily:"monospace" }}>{l.id}</td>
-                  <td style={{ padding:"10px 12px", fontSize:13, fontWeight:700, color:"#0f172a" }}>
+
+                  {/* Preço Atual */}
+                  <td style={{ padding:"6px 8px", fontSize:12, fontWeight:700, color:"#0f172a", whiteSpace:"nowrap" }}>
                     R$ {bruto.toFixed(2).replace(".",",")}
                   </td>
-                  <td style={{ padding:"10px 12px", fontSize:12, color:"#64748b" }}>
-                    {pmv ? <span style={{color:"#0891b2", fontWeight:600}}>R$ {pmv.toFixed(2).replace(".",",")}</span> : <span style={{color:"#94a3b8"}}>—</span>}
-                  </td>
-                  <td style={{ padding:"10px 12px" }}>
-                    {isEditing ? (
-                      <input type="number" step="0.01" defaultValue={custo}
-                        onBlur={function(e){
-                          var v = parseFloat(e.target.value)||0;
-                          setCustosLocais(function(c){return {...c,[l.id]:v};});
-                          setCostsAndSave(function(c){return {...c,[l.id]:v};});
-                          setSelectedId(null);
-                        }}
-                        autoFocus
-                        style={{ width:80, background:"#fff", border:"1px solid #0891b2", color:"#0f172a", padding:"4px 8px", borderRadius:6, fontSize:12, outline:"none" }} />
-                    ) : (
-                      <span onClick={function(){setSelectedId(l.id);}} title="Clique para editar"
-                        style={{ cursor:"pointer", fontSize:12, fontWeight:600, color:custo>0?"#334155":"#dc2626",
-                          background:custo>0?"transparent":"#fef2f2", padding:custo>0?"0":"2px 6px", borderRadius:4 }}>
-                        {custo>0 ? "R$ "+custo.toFixed(2).replace(".",",") : "✎ Sem custo"}
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ padding:"10px 12px", fontSize:12, color:"#dc2626" }}>R$ {taxa.toFixed(2).replace(".",",")}</td>
-                  {/* Frete Configurado (editável) */}
-                  <td style={{ padding:"10px 12px" }}>
-                    {editingFreteId === l.id ? (
-                      <input type="number" step="0.01" min="0" defaultValue={freteConfig||""}
-                        placeholder="0,00"
-                        onBlur={function(e){
-                          var v = parseFloat(e.target.value)||0;
-                          setFretesAndSave(function(f){ return Object.assign({},f,{[l.id]:v}); });
-                          setEditingFreteId(null);
-                        }}
-                        autoFocus
-                        style={{ width:80, background:"#fff", border:"1px solid #0891b2", color:"#0f172a", padding:"4px 8px", borderRadius:6, fontSize:12, outline:"none" }} />
-                    ) : (
-                      <span onClick={function(){setEditingFreteId(l.id);}} title="Clique para definir frete esperado"
-                        style={{ cursor:"pointer", fontSize:12, fontWeight:600,
-                          color:freteConfig>0?"#d97706":"#94a3b8",
-                          background:freteConfig>0?"transparent":"#f8fafc",
-                          padding:freteConfig>0?"0":"2px 8px", borderRadius:4 }}>
-                        {freteConfig>0 ? "R$ "+freteConfig.toFixed(2).replace(".",",") : "✎ definir"}
-                      </span>
-                    )}
-                  </td>
-                  {/* Frete Real do ML */}
-                  <td style={{ padding:"10px 12px", fontSize:12, color:freteAlerta?"#dc2626":"#d97706", fontWeight:freteAlerta?700:400 }}>
+
+                  {/* Frete Real */}
+                  <td style={{ padding:"6px 8px", fontSize:12, color:"#d97706", whiteSpace:"nowrap" }}>
                     R$ {freteReal.toFixed(2).replace(".",",")}
                   </td>
-                  {/* Alerta frete acima do configurado */}
-                  <td style={{ padding:"10px 12px" }}>
-                    {freteAlerta ? (
-                      <span style={{ fontSize:11, fontWeight:700, color:"#dc2626", background:"#fef2f2", border:"1px solid #fecaca", padding:"3px 8px", borderRadius:6, whiteSpace:"nowrap" }}>
-                        ⚠ +R$ {(freteReal-freteConfig).toFixed(2).replace(".",",")}
-                      </span>
-                    ) : freteConfig>0 ? (
-                      <span style={{ fontSize:11, color:"#15803d", background:"#f0fdf4", border:"1px solid #bbf7d0", padding:"3px 8px", borderRadius:6 }}>✓ OK</span>
-                    ) : (
-                      <span style={{ fontSize:11, color:"#94a3b8" }}>—</span>
-                    )}
-                  </td>
-                  {/* ── Preço de Venda Simulado (editável) ── */}
-                  <td style={{ padding:"10px 12px", background:"#faf5ff" }}>
+
+                  {/* 💡 Preço Venda Simulado (editável) */}
+                  <td style={{ padding:"6px 8px", background:"#faf5ff" }}>
                     {editingPrecoId === l.id ? (
-                      <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-                        <span style={{ fontSize:11, color:"#94a3b8" }}>R$</span>
+                      <div style={{ display:"flex", alignItems:"center", gap:3 }}>
+                        <span style={{ fontSize:10, color:"#94a3b8" }}>R$</span>
                         <input type="number" step="0.01" min="0"
                           defaultValue={precoVendaSimul||""}
                           placeholder={bruto.toFixed(2)}
                           autoFocus
-                          onBlur={function(e){
-                            var v = parseFloat(e.target.value)||0;
-                            setPrecoVenda(l.id, v);
-                            setEditingPrecoId(null);
-                          }}
+                          onBlur={function(e){ var v=parseFloat(e.target.value)||0; setPrecoVenda(l.id,v); setEditingPrecoId(null); }}
                           onKeyDown={function(e){ if(e.key==="Enter"||e.key==="Escape") e.target.blur(); }}
-                          style={{ width:84, background:"#fff", border:"1px solid #7c3aed", color:"#0f172a", padding:"4px 7px", borderRadius:6, fontSize:12, outline:"none", textAlign:"right" }} />
+                          style={{ width:78, background:"#fff", border:"1px solid #7c3aed", color:"#0f172a", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none", textAlign:"right" }} />
                       </div>
                     ) : (
-                      <div onClick={function(){ setEditingPrecoId(l.id); }} title="Clique para simular outro preço de venda" style={{ cursor:"pointer" }}>
+                      <div onClick={function(){ setEditingPrecoId(l.id); }} title="Clique para simular preço de venda" style={{ cursor:"pointer" }}>
                         {precoVendaSimul > 0 ? (
                           <div>
                             <span style={{ fontSize:13, fontWeight:800, color:"#7c3aed" }}>
                               R$ {precoVendaSimul.toFixed(2).replace(".",",")}
                             </span>
-                            {precoVendaSimul !== bruto && (
-                              <div style={{ fontSize:10, color: precoVendaSimul > bruto ? "#15803d":"#dc2626", marginTop:1 }}>
-                                {precoVendaSimul > bruto ? "▲" : "▼"} vs R$ {bruto.toFixed(2).replace(".",",")}
-                              </div>
-                            )}
+                            <div style={{ fontSize:10, color:precoVendaSimul>bruto?"#15803d":"#dc2626" }}>
+                              {precoVendaSimul>bruto?"▲":"▼"} atual: R$ {bruto.toFixed(2).replace(".",",")}
+                            </div>
                           </div>
                         ) : (
-                          <span style={{ fontSize:11, color:"#94a3b8", background:"#f5f3ff", border:"1px dashed #ddd6fe", padding:"3px 8px", borderRadius:6 }}>
-                            ✎ simular preço
+                          <span style={{ fontSize:11, color:"#94a3b8", background:"#f5f3ff", border:"1px dashed #ddd6fe", padding:"2px 7px", borderRadius:5 }}>
+                            ✎ simular
                           </span>
                         )}
                       </div>
                     )}
                   </td>
-                  {/* Lucro e Margem baseados no preço simulado (ou atual se não houver) */}
-                  <td style={{ padding:"10px 12px", background:"#faf5ff", fontSize:12, fontWeight:700, color:calc.lucro>=0?"#0891b2":"#dc2626" }}>
-                    {custo>0 ? (
-                      <div>
-                        R$ {calc.lucro.toFixed(2).replace(".",",")}
-                        {precoVendaSimul > 0 && precoVendaSimul !== bruto && (
-                          <div style={{ fontSize:10, color:"#94a3b8", fontWeight:400 }}>
-                            base: R$ {(bruto - custo - frete - (l.fee||bruto*0.13)).toFixed(2).replace(".",",")}
-                          </div>
-                        )}
-                      </div>
-                    ) : <span style={{color:"#94a3b8"}}>—</span>}
-                  </td>
-                  <td style={{ padding:"10px 12px", background:"#faf5ff" }}>
-                    {custo > 0 ? (
-                      <span style={{ fontSize:12, fontWeight:700, color:mCor, background:mCor+"18", padding:"3px 8px", borderRadius:6, display:"inline-block" }}>
-                        {calc.margem.toFixed(1)}%
-                        {calc.margem >= margemAlvo ? " ✓" : " ↓"}
-                      </span>
-                    ) : <span style={{color:"#94a3b8",fontSize:11}}>—</span>}
-                  </td>
-                  <td style={{ padding:"10px 12px" }}>
-                    {custo > 0 && calc.precoAlvo > 0 ? (
-                      <span style={{ fontSize:12, fontWeight:800,
-                        color: calc.precoAlvo > bruto ? "#dc2626" : "#15803d" }}>
-                        R$ {calc.precoAlvo.toFixed(2).replace(".",",")}
-                        <span style={{fontSize:10, fontWeight:400, marginLeft:4, color:"#94a3b8"}}>
-                          {calc.precoAlvo > bruto ? "(↑ sobe)" : "(↓ OK)"}
-                        </span>
-                      </span>
-                    ) : <span style={{color:"#94a3b8",fontSize:11}}>informe custo</span>}
-                  </td>
-                  {/* % Desconto para promoção */}
-                  <td style={{ padding:"10px 12px" }}>
+
+                  {/* 🏷 % Desconto Promoção */}
+                  <td style={{ padding:"6px 8px", background:"#faf5ff" }}>
                     {editingDescId === l.id ? (
-                      <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:3 }}>
                         <input type="number" min="0" max="80" step="1"
-                          defaultValue={descontosConfig[l.id]||""}
+                          defaultValue={descPct||""}
                           placeholder="0"
                           autoFocus
-                          onBlur={function(e){
-                            var v = Math.min(80, Math.max(0, parseFloat(e.target.value)||0));
-                            setDesconto(l.id, v);
-                            setEditingDescId(null);
-                          }}
+                          onBlur={function(e){ var v=Math.min(80,Math.max(0,parseFloat(e.target.value)||0)); setDesconto(l.id,v); setEditingDescId(null); }}
                           onKeyDown={function(e){ if(e.key==="Enter"||e.key==="Escape") e.target.blur(); }}
-                          style={{ width:52, background:"#fff", border:"1px solid #7c3aed", color:"#0f172a", padding:"4px 7px", borderRadius:6, fontSize:12, outline:"none", textAlign:"center" }} />
+                          style={{ width:46, background:"#fff", border:"1px solid #7c3aed", color:"#0f172a", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none", textAlign:"center" }} />
                         <span style={{ fontSize:11, color:"#94a3b8" }}>%</span>
                       </div>
                     ) : (
-                      <span onClick={function(){ setEditingDescId(l.id); }} title="Clique para definir % de desconto"
-                        style={{ cursor:"pointer", display:"inline-flex", alignItems:"center", gap:4 }}>
-                        <span style={{ fontSize:12, fontWeight:700,
-                          color: descontosConfig[l.id]>0 ? "#7c3aed" : "#94a3b8",
-                          background: descontosConfig[l.id]>0 ? "#f5f3ff" : "#f8fafc",
-                          border: "1px solid " + (descontosConfig[l.id]>0 ? "#ede9fe" : "#e2e8f0"),
-                          padding:"3px 10px", borderRadius:6 }}>
-                          {descontosConfig[l.id]>0 ? descontosConfig[l.id]+"%" : "✎ definir"}
-                        </span>
+                      <div onClick={function(){ setEditingDescId(l.id); }} title="% de desconto na promoção" style={{ cursor:"pointer" }}>
+                        {descPct > 0 ? (
+                          <div>
+                            <span style={{ fontSize:12, fontWeight:700, color:"#7c3aed", background:"#f5f3ff", padding:"2px 7px", borderRadius:5 }}>
+                              {descPct}%
+                            </span>
+                            <div style={{ fontSize:10, color:"#7c3aed", marginTop:1 }}>
+                              → R$ {precoComDesc.toFixed(2).replace(".",",")}
+                            </div>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize:11, color:"#94a3b8", background:"#f8fafc", border:"1px dashed #e2e8f0", padding:"2px 7px", borderRadius:5 }}>
+                            ✎ definir
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </td>
+
+                  {/* Taxa ML sobre preço c/ desconto */}
+                  <td style={{ padding:"6px 8px", background:"#faf5ff" }}>
+                    <div style={{ fontSize:12, fontWeight:700, color:"#dc2626" }}>
+                      R$ {taxaSobreDesc.toFixed(2).replace(".",",")}
+                    </div>
+                    <div style={{ fontSize:10, color:"#94a3b8" }}>
+                      {(feeRate*100).toFixed(0)}% s/ {descPct>0?"desc":"atual"}
+                    </div>
+                  </td>
+
+                  {/* Frete Config (editável) */}
+                  <td style={{ padding:"6px 8px" }}>
+                    {editingFreteId === l.id ? (
+                      <input type="number" step="0.01" min="0" defaultValue={freteConfig||""} placeholder="0,00"
+                        onBlur={function(e){ var v=parseFloat(e.target.value)||0; setFretesAndSave(function(f){return Object.assign({},f,{[l.id]:v});}); setEditingFreteId(null); }}
+                        autoFocus
+                        style={{ width:72, background:"#fff", border:"1px solid #0891b2", color:"#0f172a", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
+                    ) : (
+                      <span onClick={function(){setEditingFreteId(l.id);}} title="Frete esperado"
+                        style={{ cursor:"pointer", fontSize:12, fontWeight:600,
+                          color:freteConfig>0?"#d97706":"#94a3b8",
+                          background:freteConfig>0?"transparent":"#f8fafc",
+                          padding:freteConfig>0?"0":"2px 6px", borderRadius:4 }}>
+                        {freteConfig>0?"R$ "+freteConfig.toFixed(2).replace(".",","):"✎ definir"}
                       </span>
                     )}
                   </td>
-                  {/* Preço com desconto */}
-                  <td style={{ padding:"10px 12px" }}>
-                    {descontosConfig[l.id]>0 ? (function(){
-                      var precoDesc = bruto * (1 - descontosConfig[l.id]/100);
-                      return (
-                        <div>
-                          <span style={{ fontSize:13, fontWeight:800, color:"#7c3aed" }}>
-                            R$ {precoDesc.toFixed(2).replace(".",",")}
-                          </span>
-                          <div style={{ fontSize:10, color:"#94a3b8" }}>
-                            de R$ {bruto.toFixed(2).replace(".",",")}
-                          </div>
-                        </div>
-                      );
-                    })() : <span style={{ color:"#94a3b8", fontSize:11 }}>—</span>}
+
+                  {/* Custo (editável) */}
+                  <td style={{ padding:"6px 8px" }}>
+                    {isEditing ? (
+                      <input type="number" step="0.01" defaultValue={custo}
+                        onBlur={function(e){ var v=parseFloat(e.target.value)||0; setCustosLocais(function(c){return {...c,[l.id]:v};}); setCostsAndSave(function(c){return {...c,[l.id]:v};}); setSelectedId(null); }}
+                        autoFocus
+                        style={{ width:72, background:"#fff", border:"1px solid #0891b2", color:"#0f172a", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
+                    ) : (
+                      <span onClick={function(){setSelectedId(l.id);}} title="Clique para editar custo"
+                        style={{ cursor:"pointer", fontSize:12, fontWeight:600, color:custo>0?"#334155":"#dc2626",
+                          background:custo>0?"transparent":"#fef2f2", padding:custo>0?"0":"2px 6px", borderRadius:4 }}>
+                        {custo>0?"R$ "+custo.toFixed(2).replace(".",","): "✎ Sem custo"}
+                      </span>
+                    )}
                   </td>
-                  {/* Margem com desconto */}
-                  <td style={{ padding:"10px 12px" }}>
-                    {descontosConfig[l.id]>0 && custo>0 ? (function(){
-                      var precoDesc = bruto * (1 - descontosConfig[l.id]/100);
-                      var taxaDesc = taxa * (precoDesc/bruto); // taxa proporcional ao novo preço
-                      var lucroDesc = precoDesc - custo - frete - taxaDesc;
-                      var margemDesc = precoDesc>0 ? (lucroDesc/precoDesc)*100 : 0;
-                      var mCorDesc = margemDesc>=margemAlvo?"#15803d":margemDesc>=0?"#d97706":"#dc2626";
-                      return (
-                        <div>
-                          <span style={{ fontSize:12, fontWeight:700, color:mCorDesc, background:mCorDesc+"18", padding:"3px 8px", borderRadius:6 }}>
-                            {margemDesc.toFixed(1)}%
-                          </span>
-                          <div style={{ fontSize:10, color: lucroDesc>=0?"#64748b":"#dc2626", marginTop:2 }}>
-                            lucro R$ {lucroDesc.toFixed(2).replace(".",",")}
-                          </div>
-                        </div>
-                      );
-                    })() : <span style={{ color:"#94a3b8", fontSize:11 }}>—</span>}
+
+                  {/* Lucro Simulado (com desconto se houver) */}
+                  <td style={{ padding:"6px 8px", background:"#faf5ff" }}>
+                    {custo > 0 ? (
+                      <div>
+                        <span style={{ fontSize:13, fontWeight:700, color:lucroFinal>=0?"#0891b2":"#dc2626" }}>
+                          R$ {lucroFinal.toFixed(2).replace(".",",")}
+                        </span>
+                        {descPct > 0 && (
+                          <div style={{ fontSize:10, color:"#94a3b8", marginTop:1 }}>c/ {descPct}% desc</div>
+                        )}
+                      </div>
+                    ) : <span style={{color:"#94a3b8",fontSize:11}}>—</span>}
                   </td>
-                  <td style={{ padding:"10px 12px" }}>
-                    <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+
+                  {/* Margem Simulada */}
+                  <td style={{ padding:"6px 8px", background:"#faf5ff" }}>
+                    {custo > 0 ? (
+                      <span style={{ fontSize:13, fontWeight:700, color:mCor, background:mCor+"18", padding:"3px 8px", borderRadius:6, display:"inline-block" }}>
+                        {margemFinal.toFixed(1)}%
+                        {margemFinal >= margemAlvo ? " ✓" : " ↓"}
+                      </span>
+                    ) : <span style={{color:"#94a3b8",fontSize:11}}>—</span>}
+                  </td>
+
+                  {/* Ação */}
+                  <td style={{ padding:"6px 8px" }}>
+                    <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
                       <a href={"https://www.mercadolivre.com.br/seller-admin/listing/edit?itemId="+l.id} target="_blank" rel="noreferrer"
                         style={{ fontSize:11, color:"#0891b2", textDecoration:"none", fontWeight:600 }}>
                         Editar ML ↗
                       </a>
                       <a href={"https://vendedores.mercadolivre.com.br/ferramentas/promocoes"} target="_blank" rel="noreferrer"
                         style={{ fontSize:10, color:"#7c3aed", textDecoration:"none", fontWeight:600 }}>
-                        Central Promoções ↗
+                        Promoções ↗
                       </a>
                     </div>
                   </td>
@@ -12153,14 +12122,14 @@ function PublicidadeTab({ token, sellerId }) {
   }
 
   return (
-    <div style={{ padding:"0 24px" }}>
+    <div style={{ padding:"0 12px" }}>
       {/* Header */}
-      <div style={{ padding:"20px 0 14px", borderBottom:"1px solid #e2e8f0", display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+      <div style={{ padding:"12px 0 8px", borderBottom:"1px solid #e2e8f0", display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
         <div>
           <div style={{ fontWeight:800, fontSize:20, color:"#0f172a", marginBottom:4 }}>📣 Publicidade — ML Ads</div>
           <div style={{ fontSize:13, color:"#64748b" }}>Campanhas e métricas de anúncios patrocinados do Mercado Livre</div>
         </div>
-        <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+        <div style={{ display:"flex", gap:7, alignItems:"center" }}>
           <select value={periodo} onChange={function(e){setPeriodo(e.target.value);}}
             style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 14px", borderRadius:9, fontSize:12 }}>
             {periodos.map(function(p){ return <option key={p.k} value={p.k}>{p.l}</option>; })}
@@ -12175,14 +12144,14 @@ function PublicidadeTab({ token, sellerId }) {
 
       {/* Erro */}
       {erro && (
-        <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"14px 18px", color:"#dc2626", marginBottom:16, fontSize:13 }}>
+        <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"10px 14px", color:"#dc2626", marginBottom:8, fontSize:13 }}>
           ⚠️ {erro}
         </div>
       )}
 
       {/* Cards de totais */}
       {totalMetricas && (
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:20 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:10 }}>
           {[
             { l:"Vendas (Ads)", v:fmtN(totalMetricas.vendas), cor:"#0f172a", icon:"🛒" },
             { l:"ROAS", v:totalMetricas.roas.toFixed(2)+"x", cor:"#7c3aed", icon:"📈" },
@@ -12196,7 +12165,7 @@ function PublicidadeTab({ token, sellerId }) {
             return (
               <div key={k.l} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"14px 16px", boxShadow:"0 1px 3px rgba(0,0,0,.04)" }}>
                 <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:6 }}>{k.icon} {k.l}</div>
-                <div style={{ fontSize:22, fontWeight:800, color:k.cor }}>{k.v}</div>
+                <div style={{ fontSize:15, fontWeight:800, color:k.cor }}>{k.v}</div>
               </div>
             );
           })}
@@ -12214,7 +12183,7 @@ function PublicidadeTab({ token, sellerId }) {
         <div style={{ textAlign:"center", padding:"60px", color:"#94a3b8" }}>
           <div style={{ fontSize:40, marginBottom:12 }}>📣</div>
           <div style={{ fontWeight:600, color:"#0f172a", marginBottom:8 }}>Nenhuma campanha encontrada</div>
-          <div style={{ fontSize:13, marginBottom:16 }}>Conecte ao ML e clique em Atualizar para carregar suas campanhas</div>
+          <div style={{ fontSize:13, marginBottom:8 }}>Conecte ao ML e clique em Atualizar para carregar suas campanhas</div>
           <a href="https://publicidade.mercadolivre.com.br" target="_blank" rel="noreferrer"
             style={{ background:"#ffe000", color:"#0f172a", fontWeight:700, padding:"10px 24px", borderRadius:10, textDecoration:"none", fontSize:13 }}>
             Criar campanha no ML ↗
@@ -12262,13 +12231,13 @@ function PublicidadeTab({ token, sellerId }) {
                         {statusLabel(c.status)}
                       </span>
                     </td>
-                    <td style={{ padding:"10px 12px", fontSize:12, color:"#334155", fontWeight:600 }}>
+                    <td style={{ padding:"7px 10px", fontSize:11, color:"#334155", fontWeight:600 }}>
                       {c.daily_budget||c.dailyBudget ? fmtR(c.daily_budget||c.dailyBudget) : "—"}
                     </td>
-                    <td style={{ padding:"10px 12px", fontSize:12, color:"#64748b" }}>
+                    <td style={{ padding:"7px 10px", fontSize:11, color:"#64748b" }}>
                       {roasObjN>0 ? roasObjN.toFixed(0)+"x" : "—"}
                     </td>
-                    <td style={{ padding:"10px 12px", fontSize:13, fontWeight:700, color:"#0f172a" }}>
+                    <td style={{ padding:"7px 10px", fontSize:12, fontWeight:700, color:"#0f172a" }}>
                       {vendas>0?fmtN(vendas):<span style={{color:"#94a3b8"}}>—</span>}
                     </td>
                     <td style={{ padding:"10px 12px" }}>
@@ -12278,10 +12247,10 @@ function PublicidadeTab({ token, sellerId }) {
                         </span>
                       ) : <span style={{color:"#94a3b8",fontSize:11}}>—</span>}
                     </td>
-                    <td style={{ padding:"10px 12px", fontSize:12, fontWeight:700, color:"#15803d" }}>
+                    <td style={{ padding:"7px 10px", fontSize:11, fontWeight:700, color:"#15803d" }}>
                       {receita>0?fmtR(receita):<span style={{color:"#94a3b8"}}>—</span>}
                     </td>
-                    <td style={{ padding:"10px 12px", fontSize:12, color:"#dc2626", fontWeight:600 }}>
+                    <td style={{ padding:"7px 10px", fontSize:11, color:"#dc2626", fontWeight:600 }}>
                       {gasto>0?fmtR(gasto):<span style={{color:"#94a3b8"}}>—</span>}
                     </td>
                     <td style={{ padding:"10px 12px" }}>
@@ -12294,13 +12263,13 @@ function PublicidadeTab({ token, sellerId }) {
                         </span>
                       ) : <span style={{color:"#94a3b8",fontSize:11}}>—</span>}
                     </td>
-                    <td style={{ padding:"10px 12px", fontSize:12, color:"#334155" }}>
+                    <td style={{ padding:"7px 10px", fontSize:11, color:"#334155" }}>
                       {cliques>0?fmtN(cliques):<span style={{color:"#94a3b8"}}>—</span>}
                     </td>
-                    <td style={{ padding:"10px 12px", fontSize:12, color:"#64748b" }}>
+                    <td style={{ padding:"7px 10px", fontSize:11, color:"#64748b" }}>
                       {impressoes>0?fmtN(impressoes):<span style={{color:"#94a3b8"}}>—</span>}
                     </td>
-                    <td style={{ padding:"10px 12px", fontSize:12, color:"#0891b2" }}>
+                    <td style={{ padding:"7px 10px", fontSize:11, color:"#0891b2" }}>
                       {impressoes>0?ctr.toFixed(2)+"%":<span style={{color:"#94a3b8"}}>—</span>}
                     </td>
                     <td style={{ padding:"10px 12px" }}>
@@ -12513,7 +12482,9 @@ export default function App() {
     var mapSku = {};
     produtosUpd.forEach(function(p) {
       if (p.mlbVinculado) mapMlb[p.mlbVinculado] = p;
-      (p.mlbsVinculados || []).forEach(function(m) { mapMlb[m] = p; });
+      // Use unique MLBs only
+      var uniqueMlbs = (p.mlbsVinculados||[]).filter(function(m,i,a){ return a.indexOf(m)===i; });
+      uniqueMlbs.forEach(function(m) { mapMlb[m] = p; });
       if (p.sku) mapSku[p.sku.trim().toLowerCase()] = p;
     });
 
@@ -13359,9 +13330,9 @@ export default function App() {
 
       <header style={{ background:darkMode?"#111827":"#fff", borderBottom:`1px solid ${darkMode?"#1f2937":"#e2e8f0"}`, padding:"0 32px", display:"flex", alignItems:"center", position:"sticky", top:0, zIndex:100, boxShadow:"0 1px 2px rgba(15,23,42,.06)", minHeight:62 }}>
         {/* Logo + divisor + Abas */}
-        <div style={{ display:"flex", alignItems:"stretch", flex:1, minWidth:0, overflow:"hidden", height:62 }}>
+        <div style={{ display:"flex", alignItems:"stretch", flex:1, minWidth:0, overflow:"hidden", height:50 }}>
           {/* Logo */}
-          <div style={{ display:"flex", alignItems:"center", gap:10, paddingRight:28, marginRight:4, borderRight:`1px solid ${darkMode?"#1f2937":"#f1f5f9"}`, flexShrink:0 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:7, paddingRight:28, marginRight:4, borderRight:`1px solid ${darkMode?"#1f2937":"#f1f5f9"}`, flexShrink:0 }}>
             <div style={{ width:34, height:34, borderRadius:9, background:"#0f172a", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, fontSize:15, color:"#fbbf24", letterSpacing:-0.5 }}>M</div>
             <div>
               <div style={{ fontWeight:700, fontSize:14, color:darkMode?"#f1f5f9":"#0f172a", letterSpacing:-0.4, lineHeight:1.2 }}>ML Margem</div>
@@ -13392,7 +13363,7 @@ export default function App() {
                     onMouseEnter={function(e){ e.currentTarget.querySelector(".open-tab-btn").style.opacity="1"; }}
                     onMouseLeave={function(e){ e.currentTarget.querySelector(".open-tab-btn").style.opacity="0"; }}>
                     <button onClick={function(){ setTab(t.key); }}
-                      style={{ display:"flex", alignItems:"center", gap:6, padding:"0 16px", height:62, background:"transparent", border:"none",
+                      style={{ display:"flex", alignItems:"center", gap:6, padding:"0 16px", height:50, background:"transparent", border:"none",
                         borderBottom: isActive ? "2px solid #0f172a" : "2px solid transparent",
                         color: isActive ? (darkMode?"#f1f5f9":"#0f172a") : "#94a3b8",
                         fontWeight: isActive ? 600 : 400, fontSize:13, cursor:"pointer",
@@ -13428,7 +13399,7 @@ export default function App() {
             })()}
           </div>
         </div>
-        <div style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0, paddingLeft:16, borderLeft:`1px solid ${darkMode?"#1f2937":"#f1f5f9"}` }}>
+        <div style={{ display:"flex", alignItems:"center", gap:7, flexShrink:0, paddingLeft:16, borderLeft:`1px solid ${darkMode?"#1f2937":"#f1f5f9"}` }}>
           {usingMock && !token && <span style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", color: "#94a3b8", fontSize: 11, padding: "3px 10px", borderRadius: 20, fontWeight: 500 }}>Demonstração</span>}
           {token && <span style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#15803d", fontSize: 11, padding: "3px 12px", borderRadius: 20, fontWeight: 600 }}>● {user?.nickname}</span>}
           {loading && <span style={{ color: "#94a3b8", fontSize: 12 }}>⏳ {loadingMsg}</span>}
@@ -13483,7 +13454,7 @@ export default function App() {
         </div>
       </header>
 
-      <main style={{ maxWidth: 1440, margin: "0 auto", padding: "24px 32px" }}>
+      <main style={{ maxWidth: "100%", padding: "12px 20px" }}>
         {/* ── FILTRO DE PERÍODO e CARDS — apenas em Visão Geral, Anúncios e Pedidos ── */}
         {(tab === "overview" || tab === "listings" || tab === "orders") && <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:12, flexWrap:"wrap" }}>
           <span style={{ fontSize:12, color:"#94a3b8", fontWeight:500 }}>Período:</span>
@@ -13611,7 +13582,7 @@ export default function App() {
                 {tab === "listings" && currentUser?.permissoes?.includes("listings") && (
           <>
             {/* Sub-abas de Anúncios */}
-            <div style={{ display:"flex", gap:2, borderBottom:"2px solid #f1f5f9", marginBottom:20 }}>
+            <div style={{ display:"flex", gap:2, borderBottom:"2px solid #f1f5f9", marginBottom:10 }}>
               {[
                 { key:"ml",    label:"🟡 Anúncios Mercado Livre", badge: enriched.length },
                 { key:"outros",label:"➕ Outros Marketplaces",    badge: null },
@@ -13859,7 +13830,7 @@ export default function App() {
         {tab === "orders" && currentUser?.permissoes?.includes("orders") && (
           <>
             {/* Sub-abas de Pedidos */}
-            <div style={{ display:"flex", gap:2, borderBottom:"2px solid #f1f5f9", marginBottom:20 }}>
+            <div style={{ display:"flex", gap:2, borderBottom:"2px solid #f1f5f9", marginBottom:10 }}>
               {[
                 { key:"ml",    label:"🟡 Pedidos Mercado Livre", badge: enrichedOrders.length },
                 { key:"outros",label:"➕ Outros Marketplaces",   badge: null },
@@ -13972,7 +13943,7 @@ export default function App() {
                     var envLabel = detectTipoEnvio(o, shipmentStatuses) || "";
                     return (
                       <tr key={o.id} style={{ borderBottom:"1px solid #f8fafc" }}>
-                        <td style={{ padding:"10px 12px", fontSize:11, color:"#64748b", fontFamily:"monospace", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>#{o.id}</td>
+                        <td style={{ padding:"6px 9px", fontSize:11, color:"#64748b", fontFamily:"monospace", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>#{o.id}</td>
                         <td style={{ padding:"10px 12px" }}>
                           <span style={{ fontSize:11, fontWeight:600, color:sInfo.color, background:sInfo.bg, padding:"3px 8px", borderRadius:6, whiteSpace:"nowrap" }}>{sInfo.label}</span>
                         </td>
@@ -14026,9 +13997,9 @@ export default function App() {
                             })()}
                           </div>
                         </td>
-                        <td style={{ padding:"10px 12px", fontSize:12, color:"#64748b", whiteSpace:"nowrap" }}>{fmtDate(o.date)}</td>
-                        <td style={{ padding:"10px 12px", fontSize:13, fontWeight:700, color:"#0f172a", textAlign:"right", whiteSpace:"nowrap" }}>{fmt(o.price)}</td>
-                        <td style={{ padding:"10px 12px", fontSize:12, color:"#64748b", textAlign:"center" }}>×{o.qty}</td>
+                        <td style={{ padding:"7px 10px", fontSize:11, color:"#64748b", whiteSpace:"nowrap" }}>{fmtDate(o.date)}</td>
+                        <td style={{ padding:"7px 10px", fontSize:12, fontWeight:700, color:"#0f172a", textAlign:"right", whiteSpace:"nowrap" }}>{fmt(o.price)}</td>
+                        <td style={{ padding:"7px 10px", fontSize:11, color:"#64748b", textAlign:"center" }}>×{o.qty}</td>
                         <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#d97706", fontWeight:600, fontSize:12 }}>{fmt(o.fee)}</span></td>
                         <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#7c3aed", fontWeight:600, fontSize:12 }}>{o.freteSeller > 0 ? fmt(o.freteSeller) : "—"}</span></td>
                         <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#15803d", fontWeight:700, fontSize:12 }}>{fmt(youReceive)}</span></td>

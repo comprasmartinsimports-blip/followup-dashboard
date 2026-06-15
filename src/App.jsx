@@ -11364,6 +11364,311 @@ function BadgeTipoEnvio({ tipo }) {
   );
 }
 
+
+// ════════════════════════════════════════════════════════════
+//  ABA ASSISTENTE IA — Chat com contexto do negócio
+// ════════════════════════════════════════════════════════════
+function IAChatTab({ enriched, rawOrders, produtos, contasPagar, token }) {
+  const [msgs, setMsgs] = useState([{
+    role: "assistant",
+    content: "Olá! Sou seu assistente de negócios com acesso aos dados do seu ML Margem. Posso ajudar com análise de vendas, precificação, estoque, contas a pagar, e muito mais. O que você precisa?"
+  }]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const bottomRef = useRef(null);
+
+  useEffect(function() {
+    if (bottomRef.current) bottomRef.current.scrollIntoView({ behavior: "smooth" });
+  }, [msgs]);
+
+  function buildContext() {
+    var totalVendas = (rawOrders||[]).filter(function(o){return o.status==="paid";}).length;
+    var faturamento = (rawOrders||[]).filter(function(o){return o.status==="paid";}).reduce(function(s,o){return s+o.price*(o.qty||1);},0);
+    var contasPend = (contasPagar||[]).filter(function(c){return c.status!=="Pago";}).reduce(function(s,c){return s+parseFloat(c.valor||0);},0);
+    var topProd = {};
+    (rawOrders||[]).filter(function(o){return o.status==="paid";}).forEach(function(o){
+      if(!topProd[o.listing_id]) topProd[o.listing_id]={titulo:o.title,qtd:0,receita:0};
+      topProd[o.listing_id].qtd+=(o.qty||1);
+      topProd[o.listing_id].receita+=o.price*(o.qty||1);
+    });
+    var top5 = Object.values(topProd).sort(function(a,b){return b.receita-a.receita;}).slice(0,5);
+    var estoqueCritico = (produtos||[]).filter(function(p){return parseInt(p.estoqueAtual||0)<=(parseInt(p.estoqueMinimo||0));}).length;
+    return [
+      "=== CONTEXTO DO NEGÓCIO (dados em tempo real) ===",
+      "Total de pedidos pagos: " + totalVendas,
+      "Faturamento total: R$ " + faturamento.toFixed(2),
+      "Contas a pagar pendentes: R$ " + contasPend.toFixed(2),
+      "Produtos cadastrados: " + (produtos||[]).length,
+      "Produtos com estoque crítico: " + estoqueCritico,
+      "Top 5 produtos por receita:",
+      top5.map(function(p,i){return "  "+(i+1)+". "+p.titulo+" — "+p.qtd+" vendas — R$ "+p.receita.toFixed(2);}).join("\n"),
+      "=== FIM DO CONTEXTO ===",
+      "Responda em português brasileiro. Seja direto, objetivo e use os dados acima quando relevante.",
+    ].join("\n");
+  }
+
+  async function enviar() {
+    if (!input.trim() || loading) return;
+    var userMsg = { role: "user", content: input.trim() };
+    var newMsgs = [...msgs, userMsg];
+    setMsgs(newMsgs);
+    setInput("");
+    setLoading(true);
+    try {
+      var systemPrompt = buildContext();
+      var apiMsgs = newMsgs.map(function(m){ return { role: m.role, content: m.content }; });
+      var res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 1024,
+          system: systemPrompt,
+          messages: apiMsgs,
+        })
+      });
+      var data = await res.json();
+      var reply = (data.content||[]).find(function(b){return b.type==="text";})?.text || "Sem resposta.";
+      setMsgs(function(m){ return [...m, { role: "assistant", content: reply }]; });
+    } catch(e) {
+      setMsgs(function(m){ return [...m, { role: "assistant", content: "Erro ao conectar com a IA: " + e.message }]; });
+    }
+    setLoading(false);
+  }
+
+  function handleKey(e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); enviar(); } }
+
+  var SUGESTOES = [
+    "Como está minha margem média este mês?",
+    "Quais produtos preciso repor no estoque?",
+    "Quais são minhas contas a pagar mais urgentes?",
+    "Qual produto está gerando mais receita?",
+    "Me dê dicas para melhorar minha lucratividade",
+  ];
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", height:"calc(100vh - 130px)", maxWidth:900, margin:"0 auto", padding:"0 20px" }}>
+      {/* Header */}
+      <div style={{ padding:"20px 0 14px", borderBottom:"1px solid #e2e8f0", marginBottom:16 }}>
+        <div style={{ fontWeight:800, fontSize:20, color:"#0f172a", marginBottom:4 }}>✦ Assistente IA</div>
+        <div style={{ fontSize:13, color:"#64748b" }}>Converse com sua IA de negócios — com acesso aos dados reais do seu ML Margem</div>
+      </div>
+
+      {/* Mensagens */}
+      <div style={{ flex:1, overflowY:"auto", display:"flex", flexDirection:"column", gap:12, paddingBottom:8 }}>
+        {msgs.map(function(m, i) {
+          var isUser = m.role === "user";
+          return (
+            <div key={i} style={{ display:"flex", justifyContent:isUser?"flex-end":"flex-start" }}>
+              {!isUser && (
+                <div style={{ width:32, height:32, borderRadius:10, background:"#0f172a", color:"#ffe000", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0, marginRight:10, marginTop:2 }}>✦</div>
+              )}
+              <div style={{ maxWidth:"75%", padding:"12px 16px", borderRadius:isUser?"14px 14px 4px 14px":"14px 14px 14px 4px",
+                background:isUser?"#0f172a":"#f8fafc",
+                color:isUser?"#fff":"#0f172a",
+                fontSize:13, lineHeight:1.6, border:isUser?"none":"1px solid #e2e8f0",
+                whiteSpace:"pre-wrap" }}>
+                {m.content}
+              </div>
+            </div>
+          );
+        })}
+        {loading && (
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{ width:32, height:32, borderRadius:10, background:"#0f172a", color:"#ffe000", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>✦</div>
+            <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:"14px 14px 14px 4px", padding:"12px 16px" }}>
+              <div style={{ display:"flex", gap:4 }}>
+                {[0,1,2].map(function(j){ return <div key={j} style={{ width:6, height:6, borderRadius:"50%", background:"#94a3b8", animation:"pulse 1.2s ease-in-out "+j*0.2+"s infinite" }} />; })}
+              </div>
+            </div>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Sugestões rápidas */}
+      {msgs.length <= 1 && (
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:12 }}>
+          {SUGESTOES.map(function(s){
+            return (
+              <button key={s} onClick={function(){ setInput(s); }}
+                style={{ background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", padding:"7px 14px", borderRadius:20, fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>
+                {s}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Input */}
+      <div style={{ display:"flex", gap:10, padding:"12px 0 16px", borderTop:"1px solid #e2e8f0" }}>
+        <textarea value={input} onChange={function(e){setInput(e.target.value);}} onKeyDown={handleKey}
+          placeholder="Pergunte sobre suas vendas, estoque, finanças... (Enter para enviar)"
+          rows={2} disabled={loading}
+          style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"10px 14px",
+            borderRadius:10, fontSize:13, outline:"none", resize:"none", fontFamily:"inherit", lineHeight:1.5 }} />
+        <button onClick={enviar} disabled={loading || !input.trim()}
+          style={{ background:loading||!input.trim()?"#f1f5f9":"#0f172a", border:"none",
+            color:loading||!input.trim()?"#94a3b8":"#fff", fontWeight:700, padding:"0 20px",
+            borderRadius:10, cursor:loading||!input.trim()?"not-allowed":"pointer", fontSize:20, flexShrink:0 }}>
+          ➤
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  ABA PRECIFICAÇÃO — Calculadora vinculada aos anúncios
+// ════════════════════════════════════════════════════════════
+function PrecificacaoTab({ enriched, costs, setCostsAndSave, rawOrders }) {
+  const [busca, setBusca] = useState("");
+  const [margemAlvo, setMargemAlvo] = useState(20);
+  const [selectedId, setSelectedId] = useState(null);
+  const [custosLocais, setCustosLocais] = useState({});
+
+  var listsFiltrados = (enriched||[]).filter(function(l) {
+    if (!busca) return true;
+    var q = busca.toLowerCase();
+    return (l.title||"").toLowerCase().includes(q) || (l.id||"").includes(q) || (l.seller_sku||"").toLowerCase().includes(q);
+  });
+
+  function calcPrecos(bruto, custo, frete, taxa) {
+    var lucro = bruto - custo - frete - taxa;
+    var margem = bruto > 0 ? (lucro / bruto) * 100 : 0;
+    var precoAlvo = custo > 0 ? (custo + frete) / (1 - (margemAlvo/100) - (taxa/bruto||0.13)) : 0;
+    return { lucro, margem, precoAlvo };
+  }
+
+  // Preço médio real das últimas vendas
+  function precoMedioVendas(listingId) {
+    var vendas = (rawOrders||[]).filter(function(o){return o.listing_id===listingId && o.status==="paid";});
+    if (!vendas.length) return null;
+    return vendas.reduce(function(s,o){return s+o.price;},0) / vendas.length;
+  }
+
+  return (
+    <div style={{ padding:"0 20px" }}>
+      <div style={{ padding:"20px 0 14px", borderBottom:"1px solid #e2e8f0", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <div>
+          <div style={{ fontWeight:800, fontSize:20, color:"#0f172a", marginBottom:4 }}>💲 Precificação</div>
+          <div style={{ fontSize:13, color:"#64748b" }}>Calcule o preço ideal para cada anúncio com base na margem desejada</div>
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:10, background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 16px" }}>
+          <span style={{ fontSize:13, color:"#64748b", fontWeight:600 }}>Margem alvo:</span>
+          <input type="number" min="1" max="99" value={margemAlvo} onChange={function(e){setMargemAlvo(parseFloat(e.target.value)||20);}}
+            style={{ width:60, background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"6px 10px", borderRadius:8, fontSize:15, fontWeight:700, outline:"none", textAlign:"center" }} />
+          <span style={{ fontSize:15, fontWeight:700, color:"#0f172a" }}>%</span>
+        </div>
+      </div>
+
+      {/* Busca */}
+      <div style={{ position:"relative", margin:"14px 0" }}>
+        <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:14 }}>🔍</span>
+        <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar anúncio por título, MLB ou SKU..."
+          style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"10px 14px 10px 36px", borderRadius:10, fontSize:13, outline:"none" }} />
+      </div>
+
+      {/* Tabela */}
+      <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
+        <table style={{ borderCollapse:"collapse", width:"100%", minWidth:900 }}>
+          <thead>
+            <tr style={{ background:"#f8fafc" }}>
+              {["Anúncio","MLB","Preço Atual","Preço Médio Vendas","Custo","Taxa ML","Frete","Lucro Atual","Margem","Preço Sugerido","Ação"].map(function(h){
+                return <th key={h} style={{ fontSize:10, color:"#64748b", fontWeight:600, textTransform:"uppercase", padding:"10px 12px", borderBottom:"1px solid #e2e8f0", textAlign:"left", whiteSpace:"nowrap" }}>{h}</th>;
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {listsFiltrados.slice(0,100).map(function(l, i) {
+              var custo = custosLocais[l.id] !== undefined ? custosLocais[l.id] : (costs[l.id]||0);
+              var bruto = l.price || 0;
+              var taxa = l.fee || bruto * 0.13;
+              var frete = l.freteSeller || 0;
+              var calc = calcPrecos(bruto, custo, frete, taxa);
+              var pmv = precoMedioVendas(l.id);
+              var mCor = calc.margem >= margemAlvo ? "#15803d" : calc.margem >= margemAlvo*0.6 ? "#d97706" : "#dc2626";
+              var isEditing = selectedId === l.id;
+
+              return (
+                <tr key={l.id} style={{ borderBottom:"1px solid #f1f5f9", background:i%2===0?"#fff":"#fafafa" }}>
+                  <td style={{ padding:"10px 12px", maxWidth:220, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                    <div style={{ fontSize:12, fontWeight:600, color:"#0f172a" }}>{l.title}</div>
+                    {l.seller_sku && <div style={{ fontSize:10, color:"#94a3b8", marginTop:1 }}>SKU: {l.seller_sku}</div>}
+                  </td>
+                  <td style={{ padding:"10px 12px", fontSize:11, color:"#0891b2", fontFamily:"monospace" }}>{l.id}</td>
+                  <td style={{ padding:"10px 12px", fontSize:13, fontWeight:700, color:"#0f172a" }}>
+                    R$ {bruto.toFixed(2).replace(".",",")}
+                  </td>
+                  <td style={{ padding:"10px 12px", fontSize:12, color:"#64748b" }}>
+                    {pmv ? <span style={{color:"#0891b2", fontWeight:600}}>R$ {pmv.toFixed(2).replace(".",",")}</span> : <span style={{color:"#94a3b8"}}>—</span>}
+                  </td>
+                  <td style={{ padding:"10px 12px" }}>
+                    {isEditing ? (
+                      <input type="number" step="0.01" defaultValue={custo}
+                        onBlur={function(e){
+                          var v = parseFloat(e.target.value)||0;
+                          setCustosLocais(function(c){return {...c,[l.id]:v};});
+                          setCostsAndSave(function(c){return {...c,[l.id]:v};});
+                          setSelectedId(null);
+                        }}
+                        autoFocus
+                        style={{ width:80, background:"#fff", border:"1px solid #0891b2", color:"#0f172a", padding:"4px 8px", borderRadius:6, fontSize:12, outline:"none" }} />
+                    ) : (
+                      <span onClick={function(){setSelectedId(l.id);}} title="Clique para editar"
+                        style={{ cursor:"pointer", fontSize:12, fontWeight:600, color:custo>0?"#334155":"#dc2626",
+                          background:custo>0?"transparent":"#fef2f2", padding:custo>0?"0":"2px 6px", borderRadius:4 }}>
+                        {custo>0 ? "R$ "+custo.toFixed(2).replace(".",",") : "✎ Sem custo"}
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ padding:"10px 12px", fontSize:12, color:"#dc2626" }}>R$ {taxa.toFixed(2).replace(".",",")}</td>
+                  <td style={{ padding:"10px 12px", fontSize:12, color:"#d97706" }}>R$ {frete.toFixed(2).replace(".",",")}</td>
+                  <td style={{ padding:"10px 12px", fontSize:12, fontWeight:700, color:calc.lucro>=0?"#0891b2":"#dc2626" }}>
+                    {custo>0 ? "R$ "+calc.lucro.toFixed(2).replace(".",",") : <span style={{color:"#94a3b8"}}>—</span>}
+                  </td>
+                  <td style={{ padding:"10px 12px" }}>
+                    {custo > 0 ? (
+                      <span style={{ fontSize:12, fontWeight:700, color:mCor, background:mCor+"18", padding:"3px 8px", borderRadius:6 }}>
+                        {calc.margem.toFixed(1)}%
+                        {calc.margem >= margemAlvo ? " ✓" : " ↓"}
+                      </span>
+                    ) : <span style={{color:"#94a3b8",fontSize:11}}>—</span>}
+                  </td>
+                  <td style={{ padding:"10px 12px" }}>
+                    {custo > 0 && calc.precoAlvo > 0 ? (
+                      <span style={{ fontSize:12, fontWeight:800,
+                        color: calc.precoAlvo > bruto ? "#dc2626" : "#15803d" }}>
+                        R$ {calc.precoAlvo.toFixed(2).replace(".",",")}
+                        <span style={{fontSize:10, fontWeight:400, marginLeft:4, color:"#94a3b8"}}>
+                          {calc.precoAlvo > bruto ? "(↑ sobe)" : "(↓ OK)"}
+                        </span>
+                      </span>
+                    ) : <span style={{color:"#94a3b8",fontSize:11}}>informe custo</span>}
+                  </td>
+                  <td style={{ padding:"10px 12px" }}>
+                    <a href={"https://www.mercadolivre.com.br/anuncios/"+l.id+"/editar"} target="_blank" rel="noreferrer"
+                      style={{ fontSize:11, color:"#0891b2", textDecoration:"none", fontWeight:600 }}>
+                      Editar ML ↗
+                    </a>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {listsFiltrados.length === 0 && (
+          <div style={{ textAlign:"center", padding:"40px", color:"#94a3b8" }}>
+            <div style={{ fontSize:32, marginBottom:8 }}>🔍</div>
+            <div>Nenhum anúncio encontrado</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   // ── Auth do dashboard ─────────────────────────────────────
   const [tab, setTab] = useState(() => {
@@ -12401,6 +12706,8 @@ export default function App() {
                 currentUser?.permissoes?.includes("produtos")   && { key:"nf",         label:"NF Entrada",  badge:null },
                 currentUser?.permissoes?.includes("orders")     && { key:"nfe_saida",  label:"NF Saída",    badge:null },
                 currentUser?.permissoes?.includes("orders")     && { key:"full",        label:"⚡ Envios FULL", badge:null },
+                currentUser?.permissoes?.includes("listings")   && { key:"precificacao", label:"💲 Precificação", badge:null },
+                                                                   { key:"ia_chat",      label:"✦ Assistente IA", badge:null },
               ].filter(Boolean);
               return navTabs.map(function(t) {
                 var isActive = tab === t.key;
@@ -13127,6 +13434,25 @@ export default function App() {
             loadingNfe={loadingNfe}
             setLoadingNfe={setLoadingNfe}
             token={token}
+          />
+        )}
+
+        {tab === "ia_chat" && (
+          <IAChatTab
+            enriched={enriched}
+            rawOrders={rawOrders}
+            produtos={produtos}
+            contasPagar={contasPagar}
+            token={token}
+          />
+        )}
+
+        {tab === "precificacao" && currentUser?.permissoes?.includes("listings") && (
+          <PrecificacaoTab
+            enriched={enriched}
+            costs={costs}
+            setCostsAndSave={setCostsAndSave}
+            rawOrders={rawOrders}
           />
         )}
 

@@ -9544,12 +9544,9 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
                   );
                   return filtered.slice((paginaReceber-1)*POR_PAG_FIN, paginaReceber*POR_PAG_FIN).map(function(o, i) {
                     var ss = shipmentStatuses?.[o.id] ?? o.shipment_status;
-                    var ltR = (shipmentStatuses?.[String(o.id) + "_logistic"]) || o.shipping?.logistic_type || "";
-                    var isFullR = o.fulfilled === true || (o.orderTags||o.tags||[]).some(function(t){return String(t).includes("fulfillment");});
-                    var isFlexR = !isFullR && (ltR === "fulfillment" || ltR.includes("flex"));
                     var isDelivered2 = ss === "delivered" || (o.tags||[]).some(function(t){return t==="delivered";});
                     var isEnviado = ["shipped","in_transit"].includes(ss);
-                    var envLabel = isFullR ? "FULL" : isFlexR ? "Flex" : ltR.includes("drop_off")||ltR.includes("xd_") ? "ME2" : null;
+                    var envLabel = detectTipoEnvio(o, shipmentStatuses);
                     var label = isDelivered2 ? "Entregue" : isEnviado ? "Enviado" : "Ag. Envio";
                     var color = isDelivered2 ? "#7c3aed" : isEnviado ? "#0891b2" : "#d97706";
                     var bg = isDelivered2 ? "#f5f3ff" : isEnviado ? "#ecfeff" : "#fffbeb";
@@ -11118,6 +11115,93 @@ function FiltroBotao({ label, active, cor, bg, onClick, count }) {
   );
 }
 
+
+// ════════════════════════════════════════════════════════
+//  Detecção de Tipo de Envio (ML Brasil)
+//  Baseado nos campos oficiais da API ML
+// ════════════════════════════════════════════════════════
+function detectTipoEnvio(o, shipmentStatuses) {
+  var sid = String(o.id);
+
+  // Campos do endpoint /shipments/{id}
+  var lt       = ((shipmentStatuses && shipmentStatuses[sid + "_logistic"]) || o.shipping?.logistic_type || o.logistic_type || "").toLowerCase().trim();
+  var mode     = ((shipmentStatuses && shipmentStatuses[sid + "_mode"])     || "").toLowerCase();
+  var type     = ((shipmentStatuses && shipmentStatuses[sid + "_type"])     || "").toLowerCase();
+  var service  = ((shipmentStatuses && shipmentStatuses[sid + "_service"])  || "").toLowerCase();
+  var substatus= ((shipmentStatuses && shipmentStatuses[sid + "_substatus"])|| "").toLowerCase();
+
+  // Tags do pedido
+  var allTags = [].concat(o.tags || [], o.orderTags || []).map(function(t){ return String(t).toLowerCase(); });
+
+  var fulfilled = o.fulfilled === true;
+
+  // ══ FULL — Mercado Livre Fulfillment (galpão ML cuida do estoque e envio) ══
+  // fulfilled=true é o sinal mais confiável
+  // logistic_type="fulfillment" + fulfilled=true
+  // service_id=21 = ML Fulfillment BR
+  // tags: "fulfillment", "fbm_flow", "b2b"
+  if (
+    fulfilled ||
+    (lt.includes("fulfillment") && fulfilled) ||
+    service === "21" ||
+    allTags.includes("fulfillment") ||
+    allTags.includes("fbm_flow") ||
+    allTags.some(function(t){ return t.includes("b2b") && t.includes("fulfillment"); })
+  ) return "FULL";
+
+  // ══ FLEX — Vendedor entrega em domicílio com rota do ML ══
+  // logistic_type="fulfillment" MAS fulfilled=false (vendedor tem estoque, ML dá a rota)
+  // tags: "flex", "self_service_flex"
+  // mode="me2" com type que indica flex
+  if (
+    (lt.includes("fulfillment") && !fulfilled) ||
+    lt.includes("flex") ||
+    allTags.some(function(t){ return t.includes("flex"); }) ||
+    (mode.includes("me2") && (type.includes("flex") || substatus.includes("flex")))
+  ) return "Flex";
+
+  // ══ ME2 — Mercado Envios 2 (leva a agência dos Correios/Jadlog) ══
+  // logistic_type: "xd_drop_off", "drop_off"
+  // mode="me2" sem flex
+  if (
+    lt.includes("xd_drop_off") ||
+    lt === "drop_off" ||
+    lt.includes("cross_docking") ||
+    (mode.includes("me2") && !lt.includes("flex"))
+  ) return "ME2";
+
+  // ══ ME1 — Mercado Envios 1 (Correios coleta na casa do vendedor) ══
+  // logistic_type: "me1", "mandatory1", "not_specified" com mode="me1"
+  if (
+    lt === "me1" ||
+    lt.includes("mandatory1") ||
+    lt === "mandatory" ||
+    mode === "me1"
+  ) return "ME1";
+
+  // ══ Correios/Agência sem identificação clara → ME2 por padrão ══
+  // (pedidos com envio normal que não se identificaram acima)
+  if (lt === "not_specified" && mode) return "ME2";
+
+  return null;
+}
+
+// Badge visual do tipo de envio
+function BadgeTipoEnvio({ tipo }) {
+  if (!tipo) return null;
+  var cfg = {
+    "FULL": { bg:"#dbeafe", color:"#1d4ed8", label:"FULL" },
+    "Flex": { bg:"#ede9fe", color:"#7c3aed", label:"Flex" },
+    "ME2":  { bg:"#cffafe", color:"#0e7490", label:"ME2" },
+    "ME1":  { bg:"#dcfce7", color:"#166534", label:"ME1" },
+  }[tipo];
+  if (!cfg) return null;
+  return (
+    <span style={{ fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:5,
+      background:cfg.bg, color:cfg.color, whiteSpace:"nowrap" }}>{cfg.label}</span>
+  );
+}
+
 export default function App() {
   // ── Auth do dashboard ─────────────────────────────────────
   const [tab, setTab] = useState(() => {
@@ -11553,18 +11637,24 @@ export default function App() {
             shipmentStatusMap[String(o.id)] = shipData?.status ?? null;
             // Guardar método de envio
             var lt = shipData?.logistic_type || "";
-            // Log para os 2 pedidos de referência
-            if (String(o.id) === "2000016732869978" || String(o.id) === "2000016645535844") {
+            // Log para pedidos de referência (FULL, Flex, ME Normal)
+            var REF_IDS = ["2000016732869978","2000016645535844","2000013526353945","2000013519643433","2000013510763101"];
+            if (REF_IDS.includes(String(o.id))) {
               console.log("[SHIP_REF] id="+o.id);
-              console.log("  shipData:", JSON.stringify(shipData));
+              console.log("  logistic_type:", shipData?.logistic_type);
+              console.log("  mode:", shipData?.mode, "| type:", shipData?.type);
+              console.log("  status:", shipData?.status);
               console.log("  order.fulfilled:", o.fulfilled);
               console.log("  order.tags:", JSON.stringify(o.tags));
               console.log("  order.orderTags:", JSON.stringify(o.orderTags));
+              console.log("  shipData completo:", JSON.stringify(shipData).slice(0,500));
             }
             if (lt) shipmentStatusMap[String(o.id) + "_logistic"] = lt;
-            // Salvar mode e type do shipment para distinguir FULL de Flex
             if (shipData?.mode) shipmentStatusMap[String(o.id) + "_mode"] = shipData.mode;
             if (shipData?.type) shipmentStatusMap[String(o.id) + "_type"] = shipData.type;
+            // Salvar service_id e substatus para identificação mais precisa
+            if (shipData?.service_id) shipmentStatusMap[String(o.id) + "_service"] = String(shipData.service_id);
+            if (shipData?.substatus) shipmentStatusMap[String(o.id) + "_substatus"] = shipData.substatus;
           } catch { orderShippingMap[String(o.id)] = 0; }
         }));
         if (i % 20 === 0) setShipmentCosts({...orderShippingMap});
@@ -11986,21 +12076,10 @@ export default function App() {
   const enrichedOrdersComEnvio = useMemo(function() {
     if (filterEnvio === "todos") return enrichedOrders;
     return enrichedOrders.filter(function(o) {
-      var lt = ((shipmentStatuses?.[String(o.id)+"_logistic"]) || o.shipping?.logistic_type || "").toLowerCase();
-      var allTags = [].concat(o.tags||[], o.orderTags||[]).map(function(t){return String(t).toLowerCase();});
-      var hasFulfillmentTag = allTags.some(function(t){ return t === "fulfillment" || t === "fbm_flow"; });
-      var isFull = lt.includes("fulfillment") && (o.fulfilled === true || hasFulfillmentTag);
-      var isFlex = lt.includes("fulfillment") && o.fulfilled !== true && !hasFulfillmentTag;
-      if (!isFull && !isFlex && o.fulfilled === true) isFull = true;
-      var isME2  = lt.includes("xd_drop_off") || lt.includes("drop_off");
-      var isME1  = lt.includes("me1") || lt.includes("mandatory");
-      if (filterEnvio === "FULL") return isFull;
-      if (filterEnvio === "Flex") return isFlex;
-      if (filterEnvio === "ME2")  return isME2;
-      if (filterEnvio === "ME1")  return isME1;
-      return true;
+      var tipo = detectTipoEnvio(o, shipmentStatuses);
+      return tipo === filterEnvio;
     });
-  }, [enrichedOrders, filterEnvio, shipmentStatuses]);;
+  }, [enrichedOrders, filterEnvio, shipmentStatuses]);
 
   // ── Filtro de período ────────────────────────────────────
   const hoje = new Date().toLocaleDateString("sv-SE");
@@ -12740,30 +12819,7 @@ export default function App() {
                   ) : enrichedOrdersComEnvio.slice((paginaPedidos-1)*POR_PAG_PEDIDOS, paginaPedidos*POR_PAG_PEDIDOS).map(function(o) {
                     var youReceive = o.price - o.fee - o.freteSeller;
                     var sInfo = getOrderStatusInfo(o.status, o.tags, o.fulfilled, o.shipment_status);
-                    var lt = (shipmentStatuses?.[String(o.id) + "_logistic"]) || o.shipping?.logistic_type || "";
-                    // FULL = fulfilled===true OU tags tem "fulfillment"
-                    // Flex = logistic_type==="fulfillment" COM fulfilled===false (entrega pelo vendedor com rota ML)
-                    // FULL = o.fulfilled true (estoque no galpão ML)
-                    // Flex = logistic_type "fulfillment" mas fulfilled=false (rota ML, estoque do seller)
-                    // ME2 = xd_drop_off / drop_off
-                    // Distinção FULL vs Flex:
-                    // FULL: logistic_type="fulfillment" + tags contém "fulfillment" OU fulfilled=true
-                    // Flex: logistic_type="fulfillment" + tags NÃO contém "fulfillment" E fulfilled=false
-                    var ltNorm = lt.toLowerCase();
-                    var allTags = [].concat(o.tags||[], o.orderTags||[]).map(function(t){return String(t).toLowerCase();});
-                    var hasFulfillmentTag = allTags.some(function(t){ return t === "fulfillment" || t === "fbm_flow"; });
-                    var isFull = ltNorm.includes("fulfillment") && (o.fulfilled === true || hasFulfillmentTag);
-                    var isFlex = ltNorm.includes("fulfillment") && o.fulfilled !== true && !hasFulfillmentTag;
-                    var isME2  = ltNorm.includes("xd_drop_off") || ltNorm.includes("drop_off");
-                    var isME1  = ltNorm.includes("me1") || ltNorm.includes("mandatory");
-                    if (!isFull && !isFlex && o.fulfilled === true) isFull = true;
-                    var envCfg = isFull ? {label:"FULL", color:"#1d4ed8", bg:"#eff6ff"}
-                      : isFlex ? {label:"Flex", color:"#7c3aed", bg:"#f5f3ff"}
-                      : isME2  ? {label:"ME2",  color:"#0891b2", bg:"#ecfeff"}
-                      : isME1  ? {label:"ME1",  color:"#0369a1", bg:"#e0f2fe"}
-                      : lt.includes("cross") ? {label:"Cross", color:"#15803d", bg:"#f0fdf4"}
-                      : null;
-                    var envLabel = envCfg ? envCfg.label : "";
+                    var envLabel = detectTipoEnvio(o, shipmentStatuses) || "";
                     return (
                       <tr key={o.id} style={{ borderBottom:"1px solid #f8fafc" }}>
                         <td style={{ padding:"10px 12px", fontSize:11, color:"#64748b", fontFamily:"monospace", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>#{o.id}</td>
@@ -12771,8 +12827,7 @@ export default function App() {
                           <span style={{ fontSize:11, fontWeight:600, color:sInfo.color, background:sInfo.bg, padding:"3px 8px", borderRadius:6, whiteSpace:"nowrap" }}>{sInfo.label}</span>
                         </td>
                         <td style={{ padding:"10px 12px" }}>
-                          {envCfg ? <span style={{ fontSize:10, fontWeight:700, color:envCfg.color, background:envCfg.bg, padding:"2px 7px", borderRadius:5, whiteSpace:"nowrap" }}>{envCfg.label}</span>
-                            : <span style={{ color:"#94a3b8", fontSize:11 }}>—</span>}
+                          {envLabel ? <BadgeTipoEnvio tipo={envLabel} /> : <span style={{ color:"#94a3b8", fontSize:11 }}>—</span>}
                         </td>
                         <td style={{ padding:"10px 12px", overflow:"hidden" }}>
                           {o.buyerName ? (

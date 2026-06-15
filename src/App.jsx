@@ -11522,10 +11522,11 @@ function IAChatTab({ enriched, rawOrders, produtos, contasPagar, token }) {
 // ════════════════════════════════════════════════════════════
 //  ABA PRECIFICAÇÃO — Calculadora vinculada aos anúncios
 // ════════════════════════════════════════════════════════════
-function PrecificacaoTab({ enriched, costs, setCostsAndSave, rawOrders }) {
+function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFretesAndSave, rawOrders }) {
   const [busca, setBusca] = useState("");
   const [margemAlvo, setMargemAlvo] = useState(20);
   const [selectedId, setSelectedId] = useState(null);
+  const [editingFreteId, setEditingFreteId] = useState(null);
   const [custosLocais, setCustosLocais] = useState({});
 
   var listsFiltrados = (enriched||[]).filter(function(l) {
@@ -11575,7 +11576,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, rawOrders }) {
         <table style={{ borderCollapse:"collapse", width:"100%", minWidth:900 }}>
           <thead>
             <tr style={{ background:"#f8fafc" }}>
-              {["Anúncio","MLB","Preço Atual","Preço Médio Vendas","Custo","Taxa ML","Frete","Lucro Atual","Margem","Preço Sugerido","Ação"].map(function(h){
+              {["Anúncio","MLB","Preço Atual","Preço Médio Vendas","Custo","Taxa ML","Frete Config.","Frete Real","⚠ Frete","Lucro Atual","Margem","Preço Sugerido","Ação"].map(function(h){
                 return <th key={h} style={{ fontSize:10, color:"#64748b", fontWeight:600, textTransform:"uppercase", padding:"10px 12px", borderBottom:"1px solid #e2e8f0", textAlign:"left", whiteSpace:"nowrap" }}>{h}</th>;
               })}
             </tr>
@@ -11585,7 +11586,10 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, rawOrders }) {
               var custo = custosLocais[l.id] !== undefined ? custosLocais[l.id] : (costs[l.id]||0);
               var bruto = l.price || 0;
               var taxa = l.fee || bruto * 0.13;
-              var frete = l.freteSeller || 0;
+              var freteReal = l.freteSeller || 0;                         // frete real cobrado pelo ML
+              var freteConfig = parseFloat(fretesConfig&&fretesConfig[l.id]||0); // frete configurado na precif.
+              var frete = freteConfig > 0 ? freteConfig : freteReal;     // usa configurado se existir
+              var freteAlerta = freteConfig > 0 && freteReal > freteConfig; // real maior que configurado
               var calc = calcPrecos(bruto, custo, frete, taxa);
               var pmv = precoMedioVendas(l.id);
               var mCor = calc.margem >= margemAlvo ? "#15803d" : calc.margem >= margemAlvo*0.6 ? "#d97706" : "#dc2626";
@@ -11624,7 +11628,44 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, rawOrders }) {
                     )}
                   </td>
                   <td style={{ padding:"10px 12px", fontSize:12, color:"#dc2626" }}>R$ {taxa.toFixed(2).replace(".",",")}</td>
-                  <td style={{ padding:"10px 12px", fontSize:12, color:"#d97706" }}>R$ {frete.toFixed(2).replace(".",",")}</td>
+                  {/* Frete Configurado (editável) */}
+                  <td style={{ padding:"10px 12px" }}>
+                    {editingFreteId === l.id ? (
+                      <input type="number" step="0.01" min="0" defaultValue={freteConfig||""}
+                        placeholder="0,00"
+                        onBlur={function(e){
+                          var v = parseFloat(e.target.value)||0;
+                          setFretesAndSave(function(f){ return Object.assign({},f,{[l.id]:v}); });
+                          setEditingFreteId(null);
+                        }}
+                        autoFocus
+                        style={{ width:80, background:"#fff", border:"1px solid #0891b2", color:"#0f172a", padding:"4px 8px", borderRadius:6, fontSize:12, outline:"none" }} />
+                    ) : (
+                      <span onClick={function(){setEditingFreteId(l.id);}} title="Clique para definir frete esperado"
+                        style={{ cursor:"pointer", fontSize:12, fontWeight:600,
+                          color:freteConfig>0?"#d97706":"#94a3b8",
+                          background:freteConfig>0?"transparent":"#f8fafc",
+                          padding:freteConfig>0?"0":"2px 8px", borderRadius:4 }}>
+                        {freteConfig>0 ? "R$ "+freteConfig.toFixed(2).replace(".",",") : "✎ definir"}
+                      </span>
+                    )}
+                  </td>
+                  {/* Frete Real do ML */}
+                  <td style={{ padding:"10px 12px", fontSize:12, color:freteAlerta?"#dc2626":"#d97706", fontWeight:freteAlerta?700:400 }}>
+                    R$ {freteReal.toFixed(2).replace(".",",")}
+                  </td>
+                  {/* Alerta frete acima do configurado */}
+                  <td style={{ padding:"10px 12px" }}>
+                    {freteAlerta ? (
+                      <span style={{ fontSize:11, fontWeight:700, color:"#dc2626", background:"#fef2f2", border:"1px solid #fecaca", padding:"3px 8px", borderRadius:6, whiteSpace:"nowrap" }}>
+                        ⚠ +R$ {(freteReal-freteConfig).toFixed(2).replace(".",",")}
+                      </span>
+                    ) : freteConfig>0 ? (
+                      <span style={{ fontSize:11, color:"#15803d", background:"#f0fdf4", border:"1px solid #bbf7d0", padding:"3px 8px", borderRadius:6 }}>✓ OK</span>
+                    ) : (
+                      <span style={{ fontSize:11, color:"#94a3b8" }}>—</span>
+                    )}
+                  </td>
                   <td style={{ padding:"10px 12px", fontSize:12, fontWeight:700, color:calc.lucro>=0?"#0891b2":"#dc2626" }}>
                     {custo>0 ? "R$ "+calc.lucro.toFixed(2).replace(".",",") : <span style={{color:"#94a3b8"}}>—</span>}
                   </td>
@@ -11726,6 +11767,17 @@ export default function App() {
   const [costs, setCosts] = useState(function() {
     try { return JSON.parse(localStorage.getItem("costs_config") || "{}"); } catch { return {}; }
   });
+  // Fretes configurados na precificação: {[listing_id]: valorFreteEsperado}
+  const [fretesConfig, setFretesConfig] = useState(function() {
+    try { return JSON.parse(localStorage.getItem("fretes_config") || "{}"); } catch { return {}; }
+  });
+  function setFretesAndSave(updater) {
+    setFretesConfig(function(prev) {
+      var next = typeof updater === "function" ? updater(prev) : updater;
+      try { localStorage.setItem("fretes_config", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
   function setCostsAndSave(updater) {
     setCosts(function(prev) {
       var next = typeof updater === "function" ? updater(prev) : updater;
@@ -12419,9 +12471,18 @@ export default function App() {
     }
     if (statusFilter === "active") results = results.filter(l => l.status === "active");
     if (statusFilter === "paused") results = results.filter(l => l.status === "paused");
-    if (filterListingExtra === "sem_custo") results = results.filter(l => !(costs[l.id] > 0));
-    if (filterListingExtra === "com_promo") results = results.filter(l => l.hasPromo);
-    if (filterListingExtra === "sem_promo") results = results.filter(l => !l.hasPromo);
+    if (filterListingExtra === "sem_custo")  results = results.filter(l => !(costs[l.id] > 0));
+    if (filterListingExtra === "com_promo")  results = results.filter(l => l.hasPromo);
+    if (filterListingExtra === "sem_promo")  results = results.filter(l => !l.hasPromo);
+    if (filterListingExtra === "frete_alto") {
+      var fretesConf = {};
+      try { fretesConf = JSON.parse(localStorage.getItem("fretes_config") || "{}"); } catch {}
+      results = results.filter(function(l) {
+        var fc = parseFloat(fretesConf[l.id]||0);
+        var fr = l.freteSeller || 0;
+        return fc > 0 && fr > fc;
+      });
+    }
     return results;
   }, [enriched, searchListings, searchType, statusFilter, filterListingExtra, costs]);
 
@@ -12973,7 +13034,7 @@ export default function App() {
                     })}
                   </FiltroGrupo>
                   <FiltroGrupo titulo="Situação">
-                    {[{k:"all",l:"Todos"},{k:"sem_custo",l:"⚠️ Sem custo",cor:"#dc2626",bg:"#fef2f2"},{k:"com_promo",l:"🔥 Com promoção",cor:"#7c3aed",bg:"#f5f3ff"},{k:"sem_promo",l:"○ Sem promoção",cor:"#64748b",bg:"#f8fafc"}].map(function(f){
+                    {[{k:"all",l:"Todos"},{k:"sem_custo",l:"⚠️ Sem custo",cor:"#dc2626",bg:"#fef2f2"},{k:"com_promo",l:"🔥 Com promoção",cor:"#7c3aed",bg:"#f5f3ff"},{k:"sem_promo",l:"○ Sem promoção",cor:"#64748b",bg:"#f8fafc"},{k:"frete_alto",l:"🚚 Frete acima do config.",cor:"#ea580c",bg:"#fff7ed"}].map(function(f){
                       return <FiltroBotao key={f.k} label={f.l} active={filterListingExtra===f.k}
                         cor={f.cor||"#0f172a"} bg={f.bg||"#f1f5f9"}
                         onClick={function(){setFilterListingExtra(f.k);setPaginaAnuncios(1);}} />;
@@ -13126,6 +13187,21 @@ export default function App() {
                         <td>
                           <div style={{ fontSize: 11, color: frete.topColor, background: frete.topBg, padding: "2px 7px", borderRadius: 5, fontWeight: 600, display: "inline-block", marginBottom: 3 }}>{frete.topLabel}</div>
                           <div style={{ fontSize: 11, color: frete.bottomColor, fontWeight: 700 }}>{frete.bottomLabel}</div>
+                          {(function(){
+                            try {
+                              var fretesConf = JSON.parse(localStorage.getItem("fretes_config")||"{}");
+                              var fc = parseFloat(fretesConf[l.id]||0);
+                              var fr = l.freteSeller||0;
+                              if (fc>0 && fr>fc) return (
+                                <div style={{ marginTop:2 }}>
+                                  <span style={{ fontSize:9, fontWeight:700, background:"#fff7ed", color:"#ea580c", border:"1px solid #fed7aa", padding:"1px 5px", borderRadius:3, whiteSpace:"nowrap" }}>
+                                    🚚 frete +R${(fr-fc).toFixed(2).replace(".",",")}
+                                  </span>
+                                </div>
+                              );
+                            } catch {}
+                            return null;
+                          })()}
                         </td>
                         <td>
                           <span style={{ fontWeight: 700, color: "#15803d", fontSize: 13 }}>{fmt(l.youReceive)}</span>
@@ -13448,6 +13524,8 @@ export default function App() {
             enriched={enriched}
             costs={costs}
             setCostsAndSave={setCostsAndSave}
+            fretesConfig={fretesConfig}
+            setFretesAndSave={setFretesAndSave}
             rawOrders={rawOrders}
           />
         )}

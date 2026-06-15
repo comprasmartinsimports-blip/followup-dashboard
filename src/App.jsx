@@ -12062,42 +12062,78 @@ function PublicidadeTab({ token, sellerId }) {
   async function carregarCampanhas() {
     if (!token || !sellerId) { setErro("Conecte ao Mercado Livre primeiro."); return; }
     setLoading(true); setErro(null);
+
+    // Mapear período para datas reais (API ML Ads usa date_from/date_to)
+    function getDatas(p) {
+      var hoje = new Date();
+      var fmt = function(d){ return d.toISOString().slice(0,10); };
+      var sub = function(n){ var d=new Date(hoje); d.setDate(d.getDate()-n); return d; };
+      if(p==="TODAY")        return { from: fmt(hoje),       to: fmt(hoje) };
+      if(p==="YESTERDAY")    return { from: fmt(sub(1)),     to: fmt(sub(1)) };
+      if(p==="LAST_7_DAYS")  return { from: fmt(sub(7)),     to: fmt(hoje) };
+      if(p==="LAST_14_DAYS") return { from: fmt(sub(14)),    to: fmt(hoje) };
+      if(p==="LAST_30_DAYS") return { from: fmt(sub(30)),    to: fmt(hoje) };
+      if(p==="THIS_MONTH")   { var d=new Date(hoje.getFullYear(),hoje.getMonth(),1); return { from: fmt(d), to: fmt(hoje) }; }
+      return { from: fmt(sub(7)), to: fmt(hoje) };
+    }
+    var datas = getDatas(periodo);
+
     try {
-      // 1. Buscar campanhas
-      var res = await fetch("/api/ml/advertising/product_ads/campaigns?seller_id="+sellerId+"&status=ALL&limit=50&offset=0", {
-        headers: { Authorization: "Bearer "+token }
-      });
+      // ── 1. Buscar campanhas via API direta do ML ──
+      // Endpoint correto: GET /advertising/product_ads/campaigns
+      var BASE = "https://api.mercadolibre.com";
+      var headers = { Authorization: "Bearer "+token, "Content-Type": "application/json" };
+
+      var res = await fetch(BASE+"/advertising/product_ads/campaigns?seller_id="+sellerId+"&status=ALL&limit=50&offset=0", { headers: headers });
       var data = await res.json();
-      if (data.error) throw new Error(data.message||data.error);
-      var camps = data.results || data.campaigns || [];
+
+      // Diagnóstico em console para depuração
+      console.log("[PUBLICIDADE] campanhas response:", JSON.stringify(data).slice(0,300));
+
+      if (data.error) throw new Error((data.message||data.error)+" (status: "+res.status+")");
+      var camps = Array.isArray(data) ? data : (data.results || data.campaigns || data.data || []);
       setCampanhas(camps);
 
-      // 2. Buscar métricas de cada campanha
+      if (camps.length === 0) {
+        setErro(null);
+        setLoading(false);
+        return;
+      }
+
+      // ── 2. Buscar métricas de cada campanha ──
       var metMap = {};
-      var totais = { impressoes:0, cliques:0, vendas:0, receita:0, gasto:0, roas:0 };
+      var totais = { impressoes:0, cliques:0, vendas:0, receita:0, gasto:0 };
+
       await Promise.all(camps.map(async function(c) {
         try {
-          var mr = await fetch("/api/ml/advertising/product_ads/campaigns/"+c.id+"/metrics?seller_id="+sellerId+"&date_range="+periodo, {
-            headers: { Authorization: "Bearer "+token }
-          });
+          // Endpoint de métricas por campanha
+          var mUrl = BASE+"/advertising/product_ads/campaigns/"+c.id+"/metrics?date_from="+datas.from+"&date_to="+datas.to+"&seller_id="+sellerId;
+          var mr = await fetch(mUrl, { headers: headers });
           var md = await mr.json();
-          var m = md.results||md||{};
+          console.log("[PUBLICIDADE] métricas camp "+c.id+":", JSON.stringify(md).slice(0,200));
+          // A resposta pode vir de formas diferentes
+          var m = Array.isArray(md) ? md[0] : (md.results||md.data||md||{});
           metMap[c.id] = m;
-          totais.impressoes += parseInt(m.impressions||m.impressoes||0);
-          totais.cliques    += parseInt(m.clicks||m.cliques||0);
-          totais.vendas     += parseInt(m.sales||m.vendas||0);
-          totais.receita    += parseFloat(m.revenue||m.receita||0);
-          totais.gasto      += parseFloat(m.spent||m.gasto||m.invest||0);
-        } catch {}
+          totais.impressoes += parseFloat(m.impressions||m.prints||0);
+          totais.cliques    += parseFloat(m.clicks||0);
+          totais.vendas     += parseFloat(m.conversions||m.sales||m.orders||0);
+          totais.receita    += parseFloat(m.amount_sales||m.revenue||m.gmv||0);
+          totais.gasto      += parseFloat(m.amount_spent||m.spent||m.invest||m.cost||0);
+        } catch(e2) {
+          console.warn("[PUBLICIDADE] erro métricas camp "+c.id, e2.message);
+        }
       }));
+
       totais.roas = totais.gasto > 0 ? totais.receita/totais.gasto : 0;
       totais.ctr  = totais.impressoes > 0 ? (totais.cliques/totais.impressoes)*100 : 0;
       totais.acos = totais.receita > 0 ? (totais.gasto/totais.receita)*100 : 0;
       setMetricas(metMap);
       setTotalMetricas(totais);
       setUltimaAtualizacao(new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}));
+      setErro(null);
     } catch(e) {
-      setErro("Erro ao carregar campanhas: "+e.message);
+      console.error("[PUBLICIDADE] erro:", e);
+      setErro("Erro: "+e.message+". Verifique o console para detalhes.");
     }
     setLoading(false);
   }
@@ -12111,8 +12147,8 @@ function PublicidadeTab({ token, sellerId }) {
            s==="paused"||s==="PAUSED" ? "#d97706" : "#94a3b8";
   }
   function statusLabel(s) {
-    return s==="enabled"||s==="active"||s==="ENABLED" ? "Ativa" :
-           s==="paused"||s==="PAUSED" ? "Pausada" :
+    return s==="enabled"||s==="active"||s==="ENABLED"||s==="A" ? "Ativa" :
+           s==="paused"||s==="PAUSED"||s==="P" ? "Pausada" :
            s==="archived"||s==="ARCHIVED" ? "Arquivada" : s||"—";
   }
 
@@ -12197,15 +12233,15 @@ function PublicidadeTab({ token, sellerId }) {
             <tbody>
               {campanhas.map(function(c, i) {
                 var m = metricas[c.id] || {};
-                var impressoes = parseInt(m.impressions||m.impressoes||0);
-                var cliques    = parseInt(m.clicks||m.cliques||0);
-                var vendas     = parseInt(m.sales||m.vendas||0);
-                var receita    = parseFloat(m.revenue||m.receita||0);
-                var gasto      = parseFloat(m.spent||m.gasto||m.invest||0);
+                var impressoes = parseFloat(m.impressions||m.prints||m.impressoes||0);
+                var cliques    = parseFloat(m.clicks||m.cliques||0);
+                var vendas     = parseFloat(m.conversions||m.sales||m.orders||m.vendas||0);
+                var receita    = parseFloat(m.amount_sales||m.revenue||m.gmv||m.receita||0);
+                var gasto      = parseFloat(m.amount_spent||m.spent||m.invest||m.cost||m.gasto||0);
                 var roas       = gasto>0 ? receita/gasto : 0;
                 var acos       = receita>0 ? (gasto/receita)*100 : 0;
                 var ctr        = impressoes>0 ? (cliques/impressoes)*100 : 0;
-                var isAtiva    = c.status==="enabled"||c.status==="active"||c.status==="ENABLED";
+                var isAtiva    = c.status==="enabled"||c.status==="active"||c.status==="ENABLED"||c.status==="A";
                 var sCorText   = statusCor(c.status);
                 var roasObjN   = parseFloat(c.roas_target||c.roasTarget||0);
 

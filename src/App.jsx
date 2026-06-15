@@ -11123,65 +11123,36 @@ function FiltroBotao({ label, active, cor, bg, onClick, count }) {
 function detectTipoEnvio(o, shipmentStatuses) {
   var sid = String(o.id);
 
-  // Campos do endpoint /shipments/{id}
-  var lt       = ((shipmentStatuses && shipmentStatuses[sid + "_logistic"]) || o.shipping?.logistic_type || o.logistic_type || "").toLowerCase().trim();
-  var mode     = ((shipmentStatuses && shipmentStatuses[sid + "_mode"])     || "").toLowerCase();
-  var type     = ((shipmentStatuses && shipmentStatuses[sid + "_type"])     || "").toLowerCase();
-  var service  = ((shipmentStatuses && shipmentStatuses[sid + "_service"])  || "").toLowerCase();
-  var substatus= ((shipmentStatuses && shipmentStatuses[sid + "_substatus"])|| "").toLowerCase();
+  // Campos reais da API ML (confirmados com dados reais)
+  var lt    = ((shipmentStatuses && shipmentStatuses[sid + "_logistic"]) || o.shipping?.logistic_type || o.logistic_type || "").toLowerCase().trim();
+  var mode  = ((shipmentStatuses && shipmentStatuses[sid + "_mode"])    || "").toLowerCase();
+  var type  = ((shipmentStatuses && shipmentStatuses[sid + "_type"])    || "").toLowerCase();
 
   // Tags do pedido
   var allTags = [].concat(o.tags || [], o.orderTags || []).map(function(t){ return String(t).toLowerCase(); });
-
   var fulfilled = o.fulfilled === true;
 
-  // ══ FULL — Mercado Livre Fulfillment (galpão ML cuida do estoque e envio) ══
-  // fulfilled=true é o sinal mais confiável
-  // logistic_type="fulfillment" + fulfilled=true
-  // service_id=21 = ML Fulfillment BR
-  // tags: "fulfillment", "fbm_flow", "b2b"
-  if (
-    fulfilled ||
-    (lt.includes("fulfillment") && fulfilled) ||
-    service === "21" ||
-    allTags.includes("fulfillment") ||
-    allTags.includes("fbm_flow") ||
-    allTags.some(function(t){ return t.includes("b2b") && t.includes("fulfillment"); })
-  ) return "FULL";
+  // ══ FULL — ML Fulfillment (galpão ML, logistic_type="fulfillment", fulfilled=true) ══
+  // Confirmado: logistic_type="fulfillment" + fulfilled=true + tags=["d2c"...]
+  if (lt === "fulfillment" && fulfilled) return "FULL";
+  if (lt.includes("fulfillment") && fulfilled) return "FULL";
 
-  // ══ FLEX — Vendedor entrega em domicílio com rota do ML ══
-  // logistic_type="fulfillment" MAS fulfilled=false (vendedor tem estoque, ML dá a rota)
-  // tags: "flex", "self_service_flex"
-  // mode="me2" com type que indica flex
-  if (
-    (lt.includes("fulfillment") && !fulfilled) ||
-    lt.includes("flex") ||
-    allTags.some(function(t){ return t.includes("flex"); }) ||
-    (mode.includes("me2") && (type.includes("flex") || substatus.includes("flex")))
-  ) return "Flex";
+  // ══ FLEX — Entrega pelo vendedor com rota ML ══
+  // Confirmado: logistic_type="self_service" + mode="me2" + fulfilled=true/false
+  // "self_service" é o identificador real do Flex no Brasil
+  if (lt === "self_service") return "Flex";
+  if (lt.includes("self_service")) return "Flex";
 
-  // ══ ME2 — Mercado Envios 2 (leva a agência dos Correios/Jadlog) ══
-  // logistic_type: "xd_drop_off", "drop_off"
-  // mode="me2" sem flex
-  if (
-    lt.includes("xd_drop_off") ||
-    lt === "drop_off" ||
-    lt.includes("cross_docking") ||
-    (mode.includes("me2") && !lt.includes("flex"))
-  ) return "ME2";
+  // ══ FULL também pode aparecer como fulfillment sem fulfilled=true em alguns casos ══
+  if (lt === "fulfillment") return "FULL";
 
-  // ══ ME1 — Mercado Envios 1 (Correios coleta na casa do vendedor) ══
-  // logistic_type: "me1", "mandatory1", "not_specified" com mode="me1"
-  if (
-    lt === "me1" ||
-    lt.includes("mandatory1") ||
-    lt === "mandatory" ||
-    mode === "me1"
-  ) return "ME1";
+  // ══ ME2 — Agência (Correios/Jadlog, drop-off) ══
+  // logistic_type="xd_drop_off" ou "drop_off", mode="me2" sem self_service
+  if (lt.includes("xd_drop_off") || lt === "drop_off" || lt.includes("cross_docking")) return "ME2";
+  if (mode === "me2" && lt !== "self_service" && !lt.includes("self_service")) return "ME2";
 
-  // ══ Correios/Agência sem identificação clara → ME2 por padrão ══
-  // (pedidos com envio normal que não se identificaram acima)
-  if (lt === "not_specified" && mode) return "ME2";
+  // ══ ME1 — Correios coleta no vendedor ══
+  if (lt === "me1" || lt.includes("mandatory1") || mode === "me1") return "ME1";
 
   return null;
 }
@@ -11638,7 +11609,7 @@ export default function App() {
             // Guardar método de envio
             var lt = shipData?.logistic_type || "";
             // Log para pedidos de referência (FULL, Flex, ME Normal)
-            var REF_IDS = ["2000016732869978","2000016645535844","2000013526353945","2000013519643433","2000013510763101"];
+            var REF_IDS = ["2000016732869978","2000016645535844","2000013526353945","2000013519643433","2000013510763101","2000016946125400","2000016943980800","2000016940055500"];
             if (REF_IDS.includes(String(o.id))) {
               var dbg = {
                 id: o.id,

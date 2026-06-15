@@ -11665,18 +11665,43 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
     setDescontosConfig(next);
     try { localStorage.setItem("descontos_config", JSON.stringify(next)); } catch {}
   }
+  // Preços de venda sugeridos (digitados pelo usuário)
+  const [editingPrecoId, setEditingPrecoId] = useState(null);
+  const [precosVendaConfig, setPrecosVendaConfig] = useState(function(){
+    try { return JSON.parse(localStorage.getItem("precos_venda_config")||"{}"); } catch { return {}; }
+  });
+  function setPrecoVenda(id, preco) {
+    var next = Object.assign({}, precosVendaConfig, { [id]: preco });
+    setPrecosVendaConfig(next);
+    try { localStorage.setItem("precos_venda_config", JSON.stringify(next)); } catch {}
+  }
+
+  const [buscaSku, setBuscaSku] = useState("");
 
   var listsFiltrados = (enriched||[]).filter(function(l) {
-    if (!busca) return true;
-    var q = busca.toLowerCase();
-    return (l.title||"").toLowerCase().includes(q) || (l.id||"").includes(q) || (l.seller_sku||"").toLowerCase().includes(q);
+    // Filtro SKU específico
+    if (buscaSku.trim()) {
+      var skuQ = buscaSku.trim().toLowerCase();
+      var sku = (l.seller_sku||l.sku||"").toLowerCase();
+      if (!sku.includes(skuQ)) return false;
+    }
+    // Filtro busca geral
+    if (busca.trim()) {
+      var q = busca.trim().toLowerCase();
+      return (l.title||"").toLowerCase().includes(q) || (l.id||"").includes(q) || (l.seller_sku||"").toLowerCase().includes(q);
+    }
+    return true;
   });
 
-  function calcPrecos(bruto, custo, frete, taxa) {
-    var lucro = bruto - custo - frete - taxa;
-    var margem = bruto > 0 ? (lucro / bruto) * 100 : 0;
-    var precoAlvo = custo > 0 ? (custo + frete) / (1 - (margemAlvo/100) - (taxa/bruto||0.13)) : 0;
-    return { lucro, margem, precoAlvo };
+  function calcPrecos(bruto, custo, frete, taxa, precoVendaCustom) {
+    // Se tem preço de venda customizado, usa ele; senão usa o preço atual do anúncio
+    var precoBase = precoVendaCustom > 0 ? precoVendaCustom : bruto;
+    // Recalcular taxa proporcional ao novo preço
+    var taxaBase = precoVendaCustom > 0 && bruto > 0 ? taxa * (precoVendaCustom / bruto) : taxa;
+    var lucro = precoBase - custo - frete - taxaBase;
+    var margem = precoBase > 0 ? (lucro / precoBase) * 100 : 0;
+    var precoAlvo = custo > 0 ? (custo + frete) / (1 - (margemAlvo/100) - (taxaBase/precoBase||0.13)) : 0;
+    return { lucro, margem, precoAlvo, taxaBase };
   }
 
   // Preço médio real das últimas vendas
@@ -11702,10 +11727,23 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
       </div>
 
       {/* Busca */}
-      <div style={{ position:"relative", margin:"14px 0" }}>
-        <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:14 }}>🔍</span>
-        <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar anúncio por título, MLB ou SKU..."
-          style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"10px 14px 10px 36px", borderRadius:10, fontSize:13, outline:"none" }} />
+      <div style={{ display:"flex", gap:10, margin:"14px 0" }}>
+        <div style={{ position:"relative", flex:1 }}>
+          <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:14 }}>🔍</span>
+          <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar por título ou MLB..."
+            style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"10px 14px 10px 36px", borderRadius:10, fontSize:13, outline:"none" }} />
+        </div>
+        <div style={{ position:"relative", width:200 }}>
+          <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:12, fontWeight:700 }}>#</span>
+          <input value={buscaSku} onChange={function(e){setBuscaSku(e.target.value);}} placeholder="Filtrar por SKU..."
+            style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"10px 14px 10px 28px", borderRadius:10, fontSize:13, outline:"none" }} />
+          {buscaSku && (
+            <button onClick={function(){setBuscaSku("");}} style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:"#94a3b8", cursor:"pointer", fontSize:16, lineHeight:1 }}>×</button>
+          )}
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:8, background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"0 14px", fontSize:12, color:"#64748b", whiteSpace:"nowrap" }}>
+          {listsFiltrados.length} anúncio(s)
+        </div>
       </div>
 
       {/* Tabela */}
@@ -11713,8 +11751,9 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
         <table style={{ borderCollapse:"collapse", width:"100%", minWidth:900 }}>
           <thead>
             <tr style={{ background:"#f8fafc" }}>
-              {["Anúncio","MLB","Preço Atual","Preço Médio Vendas","Custo","Taxa ML","Frete Config.","Frete Real","⚠ Frete","Lucro Atual","Margem","Preço Sugerido","🏷 % Desc. Promoção","Preço c/ Desc.","Margem c/ Desc.","Ação"].map(function(h){
-                return <th key={h} style={{ fontSize:10, color:"#64748b", fontWeight:600, textTransform:"uppercase", padding:"10px 12px", borderBottom:"1px solid #e2e8f0", textAlign:"left", whiteSpace:"nowrap" }}>{h}</th>;
+              {["SKU","Tipo","Anúncio","MLB","Preço Atual","Preço Médio Vendas","Custo","Taxa ML","Frete Config.","Frete Real","⚠ Frete","💡 Preço Venda Simulado","Lucro Simulado","Margem Simulada","Preço Sugerido","🏷 % Desc. Promoção","Preço c/ Desc.","Margem c/ Desc.","Ação"].map(function(h){
+                var isSimul = h === "💡 Preço Venda Simulado" || h === "Lucro Simulado" || h === "Margem Simulada";
+                return <th key={h} style={{ fontSize:10, color: isSimul?"#7c3aed":"#64748b", fontWeight:600, textTransform:"uppercase", padding:"10px 12px", borderBottom:"1px solid #e2e8f0", textAlign:"left", whiteSpace:"nowrap", background: isSimul?"#faf5ff":"transparent" }}>{h}</th>;
               })}
             </tr>
           </thead>
@@ -11723,20 +11762,44 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
               var custo = custosLocais[l.id] !== undefined ? custosLocais[l.id] : (costs[l.id]||0);
               var bruto = l.price || 0;
               var taxa = l.fee || bruto * 0.13;
-              var freteReal = l.freteSeller || 0;                         // frete real cobrado pelo ML
-              var freteConfig = parseFloat(fretesConfig&&fretesConfig[l.id]||0); // frete configurado na precif.
-              var frete = freteConfig > 0 ? freteConfig : freteReal;     // usa configurado se existir
-              var freteAlerta = freteConfig > 0 && freteReal > freteConfig; // real maior que configurado
-              var calc = calcPrecos(bruto, custo, frete, taxa);
+              var freteReal = l.freteSeller || 0;
+              var freteConfig = parseFloat(fretesConfig&&fretesConfig[l.id]||0);
+              var frete = freteConfig > 0 ? freteConfig : freteReal;
+              var freteAlerta = freteConfig > 0 && freteReal > freteConfig;
+              // Preço de venda simulado (digitado pelo usuário)
+              var precoVendaSimul = parseFloat(precosVendaConfig&&precosVendaConfig[l.id]||0);
+              // Calcular com base no preço simulado se existir, senão usa preço atual
+              var calc = calcPrecos(bruto, custo, frete, taxa, precoVendaSimul);
               var pmv = precoMedioVendas(l.id);
               var mCor = calc.margem >= margemAlvo ? "#15803d" : calc.margem >= margemAlvo*0.6 ? "#d97706" : "#dc2626";
               var isEditing = selectedId === l.id;
 
               return (
                 <tr key={l.id} style={{ borderBottom:"1px solid #f1f5f9", background:i%2===0?"#fff":"#fafafa" }}>
-                  <td style={{ padding:"10px 12px", maxWidth:220, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                  {/* SKU */}
+                  <td style={{ padding:"10px 12px" }}>
+                    <span style={{ fontSize:11, fontFamily:"monospace", fontWeight:700, color:"#334155", background:"#f1f5f9", padding:"3px 8px", borderRadius:5, whiteSpace:"nowrap" }}>
+                      {l.seller_sku||l.sku||"—"}
+                    </span>
+                  </td>
+                  {/* Tipo (Clássico / Premium) */}
+                  <td style={{ padding:"10px 12px" }}>
+                    {(function(){
+                      var t = l.listing_type_id||"";
+                      var isPremium = t==="gold_premium"||t==="gold_pro"||t==="gold_special";
+                      return (
+                        <span style={{ fontSize:10, fontWeight:700, padding:"3px 8px", borderRadius:6, whiteSpace:"nowrap",
+                          background: isPremium?"#f5f3ff":"#eff6ff",
+                          color: isPremium?"#7c3aed":"#1d4ed8",
+                          border: "1px solid "+(isPremium?"#ddd6fe":"#bfdbfe") }}>
+                          {isPremium?"⭐ Premium":"📋 Clássico"}
+                        </span>
+                      );
+                    })()}
+                  </td>
+                  {/* Anúncio */}
+                  <td style={{ padding:"10px 12px", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                     <div style={{ fontSize:12, fontWeight:600, color:"#0f172a" }}>{l.title}</div>
-                    {l.seller_sku && <div style={{ fontSize:10, color:"#94a3b8", marginTop:1 }}>SKU: {l.seller_sku}</div>}
                   </td>
                   <td style={{ padding:"10px 12px", fontSize:11, color:"#0891b2", fontFamily:"monospace" }}>{l.id}</td>
                   <td style={{ padding:"10px 12px", fontSize:13, fontWeight:700, color:"#0f172a" }}>
@@ -11803,12 +11866,60 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                       <span style={{ fontSize:11, color:"#94a3b8" }}>—</span>
                     )}
                   </td>
-                  <td style={{ padding:"10px 12px", fontSize:12, fontWeight:700, color:calc.lucro>=0?"#0891b2":"#dc2626" }}>
-                    {custo>0 ? "R$ "+calc.lucro.toFixed(2).replace(".",",") : <span style={{color:"#94a3b8"}}>—</span>}
+                  {/* ── Preço de Venda Simulado (editável) ── */}
+                  <td style={{ padding:"10px 12px", background:"#faf5ff" }}>
+                    {editingPrecoId === l.id ? (
+                      <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                        <span style={{ fontSize:11, color:"#94a3b8" }}>R$</span>
+                        <input type="number" step="0.01" min="0"
+                          defaultValue={precoVendaSimul||""}
+                          placeholder={bruto.toFixed(2)}
+                          autoFocus
+                          onBlur={function(e){
+                            var v = parseFloat(e.target.value)||0;
+                            setPrecoVenda(l.id, v);
+                            setEditingPrecoId(null);
+                          }}
+                          onKeyDown={function(e){ if(e.key==="Enter"||e.key==="Escape") e.target.blur(); }}
+                          style={{ width:84, background:"#fff", border:"1px solid #7c3aed", color:"#0f172a", padding:"4px 7px", borderRadius:6, fontSize:12, outline:"none", textAlign:"right" }} />
+                      </div>
+                    ) : (
+                      <div onClick={function(){ setEditingPrecoId(l.id); }} title="Clique para simular outro preço de venda" style={{ cursor:"pointer" }}>
+                        {precoVendaSimul > 0 ? (
+                          <div>
+                            <span style={{ fontSize:13, fontWeight:800, color:"#7c3aed" }}>
+                              R$ {precoVendaSimul.toFixed(2).replace(".",",")}
+                            </span>
+                            {precoVendaSimul !== bruto && (
+                              <div style={{ fontSize:10, color: precoVendaSimul > bruto ? "#15803d":"#dc2626", marginTop:1 }}>
+                                {precoVendaSimul > bruto ? "▲" : "▼"} vs R$ {bruto.toFixed(2).replace(".",",")}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span style={{ fontSize:11, color:"#94a3b8", background:"#f5f3ff", border:"1px dashed #ddd6fe", padding:"3px 8px", borderRadius:6 }}>
+                            ✎ simular preço
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </td>
-                  <td style={{ padding:"10px 12px" }}>
+                  {/* Lucro e Margem baseados no preço simulado (ou atual se não houver) */}
+                  <td style={{ padding:"10px 12px", background:"#faf5ff", fontSize:12, fontWeight:700, color:calc.lucro>=0?"#0891b2":"#dc2626" }}>
+                    {custo>0 ? (
+                      <div>
+                        R$ {calc.lucro.toFixed(2).replace(".",",")}
+                        {precoVendaSimul > 0 && precoVendaSimul !== bruto && (
+                          <div style={{ fontSize:10, color:"#94a3b8", fontWeight:400 }}>
+                            base: R$ {(bruto - custo - frete - (l.fee||bruto*0.13)).toFixed(2).replace(".",",")}
+                          </div>
+                        )}
+                      </div>
+                    ) : <span style={{color:"#94a3b8"}}>—</span>}
+                  </td>
+                  <td style={{ padding:"10px 12px", background:"#faf5ff" }}>
                     {custo > 0 ? (
-                      <span style={{ fontSize:12, fontWeight:700, color:mCor, background:mCor+"18", padding:"3px 8px", borderRadius:6 }}>
+                      <span style={{ fontSize:12, fontWeight:700, color:mCor, background:mCor+"18", padding:"3px 8px", borderRadius:6, display:"inline-block" }}>
                         {calc.margem.toFixed(1)}%
                         {calc.margem >= margemAlvo ? " ✓" : " ↓"}
                       </span>
@@ -11914,6 +12025,261 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
             <div>Nenhum anúncio encontrado</div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  ABA PUBLICIDADE — Campanhas ML Ads
+// ════════════════════════════════════════════════════════════
+function PublicidadeTab({ token, sellerId }) {
+  const [campanhas, setCampanhas] = useState([]);
+  const [metricas, setMetricas] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [erro, setErro] = useState(null);
+  const [periodo, setPeriodo] = useState("LAST_7_DAYS");
+  const [totalMetricas, setTotalMetricas] = useState(null);
+  const [ultimaAtualizacao, setUltimaAtualizacao] = useState(null);
+
+  var periodos = [
+    { k:"TODAY",       l:"Hoje" },
+    { k:"YESTERDAY",   l:"Ontem" },
+    { k:"LAST_7_DAYS", l:"Últimos 7 dias" },
+    { k:"LAST_14_DAYS",l:"Últimos 14 dias" },
+    { k:"LAST_30_DAYS",l:"Últimos 30 dias" },
+    { k:"THIS_MONTH",  l:"Este mês" },
+  ];
+
+  async function carregarCampanhas() {
+    if (!token || !sellerId) { setErro("Conecte ao Mercado Livre primeiro."); return; }
+    setLoading(true); setErro(null);
+    try {
+      // 1. Buscar campanhas
+      var res = await fetch("/api/ml/advertising/product_ads/campaigns?seller_id="+sellerId+"&status=ALL&limit=50&offset=0", {
+        headers: { Authorization: "Bearer "+token }
+      });
+      var data = await res.json();
+      if (data.error) throw new Error(data.message||data.error);
+      var camps = data.results || data.campaigns || [];
+      setCampanhas(camps);
+
+      // 2. Buscar métricas de cada campanha
+      var metMap = {};
+      var totais = { impressoes:0, cliques:0, vendas:0, receita:0, gasto:0, roas:0 };
+      await Promise.all(camps.map(async function(c) {
+        try {
+          var mr = await fetch("/api/ml/advertising/product_ads/campaigns/"+c.id+"/metrics?seller_id="+sellerId+"&date_range="+periodo, {
+            headers: { Authorization: "Bearer "+token }
+          });
+          var md = await mr.json();
+          var m = md.results||md||{};
+          metMap[c.id] = m;
+          totais.impressoes += parseInt(m.impressions||m.impressoes||0);
+          totais.cliques    += parseInt(m.clicks||m.cliques||0);
+          totais.vendas     += parseInt(m.sales||m.vendas||0);
+          totais.receita    += parseFloat(m.revenue||m.receita||0);
+          totais.gasto      += parseFloat(m.spent||m.gasto||m.invest||0);
+        } catch {}
+      }));
+      totais.roas = totais.gasto > 0 ? totais.receita/totais.gasto : 0;
+      totais.ctr  = totais.impressoes > 0 ? (totais.cliques/totais.impressoes)*100 : 0;
+      totais.acos = totais.receita > 0 ? (totais.gasto/totais.receita)*100 : 0;
+      setMetricas(metMap);
+      setTotalMetricas(totais);
+      setUltimaAtualizacao(new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}));
+    } catch(e) {
+      setErro("Erro ao carregar campanhas: "+e.message);
+    }
+    setLoading(false);
+  }
+
+  useEffect(function(){ if(token&&sellerId) carregarCampanhas(); }, [token, sellerId, periodo]);
+
+  function fmtR(n){ return "R$ "+(parseFloat(n||0)).toFixed(2).replace(".",","); }
+  function fmtN(n){ return parseInt(n||0).toLocaleString("pt-BR"); }
+  function statusCor(s) {
+    return s==="enabled"||s==="active"||s==="ENABLED" ? "#15803d" :
+           s==="paused"||s==="PAUSED" ? "#d97706" : "#94a3b8";
+  }
+  function statusLabel(s) {
+    return s==="enabled"||s==="active"||s==="ENABLED" ? "Ativa" :
+           s==="paused"||s==="PAUSED" ? "Pausada" :
+           s==="archived"||s==="ARCHIVED" ? "Arquivada" : s||"—";
+  }
+
+  return (
+    <div style={{ padding:"0 24px" }}>
+      {/* Header */}
+      <div style={{ padding:"20px 0 14px", borderBottom:"1px solid #e2e8f0", display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+        <div>
+          <div style={{ fontWeight:800, fontSize:20, color:"#0f172a", marginBottom:4 }}>📣 Publicidade — ML Ads</div>
+          <div style={{ fontSize:13, color:"#64748b" }}>Campanhas e métricas de anúncios patrocinados do Mercado Livre</div>
+        </div>
+        <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+          <select value={periodo} onChange={function(e){setPeriodo(e.target.value);}}
+            style={{ background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 14px", borderRadius:9, fontSize:12 }}>
+            {periodos.map(function(p){ return <option key={p.k} value={p.k}>{p.l}</option>; })}
+          </select>
+          <button onClick={carregarCampanhas} disabled={loading}
+            style={{ background:loading?"#f1f5f9":"#0f172a", border:"none", color:loading?"#94a3b8":"#fff", fontWeight:700, padding:"8px 18px", borderRadius:9, cursor:loading?"not-allowed":"pointer", fontSize:13, display:"flex", alignItems:"center", gap:6 }}>
+            {loading ? "⏳ Carregando..." : "🔄 Atualizar"}
+          </button>
+          {ultimaAtualizacao && <span style={{ fontSize:11, color:"#94a3b8" }}>Atualizado às {ultimaAtualizacao}</span>}
+        </div>
+      </div>
+
+      {/* Erro */}
+      {erro && (
+        <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"14px 18px", color:"#dc2626", marginBottom:16, fontSize:13 }}>
+          ⚠️ {erro}
+        </div>
+      )}
+
+      {/* Cards de totais */}
+      {totalMetricas && (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:20 }}>
+          {[
+            { l:"Vendas (Ads)", v:fmtN(totalMetricas.vendas), cor:"#0f172a", icon:"🛒" },
+            { l:"ROAS", v:totalMetricas.roas.toFixed(2)+"x", cor:"#7c3aed", icon:"📈" },
+            { l:"Receita (Ads)", v:fmtR(totalMetricas.receita), cor:"#15803d", icon:"💰" },
+            { l:"Gasto", v:fmtR(totalMetricas.gasto), cor:"#dc2626", icon:"💸" },
+            { l:"ACOS", v:totalMetricas.acos.toFixed(1)+"%", cor:totalMetricas.acos<15?"#15803d":totalMetricas.acos<30?"#d97706":"#dc2626", icon:"🎯" },
+            { l:"Cliques", v:fmtN(totalMetricas.cliques), cor:"#0891b2", icon:"👆" },
+            { l:"Impressões", v:fmtN(totalMetricas.impressoes), cor:"#64748b", icon:"👁" },
+            { l:"CTR", v:totalMetricas.ctr.toFixed(2)+"%", cor:"#0891b2", icon:"🖱" },
+          ].map(function(k){
+            return (
+              <div key={k.l} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"14px 16px", boxShadow:"0 1px 3px rgba(0,0,0,.04)" }}>
+                <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:6 }}>{k.icon} {k.l}</div>
+                <div style={{ fontSize:22, fontWeight:800, color:k.cor }}>{k.v}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Tabela de campanhas */}
+      {loading && campanhas.length===0 ? (
+        <div style={{ textAlign:"center", padding:"60px", color:"#94a3b8" }}>
+          <div style={{ fontSize:40, marginBottom:12 }}>⏳</div>
+          <div style={{ fontWeight:600, color:"#0f172a", marginBottom:8 }}>Carregando campanhas...</div>
+          <div style={{ fontSize:13 }}>Buscando dados de publicidade no Mercado Livre</div>
+        </div>
+      ) : campanhas.length === 0 && !loading ? (
+        <div style={{ textAlign:"center", padding:"60px", color:"#94a3b8" }}>
+          <div style={{ fontSize:40, marginBottom:12 }}>📣</div>
+          <div style={{ fontWeight:600, color:"#0f172a", marginBottom:8 }}>Nenhuma campanha encontrada</div>
+          <div style={{ fontSize:13, marginBottom:16 }}>Conecte ao ML e clique em Atualizar para carregar suas campanhas</div>
+          <a href="https://publicidade.mercadolivre.com.br" target="_blank" rel="noreferrer"
+            style={{ background:"#ffe000", color:"#0f172a", fontWeight:700, padding:"10px 24px", borderRadius:10, textDecoration:"none", fontSize:13 }}>
+            Criar campanha no ML ↗
+          </a>
+        </div>
+      ) : (
+        <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
+          <table style={{ borderCollapse:"collapse", width:"100%", minWidth:900 }}>
+            <thead>
+              <tr style={{ background:"#f8fafc", borderBottom:"2px solid #e2e8f0" }}>
+                {["","Nome da Campanha","Status","Orçamento Diário","ROAS Obj.","Vendas (Ads)","ROAS Real","Receita","Gasto","ACOS","Cliques","Impressões","CTR","Ação"].map(function(h){
+                  return <th key={h} style={{ fontSize:10, color:"#64748b", fontWeight:600, textTransform:"uppercase", padding:"10px 12px", textAlign:"left", whiteSpace:"nowrap" }}>{h}</th>;
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {campanhas.map(function(c, i) {
+                var m = metricas[c.id] || {};
+                var impressoes = parseInt(m.impressions||m.impressoes||0);
+                var cliques    = parseInt(m.clicks||m.cliques||0);
+                var vendas     = parseInt(m.sales||m.vendas||0);
+                var receita    = parseFloat(m.revenue||m.receita||0);
+                var gasto      = parseFloat(m.spent||m.gasto||m.invest||0);
+                var roas       = gasto>0 ? receita/gasto : 0;
+                var acos       = receita>0 ? (gasto/receita)*100 : 0;
+                var ctr        = impressoes>0 ? (cliques/impressoes)*100 : 0;
+                var isAtiva    = c.status==="enabled"||c.status==="active"||c.status==="ENABLED";
+                var sCorText   = statusCor(c.status);
+                var roasObjN   = parseFloat(c.roas_target||c.roasTarget||0);
+
+                return (
+                  <tr key={c.id} style={{ borderBottom:"1px solid #f1f5f9", background:i%2===0?"#fff":"#fafafa" }}>
+                    {/* Toggle status visual */}
+                    <td style={{ padding:"10px 12px" }}>
+                      <div style={{ width:36, height:20, borderRadius:10, background:isAtiva?"#22c55e":"#e2e8f0", position:"relative", cursor:"default" }}>
+                        <div style={{ width:16, height:16, borderRadius:"50%", background:"#fff", position:"absolute", top:2, left:isAtiva?18:2, transition:"left .2s", boxShadow:"0 1px 3px rgba(0,0,0,.2)" }} />
+                      </div>
+                    </td>
+                    <td style={{ padding:"10px 12px", minWidth:180 }}>
+                      <div style={{ fontSize:13, fontWeight:700, color:"#1d4ed8" }}>{c.name||c.nome||"Campanha #"+c.id}</div>
+                      {c.type && <div style={{ fontSize:10, color:"#94a3b8", marginTop:2 }}>{c.type} · ID: {c.id}</div>}
+                    </td>
+                    <td style={{ padding:"10px 12px" }}>
+                      <span style={{ fontSize:11, fontWeight:700, color:sCorText, background:sCorText+"18", padding:"3px 8px", borderRadius:6 }}>
+                        {statusLabel(c.status)}
+                      </span>
+                    </td>
+                    <td style={{ padding:"10px 12px", fontSize:12, color:"#334155", fontWeight:600 }}>
+                      {c.daily_budget||c.dailyBudget ? fmtR(c.daily_budget||c.dailyBudget) : "—"}
+                    </td>
+                    <td style={{ padding:"10px 12px", fontSize:12, color:"#64748b" }}>
+                      {roasObjN>0 ? roasObjN.toFixed(0)+"x" : "—"}
+                    </td>
+                    <td style={{ padding:"10px 12px", fontSize:13, fontWeight:700, color:"#0f172a" }}>
+                      {vendas>0?fmtN(vendas):<span style={{color:"#94a3b8"}}>—</span>}
+                    </td>
+                    <td style={{ padding:"10px 12px" }}>
+                      {gasto>0 ? (
+                        <span style={{ fontSize:13, fontWeight:800, color:roas>=(roasObjN||10)?"#15803d":"#d97706" }}>
+                          {roas.toFixed(2)}x
+                        </span>
+                      ) : <span style={{color:"#94a3b8",fontSize:11}}>—</span>}
+                    </td>
+                    <td style={{ padding:"10px 12px", fontSize:12, fontWeight:700, color:"#15803d" }}>
+                      {receita>0?fmtR(receita):<span style={{color:"#94a3b8"}}>—</span>}
+                    </td>
+                    <td style={{ padding:"10px 12px", fontSize:12, color:"#dc2626", fontWeight:600 }}>
+                      {gasto>0?fmtR(gasto):<span style={{color:"#94a3b8"}}>—</span>}
+                    </td>
+                    <td style={{ padding:"10px 12px" }}>
+                      {gasto>0 ? (
+                        <span style={{ fontSize:12, fontWeight:700,
+                          color:acos<10?"#15803d":acos<20?"#d97706":"#dc2626",
+                          background:(acos<10?"#f0fdf4":acos<20?"#fffbeb":"#fef2f2"),
+                          padding:"3px 8px", borderRadius:6 }}>
+                          {acos.toFixed(1)}%
+                        </span>
+                      ) : <span style={{color:"#94a3b8",fontSize:11}}>—</span>}
+                    </td>
+                    <td style={{ padding:"10px 12px", fontSize:12, color:"#334155" }}>
+                      {cliques>0?fmtN(cliques):<span style={{color:"#94a3b8"}}>—</span>}
+                    </td>
+                    <td style={{ padding:"10px 12px", fontSize:12, color:"#64748b" }}>
+                      {impressoes>0?fmtN(impressoes):<span style={{color:"#94a3b8"}}>—</span>}
+                    </td>
+                    <td style={{ padding:"10px 12px", fontSize:12, color:"#0891b2" }}>
+                      {impressoes>0?ctr.toFixed(2)+"%":<span style={{color:"#94a3b8"}}>—</span>}
+                    </td>
+                    <td style={{ padding:"10px 12px" }}>
+                      <a href={"https://publicidade.mercadolivre.com.br/campaigns/"+c.id} target="_blank" rel="noreferrer"
+                        style={{ fontSize:11, color:"#0891b2", textDecoration:"none", fontWeight:600, whiteSpace:"nowrap" }}>
+                        Ver no ML ↗
+                      </a>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Link para criar campanha */}
+      <div style={{ marginTop:16, textAlign:"center" }}>
+        <a href="https://publicidade.mercadolivre.com.br" target="_blank" rel="noreferrer"
+          style={{ fontSize:12, color:"#0891b2", textDecoration:"none" }}>
+          Gerenciar campanhas no Mercado Livre ↗
+        </a>
       </div>
     </div>
   );
@@ -12972,8 +13338,9 @@ export default function App() {
                 currentUser?.permissoes?.includes("produtos")   && { key:"nf",         label:"NF Entrada",  badge:null },
                 currentUser?.permissoes?.includes("orders")     && { key:"nfe_saida",  label:"NF Saída",    badge:null },
                 currentUser?.permissoes?.includes("orders")     && { key:"full",        label:"⚡ Envios FULL", badge:null },
-                currentUser?.permissoes?.includes("listings")   && { key:"precificacao", label:"💲 Precificação", badge:null },
-                                                                   { key:"ia_chat",      label:"✦ Assistente IA", badge:null },
+                currentUser?.permissoes?.includes("listings")   && { key:"precificacao",  label:"💲 Precificação", badge:null },
+                currentUser?.permissoes?.includes("listings")   && { key:"publicidade",   label:"📣 Publicidade",  badge:null },
+                                                                   { key:"ia_chat",       label:"✦ Assistente IA", badge:null },
               ].filter(Boolean);
               return navTabs.map(function(t) {
                 var isActive = tab === t.key;
@@ -13737,6 +14104,10 @@ export default function App() {
             setFretesAndSave={setFretesAndSave}
             rawOrders={rawOrders}
           />
+        )}
+
+        {tab === "publicidade" && currentUser?.permissoes?.includes("listings") && (
+          <PublicidadeTab token={token} sellerId={user?.id} />
         )}
 
       {showBackup && <PainelBackup onClose={() => setShowBackup(false)} />}

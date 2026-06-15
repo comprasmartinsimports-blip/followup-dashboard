@@ -14,12 +14,18 @@ function getSku(listing) {
 
 function getRealFeeRate(listing) {
   if (listing.listing_type_id === "gold_premium" || listing.listing_type_id === "gold_pro") return 0.17;
+  if (listing.listing_type_id === "gold_special" || listing.listing_type_id === "gold_extra") return 0.12;
   return 0.12;
 }
 
 function getListingTypeLabel(type) {
+  // ML Brasil: gold_premium e gold_pro = Premium (17%)
+  // gold_special, gold_extra, demais = Clássico (12%)
   if (type === "gold_premium" || type === "gold_pro") return { label: "Premium · 17%", color: "#7c3aed" };
-  return { label: "Clássico · 12%", color: "#2563eb" };
+  if (type === "gold_special" || type === "gold_extra") return { label: "Clássico · 12%", color: "#2563eb" };
+  if (type === "silver") return { label: "Gratuito", color: "#94a3b8" };
+  if (type === "free") return { label: "Gratuito", color: "#94a3b8" };
+  return { label: type ? "Clássico" : "—", color: "#2563eb" };
 }
 
 function getPrices(listing) {
@@ -11786,7 +11792,8 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                   <td style={{ padding:"10px 12px" }}>
                     {(function(){
                       var t = l.listing_type_id||"";
-                      var isPremium = t==="gold_premium"||t==="gold_pro"||t==="gold_special";
+                      // ML Brasil: gold_premium = Premium | gold_special = Clássico
+                      var isPremium = t==="gold_premium"||t==="gold_pro";
                       return (
                         <span style={{ fontSize:10, fontWeight:700, padding:"3px 8px", borderRadius:6, whiteSpace:"nowrap",
                           background: isPremium?"#f5f3ff":"#eff6ff",
@@ -12004,11 +12011,11 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                   </td>
                   <td style={{ padding:"10px 12px" }}>
                     <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-                      <a href={"https://www.mercadolivre.com.br/anuncios/"+l.id+"/editar"} target="_blank" rel="noreferrer"
+                      <a href={"https://www.mercadolivre.com.br/seller-admin/listing/edit?itemId="+l.id} target="_blank" rel="noreferrer"
                         style={{ fontSize:11, color:"#0891b2", textDecoration:"none", fontWeight:600 }}>
                         Editar ML ↗
                       </a>
-                      <a href={"https://www.mercadolivre.com.br/publicidade/promocoes"} target="_blank" rel="noreferrer"
+                      <a href={"https://vendedores.mercadolivre.com.br/ferramentas/promocoes"} target="_blank" rel="noreferrer"
                         style={{ fontSize:10, color:"#7c3aed", textDecoration:"none", fontWeight:600 }}>
                         Central Promoções ↗
                       </a>

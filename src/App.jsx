@@ -11940,8 +11940,9 @@ export default function App() {
       localStorage.setItem("mov_estoque", JSON.stringify(movsUpd));
       localStorage.setItem("vendas_estoque_baixadas", JSON.stringify([...novasBaixadas]));
       setProdutos(produtosUpd);
+      setMovEstoque(movsUpd);          // ← CRÍTICO: atualiza estado do React
       setVendasBaixadas(novasBaixadas);
-      console.log("[ESTOQUE] " + qtdBaixadas + " baixa(s) de estoque. Movimentações totais: " + movsUpd.length);
+      console.log("[ESTOQUE] " + qtdBaixadas + " baixa(s). Total movs: " + movsUpd.length);
     }
     return qtdBaixadas;
   }
@@ -11953,25 +11954,24 @@ export default function App() {
   // ── Auto-baixa quando realOrders muda (novas vendas chegam ao reconectar) ──
   useEffect(function() {
     if (!realOrders || realOrders.length === 0) return;
-    // Pequeno delay para garantir que produtos também já carregaram
+    if (!produtos || produtos.length === 0) return;
     var timer = setTimeout(function() {
       try {
-        var prodAtual = JSON.parse(localStorage.getItem("produtos_cadastro") || "[]");
-        if (prodAtual.length === 0) return;
-        var movAtual  = JSON.parse(localStorage.getItem("mov_estoque") || "[]");
-        var baixAtual = new Set(JSON.parse(localStorage.getItem("vendas_estoque_baixadas") || "[]"));
         var pedidosPagos = realOrders.filter(function(o){ return o.status === "paid"; });
+        var baixAtual = new Set(JSON.parse(localStorage.getItem("vendas_estoque_baixadas") || "[]"));
         var novas = pedidosPagos.filter(function(o){ return !baixAtual.has(String(o.id)); });
-        // Só processa se tiver vendas novas OU movimentações sem produto para corrigir
-        if (novas.length > 0 || movAtual.some(function(m){ return m.semProduto; })) {
+        var temSemProduto = movEstoque.some(function(m){ return m.semProduto; });
+        if (novas.length > 0 || temSemProduto) {
+          console.log("[ESTOQUE] " + novas.length + " venda(s) nova(s) para baixar");
           if (baixarEstoqueRef.current) {
-            baixarEstoqueRef.current(pedidosPagos, prodAtual, movAtual, baixAtual);
+            // Usa produtos e movEstoque do estado React (sempre atualizados)
+            baixarEstoqueRef.current(pedidosPagos, produtos, movEstoque, baixAtual);
           }
         }
       } catch(e) { console.warn("[ESTOQUE] Auto-baixa:", e); }
-    }, 500);
+    }, 800);
     return function() { clearTimeout(timer); };
-  }, [realOrders]);
+  }, [realOrders, produtos]);
 
   // Renova token automaticamente se estiver próximo de vencer
   async function getValidToken() {
@@ -12035,13 +12035,9 @@ export default function App() {
         localStorage.setItem("ml_orders_cache", JSON.stringify(ordersLeve));
       } catch(e) {}
       // Baixa automática de estoque para pedidos pagos
-      try {
-        var pedidosPagos2 = orders.filter(function(o){ return o.status === "paid"; });
-        var prodAtual2 = JSON.parse(localStorage.getItem("produtos_cadastro") || "[]");
-        var movAtual2  = JSON.parse(localStorage.getItem("mov_estoque") || "[]");
-        var baixAtual2 = new Set(JSON.parse(localStorage.getItem("vendas_estoque_baixadas") || "[]"));
-        baixarEstoqueVendas(pedidosPagos2, prodAtual2, movAtual2, baixAtual2);
-      } catch(e) { console.warn("Erro ao baixar estoque:", e); }
+      // (o useEffect vai cuidar disso quando realOrders mudar)
+      // Aqui só garantimos que realOrders foi atualizado
+      console.log("[ESTOQUE] " + orders.filter(function(o){return o.status==="paid";}).length + " pedidos pagos carregados para processamento.");
 
       setLoadingMsg("Buscando custo de frete por anúncio...");
       const shippingMap = {};

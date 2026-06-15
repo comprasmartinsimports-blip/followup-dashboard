@@ -11609,30 +11609,7 @@ export default function App() {
             // Guardar método de envio
             var lt = shipData?.logistic_type || "";
             // Log para pedidos de referência (FULL, Flex, ME Normal)
-            var REF_IDS = ["2000016732869978","2000016645535844","2000013526353945","2000013519643433","2000013510763101","2000016946125400","2000016943980800","2000016940055500"];
-            if (REF_IDS.includes(String(o.id))) {
-              var dbg = {
-                id: o.id,
-                logistic_type: shipData?.logistic_type,
-                mode: shipData?.mode,
-                type: shipData?.type,
-                service_id: shipData?.service_id,
-                substatus: shipData?.substatus,
-                status: shipData?.status,
-                order_fulfilled: o.fulfilled,
-                order_tags: o.tags,
-                order_orderTags: o.orderTags,
-                shipping_obj: o.shipping,
-              };
-              console.log("[SHIP_REF]", JSON.stringify(dbg, null, 2));
-              // Salvar no localStorage para ver sem abrir console
-              try {
-                var dbgList = JSON.parse(localStorage.getItem("_ship_debug") || "[]");
-                dbgList = dbgList.filter(function(x){ return x.id !== o.id; });
-                dbgList.push(dbg);
-                localStorage.setItem("_ship_debug", JSON.stringify(dbgList));
-              } catch {}
-            }
+
             if (lt) shipmentStatusMap[String(o.id) + "_logistic"] = lt;
             if (shipData?.mode) shipmentStatusMap[String(o.id) + "_mode"] = shipData.mode;
             if (shipData?.type) shipmentStatusMap[String(o.id) + "_type"] = shipData.type;
@@ -12693,36 +12670,6 @@ export default function App() {
         {tab === "orders" && currentUser?.permissoes?.includes("orders") && (
           <>
             {/* Sub-abas de Pedidos */}
-            {/* DIAGNÓSTICO TEMPORÁRIO — remover após ajuste */}
-            {(function(){
-              try {
-                var dbgList = JSON.parse(localStorage.getItem("_ship_debug") || "[]");
-                if (dbgList.length === 0) return null;
-                return (
-                  <div style={{ background:"#0f172a", color:"#f8fafc", borderRadius:10, padding:"14px 18px", marginBottom:16, fontSize:11, fontFamily:"monospace" }}>
-                    <div style={{ fontWeight:700, marginBottom:8, color:"#ffe000" }}>🔍 DIAGNÓSTICO DE ENVIO (pedidos de referência)</div>
-                    {dbgList.map(function(d){
-                      return (
-                        <div key={d.id} style={{ marginBottom:10, paddingBottom:10, borderBottom:"1px solid #334155" }}>
-                          <div style={{ color:"#ffe000" }}>Pedido #{d.id}</div>
-                          <div>logistic_type: <span style={{color:"#4ade80"}}>{String(d.logistic_type||"—")}</span></div>
-                          <div>mode: <span style={{color:"#4ade80"}}>{String(d.mode||"—")}</span> | type: <span style={{color:"#4ade80"}}>{String(d.type||"—")}</span></div>
-                          <div>service_id: <span style={{color:"#4ade80"}}>{String(d.service_id||"—")}</span></div>
-                          <div>fulfilled: <span style={{color:"#f87171"}}>{String(d.order_fulfilled)}</span></div>
-                          <div>tags: <span style={{color:"#a5b4fc"}}>{JSON.stringify(d.order_tags||[])}</span></div>
-                          <div>orderTags: <span style={{color:"#a5b4fc"}}>{JSON.stringify(d.order_orderTags||[])}</span></div>
-                          <div>shipping obj: <span style={{color:"#94a3b8"}}>{JSON.stringify(d.shipping_obj||{}).slice(0,100)}</span></div>
-                        </div>
-                      );
-                    })}
-                    <button onClick={function(){localStorage.removeItem("_ship_debug"); window.location.reload();}}
-                      style={{background:"#dc2626",border:"none",color:"#fff",padding:"4px 10px",borderRadius:6,cursor:"pointer",fontSize:11,marginTop:6}}>
-                      ✕ Fechar diagnóstico
-                    </button>
-                  </div>
-                );
-              } catch { return null; }
-            })()}
             <div style={{ display:"flex", gap:2, borderBottom:"2px solid #f1f5f9", marginBottom:20 }}>
               {[
                 { key:"ml",    label:"🟡 Pedidos Mercado Livre", badge: enrichedOrders.length },

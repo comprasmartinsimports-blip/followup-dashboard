@@ -4031,7 +4031,7 @@ function ModalMovEstoque({ produto, movEstoque, onRegistrar, onClose }) {
   );
 }
 
-function ModalProduto({ produto, fornecedores, listings, onSave, onClose }) {
+function ModalProduto({ produto, fornecedores, listings, produtos, onSave, onClose }) {
   const emptyForm = {
     id: Date.now(), titulo: "", sku: "", ean: "", codigoFornecedor: "",
     fornecedorId: "", precoCusto: "", precoVenda: "",
@@ -4040,11 +4040,26 @@ function ModalProduto({ produto, fornecedores, listings, onSave, onClose }) {
     aliqICMS: "", aliqIPI: "", aliqPIS: "0.65", aliqCOFINS: "3.00",
     categoria: "Outros", descricao: "", peso: "", comprimento: "", largura: "", altura: "",
     status: "Ativo", imagens: [], mlbVinculado: "",
+    tipoProduto: "simples",      // simples | composto
+    composicao: [],               // [{ skuComponente, qtd }]
   };
-  const [form, setForm] = useState(produto || emptyForm);
+  const [form, setForm] = useState(produto ? { tipoProduto:"simples", composicao:[], ...produto } : emptyForm);
   const [tab, setTab] = useState("geral");
   const [uploading, setUploading] = useState(false);
+  const [novoCompSku, setNovoCompSku] = useState("");
+  const [novoCompQtd, setNovoCompQtd] = useState("1");
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  function addComponente() {
+    if (!novoCompSku.trim()) return;
+    var jaExiste = (form.composicao||[]).some(function(c){ return c.skuComponente === novoCompSku.trim(); });
+    if (jaExiste) { alert("SKU já adicionado."); return; }
+    set("composicao", [...(form.composicao||[]), { skuComponente: novoCompSku.trim(), qtd: parseInt(novoCompQtd)||1 }]);
+    setNovoCompSku(""); setNovoCompQtd("1");
+  }
+  function removeComponente(sku) {
+    set("composicao", (form.composicao||[]).filter(function(c){ return c.skuComponente !== sku; }));
+  }
 
   async function handleImages(files) {
     if (form.imagens.length >= 10) return;
@@ -4062,6 +4077,7 @@ function ModalProduto({ produto, fornecedores, listings, onSave, onClose }) {
 
   const TABS = [
     { key:"geral", label:"📋 Geral" },
+    { key:"composicao", label:"🔗 Composição" },
     { key:"estoque", label:"📦 Estoque" },
     { key:"fiscal", label:"🧾 Fiscal" },
     { key:"fotos", label:"🖼️ Fotos" },
@@ -4091,6 +4107,23 @@ function ModalProduto({ produto, fornecedores, listings, onSave, onClose }) {
           {/* ── GERAL ── */}
           {tab === "geral" && (
             <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+              {/* Tipo de produto */}
+              <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"12px 14px" }}>
+                <div style={{ fontSize:11, color:"#94a3b8", marginBottom:8, fontWeight:600, textTransform:"uppercase" }}>Tipo de Produto</div>
+                <div style={{ display:"flex", gap:8 }}>
+                  {[{k:"simples",l:"📦 Produto Simples",desc:"Produto unitário com estoque próprio"},{k:"composto",l:"🔗 Produto Composto",desc:"Kit formado por outros produtos (componentes)"}].map(function(t){
+                    var a = (form.tipoProduto||"simples") === t.k;
+                    return (
+                      <button key={t.k} onClick={function(){set("tipoProduto",t.k); if(t.k==="composto") setTimeout(function(){},0);}}
+                        style={{ flex:1, padding:"10px 14px", borderRadius:9, border:"1.5px solid "+(a?"#0f172a":"#e2e8f0"),
+                          background:a?"#0f172a":"#fff", color:a?"#fff":"#64748b", fontWeight:a?700:400, fontSize:12, cursor:"pointer", textAlign:"left" }}>
+                        <div style={{ fontWeight:a?700:600 }}>{t.l}</div>
+                        <div style={{ fontSize:10, opacity:0.7, marginTop:2 }}>{t.desc}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               <div>
                 <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Título *</div>
                 <input value={form.titulo} onChange={e => set("titulo", e.target.value)} placeholder="Nome completo do produto"
@@ -4180,6 +4213,91 @@ function ModalProduto({ produto, fornecedores, listings, onSave, onClose }) {
                   ))}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* ── COMPOSIÇÃO ── */}
+          {tab === "composicao" && (
+            <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+              {(form.tipoProduto||"simples") === "simples" ? (
+                <div style={{ textAlign:"center", padding:"32px 20px", color:"#94a3b8" }}>
+                  <div style={{ fontSize:32, marginBottom:8 }}>📦</div>
+                  <div style={{ fontWeight:600, color:"#0f172a", marginBottom:6 }}>Este é um Produto Simples</div>
+                  <div style={{ fontSize:13 }}>Mude para <b>Produto Composto</b> na aba Geral para definir a composição.</div>
+                </div>
+              ) : (
+                <>
+                  <div style={{ background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:10, padding:"12px 14px", fontSize:12, color:"#1d4ed8" }}>
+                    ℹ️ <b>Produto Composto (Kit)</b> — Informe os SKUs e quantidades dos produtos que compõem este kit.<br/>
+                    Exemplo: SKU <b>14861487</b> é composto por 1× SKU <b>1486</b> + 1× SKU <b>1487</b>
+                  </div>
+
+                  {/* Adicionar componente */}
+                  <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"14px" }}>
+                    <div style={{ fontSize:12, fontWeight:700, color:"#0f172a", marginBottom:10 }}>+ Adicionar Componente</div>
+                    <div style={{ display:"flex", gap:8, alignItems:"flex-end" }}>
+                      <div style={{ flex:2 }}>
+                        <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4, fontWeight:600, textTransform:"uppercase" }}>SKU do Componente</div>
+                        <input value={novoCompSku} onChange={function(e){setNovoCompSku(e.target.value);}} placeholder="Ex: 1486"
+                          onKeyDown={function(e){if(e.key==="Enter") addComponente();}}
+                          style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                      </div>
+                      <div style={{ width:80 }}>
+                        <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4, fontWeight:600, textTransform:"uppercase" }}>Qtd</div>
+                        <input type="number" min="1" value={novoCompQtd} onChange={function(e){setNovoCompQtd(e.target.value);}}
+                          style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
+                      </div>
+                      <button onClick={addComponente}
+                        style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 18px", borderRadius:8, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>
+                        + Adicionar
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Lista de componentes */}
+                  {(form.composicao||[]).length === 0 ? (
+                    <div style={{ textAlign:"center", padding:"20px", color:"#94a3b8", fontSize:13 }}>
+                      Nenhum componente adicionado ainda.
+                    </div>
+                  ) : (
+                    <div style={{ border:"1px solid #e2e8f0", borderRadius:10, overflow:"hidden" }}>
+                      <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                        <thead>
+                          <tr style={{ background:"#f8fafc" }}>
+                            {["SKU Componente","Produto","Qtd",""].map(function(h){
+                              return <th key={h} style={{ fontSize:11, color:"#64748b", fontWeight:600, padding:"10px 14px", textAlign:"left", borderBottom:"1px solid #e2e8f0" }}>{h}</th>;
+                            })}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(form.composicao||[]).map(function(comp, i){
+                            // Buscar produto pelo SKU nos produtos cadastrados
+                            return (
+                              <tr key={comp.skuComponente} style={{ borderBottom:"1px solid #f1f5f9", background:i%2===0?"#fff":"#fafafa" }}>
+                                <td style={{ padding:"10px 14px", fontSize:12, fontFamily:"monospace", fontWeight:700, color:"#0891b2" }}>{comp.skuComponente}</td>
+                                <td style={{ padding:"10px 14px", fontSize:12, color:"#64748b" }}>
+                                  {(function(){
+                                    var p = (produtos||[]).find(function(x){ return x.sku && x.sku.trim() === comp.skuComponente.trim(); });
+                                    return p ? <span style={{color:"#0f172a"}}>{p.titulo?.slice(0,45)||"—"}</span> : <span style={{color:"#dc2626",fontSize:11}}>⚠ SKU não encontrado</span>;
+                                  })()}
+                                </td>
+                                <td style={{ padding:"10px 14px", fontSize:13, fontWeight:700, color:"#0f172a" }}>{comp.qtd}×</td>
+                                <td style={{ padding:"10px 14px" }}>
+                                  <button onClick={function(){removeComponente(comp.skuComponente);}}
+                                    style={{ background:"#fef2f2", border:"none", color:"#dc2626", padding:"4px 10px", borderRadius:6, cursor:"pointer", fontSize:12 }}>✕</button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                      <div style={{ padding:"10px 14px", background:"#f8fafc", borderTop:"1px solid #e2e8f0", fontSize:12, color:"#64748b" }}>
+                        Total: <b>{(form.composicao||[]).reduce(function(s,c){return s+c.qtd;},0)}</b> unidade(s) de componentes
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
 
@@ -4985,7 +5103,10 @@ function RelatoriosEstoqueTab({ produtos, fornecedores, movEstoque, listings }) 
                 return (
                   <tr key={p.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
                     <td style={{ padding:"8px 12px",fontSize:12,color:"#0f172a",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{p.titulo}</td>
-                    <td style={{ padding:"8px 12px",fontSize:11,color:"#64748b",fontFamily:"monospace" }}>{p.sku||"—"}</td>
+                    <td style={{ padding:"8px 12px",fontSize:11,color:"#64748b",fontFamily:"monospace" }}>
+                      {p.sku||"—"}
+                      {p.tipoProduto==="composto" && <span style={{ marginLeft:5,fontSize:9,fontWeight:700,background:"#ede9fe",color:"#7c3aed",padding:"1px 5px",borderRadius:4 }}>KIT</span>}
+                    </td>
                     <td style={{ padding:"8px 12px",fontSize:12,color:"#64748b" }}>{p.categoria||"—"}</td>
                     <td style={{ padding:"8px 12px",textAlign:"center",fontWeight:800,fontSize:13,color:cor }}>{est}</td>
                     <td style={{ padding:"8px 12px",textAlign:"center",fontSize:12,color:"#94a3b8" }}>{min||"—"}</td>
@@ -5505,6 +5626,40 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
     setEditingProd(null);
   }
 
+  // Auto-detectar composição para produtos "Par" (ex: SKU 14861487 = 1486 + 1487)
+  function autoDetectarComposicaoPar(produto) {
+    var sku = (produto.sku || "").trim();
+    var titulo = (produto.titulo || "").toLowerCase();
+    if (!titulo.startsWith("par ") && !titulo.startsWith("par d") && !titulo.startsWith("par l")) return null;
+    // Regra: SKU do par é a concatenação dos SKUs simples
+    // Ex: 14861487 → 1486 + 1487, com 4 dígitos cada
+    if (sku.length >= 6) {
+      var metade = Math.floor(sku.length / 2);
+      var sku1 = sku.slice(0, metade);
+      var sku2 = sku.slice(metade);
+      // Verificar se ambos existem nos produtos
+      var p1 = produtos.find(function(p){ return p.sku && p.sku.trim() === sku1; });
+      var p2 = produtos.find(function(p){ return p.sku && p.sku.trim() === sku2; });
+      if (p1 && p2) return [{ skuComponente: sku1, qtd: 1 }, { skuComponente: sku2, qtd: 1 }];
+    }
+    return null;
+  }
+
+  // Aplicar composição automática em todos os produtos "par" cadastrados
+  function aplicarComposicaoPares() {
+    var atualizados = 0;
+    var produtosUpd = produtos.map(function(p) {
+      if ((p.composicao||[]).length > 0) return p; // já tem composição
+      var comp = autoDetectarComposicaoPar(p);
+      if (!comp) return p;
+      atualizados++;
+      return Object.assign({}, p, { tipoProduto: "composto", composicao: comp });
+    });
+    if (atualizados === 0) { alert("Nenhum produto par novo detectado."); return; }
+    setProdutos(produtosUpd); saveProdutos(produtosUpd);
+    alert("✅ " + atualizados + " produto(s) par atualizado(s) com composição automática!");
+  }
+
   function deleteProd(id) {
     if (!confirm("Excluir este produto?")) return;
     const updated = produtos.filter(p => p.id !== id);
@@ -5641,6 +5796,10 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                 <input type="file" accept=".xlsx,.csv" style={{ display:"none" }}
                   onChange={function(e){ if(e.target.files[0]) importarPlanilhaProdutos(e.target.files[0]); e.target.value=""; }} />
               </label>
+              <button onClick={aplicarComposicaoPares}
+                style={{ background:"#7c3aed", border:"none", color:"#fff", fontWeight:700, padding:"9px 16px", borderRadius:8, cursor:"pointer", fontSize:13 }}>
+                🔗 Detectar Pares
+              </button>
               <button onClick={function(){ setEditingProd(null); setShowModalProd(true); }}
                 style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Novo Produto</button>
             </div>
@@ -6426,7 +6585,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
         </div>
       )}
 
-      {showModalProd && <ModalProduto produto={editingProd} fornecedores={fornecedores} listings={listings} onSave={saveProd} onClose={() => { setShowModalProd(false); setEditingProd(null); }} />}
+      {showModalProd && <ModalProduto produto={editingProd} fornecedores={fornecedores} listings={listings} produtos={produtos} onSave={saveProd} onClose={() => { setShowModalProd(false); setEditingProd(null); }} />}
       {showModalDeposito && (
         <ModalDeposito
           deposito={editingDeposito}

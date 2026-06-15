@@ -11208,33 +11208,29 @@ function ModalNovoEnvioFull({ envio, produtos, listings, onSave, onClose }) {
 function LayoutFiltros({ filtros, busca, acoes, children }) {
   return (
     <div style={{ display:"flex", gap:0, minHeight:"calc(100vh - 180px)" }}>
-      {/* Painel de filtros — lateral esquerda */}
+      {/* Painel lateral — mais estreito e delicado */}
       {filtros && (
-        <div style={{ width:220, flexShrink:0, background:"#f8fafc", borderRight:"1px solid #e2e8f0", padding:"16px 14px", display:"flex", flexDirection:"column", gap:14 }}>
+        <div style={{ width:168, flexShrink:0, background:"#fafafa", borderRight:"1px solid #f0f0f0", padding:"12px 10px", display:"flex", flexDirection:"column", gap:10 }}>
           {filtros}
         </div>
       )}
       {/* Área principal */}
-      <div style={{ flex:1, minWidth:0, padding:"16px 20px", display:"flex", flexDirection:"column", gap:12 }}>
-        {/* Busca + Ações no topo */}
+      <div style={{ flex:1, minWidth:0, padding:"14px 18px", display:"flex", flexDirection:"column", gap:10 }}>
         {(busca || acoes) && (
-          <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+          <div style={{ display:"flex", gap:8, alignItems:"center" }}>
             {busca && <div style={{ flex:1 }}>{busca}</div>}
-            {acoes && <div style={{ display:"flex", gap:8, flexShrink:0 }}>{acoes}</div>}
+            {acoes && <div style={{ display:"flex", gap:6, flexShrink:0 }}>{acoes}</div>}
           </div>
         )}
-        {/* Conteúdo */}
         {children}
       </div>
     </div>
   );
 }
 
-// Grupo de filtro lateral reutilizável
-// FiltroGrupo com dropdown colapsável
+// FiltroGrupo — dropdown compacto e delicado
 function FiltroGrupo({ titulo, children }) {
   const [open, setOpen] = useState(false);
-  // Detectar qual filho está ativo para mostrar no botão
   var activeLabel = null;
   var childArr = Children.toArray(children);
   childArr.forEach(function(child) {
@@ -11242,63 +11238,60 @@ function FiltroGrupo({ titulo, children }) {
   });
 
   return (
-    <div>
+    <div style={{ position:"relative" }}>
       {titulo && (
-        <div style={{ fontSize:10, color:"#94a3b8", fontWeight:700, textTransform:"uppercase", letterSpacing:0.8, marginBottom:6 }}>{titulo}</div>
+        <div style={{ fontSize:9, color:"#b0b8c4", fontWeight:700, textTransform:"uppercase", letterSpacing:0.7, marginBottom:4 }}>{titulo}</div>
       )}
-      {/* Botão que mostra seleção atual e abre dropdown */}
       <button
         onClick={function(){ setOpen(function(v){return !v;}); }}
         style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center",
-          padding:"8px 11px", borderRadius:9, border:"1.5px solid "+(activeLabel?"#0f172a":"#e2e8f0"),
+          padding:"5px 9px", borderRadius:7,
+          border:"1px solid "+(activeLabel?"#cbd5e1":"#e9ecef"),
           background: activeLabel ? "#f1f5f9" : "#fff",
-          color: activeLabel ? "#0f172a" : "#64748b",
-          fontWeight: activeLabel ? 700 : 400, fontSize:12, cursor:"pointer", textAlign:"left" }}>
+          color: activeLabel ? "#0f172a" : "#94a3b8",
+          fontWeight: activeLabel ? 600 : 400, fontSize:11, cursor:"pointer", textAlign:"left",
+          transition:"border-color .15s" }}>
         <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>
           {activeLabel || "Todos"}
         </span>
-        <span style={{ fontSize:10, color:"#94a3b8", marginLeft:6, flexShrink:0 }}>{open?"▲":"▼"}</span>
+        <span style={{ fontSize:8, color:"#c4c9d0", marginLeft:4, flexShrink:0 }}>{open?"▲":"▼"}</span>
       </button>
-      {/* Lista de opções — aparece ao abrir */}
       {open && (
-        <div style={{ marginTop:4, background:"#fff", border:"1px solid #e2e8f0", borderRadius:9,
-          boxShadow:"0 4px 16px rgba(0,0,0,.08)", overflow:"hidden", zIndex:50 }}>
-          <div style={{ display:"flex", flexDirection:"column" }}>
-            {childArr.map(function(child, i) {
-              if (!child) return null;
-              // Wrap each FiltroBotao click to also close dropdown
-              return cloneElement(child, {
-                key: i,
-                onClick: function() {
-                  if (child.props.onClick) child.props.onClick();
-                  setOpen(false);
-                }
-              });
-            })}
-          </div>
+        <div style={{ position:"absolute", top:"100%", left:0, right:0, marginTop:2,
+          background:"#fff", border:"1px solid #e9ecef", borderRadius:7,
+          boxShadow:"0 6px 20px rgba(0,0,0,.07)", overflow:"hidden", zIndex:100 }}>
+          {childArr.map(function(child, i) {
+            if (!child) return null;
+            return cloneElement(child, {
+              key: i,
+              onClick: function() {
+                if (child.props.onClick) child.props.onClick();
+                setOpen(false);
+              }
+            });
+          })}
         </div>
       )}
     </div>
   );
 }
 
-// Botão de filtro dentro do dropdown
+// FiltroBotao — opção compacta dentro do dropdown
 function FiltroBotao({ label, active, cor, bg, onClick, count }) {
   return (
     <button onClick={onClick}
       style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
-        padding:"8px 12px",
-        border:"none",
-        borderBottom:"1px solid #f1f5f9",
-        background: active ? (bg||"#f1f5f9") : "transparent",
-        color: active ? (cor||"#0f172a") : "#334155",
-        fontWeight: active ? 700 : 400, fontSize:12, cursor:"pointer", textAlign:"left", width:"100%" }}>
-      <span>{label}</span>
+        padding:"6px 10px", border:"none", borderBottom:"1px solid #f5f5f5",
+        background: active ? (bg||"#f1f5f9") : "#fff",
+        color: active ? (cor||"#0f172a") : "#64748b",
+        fontWeight: active ? 600 : 400, fontSize:11, cursor:"pointer",
+        textAlign:"left", width:"100%", transition:"background .1s" }}>
+      <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{label}</span>
       {count !== undefined && (
-        <span style={{ fontSize:10, fontWeight:600,
+        <span style={{ fontSize:9, fontWeight:600, flexShrink:0, marginLeft:4,
           color: active?(cor||"#0f172a"):"#94a3b8",
-          background: active?(bg||"#e2e8f0"):"#f1f5f9",
-          padding:"1px 6px", borderRadius:10, minWidth:18, textAlign:"center" }}>
+          background: active?"transparent":"#f1f5f9",
+          padding:"1px 5px", borderRadius:8 }}>
           {count}
         </span>
       )}

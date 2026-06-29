@@ -12711,13 +12711,26 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
 
       var rawResults = data.results || [];
 
-      // O /products/search retorna produtos de CATÁLOGO: cada produto tem um
-      // buy_box_winner_item_id (o anúncio que está ganhando o buy box agora) e/ou
-      // buy_box_winner_price já direto na resposta. Vamos extrair o que vier pronto
-      // e, se necessário, buscar o item do buy box individualmente.
+      // Diagnóstico: mostra a estrutura COMPLETA do primeiro resultado para
+      // entendermos exatamente quais campos a API está retornando
+      if (rawResults.length > 0) {
+        console.log("[CONCORRENCIA] estrutura completa do 1º resultado:", JSON.stringify(rawResults[0], null, 2));
+      }
+
+      // Tenta extrair um item_id comparável usando várias possibilidades de campo,
+      // pois o formato de /products/search pode variar (catálogo vs item direto)
       var candidatos = rawResults.map(function(r){
-        var precoDireto = r.buy_box_winner_price ?? r.price ?? null;
-        var itemIdBuyBox = r.buy_box_winner_item_id || r.item_id || null;
+        var itemIdBuyBox =
+          r.buy_box_winner_item_id ||
+          r.buy_box_winner?.item_id ||
+          r.item_id ||
+          r.id || // fallback: às vezes "id" já é o item MLB diretamente
+          null;
+        var precoDireto =
+          r.buy_box_winner_price ??
+          r.buy_box_winner?.price ??
+          r.price ??
+          null;
         return {
           productId: r.id,
           itemId: itemIdBuyBox,
@@ -12725,13 +12738,15 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
           precoDireto: precoDireto,
           thumbnail: r.pictures?.[0]?.url || r.pictures?.[0]?.secure_url || r.thumbnail,
           permalink: r.permalink || (r.id ? "https://www.mercadolivre.com.br/p/"+r.id : null),
+          rawKeys: Object.keys(r), // para diagnóstico
         };
       }).filter(function(r){ return r.itemId && r.itemId !== listing.id; });
 
-      console.log("[CONCORRENCIA] candidatos extraídos:", JSON.stringify(candidatos.slice(0,5)));
+      console.log("[CONCORRENCIA] candidatos extraídos:", JSON.stringify(candidatos.slice(0,5), null, 2));
 
       if (candidatos.length === 0) {
-        throw new Error("Nenhum produto de catálogo com item_id válido foi encontrado para comparar.");
+        var amostraChaves = rawResults.length>0 ? Object.keys(rawResults[0]).join(", ") : "nenhum resultado";
+        throw new Error("A busca retornou "+rawResults.length+" resultado(s), mas nenhum tinha um identificador de item reconhecível. Campos disponíveis no resultado: ["+amostraChaves+"]. Abra o console (F12) para ver a estrutura completa.");
       }
 
       // Buscar detalhes reais de cada item (preço, vendedor, frete) via /items/{id}
@@ -13448,7 +13463,43 @@ export default function App() {
       return next;
     });
   }
-  const [minStock, setMinStock] = useState({});
+  const [minStock, setMinStock] = useState(function(){
+    try { return JSON.parse(localStorage.getItem("min_stock_anuncios")||"{}"); } catch { return {}; }
+  });
+  function setMinStockAndSave(updater) {
+    setMinStock(function(prev) {
+      var next = typeof updater === "function" ? updater(prev) : updater;
+      try { localStorage.setItem("min_stock_anuncios", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
+  // Sincroniza automaticamente o estoque mínimo definido no cadastro de Produtos
+  // (campo estoqueMinimo) com a coluna "Mín" da aba Anúncios, usando o MLB vinculado.
+  useEffect(function(){
+    if (!produtos || produtos.length === 0) return;
+    setMinStock(function(prev) {
+      var next = Object.assign({}, prev);
+      var mudou = false;
+      produtos.forEach(function(p) {
+        if (!p.estoqueMinimo) return;
+        var mlbs = [p.mlbVinculado].concat(p.mlbsVinculados||[]).filter(Boolean);
+        mlbs.forEach(function(mlb) {
+          var valorProduto = parseInt(p.estoqueMinimo);
+          // Só sobrescreve se ainda não foi definido manualmente na aba Anúncios,
+          // ou se o valor do produto mudou desde a última sincronização
+          if (next[mlb] === undefined || next["_src_"+mlb] === "produto") {
+            if (next[mlb] !== valorProduto) {
+              next[mlb] = valorProduto;
+              next["_src_"+mlb] = "produto";
+              mudou = true;
+            }
+          }
+        });
+      });
+      if (mudou) { try { localStorage.setItem("min_stock_anuncios", JSON.stringify(next)); } catch {} }
+      return mudou ? next : prev;
+    });
+  }, [produtos]);
   const [selectedListing, setSelectedListing] = useState(null);
   const [sortBy, setSortBy] = useState("score");
   const [orderFilter, setOrderFilter] = useState("all");
@@ -14816,7 +14867,8 @@ export default function App() {
                                 </span>
                                 <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                                   <span style={{ fontSize: 10, color: "#94a3b8" }}>Mín:</span>
-                                  <input type="number" value={minStock[l.id] ?? ""} onChange={e => setMinStock(m => ({ ...m, [l.id]: Number(e.target.value) }))} placeholder="0"
+                                  <input type="number" value={minStock[l.id] ?? ""} onChange={e => setMinStockAndSave(m => ({ ...m, [l.id]: Number(e.target.value), ["_src_"+l.id]: "manual" }))} placeholder="0"
+                                    title="Editar aqui marca como manual; para voltar a sincronizar com o cadastro do produto, defina o Estoque Mínimo em Produtos novamente"
                                     style={{ background: "#f8fafc", border: "1px solid #e2e8f0", color: "#0f172a", padding: "2px 6px", borderRadius: 4, width: 52, fontSize: 11, textAlign: "right" }} />
                                 </div>
                               </div>

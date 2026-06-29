@@ -11755,7 +11755,47 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
     var next = Object.assign({}, precosVendaConfig, { [id]: preco });
     setPrecosVendaConfig(next);
     try { localStorage.setItem("precos_venda_config", JSON.stringify(next)); } catch {}
+    // Marca como pendente de atualização no ML (preço simulado != preço atual)
+    marcarPendente(id, preco);
   }
+
+  // ── Controle de "pendente de atualização no ML" ──
+  const [pendentesAtualizacao, setPendentesAtualizacao] = useState(function(){
+    try { return JSON.parse(localStorage.getItem("precos_pendentes_ml")||"{}"); } catch { return {}; }
+  });
+  function salvarPendentes(next) {
+    setPendentesAtualizacao(next);
+    try { localStorage.setItem("precos_pendentes_ml", JSON.stringify(next)); } catch {}
+  }
+  function marcarPendente(id, novoPreco) {
+    var listing = (enriched||[]).find(function(l){ return l.id===id; });
+    if (!listing) return;
+    var next = Object.assign({}, pendentesAtualizacao);
+    if (novoPreco > 0 && novoPreco !== listing.price) {
+      next[id] = { precoAntigo: listing.price, precoNovo: novoPreco, data: new Date().toISOString(), titulo: listing.title };
+    } else {
+      delete next[id];
+    }
+    salvarPendentes(next);
+  }
+  function confirmarAtualizado(id) {
+    var next = Object.assign({}, pendentesAtualizacao);
+    delete next[id];
+    salvarPendentes(next);
+  }
+  // Detectar automaticamente quando o preço do ML já bateu com o simulado (resolve sozinho)
+  useEffect(function(){
+    var next = Object.assign({}, pendentesAtualizacao);
+    var mudou = false;
+    Object.keys(next).forEach(function(id){
+      var listing = (enriched||[]).find(function(l){ return l.id===id; });
+      if (listing && listing.price === next[id].precoNovo) {
+        delete next[id];
+        mudou = true;
+      }
+    });
+    if (mudou) salvarPendentes(next);
+  }, [enriched]);
 
   const [buscaSku, setBuscaSku] = useState("");
 
@@ -11806,6 +11846,40 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
           <span style={{ fontSize:15, fontWeight:700, color:"#0f172a" }}>%</span>
         </div>
       </div>
+
+      {/* Banner de avisos — preços pendentes de atualização no ML */}
+      {Object.keys(pendentesAtualizacao).length > 0 && (
+        <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:10, padding:"12px 16px", margin:"12px 0" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:"#92400e" }}>
+              ⚠️ {Object.keys(pendentesAtualizacao).length} anúncio(s) com preço pendente de atualização no Mercado Livre
+            </div>
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:6, maxHeight:160, overflowY:"auto" }}>
+            {Object.entries(pendentesAtualizacao).map(function([id, p]){
+              return (
+                <div key={id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"#fff", border:"1px solid #fde68a", borderRadius:8, padding:"7px 12px" }}>
+                  <div style={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontSize:12, color:"#0f172a" }}>
+                    {p.titulo}
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
+                    <span style={{ fontSize:11, color:"#94a3b8", textDecoration:"line-through" }}>R$ {p.precoAntigo.toFixed(2).replace(".",",")}</span>
+                    <span style={{ fontSize:12, fontWeight:700, color:"#7c3aed" }}>→ R$ {p.precoNovo.toFixed(2).replace(".",",")}</span>
+                    <a href={"https://www.mercadolivre.com.br/seller-admin/listing/edit?itemId="+id} target="_blank" rel="noreferrer"
+                      style={{ fontSize:11, color:"#0891b2", textDecoration:"none", fontWeight:600, whiteSpace:"nowrap" }}>
+                      Editar no ML ↗
+                    </a>
+                    <button onClick={function(){ confirmarAtualizado(id); }}
+                      style={{ background:"#15803d", border:"none", color:"#fff", fontWeight:700, padding:"4px 10px", borderRadius:6, cursor:"pointer", fontSize:11, whiteSpace:"nowrap" }}>
+                      ✓ Já atualizei
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Busca */}
       <div style={{ display:"flex", gap:7, margin:"14px 0" }}>
@@ -11933,6 +12007,11 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                             <div style={{ fontSize:10, color:precoVendaSimul>bruto?"#15803d":"#dc2626" }}>
                               {precoVendaSimul>bruto?"▲":"▼"} atual: R$ {bruto.toFixed(2).replace(".",",")}
                             </div>
+                            {pendentesAtualizacao[l.id] && (
+                              <div style={{ fontSize:9, fontWeight:700, color:"#d97706", background:"#fffbeb", border:"1px solid #fde68a", padding:"1px 5px", borderRadius:4, marginTop:2, display:"inline-block" }}>
+                                ⏳ pendente ML
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <span style={{ fontSize:11, color:"#94a3b8", background:"#f5f3ff", border:"1px dashed #ddd6fe", padding:"2px 7px", borderRadius:5 }}>
@@ -12678,6 +12757,331 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
               )}
             </>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  CHAT INTERNO — Conversa entre usuários + Tarefas + Anexos
+// ════════════════════════════════════════════════════════════
+function getChatMensagens() {
+  try { return JSON.parse(localStorage.getItem("chat_interno_mensagens")||"[]"); } catch { return []; }
+}
+function saveChatMensagens(msgs) {
+  try { localStorage.setItem("chat_interno_mensagens", JSON.stringify(msgs)); } catch {}
+}
+function getTarefas() {
+  try { return JSON.parse(localStorage.getItem("chat_interno_tarefas")||"[]"); } catch { return []; }
+}
+function saveTarefas(t) {
+  try { localStorage.setItem("chat_interno_tarefas", JSON.stringify(t)); } catch {}
+}
+
+function ChatInternoWidget({ currentUser }) {
+  const [open, setOpen] = useState(false);
+  const [aba, setAba] = useState("conversa"); // conversa | tarefas
+  const [mensagens, setMensagens] = useState(getChatMensagens);
+  const [tarefas, setTarefas] = useState(getTarefas);
+  const [texto, setTexto] = useState("");
+  const [canalAtivo, setCanalAtivo] = useState("geral"); // geral | dm:<userId>
+  const [showNovaTarefa, setShowNovaTarefa] = useState(false);
+  const bottomRef = useRef(null);
+  const fileRef = useRef(null);
+
+  var usuarios = getUsuarios().filter(function(u){ return u.ativo; });
+  var naoLidas = mensagens.filter(function(m){ return !((m.lidoPor||[]).includes(currentUser?.id)) && m.autorId!==currentUser?.id; }).length;
+  var tarefasMinhas = tarefas.filter(function(t){ return t.responsavelId===currentUser?.id && t.status!=="concluida"; }).length;
+
+  useEffect(function(){
+    if (open && bottomRef.current) bottomRef.current.scrollIntoView({ behavior:"smooth" });
+  }, [mensagens, open, canalAtivo]);
+
+  // Polling simples para simular tempo real entre abas/usuários (localStorage não dispara evento na mesma aba)
+  useEffect(function(){
+    var interval = setInterval(function(){
+      var fresh = getChatMensagens();
+      if (JSON.stringify(fresh) !== JSON.stringify(mensagens)) setMensagens(fresh);
+      var freshT = getTarefas();
+      if (JSON.stringify(freshT) !== JSON.stringify(tarefas)) setTarefas(freshT);
+    }, 3000);
+    return function(){ clearInterval(interval); };
+  }, [mensagens, tarefas]);
+
+  function marcarComoLidas() {
+    var next = mensagens.map(function(m){
+      if (m.autorId === currentUser?.id) return m;
+      var lidoPor = m.lidoPor||[];
+      if (lidoPor.includes(currentUser?.id)) return m;
+      return Object.assign({}, m, { lidoPor: [...lidoPor, currentUser.id] });
+    });
+    setMensagens(next);
+    saveChatMensagens(next);
+  }
+
+  function enviarMensagem(anexoBase64, anexoNome, anexoTipo) {
+    if (!texto.trim() && !anexoBase64) return;
+    var nova = {
+      id: "msg_"+Date.now(),
+      canal: canalAtivo,
+      autorId: currentUser.id,
+      autorNome: currentUser.nome,
+      texto: texto.trim(),
+      anexo: anexoBase64 ? { data: anexoBase64, nome: anexoNome, tipo: anexoTipo } : null,
+      data: new Date().toISOString(),
+      lidoPor: [currentUser.id],
+    };
+    var next = [...mensagens, nova];
+    setMensagens(next);
+    saveChatMensagens(next);
+    setTexto("");
+  }
+
+  function handleFileChange(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 3*1024*1024) { alert("Arquivo muito grande (máx 3MB)."); return; }
+    var reader = new FileReader();
+    reader.onload = function(){ enviarMensagem(reader.result, file.name, file.type); };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  }
+
+  function handleKey(e) { if (e.key==="Enter" && !e.shiftKey) { e.preventDefault(); enviarMensagem(); } }
+
+  function criarTarefa(form) {
+    var nova = {
+      id: "tarefa_"+Date.now(),
+      titulo: form.titulo,
+      descricao: form.descricao,
+      responsavelId: form.responsavelId,
+      responsavelNome: usuarios.find(function(u){return u.id===form.responsavelId;})?.nome||"—",
+      criadorId: currentUser.id,
+      criadorNome: currentUser.nome,
+      prazo: form.prazo,
+      prioridade: form.prioridade,
+      status: "pendente",
+      criadoEm: new Date().toISOString(),
+    };
+    var next = [...tarefas, nova];
+    setTarefas(next); saveTarefas(next);
+    setShowNovaTarefa(false);
+  }
+
+  function mudarStatusTarefa(id, status) {
+    var next = tarefas.map(function(t){ return t.id===id ? Object.assign({},t,{status:status}) : t; });
+    setTarefas(next); saveTarefas(next);
+  }
+
+  var canais = [{ k:"geral", l:"💬 Geral", icon:"👥" }].concat(
+    usuarios.filter(function(u){return u.id!==currentUser?.id;}).map(function(u){
+      return { k:"dm:"+u.id, l:u.nome, icon:"👤" };
+    })
+  );
+
+  var msgsCanal = mensagens.filter(function(m){
+    if (canalAtivo === "geral") return m.canal === "geral";
+    // DM: aparece se o canal bate OU é uma DM entre os dois envolvidos
+    var [, otherId] = canalAtivo.split(":");
+    var dmKey1 = "dm:"+currentUser.id+":"+otherId;
+    var dmKey2 = "dm:"+otherId+":"+currentUser.id;
+    return m.canal === canalAtivo || m.canal === dmKey1 || m.canal === dmKey2;
+  });
+
+  return (
+    <>
+      {/* Botão flutuante */}
+      <button onClick={function(){ setOpen(true); marcarComoLidas(); }}
+        style={{ position:"fixed", bottom:20, right:20, width:56, height:56, borderRadius:"50%",
+          background:"#0f172a", border:"none", color:"#ffe000", fontSize:24, cursor:"pointer",
+          boxShadow:"0 6px 20px rgba(0,0,0,.25)", zIndex:500, display: open?"none":"flex",
+          alignItems:"center", justifyContent:"center" }}>
+        💬
+        {(naoLidas>0||tarefasMinhas>0) && (
+          <span style={{ position:"absolute", top:-4, right:-4, background:"#dc2626", color:"#fff",
+            fontSize:11, fontWeight:700, borderRadius:10, minWidth:20, height:20, display:"flex",
+            alignItems:"center", justifyContent:"center", padding:"0 5px" }}>
+            {naoLidas+tarefasMinhas}
+          </span>
+        )}
+      </button>
+
+      {/* Painel do chat */}
+      {open && (
+        <div style={{ position:"fixed", bottom:20, right:20, width:420, height:560, background:"#fff",
+          borderRadius:16, boxShadow:"0 12px 40px rgba(0,0,0,.25)", zIndex:500, display:"flex",
+          flexDirection:"column", overflow:"hidden", border:"1px solid #e2e8f0" }}>
+
+          {/* Header */}
+          <div style={{ background:"#0f172a", padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <div style={{ color:"#fff", fontWeight:700, fontSize:14 }}>💬 Chat da Equipe</div>
+            <button onClick={function(){setOpen(false);}} style={{ background:"transparent", border:"none", color:"#94a3b8", fontSize:18, cursor:"pointer" }}>✕</button>
+          </div>
+
+          {/* Sub-abas */}
+          <div style={{ display:"flex", borderBottom:"1px solid #e2e8f0" }}>
+            {[{k:"conversa",l:"💬 Conversa"},{k:"tarefas",l:"✓ Tarefas"+(tarefasMinhas>0?" ("+tarefasMinhas+")":"")}].map(function(t){
+              var a = aba===t.k;
+              return <button key={t.k} onClick={function(){setAba(t.k);}}
+                style={{ flex:1, padding:"9px", border:"none", borderBottom:a?"2px solid #0f172a":"2px solid transparent",
+                  background:"transparent", color:a?"#0f172a":"#94a3b8", fontWeight:a?700:400, fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>
+                {t.l}
+              </button>;
+            })}
+          </div>
+
+          {aba === "conversa" ? (
+            <>
+              {/* Canais */}
+              <div style={{ display:"flex", gap:4, padding:"8px 10px", borderBottom:"1px solid #f1f5f9", overflowX:"auto" }}>
+                {canais.map(function(c){
+                  var a = canalAtivo===c.k;
+                  return <button key={c.k} onClick={function(){setCanalAtivo(c.k);}}
+                    style={{ padding:"5px 10px", borderRadius:14, border:"1px solid "+(a?"#0f172a":"#e2e8f0"),
+                      background:a?"#0f172a":"#fff", color:a?"#fff":"#64748b", fontSize:11, fontWeight:a?700:400, cursor:"pointer", whiteSpace:"nowrap" }}>
+                    {c.icon} {c.l}
+                  </button>;
+                })}
+              </div>
+
+              {/* Mensagens */}
+              <div style={{ flex:1, overflowY:"auto", padding:"10px 14px", display:"flex", flexDirection:"column", gap:8 }}>
+                {msgsCanal.length===0 && (
+                  <div style={{ textAlign:"center", color:"#94a3b8", fontSize:12, padding:30 }}>
+                    Nenhuma mensagem ainda. Comece a conversa!
+                  </div>
+                )}
+                {msgsCanal.map(function(m){
+                  var isMe = m.autorId === currentUser.id;
+                  return (
+                    <div key={m.id} style={{ display:"flex", flexDirection:"column", alignItems:isMe?"flex-end":"flex-start" }}>
+                      {!isMe && <div style={{ fontSize:10, color:"#94a3b8", marginBottom:2, marginLeft:4 }}>{m.autorNome}</div>}
+                      <div style={{ maxWidth:"80%", background:isMe?"#0f172a":"#f1f5f9", color:isMe?"#fff":"#0f172a",
+                        padding:"8px 12px", borderRadius:isMe?"12px 12px 4px 12px":"12px 12px 12px 4px", fontSize:13 }}>
+                        {m.anexo && (
+                          m.anexo.tipo?.startsWith("image/") ? (
+                            <img src={m.anexo.data} alt={m.anexo.nome} style={{ maxWidth:200, borderRadius:8, marginBottom:m.texto?6:0, display:"block" }} />
+                          ) : (
+                            <a href={m.anexo.data} download={m.anexo.nome} style={{ display:"flex", alignItems:"center", gap:6, color:isMe?"#bfdbfe":"#1d4ed8", textDecoration:"none", marginBottom:m.texto?6:0 }}>
+                              📎 {m.anexo.nome}
+                            </a>
+                          )
+                        )}
+                        {m.texto && <div style={{ whiteSpace:"pre-wrap" }}>{m.texto}</div>}
+                      </div>
+                      <div style={{ fontSize:9, color:"#cbd5e1", marginTop:2 }}>
+                        {new Date(m.data).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}
+                      </div>
+                    </div>
+                  );
+                })}
+                <div ref={bottomRef} />
+              </div>
+
+              {/* Input */}
+              <div style={{ display:"flex", gap:6, padding:"10px 12px", borderTop:"1px solid #e2e8f0" }}>
+                <input type="file" ref={fileRef} style={{display:"none"}} onChange={handleFileChange} accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
+                <button onClick={function(){fileRef.current?.click();}}
+                  style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:36, height:36, borderRadius:9, cursor:"pointer", fontSize:16, flexShrink:0 }}>
+                  📎
+                </button>
+                <input value={texto} onChange={function(e){setTexto(e.target.value);}} onKeyDown={handleKey} placeholder="Digite uma mensagem..."
+                  style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px", borderRadius:9, fontSize:13, outline:"none" }} />
+                <button onClick={function(){enviarMensagem();}} disabled={!texto.trim()}
+                  style={{ background:texto.trim()?"#0f172a":"#f1f5f9", border:"none", color:texto.trim()?"#fff":"#94a3b8", width:36, height:36, borderRadius:9, cursor:texto.trim()?"pointer":"not-allowed", fontSize:16, flexShrink:0 }}>
+                  ➤
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Tarefas */}
+              <div style={{ flex:1, overflowY:"auto", padding:"12px 14px" }}>
+                <button onClick={function(){setShowNovaTarefa(true);}}
+                  style={{ width:"100%", background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px", borderRadius:9, cursor:"pointer", fontSize:12, marginBottom:12 }}>
+                  + Nova Tarefa
+                </button>
+                {tarefas.length===0 && <div style={{ textAlign:"center", color:"#94a3b8", fontSize:12, padding:20 }}>Nenhuma tarefa criada</div>}
+                {tarefas.slice().reverse().map(function(t){
+                  var corPrior = t.prioridade==="alta"?"#dc2626":t.prioridade==="media"?"#d97706":"#15803d";
+                  var concluida = t.status==="concluida";
+                  return (
+                    <div key={t.id} style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 12px", marginBottom:8, opacity:concluida?0.6:1 }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:6 }}>
+                        <div style={{ fontSize:13, fontWeight:700, color:"#0f172a", textDecoration:concluida?"line-through":"none" }}>{t.titulo}</div>
+                        <span style={{ fontSize:9, fontWeight:700, color:corPrior, background:corPrior+"18", padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
+                          {t.prioridade}
+                        </span>
+                      </div>
+                      {t.descricao && <div style={{ fontSize:11, color:"#64748b", marginTop:3 }}>{t.descricao}</div>}
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:6 }}>
+                        <div style={{ fontSize:10, color:"#94a3b8" }}>
+                          👤 {t.responsavelNome} {t.prazo && "· 📅 "+new Date(t.prazo).toLocaleDateString("pt-BR")}
+                        </div>
+                        {!concluida && t.responsavelId===currentUser.id && (
+                          <button onClick={function(){mudarStatusTarefa(t.id,"concluida");}}
+                            style={{ background:"#15803d", border:"none", color:"#fff", padding:"3px 9px", borderRadius:6, cursor:"pointer", fontSize:10, fontWeight:600 }}>
+                            ✓ Concluir
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Modal nova tarefa */}
+      {showNovaTarefa && (
+        <ModalNovaTarefa usuarios={usuarios} onSave={criarTarefa} onClose={function(){setShowNovaTarefa(false);}} />
+      )}
+    </>
+  );
+}
+
+function ModalNovaTarefa({ usuarios, onSave, onClose }) {
+  const [titulo, setTitulo] = useState("");
+  const [descricao, setDescricao] = useState("");
+  const [responsavelId, setResponsavelId] = useState(usuarios[0]?.id||"");
+  const [prazo, setPrazo] = useState("");
+  const [prioridade, setPrioridade] = useState("media");
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:700, padding:16 }}>
+      <div style={{ background:"#fff", borderRadius:14, width:"100%", maxWidth:420, padding:20 }}>
+        <div style={{ fontWeight:700, fontSize:15, color:"#0f172a", marginBottom:14 }}>+ Nova Tarefa</div>
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          <input value={titulo} onChange={function(e){setTitulo(e.target.value);}} placeholder="Título da tarefa"
+            style={{ background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+          <textarea value={descricao} onChange={function(e){setDescricao(e.target.value);}} placeholder="Descrição (opcional)" rows={3}
+            style={{ background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none", resize:"none", fontFamily:"inherit" }} />
+          <select value={responsavelId} onChange={function(e){setResponsavelId(e.target.value);}}
+            style={{ background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", padding:"9px 12px", borderRadius:8, fontSize:13 }}>
+            {usuarios.map(function(u){ return <option key={u.id} value={u.id}>{u.nome}</option>; })}
+          </select>
+          <div style={{ display:"flex", gap:8 }}>
+            <input type="date" value={prazo} onChange={function(e){setPrazo(e.target.value);}}
+              style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", padding:"9px 12px", borderRadius:8, fontSize:13 }} />
+            <select value={prioridade} onChange={function(e){setPrioridade(e.target.value);}}
+              style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", padding:"9px 12px", borderRadius:8, fontSize:13 }}>
+              <option value="baixa">Baixa</option>
+              <option value="media">Média</option>
+              <option value="alta">Alta</option>
+            </select>
+          </div>
+        </div>
+        <div style={{ display:"flex", gap:8, marginTop:16 }}>
+          <button onClick={onClose} style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"10px", borderRadius:9, cursor:"pointer" }}>Cancelar</button>
+          <button onClick={function(){ if(titulo.trim()) onSave({titulo,descricao,responsavelId,prazo,prioridade}); }}
+            disabled={!titulo.trim()}
+            style={{ flex:2, background:titulo.trim()?"#0f172a":"#f1f5f9", border:"none", color:titulo.trim()?"#fff":"#94a3b8", fontWeight:700, padding:"10px", borderRadius:9, cursor:titulo.trim()?"pointer":"not-allowed" }}>
+            Criar Tarefa
+          </button>
         </div>
       </div>
     </div>
@@ -14520,6 +14924,7 @@ export default function App() {
 
       {showMLModal && <MLConnectModal onConnect={handleConnect} onClose={() => setShowMLModal(false)} />}
       {selectedListing && <AIPanel listing={selectedListing} onClose={() => setSelectedListing(null)} />}
+      {currentUser && <ChatInternoWidget currentUser={currentUser} />}
     </div>
   );
 }

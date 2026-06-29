@@ -12369,12 +12369,10 @@ function PublicidadeTab({ token, sellerId }) {
     var datas = getDatas(periodo);
 
     try {
-      // ── 1. Buscar campanhas via API direta do ML ──
-      // Endpoint correto: GET /advertising/product_ads/campaigns
-      var BASE = "https://api.mercadolibre.com";
+      // ── 1. Buscar campanhas via proxy /api/ml (evita CORS) ──
       var headers = { Authorization: "Bearer "+token, "Content-Type": "application/json" };
 
-      var res = await fetch(BASE+"/advertising/product_ads/campaigns?seller_id="+sellerId+"&status=ALL&limit=50&offset=0", { headers: headers });
+      var res = await fetch("/api/ml/advertising/product_ads/campaigns?seller_id="+sellerId+"&status=ALL&limit=50&offset=0", { headers: headers });
       var data = await res.json();
 
       // Diagnóstico em console para depuração
@@ -12397,7 +12395,7 @@ function PublicidadeTab({ token, sellerId }) {
       await Promise.all(camps.map(async function(c) {
         try {
           // Endpoint de métricas por campanha
-          var mUrl = BASE+"/advertising/product_ads/campaigns/"+c.id+"/metrics?date_from="+datas.from+"&date_to="+datas.to+"&seller_id="+sellerId;
+          var mUrl = "/api/ml/advertising/product_ads/campaigns/"+c.id+"/metrics?date_from="+datas.from+"&date_to="+datas.to+"&seller_id="+sellerId;
           var mr = await fetch(mUrl, { headers: headers });
           var md = await mr.json();
           console.log("[PUBLICIDADE] métricas camp "+c.id+":", JSON.stringify(md).slice(0,200));
@@ -12642,13 +12640,13 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
     setSelectedListing(listing);
     setLoading(true); setErro(null); setConcorrentes([]);
     try {
-      // Limpar título para gerar query de busca eficaz (remove ano/medidas excessivas, mantém termos chave)
+      // Limpar título para gerar query de busca eficaz
       var query = (listing.title||"").trim();
-      // Buscar via API pública do ML (não requer auth)
-      var url = "https://api.mercadolibre.com/sites/MLB/search?q="+encodeURIComponent(query)+"&limit=30";
-      var res = await fetch(url);
+      // Buscar via proxy /api/ml (evita CORS/forbidden no browser)
+      var url = "/api/ml/sites/MLB/search?q="+encodeURIComponent(query)+"&limit=30";
+      var res = await fetch(url, { headers: token ? { Authorization: "Bearer "+token } : {} });
       var data = await res.json();
-      if (data.error) throw new Error(data.message||data.error);
+      if (data.error) throw new Error((data.message||data.error)+" (status: "+res.status+")");
 
       var results = (data.results||[]).filter(function(r){
         return r.id !== listing.id; // exclui o próprio anúncio

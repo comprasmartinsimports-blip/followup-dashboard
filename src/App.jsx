@@ -1438,104 +1438,221 @@ function AdminTab({ currentUser }) {
 }
 
 
-// ── Versão compacta do painel de Impostos/Custos Fixos ───────
-function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, faturamentoMes }) {
-  const [novoImposto, setNovoImposto] = useState({ nome:"", valor:"", tipo:"%" });
-  const [novoCusto, setNovoCusto] = useState({ nome:"", valor:"", tipo:"%" });
+// ── Painel detalhado de Impostos (Lucro Real) e Custos Fixos ──
+var ESTADOS_BR_ICMS = [["AC", "Acre", 19], ["AL", "Alagoas", 19], ["AP", "Amapá", 18], ["AM", "Amazonas", 20], ["BA", "Bahia", 20.5], ["CE", "Ceará", 20], ["DF", "Distrito Federal", 20], ["ES", "Espírito Santo", 17], ["GO", "Goiás", 19], ["MA", "Maranhão", 22], ["MT", "Mato Grosso", 17], ["MS", "Mato Grosso do Sul", 17], ["MG", "Minas Gerais", 18], ["PA", "Pará", 19], ["PB", "Paraíba", 20], ["PR", "Paraná", 19.5], ["PE", "Pernambuco", 20.5], ["PI", "Piauí", 21], ["RJ", "Rio de Janeiro", 22], ["RN", "Rio Grande do Norte", 18], ["RS", "Rio Grande do Sul", 17], ["RO", "Rondônia", 19.5], ["RR", "Roraima", 20], ["SC", "Santa Catarina", 17], ["SP", "São Paulo", 18], ["SE", "Sergipe", 19], ["TO", "Tocantins", 20]];
 
-  function addImposto() {
-    if (!novoImposto.nome || !novoImposto.valor) return;
-    var upd = [...impostos, Object.assign({}, novoImposto, {id: Date.now()})];
-    setImpostos(upd); saveImpostos(upd);
-    setNovoImposto({ nome:"", valor:"", tipo:"%" });
+function getIcmsConfig() {
+  try { return JSON.parse(localStorage.getItem("icms_por_estado")||"{}"); } catch { return {}; }
+}
+function saveIcmsConfig(cfg) { try { localStorage.setItem("icms_por_estado", JSON.stringify(cfg)); } catch {} }
+
+function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, faturamentoMes }) {
+  const [novoCusto, setNovoCusto] = useState({ nome:"", valor:"", tipo:"R$" });
+  const [icmsConfig, setIcmsConfig] = useState(getIcmsConfig);
+  const [showIcmsTable, setShowIcmsTable] = useState(false);
+  const [irpjPct, setIrpjPct] = useState(function(){ try { return JSON.parse(localStorage.getItem("irpj_csll_config")||"{}").irpj || "15"; } catch { return "15"; } });
+  const [irpjAdicionalPct, setIrpjAdicionalPct] = useState(function(){ try { return JSON.parse(localStorage.getItem("irpj_csll_config")||"{}").irpjAdicional || "10"; } catch { return "10"; } });
+  const [csllPct, setCsllPct] = useState(function(){ try { return JSON.parse(localStorage.getItem("irpj_csll_config")||"{}").csll || "9"; } catch { return "9"; } });
+
+  function salvarIrpjCsll(novoIrpj, novoIrpjAd, novoCsll) {
+    var cfg = { irpj: novoIrpj, irpjAdicional: novoIrpjAd, csll: novoCsll };
+    try { localStorage.setItem("irpj_csll_config", JSON.stringify(cfg)); } catch {}
   }
+
+  function setIcmsEstado(uf, valor) {
+    var next = Object.assign({}, icmsConfig, { [uf]: valor });
+    setIcmsConfig(next); saveIcmsConfig(next);
+  }
+  function resetIcmsPadrao() {
+    var next = {};
+    ESTADOS_BR_ICMS.forEach(function(e){ next[e[0]] = e[2]; });
+    setIcmsConfig(next); saveIcmsConfig(next);
+  }
+
   function addCusto() {
     if (!novoCusto.nome || !novoCusto.valor) return;
     var upd = [...custosFixos, Object.assign({}, novoCusto, {id: Date.now()})];
     setCustosFixos(upd); saveCustosFixos(upd);
-    setNovoCusto({ nome:"", valor:"", tipo:"%" });
+    setNovoCusto({ nome:"", valor:"", tipo:"R$" });
   }
-  function removeImposto(id) { var upd = impostos.filter(function(i){return i.id!==id;}); setImpostos(upd); saveImpostos(upd); }
   function removeCusto(id) { var upd = custosFixos.filter(function(c){return c.id!==id;}); setCustosFixos(upd); saveCustosFixos(upd); }
 
-  var totalImp = impostos.reduce(function(s,i){ return s + calcValor(i, faturamentoMes); }, 0);
+  function calcValor(item, base) {
+    var v = parseFloat(item.valor||0);
+    return item.tipo === "%" ? base * (v/100) : v;
+  }
+
   var totalFix = custosFixos.reduce(function(s,c){ return s + calcValor(c, faturamentoMes); }, 0);
+
+  // ICMS médio ponderado (apenas para exibição de referência; cálculo real usa por-pedido conforme UF do comprador)
+  var ufsConfigurados = Object.keys(icmsConfig).filter(function(k){ return parseFloat(icmsConfig[k])>0; });
+  var icmsMedioRef = ufsConfigurados.length
+    ? ufsConfigurados.reduce(function(s,k){return s+parseFloat(icmsConfig[k]);},0) / ufsConfigurados.length
+    : 0;
+
+  var irpjTotal = parseFloat(irpjPct||0) + parseFloat(irpjAdicionalPct||0);
+  var csllTotalCalc = parseFloat(csllPct||0);
+  var totalImpFixo = faturamentoMes * ((irpjTotal+csllTotalCalc)/100);
 
   function ItemRow({ item, onRemove }) {
     return (
       <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 0", borderBottom:"1px solid #f8fafc" }}>
         <div style={{ flex:1, fontSize:13, color:"#0f172a", fontWeight:500 }}>{item.nome}</div>
-        <div style={{ fontSize:13, fontWeight:700, color:"#334155" }}>{item.valor}{item.tipo}</div>
+        <div style={{ fontSize:13, fontWeight:700, color:"#334155" }}>{item.tipo==="%" ? item.valor+"%" : "R$ "+parseFloat(item.valor).toFixed(2).replace(".",",")}</div>
         <div style={{ fontSize:12, color:"#94a3b8" }}>= R$ {calcValor(item, faturamentoMes).toFixed(2).replace(".",",")}</div>
         <button onClick={function(){ onRemove(item.id); }} style={{ background:"#fef2f2", border:"none", color:"#dc2626", width:24, height:24, borderRadius:6, cursor:"pointer", fontSize:11, flexShrink:0 }}>✕</button>
       </div>
     );
   }
 
-  function AddRow({ state, setState, onAdd, placeholder }) {
-    return (
-      <div style={{ display:"flex", gap:6, marginTop:10, alignItems:"center" }}>
-        <input value={state.nome} onChange={function(e){setState(function(s){return Object.assign({},s,{nome:e.target.value});});}}
-          placeholder={placeholder}
-          style={{ flex:2, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"7px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
-        <div style={{ display:"flex", border:"1px solid #e2e8f0", borderRadius:8, overflow:"hidden", flexShrink:0 }}>
-          {["%","R$"].map(function(t){
-            return <button key={t} onClick={function(){setState(function(s){return Object.assign({},s,{tipo:t});});}}
-              style={{ padding:"7px 10px", border:"none", cursor:"pointer", fontSize:12, fontWeight:700,
-                background: state.tipo===t?"#0f172a":"#fff", color: state.tipo===t?"#fff":"#64748b" }}>{t}</button>;
-          })}
-        </div>
-        <input type="number" value={state.valor} onChange={function(e){setState(function(s){return Object.assign({},s,{valor:e.target.value});});}}
-          placeholder="0"
-          style={{ width:70, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"7px 10px", borderRadius:8, fontSize:12, outline:"none", flexShrink:0 }} />
-        <button onClick={onAdd} disabled={!state.nome||!state.valor}
-          style={{ background: (state.nome&&state.valor)?"#0f172a":"#f1f5f9", border:"none", color:(state.nome&&state.valor)?"#fff":"#94a3b8",
-            fontWeight:700, padding:"7px 14px", borderRadius:8, cursor:(state.nome&&state.valor)?"pointer":"not-allowed", fontSize:12, flexShrink:0 }}>+</button>
-      </div>
-    );
-  }
-
   return (
-    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-      {/* Impostos */}
+    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+
+      {/* ── IMPOSTOS — Lucro Real ── */}
       <div style={{ background:"#fff", border:"1px solid #fecaca", borderRadius:14, overflow:"hidden" }}>
         <div style={{ background:"#fef2f2", padding:"10px 14px", borderBottom:"1px solid #fecaca", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
-            <div style={{ fontWeight:700, fontSize:14, color:"#dc2626" }}>📋 Impostos</div>
-            <div style={{ fontSize:11, color:"#94a3b8", marginTop:1 }}>ICMS, Simples, DAS...</div>
+            <div style={{ fontWeight:700, fontSize:14, color:"#dc2626" }}>📋 Impostos — Regime Lucro Real</div>
+            <div style={{ fontSize:11, color:"#94a3b8", marginTop:1 }}>ICMS por estado, IRPJ e CSLL</div>
           </div>
           <div style={{ textAlign:"right" }}>
-            <div style={{ fontSize:11, color:"#94a3b8" }}>Total</div>
-            <div style={{ fontSize:17, fontWeight:800, color:"#dc2626" }}>R$ {totalImp.toFixed(2).replace(".",",")}</div>
+            <div style={{ fontSize:11, color:"#94a3b8" }}>IRPJ+CSLL s/ faturamento</div>
+            <div style={{ fontSize:17, fontWeight:800, color:"#dc2626" }}>R$ {totalImpFixo.toFixed(2).replace(".",",")}</div>
           </div>
         </div>
-        <div style={{ padding:"12px 18px" }}>
-          {impostos.length === 0
-            ? <div style={{ fontSize:12, color:"#94a3b8", padding:"8px 0", textAlign:"center" }}>Nenhum imposto cadastrado</div>
-            : impostos.map(function(i){ return <ItemRow key={i.id} item={i} onRemove={removeImposto} />; })
-          }
-          <AddRow state={novoImposto} setState={setNovoImposto} onAdd={addImposto} placeholder="Ex: Simples Nacional" />
+
+        <div style={{ padding:"14px 18px" }}>
+          {/* IRPJ e CSLL */}
+          <div style={{ fontSize:11, color:"#94a3b8", fontWeight:700, textTransform:"uppercase", marginBottom:8 }}>IRPJ e CSLL (sobre o Lucro Real apurado)</div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:14 }}>
+            <div>
+              <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4 }}>IRPJ base (%)</div>
+              <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                <input type="number" step="0.01" value={irpjPct}
+                  onChange={function(e){ setIrpjPct(e.target.value); salvarIrpjCsll(e.target.value, irpjAdicionalPct, csllPct); }}
+                  style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"7px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
+                <span style={{ fontSize:12, color:"#94a3b8" }}>%</span>
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4 }}>IRPJ adicional (%)</div>
+              <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                <input type="number" step="0.01" value={irpjAdicionalPct}
+                  onChange={function(e){ setIrpjAdicionalPct(e.target.value); salvarIrpjCsll(irpjPct, e.target.value, csllPct); }}
+                  style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"7px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
+                <span style={{ fontSize:12, color:"#94a3b8" }}>%</span>
+              </div>
+              <div style={{ fontSize:9, color:"#cbd5e1", marginTop:2 }}>Sobre lucro &gt; R$ 20mil/mês</div>
+            </div>
+            <div>
+              <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4 }}>CSLL (%)</div>
+              <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                <input type="number" step="0.01" value={csllPct}
+                  onChange={function(e){ setCsllPct(e.target.value); salvarIrpjCsll(irpjPct, irpjAdicionalPct, e.target.value); }}
+                  style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"7px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
+                <span style={{ fontSize:12, color:"#94a3b8" }}>%</span>
+              </div>
+            </div>
+          </div>
+
+          {/* ICMS por estado */}
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+            <div style={{ fontSize:11, color:"#94a3b8", fontWeight:700, textTransform:"uppercase" }}>
+              ICMS por Estado (alíquota interna de venda)
+            </div>
+            <div style={{ display:"flex", gap:6 }}>
+              <button onClick={resetIcmsPadrao}
+                style={{ fontSize:10, color:"#0891b2", background:"#ecfeff", border:"1px solid #a5f3fc", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontWeight:600 }}>
+                ↺ Usar alíquotas padrão
+              </button>
+              <button onClick={function(){ setShowIcmsTable(function(v){return !v;}); }}
+                style={{ fontSize:10, color:"#64748b", background:"#f8fafc", border:"1px solid #e2e8f0", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontWeight:600 }}>
+                {showIcmsTable ? "▲ Ocultar tabela" : "▼ Ver/editar todos os 27 estados"}
+              </button>
+            </div>
+          </div>
+
+          {!showIcmsTable ? (
+            <div style={{ display:"flex", alignItems:"center", gap:14, background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px" }}>
+              <div>
+                <div style={{ fontSize:10, color:"#94a3b8" }}>Estados configurados</div>
+                <div style={{ fontSize:16, fontWeight:800, color:"#0f172a" }}>{ufsConfigurados.length}/27</div>
+              </div>
+              <div style={{ width:1, height:28, background:"#e2e8f0" }} />
+              <div>
+                <div style={{ fontSize:10, color:"#94a3b8" }}>Alíquota média configurada</div>
+                <div style={{ fontSize:16, fontWeight:800, color:"#dc2626" }}>{icmsMedioRef.toFixed(2)}%</div>
+              </div>
+              {ufsConfigurados.length===0 && (
+                <div style={{ fontSize:11, color:"#d97706", marginLeft:"auto" }}>⚠️ Clique em "Usar alíquotas padrão" para começar</div>
+              )}
+            </div>
+          ) : (
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, maxHeight:340, overflowY:"auto", padding:2 }}>
+              {ESTADOS_BR_ICMS.map(function(e){
+                var uf = e[0], nome = e[1], padrao = e[2];
+                var valorAtual = icmsConfig[uf] !== undefined ? icmsConfig[uf] : "";
+                return (
+                  <div key={uf} style={{ display:"flex", alignItems:"center", gap:6, background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:8, padding:"6px 10px" }}>
+                    <span style={{ fontSize:11, fontWeight:700, color:"#0f172a", width:26, flexShrink:0 }}>{uf}</span>
+                    <span style={{ fontSize:10, color:"#94a3b8", flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{nome}</span>
+                    <input type="number" step="0.1" placeholder={String(padrao)} value={valorAtual}
+                      onChange={function(ev){ setIcmsEstado(uf, ev.target.value); }}
+                      style={{ width:50, background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"3px 5px", borderRadius:6, fontSize:11, outline:"none", textAlign:"center" }} />
+                    <span style={{ fontSize:10, color:"#94a3b8" }}>%</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Custos Fixos */}
+      {/* ── CUSTOS FIXOS DETALHADOS ── */}
       <div style={{ background:"#fff", border:"1px solid #fde68a", borderRadius:14, overflow:"hidden" }}>
         <div style={{ background:"#fffbeb", padding:"10px 14px", borderBottom:"1px solid #fde68a", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
-            <div style={{ fontWeight:700, fontSize:14, color:"#d97706" }}>🏢 Custos Fixos</div>
-            <div style={{ fontSize:11, color:"#94a3b8", marginTop:1 }}>Aluguel, salários, assinaturas...</div>
+            <div style={{ fontWeight:700, fontSize:14, color:"#d97706" }}>🏢 Custos Fixos Detalhados</div>
+            <div style={{ fontSize:11, color:"#94a3b8", marginTop:1 }}>Aluguel, salários, assinaturas, sistemas...</div>
           </div>
           <div style={{ textAlign:"right" }}>
-            <div style={{ fontSize:11, color:"#94a3b8" }}>Total</div>
+            <div style={{ fontSize:11, color:"#94a3b8" }}>Total mensal</div>
             <div style={{ fontSize:17, fontWeight:800, color:"#d97706" }}>R$ {totalFix.toFixed(2).replace(".",",")}</div>
           </div>
         </div>
         <div style={{ padding:"12px 18px" }}>
           {custosFixos.length === 0
-            ? <div style={{ fontSize:12, color:"#94a3b8", padding:"8px 0", textAlign:"center" }}>Nenhum custo fixo cadastrado</div>
-            : custosFixos.map(function(c){ return <ItemRow key={c.id} item={c} onRemove={removeCusto} />; })
+            ? <div style={{ fontSize:12, color:"#94a3b8", padding:"8px 0", textAlign:"center" }}>Nenhum custo fixo cadastrado — adicione abaixo com o valor real (R$) de cada item</div>
+            : (
+              <div>
+                <div style={{ display:"flex", gap:8, padding:"4px 0 8px", borderBottom:"1px solid #f1f5f9", fontSize:10, color:"#94a3b8", fontWeight:700, textTransform:"uppercase" }}>
+                  <div style={{ flex:1 }}>Custo</div>
+                  <div>Valor</div>
+                  <div>= R$ mensal</div>
+                  <div style={{ width:24 }}></div>
+                </div>
+                {custosFixos.map(function(c){ return <ItemRow key={c.id} item={c} onRemove={removeCusto} />; })}
+              </div>
+            )
           }
-          <AddRow state={novoCusto} setState={setNovoCusto} onAdd={addCusto} placeholder="Ex: Aluguel" />
+          <div style={{ display:"flex", gap:6, marginTop:12, alignItems:"center" }}>
+            <input value={novoCusto.nome} onChange={function(e){setNovoCusto(function(s){return Object.assign({},s,{nome:e.target.value});});}}
+              placeholder="Ex: Aluguel, Funcionário, Sistema..."
+              style={{ flex:2, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"7px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
+            <div style={{ display:"flex", border:"1px solid #e2e8f0", borderRadius:8, overflow:"hidden", flexShrink:0 }}>
+              {["R$","%"].map(function(t){
+                return <button key={t} onClick={function(){setNovoCusto(function(s){return Object.assign({},s,{tipo:t});});}}
+                  style={{ padding:"7px 10px", border:"none", cursor:"pointer", fontSize:12, fontWeight:700,
+                    background: novoCusto.tipo===t?"#0f172a":"#fff", color: novoCusto.tipo===t?"#fff":"#64748b" }}>{t}</button>;
+              })}
+            </div>
+            <input type="number" step="0.01" value={novoCusto.valor} onChange={function(e){setNovoCusto(function(s){return Object.assign({},s,{valor:e.target.value});});}}
+              placeholder={novoCusto.tipo==="R$" ? "0,00" : "0"}
+              style={{ width:90, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"7px 10px", borderRadius:8, fontSize:12, outline:"none", flexShrink:0 }} />
+            <button onClick={addCusto} disabled={!novoCusto.nome||!novoCusto.valor}
+              style={{ background: (novoCusto.nome&&novoCusto.valor)?"#0f172a":"#f1f5f9", border:"none", color:(novoCusto.nome&&novoCusto.valor)?"#fff":"#94a3b8",
+                fontWeight:700, padding:"7px 16px", borderRadius:8, cursor:(novoCusto.nome&&novoCusto.valor)?"pointer":"not-allowed", fontSize:12, flexShrink:0 }}>+ Adicionar</button>
+          </div>
         </div>
       </div>
     </div>
@@ -10428,7 +10545,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
 
       {/* ── CONFIGURAÇÕES ── */}
       {finTab === "config" && (
-        <div style={{ maxWidth:700 }}>
+        <div style={{ maxWidth:1100 }}>
           {/* Painel compacto de Impostos e Custos Fixos */}
           <div style={{ marginBottom:10 }}>
             <div style={{ fontWeight:700, fontSize:15, color:"#0f172a", marginBottom:4 }}>Impostos e Custos Fixos</div>

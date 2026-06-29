@@ -13473,33 +13473,7 @@ export default function App() {
       return next;
     });
   }
-  // Sincroniza automaticamente o estoque mínimo definido no cadastro de Produtos
-  // (campo estoqueMinimo) com a coluna "Mín" da aba Anúncios, usando o MLB vinculado.
-  useEffect(function(){
-    if (!produtos || produtos.length === 0) return;
-    setMinStock(function(prev) {
-      var next = Object.assign({}, prev);
-      var mudou = false;
-      produtos.forEach(function(p) {
-        if (!p.estoqueMinimo) return;
-        var mlbs = [p.mlbVinculado].concat(p.mlbsVinculados||[]).filter(Boolean);
-        mlbs.forEach(function(mlb) {
-          var valorProduto = parseInt(p.estoqueMinimo);
-          // Só sobrescreve se ainda não foi definido manualmente na aba Anúncios,
-          // ou se o valor do produto mudou desde a última sincronização
-          if (next[mlb] === undefined || next["_src_"+mlb] === "produto") {
-            if (next[mlb] !== valorProduto) {
-              next[mlb] = valorProduto;
-              next["_src_"+mlb] = "produto";
-              mudou = true;
-            }
-          }
-        });
-      });
-      if (mudou) { try { localStorage.setItem("min_stock_anuncios", JSON.stringify(next)); } catch {} }
-      return mudou ? next : prev;
-    });
-  }, [produtos]);
+
   const [selectedListing, setSelectedListing] = useState(null);
   const [sortBy, setSortBy] = useState("score");
   const [orderFilter, setOrderFilter] = useState("all");
@@ -13579,6 +13553,32 @@ export default function App() {
   const [produtos, setProdutos] = useState(() => {
     try { return JSON.parse(localStorage.getItem("produtos_cadastro") || "[]"); } catch { return []; }
   });
+
+  // Sincroniza automaticamente o estoque mínimo definido no cadastro de Produtos
+  // (campo estoqueMinimo) com a coluna "Mín" da aba Anúncios, usando o MLB vinculado.
+  useEffect(function(){
+    if (!produtos || produtos.length === 0) return;
+    setMinStock(function(prev) {
+      var next = Object.assign({}, prev);
+      var mudou = false;
+      produtos.forEach(function(p) {
+        if (!p.estoqueMinimo) return;
+        var mlbs = [p.mlbVinculado].concat(p.mlbsVinculados||[]).filter(Boolean);
+        mlbs.forEach(function(mlb) {
+          var valorProduto = parseInt(p.estoqueMinimo);
+          if (next[mlb] === undefined || next["_src_"+mlb] === "produto") {
+            if (next[mlb] !== valorProduto) {
+              next[mlb] = valorProduto;
+              next["_src_"+mlb] = "produto";
+              mudou = true;
+            }
+          }
+        });
+      });
+      if (mudou) { try { localStorage.setItem("min_stock_anuncios", JSON.stringify(next)); } catch {} }
+      return mudou ? next : prev;
+    });
+  }, [produtos]);
   // Rastreia IDs de pedidos que já tiveram baixa de estoque
   const [vendasBaixadas, setVendasBaixadas] = useState(function() {
     try { return new Set(JSON.parse(localStorage.getItem("vendas_estoque_baixadas") || "[]")); } catch { return new Set(); }

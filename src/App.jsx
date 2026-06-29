@@ -12369,33 +12369,34 @@ function PublicidadeTab({ token, sellerId }) {
     var datas = getDatas(periodo);
 
     try {
-      // ── 1. Buscar campanhas via proxy /api/ml (evita CORS) ──
-      var headers = { Authorization: "Bearer "+token, "Content-Type": "application/json" };
+      // Header obrigatório pela API oficial do Product Ads (documentação ML)
+      var headers = { Authorization: "Bearer "+token, "Content-Type": "application/json", "Api-Version": "2" };
 
-      // Tenta múltiplos formatos de endpoint, pois a API de Ads do ML
-      // varia a sintaxe entre /advertising/... e /advertising/campaigns (sem product_ads)
-      var tentativas = [
-        "/api/ml/advertising/product_ads/campaigns?seller_id="+sellerId+"&status=ALL&limit=50&offset=0",
-        "/api/ml/advertising/advertisers/"+sellerId+"/product_ads_campaigns?status=ALL&limit=50&offset=0",
-        "/api/ml/advertising/campaigns?seller_id="+sellerId+"&product_id=PADS&status=ALL&limit=50&offset=0",
-      ];
-      var data = null, res = null, ultimoErro = null;
-      for (var ti = 0; ti < tentativas.length; ti++) {
-        try {
-          res = await fetch(tentativas[ti], { headers: headers });
-          var txt = await res.text();
-          console.log("[PUBLICIDADE] tentativa "+ti+" ("+tentativas[ti]+") status "+res.status+":", txt.slice(0,300));
-          if (res.status === 200 || res.status === 201) {
-            data = JSON.parse(txt);
-            break;
-          } else {
-            ultimoErro = "status "+res.status+" em "+tentativas[ti];
-          }
-        } catch(e3) { ultimoErro = e3.message; }
+      // ── 1. Buscar o advertiser_id (NÃO é o seller_id — é um ID separado do Product Ads) ──
+      var advRes = await fetch("/api/ml/advertising/advertisers?product_id=PADS", { headers: headers });
+      var advTxt = await advRes.text();
+      console.log("[PUBLICIDADE] advertisers status "+advRes.status+":", advTxt.slice(0,500));
+
+      if (advRes.status !== 200) {
+        throw new Error("Não foi possível obter o advertiser_id (status "+advRes.status+"). Isso geralmente significa que o Product Ads não está habilitado nesta conta, ou que o token de conexão não tem o escopo de advertising. Acesse Mercado Livre > Seu perfil > Publicidade para habilitar.");
       }
+      var advData = JSON.parse(advTxt);
+      var advertisers = advData.advertisers || advData.results || (Array.isArray(advData) ? advData : []);
+      if (!advertisers.length) {
+        throw new Error("Nenhum 'advertiser' encontrado para esta conta. O Product Ads pode não estar habilitado — acesse Mercado Livre > Seu perfil > Publicidade.");
+      }
+      var advertiserId = advertisers[0].advertiser_id || advertisers[0].id;
 
-      if (!data) throw new Error("Nenhum endpoint de campanhas respondeu com sucesso. Último erro: "+ultimoErro+". A API de Publicidade do ML pode exigir permissão extra (escopo de advertising) na conexão OAuth — tente reconectar.");
+      // ── 2. Buscar campanhas desse advertiser (endpoint oficial documentado) ──
+      var campUrl = "/api/ml/advertising/advertisers/"+advertiserId+"/product_ads/campaigns?limit=50&offset=0";
+      var res = await fetch(campUrl, { headers: headers });
+      var txt = await res.text();
+      console.log("[PUBLICIDADE] campanhas status "+res.status+":", txt.slice(0,500));
 
+      if (res.status !== 200) {
+        throw new Error("Erro ao buscar campanhas (status "+res.status+"): "+txt.slice(0,200));
+      }
+      var data = JSON.parse(txt);
       var camps = Array.isArray(data) ? data : (data.results || data.campaigns || data.data || []);
       setCampanhas(camps);
 
@@ -12405,29 +12406,35 @@ function PublicidadeTab({ token, sellerId }) {
         return;
       }
 
-      // ── 2. Buscar métricas de cada campanha ──
+      // ── 3. Buscar campanhas COM métricas direto (endpoint /campaigns aceita filtro de métricas) ──
       var metMap = {};
       var totais = { impressoes:0, cliques:0, vendas:0, receita:0, gasto:0 };
 
-      await Promise.all(camps.map(async function(c) {
-        try {
-          // Endpoint de métricas por campanha
-          var mUrl = "/api/ml/advertising/product_ads/campaigns/"+c.id+"/metrics?date_from="+datas.from+"&date_to="+datas.to+"&seller_id="+sellerId;
-          var mr = await fetch(mUrl, { headers: headers });
-          var md = await mr.json();
-          console.log("[PUBLICIDADE] métricas camp "+c.id+":", JSON.stringify(md).slice(0,200));
-          // A resposta pode vir de formas diferentes
-          var m = Array.isArray(md) ? md[0] : (md.results||md.data||md||{});
-          metMap[c.id] = m;
-          totais.impressoes += parseFloat(m.impressions||m.prints||0);
-          totais.cliques    += parseFloat(m.clicks||0);
-          totais.vendas     += parseFloat(m.conversions||m.sales||m.orders||0);
-          totais.receita    += parseFloat(m.amount_sales||m.revenue||m.gmv||0);
-          totais.gasto      += parseFloat(m.amount_spent||m.spent||m.invest||m.cost||0);
-        } catch(e2) {
-          console.warn("[PUBLICIDADE] erro métricas camp "+c.id, e2.message);
+      var metricsParam = "clicks,prints,cost,acos,direct_amount,direct_items_quantity";
+      var campWithMetricsUrl = "/api/ml/advertising/advertisers/"+advertiserId+"/product_ads/campaigns"+
+        "?limit=50&offset=0&date_from="+datas.from+"&date_to="+datas.to+"&metrics="+metricsParam;
+      try {
+        var mr = await fetch(campWithMetricsUrl, { headers: headers });
+        var mtxt = await mr.text();
+        console.log("[PUBLICIDADE] campanhas+métricas status "+mr.status+":", mtxt.slice(0,500));
+        if (mr.status === 200) {
+          var mdata = JSON.parse(mtxt);
+          var campsComMetricas = Array.isArray(mdata) ? mdata : (mdata.results || mdata.campaigns || []);
+          campsComMetricas.forEach(function(c) {
+            var met = c.metrics || c;
+            metMap[c.id] = met;
+            totais.impressoes += parseFloat(met.prints||met.impressions||0);
+            totais.cliques    += parseFloat(met.clicks||0);
+            totais.vendas     += parseFloat(met.direct_items_quantity||met.organic_items_quantity||0);
+            totais.receita    += parseFloat(met.direct_amount||met.organic_units_amount||0);
+            totais.gasto      += parseFloat(met.cost||0);
+          });
+          // Se essa chamada já trouxe as campanhas atualizadas, usa elas (têm mais dados que a primeira)
+          if (campsComMetricas.length > 0) { setCampanhas(campsComMetricas); }
         }
-      }));
+      } catch(e2) {
+        console.warn("[PUBLICIDADE] erro ao buscar métricas agregadas:", e2.message);
+      }
 
       totais.roas = totais.gasto > 0 ? totais.receita/totais.gasto : 0;
       totais.ctr  = totais.impressoes > 0 ? (totais.cliques/totais.impressoes)*100 : 0;
@@ -12438,7 +12445,7 @@ function PublicidadeTab({ token, sellerId }) {
       setErro(null);
     } catch(e) {
       console.error("[PUBLICIDADE] erro:", e);
-      setErro("Erro: "+e.message+". Verifique o console para detalhes.");
+      setErro(e.message + " — Verifique o console (F12) para detalhes técnicos.");
     }
     setLoading(false);
   }
@@ -12541,18 +12548,19 @@ function PublicidadeTab({ token, sellerId }) {
             </thead>
             <tbody>
               {campanhas.map(function(c, i) {
-                var m = metricas[c.id] || {};
-                var impressoes = parseFloat(m.impressions||m.prints||m.impressoes||0);
-                var cliques    = parseFloat(m.clicks||m.cliques||0);
-                var vendas     = parseFloat(m.conversions||m.sales||m.orders||m.vendas||0);
-                var receita    = parseFloat(m.amount_sales||m.revenue||m.gmv||m.receita||0);
-                var gasto      = parseFloat(m.amount_spent||m.spent||m.invest||m.cost||m.gasto||0);
+                var m = metricas[c.id] || c.metrics || {};
+                // Campos oficiais da API Product Ads: prints, clicks, cost, direct_amount, acos
+                var impressoes = parseFloat(m.prints||m.impressions||0);
+                var cliques    = parseFloat(m.clicks||0);
+                var vendas     = parseFloat(m.direct_items_quantity||m.organic_items_quantity||0);
+                var receita    = parseFloat(m.direct_amount||m.organic_units_amount||0);
+                var gasto      = parseFloat(m.cost||0);
                 var roas       = gasto>0 ? receita/gasto : 0;
-                var acos       = receita>0 ? (gasto/receita)*100 : 0;
+                var acos       = m.acos!=null ? parseFloat(m.acos) : (receita>0 ? (gasto/receita)*100 : 0);
                 var ctr        = impressoes>0 ? (cliques/impressoes)*100 : 0;
-                var isAtiva    = c.status==="enabled"||c.status==="active"||c.status==="ENABLED"||c.status==="A";
+                var isAtiva    = c.status==="active"||c.status==="enabled"||c.status==="ENABLED"||c.status==="A";
                 var sCorText   = statusCor(c.status);
-                var roasObjN   = parseFloat(c.roas_target||c.roasTarget||0);
+                var roasObjN   = parseFloat(c.acos_target||c.roas_target||0);
 
                 return (
                   <tr key={c.id} style={{ borderBottom:"1px solid #f1f5f9", background:i%2===0?"#fff":"#fafafa" }}>
@@ -12674,7 +12682,7 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
         try {
           var bres = await fetch(tentativasBusca[bi], { headers: token ? { Authorization: "Bearer "+token } : {} });
           var btxt = await bres.text();
-          console.log("[CONCORRENCIA] tentativa "+bi+" status "+bres.status+":", btxt.slice(0,300));
+          console.log("[CONCORRENCIA] tentativa "+bi+" ("+tentativasBusca[bi]+") status "+bres.status+":", btxt.slice(0,800));
           ultimoStatus = bres.status;
           if (bres.status === 200) {
             var bdata = JSON.parse(btxt);
@@ -12694,33 +12702,48 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
         );
       }
 
-      var results = (data.results||[]).filter(function(r){
-        return r.id !== listing.id; // exclui o próprio anúncio
+      var rawResults = data.results || [];
+
+      // Normaliza os dois formatos possíveis de resposta:
+      // Formato A (/sites/MLB/search): item com price, seller{}, shipping{} direto
+      // Formato B (/products/search, busca por catálogo): item com buy_box_winner{} ou price aninhado
+      var results = rawResults.map(function(r){
+        // Formato de catálogo: o preço/vendedor reais ficam em buy_box_winner ou em winner
+        var bb = r.buy_box_winner || r.winner || null;
+        var precoFinal = r.price ?? bb?.price ?? r.buy_box_price ?? null;
+        var sellerFinal = r.seller || bb?.seller || null;
+        var sellerIdFinal = sellerFinal?.id ?? bb?.seller_id ?? r.seller_id ?? null;
+        var permalinkFinal = r.permalink || (r.id ? "https://www.mercadolivre.com.br/p/"+r.id : null) || bb?.permalink;
+        var thumbFinal = r.thumbnail || r.pictures?.[0]?.url || r.pictures?.[0]?.secure_url;
+        var titleFinal = r.title || r.name;
+        return {
+          id: r.id || r.item_id,
+          title: titleFinal,
+          price: precoFinal,
+          original_price: r.original_price,
+          thumbnail: thumbFinal,
+          permalink: permalinkFinal,
+          seller_id: sellerIdFinal,
+          seller_nickname: sellerFinal?.nickname || r.seller_nickname || "—",
+          sold_quantity: r.sold_quantity ?? bb?.sold_quantity ?? 0,
+          free_shipping: r.shipping?.free_shipping ?? bb?.shipping?.free_shipping ?? false,
+          listing_type_id: r.listing_type_id || bb?.listing_type_id,
+          condition: r.condition,
+        };
+      }).filter(function(r){
+        return r.id && r.id !== listing.id && r.price != null && r.price > 0; // só itens com preço válido
       });
 
-      // Identificar se é nosso próprio anúncio com outro MLB (mesmo seller_id)
-      var minhaConta = results.filter(function(r){ return String(r.seller?.id) === String(sellerId); });
-      var concorrenciaReal = results.filter(function(r){ return String(r.seller?.id) !== String(sellerId); });
+      var concorrenciaReal = results.filter(function(r){ return String(r.seller_id) !== String(sellerId); });
 
       // Ordenar concorrência por preço
       concorrenciaReal.sort(function(a,b){ return a.price - b.price; });
 
-      var processado = concorrenciaReal.slice(0,15).map(function(r){
-        return {
-          id: r.id,
-          title: r.title,
-          price: r.price,
-          original_price: r.original_price,
-          thumbnail: r.thumbnail,
-          permalink: r.permalink,
-          seller_nickname: r.seller?.nickname || "—",
-          sold_quantity: r.sold_quantity || 0,
-          free_shipping: r.shipping?.free_shipping || false,
-          listing_type_id: r.listing_type_id,
-          reputation: r.seller?.seller_reputation?.level_id || null,
-          condition: r.condition,
-        };
-      });
+      var processado = concorrenciaReal.slice(0,15);
+
+      if (processado.length === 0) {
+        throw new Error("A busca encontrou resultados, mas nenhum continha preço/vendedor utilizável (formato de resposta inesperado da API do ML).");
+      }
 
       setConcorrentes(processado);
 

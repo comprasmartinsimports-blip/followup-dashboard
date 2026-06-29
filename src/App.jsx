@@ -3862,6 +3862,8 @@ function ModalMovEstoque({ produto, movEstoque, onRegistrar, onClose }) {
   var estoqueAtual = parseInt(produto.estoqueAtual||0);
   var totalEntradas = movsProd.filter(function(m){return m.tipo==="entrada";}).reduce(function(s,m){return s+parseInt(m.qtd||0);},0);
   var totalSaidas   = movsProd.filter(function(m){return m.tipo==="saida";}).reduce(function(s,m){return s+parseInt(m.qtd||0);},0);
+  // Saldo real = entradas - saídas (não depende do estoqueAtual do produto)
+  var saldoCalculado = totalEntradas - totalSaidas;
 
   function handleRegistrar() {
     if (!qtd || parseInt(qtd) <= 0) return;
@@ -3872,8 +3874,8 @@ function ModalMovEstoque({ produto, movEstoque, onRegistrar, onClose }) {
   var fmt2 = function(n){ return n!=null&&n!==""?"R$ "+Number(n).toFixed(2).replace(".",","):"—"; };
 
   return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:16 }}>
-      <div style={{ background:"#fff", borderRadius:14, width:"100%", maxWidth:960, maxHeight:"92vh", display:"flex", flexDirection:"column", boxShadow:"0 20px 60px rgba(0,0,0,.18)" }}>
+    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.7)", backdropFilter:"blur(4px)", display:"flex", alignItems:"stretch", justifyContent:"center", zIndex:600, padding:"12px" }}>
+      <div style={{ background:"#fff", borderRadius:14, width:"100%", maxWidth:"100%", height:"100%", display:"flex", flexDirection:"column", boxShadow:"0 20px 60px rgba(0,0,0,.3)" }}>
 
         {/* Header */}
         <div style={{ padding:"16px 24px", borderBottom:"1px solid #f1f5f9", display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
@@ -4049,15 +4051,18 @@ function ModalMovEstoque({ produto, movEstoque, onRegistrar, onClose }) {
           <div style={{ width:200, flexShrink:0, borderLeft:"1px solid #f1f5f9", padding:"20px 16px", display:"flex", flexDirection:"column", gap:16 }}>
             <div>
               <div style={{ fontSize:11, color:"#64748b", fontWeight:600, marginBottom:4 }}>Entradas</div>
-              <div style={{ fontSize:15, fontWeight:800, color:"#15803d" }}>{totalEntradas.toFixed(13).replace(/\.?0+$/,"")}</div>
+              <div style={{ fontSize:15, fontWeight:800, color:totalEntradas>0?"#15803d":"#94a3b8" }}>{totalEntradas}</div>
             </div>
             <div>
               <div style={{ fontSize:11, color:"#64748b", fontWeight:600, marginBottom:4 }}>Saídas</div>
-              <div style={{ fontSize:15, fontWeight:800, color:"#dc2626" }}>{totalSaidas.toFixed(13).replace(/\.?0+$/,"")}</div>
+              <div style={{ fontSize:15, fontWeight:800, color:totalSaidas>0?"#dc2626":"#94a3b8" }}>{totalSaidas}</div>
             </div>
             <div style={{ borderTop:"1px solid #f1f5f9", paddingTop:12 }}>
-              <div style={{ fontSize:11, color:"#64748b", fontWeight:600, marginBottom:4 }}>Saldo atual</div>
-              <div style={{ fontSize:15, fontWeight:800, color:estoqueAtual>0?"#0f172a":"#dc2626" }}>{estoqueAtual}</div>
+              <div style={{ fontSize:11, color:"#64748b", fontWeight:600, marginBottom:4 }}>Saldo calculado</div>
+              <div style={{ fontSize:18, fontWeight:800, color:saldoCalculado>0?"#15803d":"#dc2626" }}>{saldoCalculado}</div>
+              {saldoCalculado !== estoqueAtual && (
+                <div style={{ fontSize:10, color:"#94a3b8", marginTop:2 }}>Cadastrado: {estoqueAtual}</div>
+              )}
             </div>
             {mlbsProd.length > 0 && (
               <div style={{ borderTop:"1px solid #f1f5f9", paddingTop:12 }}>
@@ -6393,13 +6398,75 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                   setMovEstoque(movsIniciais);
 
                   if (pedidosPagos.length === 0) {
-                    alert("✅ " + movsIniciais.length + " entradas iniciais criadas! Reconecte ao ML para importar saídas.");
+                    alert("✅ " + movsIniciais.length + " entradas iniciais criadas!\n\nNenhum pedido encontrado em cache. Reconecte ao ML para gerar as saídas.");
                     return;
                   }
 
                   // Gerar saídas de todas as vendas pagas
-                  baixarEstoqueVendas(pedidosPagos, produtosUpd, movsIniciais, new Set());
-                  alert("✅ Concluído!\n• " + movsIniciais.length + " entradas iniciais\n• " + pedidosPagos.length + " saídas de vendas geradas");
+                  // Chama diretamente sem depender do estado React (que pode estar desatualizado)
+                  var resultBaixa = (function() {
+                    var novasBaixadas = new Set();
+                    var produtosUpd2 = produtosUpd.slice();
+                    var movsUpd = movsIniciais.slice();
+                    var qtdBaixadas = 0;
+
+                    // Mapa MLB → produto (deduplicated)
+                    var mapMlb = {}, mapSku = {};
+                    produtosUpd2.forEach(function(p) {
+                      var mlbsU = [p.mlbVinculado].concat(p.mlbsVinculados||[]).filter(Boolean).filter(function(m,i,a){return a.indexOf(m)===i;});
+                      mlbsU.forEach(function(m){ mapMlb[m] = p; });
+                      if (p.sku) mapSku[p.sku.trim().toLowerCase()] = p;
+                    });
+
+                    pedidosPagos.forEach(function(o) {
+                      if (novasBaixadas.has(String(o.id))) return;
+                      var lid = o.listing_id;
+                      var prod = (lid && mapMlb[lid]) ||
+                                 (o.seller_sku && mapSku[o.seller_sku.trim().toLowerCase()]) || null;
+                      if (!prod) {
+                        // Sem produto cadastrado — registra semProduto
+                        if (lid) {
+                          movsUpd.push({
+                            id: "venda_"+o.id, produtoId:null, mlbId:lid, sku:o.seller_sku||"",
+                            tipo:"saida", qtd:parseInt(o.qty||1),
+                            motivo:"Venda ML #"+o.id+" ("+(o.title||"").slice(0,35)+") — sem produto",
+                            pedidoId:String(o.id), data:o.date||hoje, hora:horaAgora,
+                            automatico:true, semProduto:true,
+                          });
+                          novasBaixadas.add(String(o.id));
+                        }
+                        return;
+                      }
+                      var qty = parseInt(o.qty||1);
+                      var idx = produtosUpd2.findIndex(function(p2){return p2.id===prod.id;});
+                      if (idx>=0) {
+                        var est = parseInt(produtosUpd2[idx].estoqueAtual||0);
+                        produtosUpd2[idx] = Object.assign({},produtosUpd2[idx],{estoqueAtual:String(Math.max(0,est-qty))});
+                        // atualizar mapa
+                        var mlbsU2=[produtosUpd2[idx].mlbVinculado].concat(produtosUpd2[idx].mlbsVinculados||[]).filter(Boolean).filter(function(m,i,a){return a.indexOf(m)===i;});
+                        mlbsU2.forEach(function(m){mapMlb[m]=produtosUpd2[idx];});
+                      }
+                      movsUpd.push({
+                        id:"venda_"+o.id, produtoId:prod.id, mlbId:lid,
+                        sku:prod.sku||o.seller_sku||"", tipo:"saida", qtd:qty,
+                        motivo:"Venda ML #"+o.id+(o.title?" — "+o.title.slice(0,40):""),
+                        pedidoId:String(o.id), data:o.date||hoje, hora:horaAgora,
+                        automatico:true,
+                      });
+                      novasBaixadas.add(String(o.id));
+                      qtdBaixadas++;
+                    });
+
+                    // Salvar tudo
+                    localStorage.setItem("produtos_cadastro", JSON.stringify(produtosUpd2));
+                    localStorage.setItem("mov_estoque", JSON.stringify(movsUpd));
+                    localStorage.setItem("vendas_estoque_baixadas", JSON.stringify([...novasBaixadas]));
+                    setProdutos(produtosUpd2);
+                    setMovEstoque(movsUpd);
+                    return { qtd: qtdBaixadas, total: movsUpd.length, semProduto: movsUpd.filter(function(m){return m.semProduto;}).length };
+                  })();
+
+                  alert("✅ Concluído!\n• " + movsIniciais.length + " entradas iniciais\n• " + resultBaixa.qtd + " saídas de vendas vinculadas\n• " + resultBaixa.semProduto + " sem produto cadastrado\n• " + resultBaixa.total + " movimentações no total");
                 }}
                   style={{ background:"#ffe000", border:"none", color:"#0f172a", fontWeight:700, padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
                   🔄 Reprocessar Vendas
@@ -12297,6 +12364,326 @@ function PublicidadeTab({ token, sellerId }) {
   );
 }
 
+
+// ════════════════════════════════════════════════════════════
+//  ABA CONCORRÊNCIA — Comparativo com anúncios similares no ML
+// ════════════════════════════════════════════════════════════
+function ConcorrenciaTab({ enriched, token, sellerId }) {
+  const [selectedListing, setSelectedListing] = useState(null);
+  const [busca, setBusca] = useState("");
+  const [concorrentes, setConcorrentes] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [erro, setErro] = useState(null);
+  const [historico, setHistorico] = useState(function(){
+    try { return JSON.parse(localStorage.getItem("concorrencia_historico")||"{}"); } catch { return {}; }
+  });
+
+  var listsFiltrados = (enriched||[]).filter(function(l) {
+    if (!busca.trim()) return true;
+    var q = busca.trim().toLowerCase();
+    return (l.title||"").toLowerCase().includes(q) || (l.id||"").includes(q) || (l.seller_sku||"").toLowerCase().includes(q);
+  });
+
+  async function buscarConcorrentes(listing) {
+    setSelectedListing(listing);
+    setLoading(true); setErro(null); setConcorrentes([]);
+    try {
+      // Limpar título para gerar query de busca eficaz (remove ano/medidas excessivas, mantém termos chave)
+      var query = (listing.title||"").trim();
+      // Buscar via API pública do ML (não requer auth)
+      var url = "https://api.mercadolibre.com/sites/MLB/search?q="+encodeURIComponent(query)+"&limit=30";
+      var res = await fetch(url);
+      var data = await res.json();
+      if (data.error) throw new Error(data.message||data.error);
+
+      var results = (data.results||[]).filter(function(r){
+        return r.id !== listing.id; // exclui o próprio anúncio
+      });
+
+      // Identificar se é nosso próprio anúncio com outro MLB (mesmo seller_id)
+      var minhaConta = results.filter(function(r){ return String(r.seller?.id) === String(sellerId); });
+      var concorrenciaReal = results.filter(function(r){ return String(r.seller?.id) !== String(sellerId); });
+
+      // Ordenar concorrência por preço
+      concorrenciaReal.sort(function(a,b){ return a.price - b.price; });
+
+      var processado = concorrenciaReal.slice(0,15).map(function(r){
+        return {
+          id: r.id,
+          title: r.title,
+          price: r.price,
+          original_price: r.original_price,
+          thumbnail: r.thumbnail,
+          permalink: r.permalink,
+          seller_nickname: r.seller?.nickname || "—",
+          sold_quantity: r.sold_quantity || 0,
+          free_shipping: r.shipping?.free_shipping || false,
+          listing_type_id: r.listing_type_id,
+          reputation: r.seller?.seller_reputation?.level_id || null,
+          condition: r.condition,
+        };
+      });
+
+      setConcorrentes(processado);
+
+      // Salvar no histórico para acompanhamento ao longo do tempo
+      var precoMin = processado.length ? Math.min.apply(null, processado.map(function(p){return p.price;})) : null;
+      var precoMed = processado.length ? processado.reduce(function(s,p){return s+p.price;},0)/processado.length : null;
+      var hoje = new Date().toLocaleDateString("sv-SE");
+      var novoHist = Object.assign({}, historico);
+      if (!novoHist[listing.id]) novoHist[listing.id] = [];
+      novoHist[listing.id] = novoHist[listing.id].filter(function(h){return h.data!==hoje;});
+      novoHist[listing.id].push({
+        data: hoje,
+        meuPreco: listing.price,
+        precoMin: precoMin,
+        precoMedio: precoMed,
+        qtdConcorrentes: processado.length,
+      });
+      // Manter só últimos 30 registros por anúncio
+      novoHist[listing.id] = novoHist[listing.id].slice(-30);
+      setHistorico(novoHist);
+      try { localStorage.setItem("concorrencia_historico", JSON.stringify(novoHist)); } catch {}
+
+    } catch(e) {
+      setErro("Erro ao buscar concorrentes: "+e.message);
+    }
+    setLoading(false);
+  }
+
+  function fmt2(n){ return "R$ "+(parseFloat(n||0)).toFixed(2).replace(".",","); }
+
+  var meuPreco = selectedListing?.price || 0;
+  var precosOrdenados = concorrentes.map(function(c){return c.price;}).sort(function(a,b){return a-b;});
+  var minhaPosicao = precosOrdenados.filter(function(p){return p < meuPreco;}).length + 1;
+  var totalNaLista = precosOrdenados.length + 1;
+  var precoMinimo = precosOrdenados.length ? precosOrdenados[0] : null;
+  var precoMaximo = precosOrdenados.length ? precosOrdenados[precosOrdenados.length-1] : null;
+  var precoMedio = precosOrdenados.length ? precosOrdenados.reduce(function(s,p){return s+p;},0)/precosOrdenados.length : null;
+  var diferencaMedia = precoMedio!=null ? ((meuPreco-precoMedio)/precoMedio)*100 : null;
+
+  var histAtual = selectedListing ? (historico[selectedListing.id]||[]) : [];
+
+  return (
+    <div style={{ padding:"0 12px" }}>
+      {/* Header */}
+      <div style={{ padding:"12px 0 8px", borderBottom:"1px solid #e2e8f0", marginBottom:14 }}>
+        <div style={{ fontWeight:800, fontSize:20, color:"#0f172a", marginBottom:4 }}>⚔️ Análise de Concorrência</div>
+        <div style={{ fontSize:13, color:"#64748b" }}>Compare seus anúncios com produtos similares de outros vendedores no Mercado Livre</div>
+      </div>
+
+      <div style={{ display:"flex", gap:14 }}>
+        {/* Painel esquerdo — lista de anúncios para selecionar */}
+        <div style={{ width:320, flexShrink:0 }}>
+          <div style={{ position:"relative", marginBottom:10 }}>
+            <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
+            <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar seu anúncio..."
+              style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px 8px 30px", borderRadius:9, fontSize:12, outline:"none" }} />
+          </div>
+          <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:10, maxHeight:"calc(100vh - 220px)", overflowY:"auto" }}>
+            {listsFiltrados.slice(0,80).map(function(l){
+              var isSelected = selectedListing?.id === l.id;
+              var hist = historico[l.id];
+              var ultimoHist = hist && hist.length ? hist[hist.length-1] : null;
+              return (
+                <div key={l.id} onClick={function(){ buscarConcorrentes(l); }}
+                  style={{ padding:"10px 12px", borderBottom:"1px solid #f1f5f9", cursor:"pointer",
+                    background: isSelected?"#eff6ff":"#fff", borderLeft: isSelected?"3px solid #1d4ed8":"3px solid transparent" }}>
+                  <div style={{ fontSize:12, fontWeight:600, color:"#0f172a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{l.title}</div>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:3 }}>
+                    <span style={{ fontSize:11, color:"#64748b" }}>R$ {l.price?.toFixed(2).replace(".",",")}</span>
+                    {ultimoHist && (
+                      <span style={{ fontSize:10, fontWeight:600,
+                        color: ultimoHist.meuPreco <= (ultimoHist.precoMin||999999) ? "#15803d" : "#dc2626" }}>
+                        {ultimoHist.meuPreco <= (ultimoHist.precoMin||999999) ? "✓ menor preço" : "↑ acima do mín."}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            {listsFiltrados.length === 0 && (
+              <div style={{ padding:30, textAlign:"center", color:"#94a3b8", fontSize:12 }}>Nenhum anúncio encontrado</div>
+            )}
+          </div>
+        </div>
+
+        {/* Painel direito — resultado da comparação */}
+        <div style={{ flex:1, minWidth:0 }}>
+          {!selectedListing ? (
+            <div style={{ textAlign:"center", padding:"80px 20px", color:"#94a3b8" }}>
+              <div style={{ fontSize:48, marginBottom:12 }}>⚔️</div>
+              <div style={{ fontWeight:700, fontSize:16, color:"#0f172a", marginBottom:8 }}>Selecione um anúncio</div>
+              <div style={{ fontSize:13 }}>Escolha um produto na lista à esquerda para comparar com a concorrência</div>
+            </div>
+          ) : (
+            <>
+              {/* Card do meu anúncio */}
+              <div style={{ background:"#fff", border:"2px solid #1d4ed8", borderRadius:12, padding:"14px 16px", marginBottom:14, display:"flex", gap:14, alignItems:"center" }}>
+                {selectedListing.thumbnail && <img src={selectedListing.thumbnail} alt="" style={{ width:64, height:64, borderRadius:8, objectFit:"cover" }} />}
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:10, fontWeight:700, color:"#1d4ed8", textTransform:"uppercase", marginBottom:2 }}>🏠 MEU ANÚNCIO</div>
+                  <div style={{ fontSize:14, fontWeight:700, color:"#0f172a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{selectedListing.title}</div>
+                  <div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{selectedListing.id}</div>
+                </div>
+                <div style={{ textAlign:"right" }}>
+                  <div style={{ fontSize:22, fontWeight:800, color:"#0f172a" }}>{fmt2(meuPreco)}</div>
+                  <a href={"https://www.mercadolivre.com.br/seller-admin/listing/edit?itemId="+selectedListing.id} target="_blank" rel="noreferrer"
+                    style={{ fontSize:11, color:"#0891b2", textDecoration:"none" }}>Editar ↗</a>
+                </div>
+              </div>
+
+              {loading ? (
+                <div style={{ textAlign:"center", padding:60, color:"#94a3b8" }}>
+                  <div style={{ fontSize:32, marginBottom:10 }}>⏳</div>
+                  <div>Buscando concorrentes no Mercado Livre...</div>
+                </div>
+              ) : erro ? (
+                <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:14, color:"#dc2626", fontSize:13 }}>⚠️ {erro}</div>
+              ) : concorrentes.length === 0 ? (
+                <div style={{ textAlign:"center", padding:50, color:"#94a3b8" }}>
+                  <div style={{ fontSize:32, marginBottom:10 }}>🔍</div>
+                  <div>Nenhum concorrente similar encontrado</div>
+                </div>
+              ) : (
+                <>
+                  {/* Cards de resumo comparativo */}
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:10, marginBottom:14 }}>
+                    <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px" }}>
+                      <div style={{ fontSize:9, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:3 }}>Sua posição</div>
+                      <div style={{ fontSize:18, fontWeight:800, color: minhaPosicao===1?"#15803d":minhaPosicao<=3?"#d97706":"#dc2626" }}>
+                        {minhaPosicao}º de {totalNaLista}
+                      </div>
+                    </div>
+                    <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px" }}>
+                      <div style={{ fontSize:9, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:3 }}>Menor preço</div>
+                      <div style={{ fontSize:18, fontWeight:800, color:"#15803d" }}>{fmt2(precoMinimo)}</div>
+                    </div>
+                    <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px" }}>
+                      <div style={{ fontSize:9, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:3 }}>Preço médio</div>
+                      <div style={{ fontSize:18, fontWeight:800, color:"#0891b2" }}>{fmt2(precoMedio)}</div>
+                    </div>
+                    <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px" }}>
+                      <div style={{ fontSize:9, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:3 }}>Maior preço</div>
+                      <div style={{ fontSize:18, fontWeight:800, color:"#dc2626" }}>{fmt2(precoMaximo)}</div>
+                    </div>
+                    <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px" }}>
+                      <div style={{ fontSize:9, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:3 }}>Vs. média</div>
+                      <div style={{ fontSize:18, fontWeight:800, color: diferencaMedia<=0?"#15803d":"#dc2626" }}>
+                        {diferencaMedia>0?"+":""}{diferencaMedia?.toFixed(1)}%
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Alerta se estiver acima do mínimo */}
+                  {precoMinimo!=null && meuPreco > precoMinimo && (
+                    <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:10, padding:"10px 14px", marginBottom:14, fontSize:12, color:"#92400e" }}>
+                      ⚠️ Você está <b>{fmt2(meuPreco-precoMinimo)}</b> ({(((meuPreco-precoMinimo)/precoMinimo)*100).toFixed(1)}%) acima do menor preço encontrado.
+                    </div>
+                  )}
+                  {precoMinimo!=null && meuPreco <= precoMinimo && (
+                    <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:10, padding:"10px 14px", marginBottom:14, fontSize:12, color:"#166534" }}>
+                      ✓ Você tem o menor preço entre os concorrentes encontrados!
+                    </div>
+                  )}
+
+                  {/* Tabela de concorrentes */}
+                  <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
+                    <table style={{ borderCollapse:"collapse", width:"100%" }}>
+                      <thead>
+                        <tr style={{ background:"#f8fafc" }}>
+                          {["","Anúncio Concorrente","Vendedor","Preço","Vs. Você","Vendidos","Frete","Tipo",""].map(function(h){
+                            return <th key={h} style={{ fontSize:10, color:"#64748b", fontWeight:600, textTransform:"uppercase", padding:"8px 10px", textAlign:"left", whiteSpace:"nowrap" }}>{h}</th>;
+                          })}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {concorrentes.map(function(c, i) {
+                          var diff = meuPreco>0 ? ((c.price-meuPreco)/meuPreco)*100 : 0;
+                          var isPremiumC = c.listing_type_id==="gold_premium"||c.listing_type_id==="gold_pro";
+                          return (
+                            <tr key={c.id} style={{ borderBottom:"1px solid #f1f5f9", background:i%2===0?"#fff":"#fafafa" }}>
+                              <td style={{ padding:"6px 8px" }}>
+                                {c.thumbnail && <img src={c.thumbnail} alt="" style={{ width:36, height:36, borderRadius:6, objectFit:"cover" }} />}
+                              </td>
+                              <td style={{ padding:"6px 8px", maxWidth:240, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                                <a href={c.permalink} target="_blank" rel="noreferrer" style={{ fontSize:12, fontWeight:600, color:"#1d4ed8", textDecoration:"none" }}>
+                                  {c.title}
+                                </a>
+                              </td>
+                              <td style={{ padding:"6px 8px", fontSize:11, color:"#64748b" }}>{c.seller_nickname}</td>
+                              <td style={{ padding:"6px 8px", fontSize:13, fontWeight:700, color: c.price<meuPreco?"#15803d":c.price>meuPreco?"#dc2626":"#64748b" }}>
+                                {fmt2(c.price)}
+                              </td>
+                              <td style={{ padding:"6px 8px" }}>
+                                <span style={{ fontSize:11, fontWeight:700, color: diff<0?"#15803d":diff>0?"#dc2626":"#94a3b8" }}>
+                                  {diff>0?"+":""}{diff.toFixed(1)}%
+                                </span>
+                              </td>
+                              <td style={{ padding:"6px 8px", fontSize:11, color:"#64748b" }}>{c.sold_quantity}</td>
+                              <td style={{ padding:"6px 8px" }}>
+                                {c.free_shipping ? (
+                                  <span style={{ fontSize:10, fontWeight:600, color:"#15803d", background:"#f0fdf4", padding:"2px 6px", borderRadius:4 }}>Grátis</span>
+                                ) : (
+                                  <span style={{ fontSize:10, color:"#94a3b8" }}>—</span>
+                                )}
+                              </td>
+                              <td style={{ padding:"6px 8px" }}>
+                                <span style={{ fontSize:10, fontWeight:600, padding:"2px 6px", borderRadius:4,
+                                  background:isPremiumC?"#f5f3ff":"#eff6ff", color:isPremiumC?"#7c3aed":"#1d4ed8" }}>
+                                  {isPremiumC?"Premium":"Clássico"}
+                                </span>
+                              </td>
+                              <td style={{ padding:"6px 8px" }}>
+                                <a href={c.permalink} target="_blank" rel="noreferrer" style={{ fontSize:11, color:"#0891b2", textDecoration:"none" }}>Ver ↗</a>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Histórico de acompanhamento */}
+                  {histAtual.length > 1 && (
+                    <div style={{ marginTop:14, background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"14px 16px" }}>
+                      <div style={{ fontWeight:700, fontSize:13, color:"#0f172a", marginBottom:10 }}>📈 Histórico de Acompanhamento</div>
+                      <div style={{ overflowX:"auto" }}>
+                        <table style={{ borderCollapse:"collapse", width:"100%", fontSize:11 }}>
+                          <thead>
+                            <tr style={{ background:"#f8fafc" }}>
+                              {["Data","Meu Preço","Menor Concorrente","Preço Médio","Concorrentes"].map(function(h){
+                                return <th key={h} style={{ padding:"6px 10px", textAlign:"left", color:"#94a3b8", fontWeight:600 }}>{h}</th>;
+                              })}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {histAtual.slice().reverse().map(function(h,i){
+                              return (
+                                <tr key={i} style={{ borderBottom:"1px solid #f1f5f9" }}>
+                                  <td style={{ padding:"5px 10px" }}>{new Date(h.data).toLocaleDateString("pt-BR")}</td>
+                                  <td style={{ padding:"5px 10px", fontWeight:700 }}>{fmt2(h.meuPreco)}</td>
+                                  <td style={{ padding:"5px 10px", color:"#15803d" }}>{h.precoMin!=null?fmt2(h.precoMin):"—"}</td>
+                                  <td style={{ padding:"5px 10px", color:"#0891b2" }}>{h.precoMedio!=null?fmt2(h.precoMedio):"—"}</td>
+                                  <td style={{ padding:"5px 10px", color:"#64748b" }}>{h.qtdConcorrentes}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   // ── Auth do dashboard ─────────────────────────────────────
   const [tab, setTab] = useState(() => {
@@ -13354,6 +13741,7 @@ export default function App() {
                 currentUser?.permissoes?.includes("orders")     && { key:"full",        label:"⚡ Envios FULL", badge:null },
                 currentUser?.permissoes?.includes("listings")   && { key:"precificacao",  label:"💲 Precificação", badge:null },
                 currentUser?.permissoes?.includes("listings")   && { key:"publicidade",   label:"📣 Publicidade",  badge:null },
+                currentUser?.permissoes?.includes("listings")   && { key:"concorrencia",  label:"⚔️ Concorrência",badge:null },
                                                                    { key:"ia_chat",       label:"✦ Assistente IA", badge:null },
               ].filter(Boolean);
               return navTabs.map(function(t) {
@@ -14122,6 +14510,10 @@ export default function App() {
 
         {tab === "publicidade" && currentUser?.permissoes?.includes("listings") && (
           <PublicidadeTab token={token} sellerId={user?.id} />
+        )}
+
+        {tab === "concorrencia" && currentUser?.permissoes?.includes("listings") && (
+          <ConcorrenciaTab enriched={enriched} token={token} sellerId={user?.id} />
         )}
 
       {showBackup && <PainelBackup onClose={() => setShowBackup(false)} />}

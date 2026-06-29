@@ -2927,6 +2927,23 @@ function ModalNF({ nf, fornecedores, produtos, categoriasPagar, onSave, onClose 
                     </div>
                   </div>
                   <div style={{ display:"flex", gap:8, marginTop:8, alignItems:"center", flexWrap:"wrap" }}>
+                    <div style={{ flex:1, minWidth:110 }}>
+                      <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4, fontWeight:600 }}>BUSCAR POR SKU</div>
+                      <input style={{ ...inp, fontSize:12 }} placeholder="Digite o SKU..."
+                        value={it.skuBusca!==undefined ? it.skuBusca : ""}
+                        onChange={function(e){
+                          var val = e.target.value;
+                          var matchExato = produtos.find(function(p){ return p.sku && p.sku.trim().toLowerCase() === val.trim().toLowerCase(); });
+                          var updated = form.itens.map(function(it2,i2){
+                            if (i2 !== idx) return it2;
+                            var up = Object.assign({}, it2, { skuBusca: val });
+                            if (matchExato) up.produtoCadastradoId = matchExato.id;
+                            return up;
+                          });
+                          set("itens", updated);
+                        }}
+                        style={{ ...inp, fontSize:12, borderColor: it.skuBusca && !produtos.some(function(p){return p.sku&&p.sku.trim().toLowerCase()===it.skuBusca.trim().toLowerCase();}) ? "#fca5a5" : undefined }} />
+                    </div>
                     <div style={{ flex:2, minWidth:160 }}>
                       <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4, fontWeight:600 }}>VINCULAR AO PRODUTO CADASTRADO</div>
                       <select style={{ ...inp, fontSize:12 }} value={it.produtoCadastradoId||""} onChange={e=>updateItem(idx,"produtoCadastradoId",e.target.value)}>

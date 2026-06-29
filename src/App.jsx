@@ -3479,16 +3479,48 @@ function NotasFiscaisTab({ notasFiscais, setNotasFiscais, fornecedores, produtos
     saveNFs(updated);
 
     if (isNew) {
-      // Atualizar estoque dos produtos vinculados
+      // Atualizar estoque dos produtos vinculados + registrar movimentação de ENTRADA
       if (form.atualizarEstoque) {
+        var hoje = new Date().toLocaleDateString("sv-SE");
+        var horaAgora = new Date().toLocaleTimeString("pt-BR", {hour:"2-digit", minute:"2-digit"});
+        var movsNovas = [];
+
         const novoProdutos = produtos.map(p => {
           const item = form.itens.find(it => it.produtoCadastradoId === p.id);
           if (!item) return p;
-          const novoEstoque = parseFloat(p.estoqueAtual || 0) + parseFloat(item.qCom || 0);
+          const qtdEntrada = parseFloat(item.qCom || 0);
+          const novoEstoque = parseFloat(p.estoqueAtual || 0) + qtdEntrada;
+
+          // Registrar movimentação de entrada vinculada à NF
+          movsNovas.push({
+            id: "nf_" + form.id + "_" + p.id,
+            produtoId: p.id,
+            mlbId: p.mlbVinculado || (p.mlbsVinculados||[])[0] || null,
+            sku: p.sku || item.cProd || "",
+            tipo: "entrada",
+            qtd: qtdEntrada,
+            preco: parseFloat(item.vUnCom || 0) || null,
+            motivo: "NF " + form.numero + "/" + form.serie + " — " + (form.fornecedorNome || "Fornecedor"),
+            nfId: form.id,
+            data: form.dataEmissao || hoje,
+            hora: horaAgora,
+            automatico: true,
+          });
+
           return { ...p, estoqueAtual: String(novoEstoque) };
         });
+
         setProdutos(novoProdutos);
         try { localStorage.setItem("produtos_cadastro", JSON.stringify(novoProdutos)); } catch {}
+
+        // Salvar as movimentações no histórico de estoque (mov_estoque)
+        if (movsNovas.length > 0) {
+          try {
+            var movAtual = JSON.parse(localStorage.getItem("mov_estoque") || "[]");
+            var movFinal = [...movAtual, ...movsNovas];
+            localStorage.setItem("mov_estoque", JSON.stringify(movFinal));
+          } catch (e) { console.warn("[NF] Erro ao salvar movimentação de estoque:", e); }
+        }
       }
 
       // Gerar contas a pagar para cada duplicata
@@ -5717,6 +5749,15 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
   const [prodSel, setProdSel] = useState([]);
   const [showMovEstoque, setShowMovEstoque] = useState(null); // produto para ver movimentação
   const [movEstoque, setMovEstoque] = useState(function(){ try { return JSON.parse(localStorage.getItem("mov_estoque")||"[]"); } catch(e){ return []; } });
+  // Recarrega movimentações sempre que a aba "estoque" (Movimentações) é aberta —
+  // garante refletir entradas geradas por NF Entrada, vendas, etc.
+  useEffect(function(){
+    if (prodTab !== "estoque") return;
+    try {
+      var fresh = JSON.parse(localStorage.getItem("mov_estoque")||"[]");
+      setMovEstoque(fresh);
+    } catch(e) {}
+  }, [prodTab]);
   const [importMsg, setImportMsg] = useState(null); // {tipo:"ok"|"erro", texto:"..."}
   const [paginaProdutos, setPaginaProdutos] = useState(1);
   const POR_PAG_PROD = 50;

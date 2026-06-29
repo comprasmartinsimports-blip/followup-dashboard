@@ -11801,21 +11801,28 @@ function IAChatTab({ enriched, rawOrders, produtos, contasPagar, token }) {
     try {
       var systemPrompt = buildContext();
       var apiMsgs = newMsgs.map(function(m){ return { role: m.role, content: m.content }; });
-      var res = await fetch("https://api.anthropic.com/v1/messages", {
+      // Chama via proxy serverless /api/ai-chat (necessário pois o navegador
+      // não pode chamar api.anthropic.com diretamente: CORS + exporia a chave de API)
+      var res = await fetch("/api/ai-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 1024,
           system: systemPrompt,
           messages: apiMsgs,
         })
       });
+      if (!res.ok) {
+        var errTxt = await res.text();
+        throw new Error("Servidor respondeu "+res.status+": "+errTxt.slice(0,200));
+      }
       var data = await res.json();
-      var reply = (data.content||[]).find(function(b){return b.type==="text";})?.text || "Sem resposta.";
+      var reply = (data.content||[]).find(function(b){return b.type==="text";})?.text || data.reply || "Sem resposta.";
       setMsgs(function(m){ return [...m, { role: "assistant", content: reply }]; });
     } catch(e) {
-      setMsgs(function(m){ return [...m, { role: "assistant", content: "Erro ao conectar com a IA: " + e.message }]; });
+      var msgErro = e.message.includes("404") || e.message.includes("Failed to fetch")
+        ? "O servidor ainda não tem a rota /api/ai-chat configurada. É necessário criar esse endpoint no backend (Vercel) para que o chat funcione — peça ao desenvolvedor para adicionar o arquivo api/ai-chat.js."
+        : "Erro ao conectar com a IA: " + e.message;
+      setMsgs(function(m){ return [...m, { role: "assistant", content: msgErro }]; });
     }
     setLoading(false);
   }
@@ -12704,35 +12711,64 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
 
       var rawResults = data.results || [];
 
-      // Normaliza os dois formatos possíveis de resposta:
-      // Formato A (/sites/MLB/search): item com price, seller{}, shipping{} direto
-      // Formato B (/products/search, busca por catálogo): item com buy_box_winner{} ou price aninhado
-      var results = rawResults.map(function(r){
-        // Formato de catálogo: o preço/vendedor reais ficam em buy_box_winner ou em winner
-        var bb = r.buy_box_winner || r.winner || null;
-        var precoFinal = r.price ?? bb?.price ?? r.buy_box_price ?? null;
-        var sellerFinal = r.seller || bb?.seller || null;
-        var sellerIdFinal = sellerFinal?.id ?? bb?.seller_id ?? r.seller_id ?? null;
-        var permalinkFinal = r.permalink || (r.id ? "https://www.mercadolivre.com.br/p/"+r.id : null) || bb?.permalink;
-        var thumbFinal = r.thumbnail || r.pictures?.[0]?.url || r.pictures?.[0]?.secure_url;
-        var titleFinal = r.title || r.name;
+      // O /products/search retorna produtos de CATÁLOGO: cada produto tem um
+      // buy_box_winner_item_id (o anúncio que está ganhando o buy box agora) e/ou
+      // buy_box_winner_price já direto na resposta. Vamos extrair o que vier pronto
+      // e, se necessário, buscar o item do buy box individualmente.
+      var candidatos = rawResults.map(function(r){
+        var precoDireto = r.buy_box_winner_price ?? r.price ?? null;
+        var itemIdBuyBox = r.buy_box_winner_item_id || r.item_id || null;
         return {
-          id: r.id || r.item_id,
-          title: titleFinal,
-          price: precoFinal,
-          original_price: r.original_price,
-          thumbnail: thumbFinal,
-          permalink: permalinkFinal,
-          seller_id: sellerIdFinal,
-          seller_nickname: sellerFinal?.nickname || r.seller_nickname || "—",
-          sold_quantity: r.sold_quantity ?? bb?.sold_quantity ?? 0,
-          free_shipping: r.shipping?.free_shipping ?? bb?.shipping?.free_shipping ?? false,
-          listing_type_id: r.listing_type_id || bb?.listing_type_id,
-          condition: r.condition,
+          productId: r.id,
+          itemId: itemIdBuyBox,
+          title: r.name || r.title,
+          precoDireto: precoDireto,
+          thumbnail: r.pictures?.[0]?.url || r.pictures?.[0]?.secure_url || r.thumbnail,
+          permalink: r.permalink || (r.id ? "https://www.mercadolivre.com.br/p/"+r.id : null),
         };
-      }).filter(function(r){
-        return r.id && r.id !== listing.id && r.price != null && r.price > 0; // só itens com preço válido
+      }).filter(function(r){ return r.itemId && r.itemId !== listing.id; });
+
+      console.log("[CONCORRENCIA] candidatos extraídos:", JSON.stringify(candidatos.slice(0,5)));
+
+      if (candidatos.length === 0) {
+        throw new Error("Nenhum produto de catálogo com item_id válido foi encontrado para comparar.");
+      }
+
+      // Buscar detalhes reais de cada item (preço, vendedor, frete) via /items/{id}
+      // Limita a 15 para não sobrecarregar
+      var detalhesPromises = candidatos.slice(0,15).map(async function(cand){
+        try {
+          var ir = await fetch("/api/ml/items/"+cand.itemId, { headers: token ? { Authorization: "Bearer "+token } : {} });
+          if (!ir.ok) return null;
+          var item = await ir.json();
+          if (item.error) return null;
+          return {
+            id: item.id,
+            title: item.title || cand.title,
+            price: item.price ?? cand.precoDireto,
+            original_price: item.original_price,
+            thumbnail: item.thumbnail || cand.thumbnail,
+            permalink: item.permalink || cand.permalink,
+            seller_id: item.seller_id,
+            seller_nickname: "—", // /items não retorna nickname do vendedor
+            sold_quantity: item.sold_quantity || 0,
+            free_shipping: item.shipping?.free_shipping || false,
+            listing_type_id: item.listing_type_id,
+            condition: item.condition,
+          };
+        } catch(e5) { return null; }
       });
+
+      var detalhes = (await Promise.all(detalhesPromises)).filter(Boolean);
+      console.log("[CONCORRENCIA] detalhes resolvidos:", detalhes.length, "de", candidatos.length);
+
+      var results = detalhes.filter(function(r){
+        return r.id && r.id !== listing.id && r.price != null && r.price > 0;
+      });
+
+      if (results.length === 0) {
+        throw new Error("Encontramos "+candidatos.length+" produtos similares no catálogo, mas não foi possível obter preço/vendedor de nenhum (a busca individual de itens falhou). Use o botão de busca manual abaixo.");
+      }
 
       var concorrenciaReal = results.filter(function(r){ return String(r.seller_id) !== String(sellerId); });
 

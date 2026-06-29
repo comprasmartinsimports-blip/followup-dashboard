@@ -12372,13 +12372,30 @@ function PublicidadeTab({ token, sellerId }) {
       // ── 1. Buscar campanhas via proxy /api/ml (evita CORS) ──
       var headers = { Authorization: "Bearer "+token, "Content-Type": "application/json" };
 
-      var res = await fetch("/api/ml/advertising/product_ads/campaigns?seller_id="+sellerId+"&status=ALL&limit=50&offset=0", { headers: headers });
-      var data = await res.json();
+      // Tenta múltiplos formatos de endpoint, pois a API de Ads do ML
+      // varia a sintaxe entre /advertising/... e /advertising/campaigns (sem product_ads)
+      var tentativas = [
+        "/api/ml/advertising/product_ads/campaigns?seller_id="+sellerId+"&status=ALL&limit=50&offset=0",
+        "/api/ml/advertising/advertisers/"+sellerId+"/product_ads_campaigns?status=ALL&limit=50&offset=0",
+        "/api/ml/advertising/campaigns?seller_id="+sellerId+"&product_id=PADS&status=ALL&limit=50&offset=0",
+      ];
+      var data = null, res = null, ultimoErro = null;
+      for (var ti = 0; ti < tentativas.length; ti++) {
+        try {
+          res = await fetch(tentativas[ti], { headers: headers });
+          var txt = await res.text();
+          console.log("[PUBLICIDADE] tentativa "+ti+" ("+tentativas[ti]+") status "+res.status+":", txt.slice(0,300));
+          if (res.status === 200 || res.status === 201) {
+            data = JSON.parse(txt);
+            break;
+          } else {
+            ultimoErro = "status "+res.status+" em "+tentativas[ti];
+          }
+        } catch(e3) { ultimoErro = e3.message; }
+      }
 
-      // Diagnóstico em console para depuração
-      console.log("[PUBLICIDADE] campanhas response:", JSON.stringify(data).slice(0,300));
+      if (!data) throw new Error("Nenhum endpoint de campanhas respondeu com sucesso. Último erro: "+ultimoErro+". A API de Publicidade do ML pode exigir permissão extra (escopo de advertising) na conexão OAuth — tente reconectar.");
 
-      if (data.error) throw new Error((data.message||data.error)+" (status: "+res.status+")");
       var camps = Array.isArray(data) ? data : (data.results || data.campaigns || data.data || []);
       setCampanhas(camps);
 
@@ -12464,7 +12481,11 @@ function PublicidadeTab({ token, sellerId }) {
       {/* Erro */}
       {erro && (
         <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"10px 14px", color:"#dc2626", marginBottom:8, fontSize:13 }}>
-          ⚠️ {erro}
+          <div style={{ marginBottom:8 }}>⚠️ {erro}</div>
+          <a href="https://publicidade.mercadolivre.com.br" target="_blank" rel="noreferrer"
+            style={{ display:"inline-block", background:"#ffe000", color:"#0f172a", fontWeight:700, padding:"8px 18px", borderRadius:8, textDecoration:"none", fontSize:12 }}>
+            📣 Ver campanhas direto no Mercado Ads ↗
+          </a>
         </div>
       )}
 
@@ -12640,13 +12661,38 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
     setSelectedListing(listing);
     setLoading(true); setErro(null); setConcorrentes([]);
     try {
-      // Limpar título para gerar query de busca eficaz
       var query = (listing.title||"").trim();
-      // Buscar via proxy /api/ml (evita CORS/forbidden no browser)
-      var url = "/api/ml/sites/MLB/search?q="+encodeURIComponent(query)+"&limit=30";
-      var res = await fetch(url, { headers: token ? { Authorization: "Bearer "+token } : {} });
-      var data = await res.json();
-      if (data.error) throw new Error((data.message||data.error)+" (status: "+res.status+")");
+
+      // Tenta múltiplos endpoints de busca do ML (a API pública de search
+      // foi restringida pelo ML para apps de terceiros — tentamos alternativas)
+      var tentativasBusca = [
+        "/api/ml/sites/MLB/search?q="+encodeURIComponent(query)+"&limit=30",
+        "/api/ml/products/search?q="+encodeURIComponent(query)+"&site_id=MLB&limit=30",
+      ];
+      var data = null, ultimoStatus = null, ultimoErro = null;
+      for (var bi = 0; bi < tentativasBusca.length; bi++) {
+        try {
+          var bres = await fetch(tentativasBusca[bi], { headers: token ? { Authorization: "Bearer "+token } : {} });
+          var btxt = await bres.text();
+          console.log("[CONCORRENCIA] tentativa "+bi+" status "+bres.status+":", btxt.slice(0,300));
+          ultimoStatus = bres.status;
+          if (bres.status === 200) {
+            var bdata = JSON.parse(btxt);
+            if (!bdata.error) { data = bdata; break; }
+            ultimoErro = bdata.message||bdata.error;
+          } else {
+            ultimoErro = "status "+bres.status;
+          }
+        } catch(e4) { ultimoErro = e4.message; }
+      }
+
+      if (!data) {
+        throw new Error(
+          "A API de busca do Mercado Livre recusou a consulta (" + (ultimoErro||ultimoStatus) + "). " +
+          "O ML restringiu esse endpoint para a maioria dos apps de terceiros. " +
+          "Use o botão \"Buscar no ML ↗\" abaixo para comparar manualmente."
+        );
+      }
 
       var results = (data.results||[]).filter(function(r){
         return r.id !== listing.id; // exclui o próprio anúncio
@@ -12791,7 +12837,14 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
                   <div>Buscando concorrentes no Mercado Livre...</div>
                 </div>
               ) : erro ? (
-                <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:14, color:"#dc2626", fontSize:13 }}>⚠️ {erro}</div>
+                <div>
+                  <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:14, color:"#dc2626", fontSize:13, marginBottom:10 }}>⚠️ {erro}</div>
+                  <a href={"https://lista.mercadolivre.com.br/"+encodeURIComponent((selectedListing?.title||"").trim())}
+                    target="_blank" rel="noreferrer"
+                    style={{ display:"inline-block", background:"#ffe000", color:"#0f172a", fontWeight:700, padding:"10px 20px", borderRadius:10, textDecoration:"none", fontSize:13 }}>
+                    🔍 Buscar "{selectedListing?.title?.slice(0,40)}..." no ML ↗
+                  </a>
+                </div>
               ) : concorrentes.length === 0 ? (
                 <div style={{ textAlign:"center", padding:50, color:"#94a3b8" }}>
                   <div style={{ fontSize:32, marginBottom:10 }}>🔍</div>

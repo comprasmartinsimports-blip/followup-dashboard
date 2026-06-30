@@ -11816,27 +11816,33 @@ function IAChatTab({ enriched, rawOrders, produtos, contasPagar, token }) {
     try {
       var systemPrompt = buildContext();
       var apiMsgs = newMsgs.map(function(m){ return { role: m.role, content: m.content }; });
-      // Chama via proxy serverless /api/ai-chat (necessário pois o navegador
-      // não pode chamar api.anthropic.com diretamente: CORS + exporia a chave de API)
+      // Tenta /api/ai-chat (endpoint serverless Vercel que precisa ser criado)
+      // Se não existir (405/404), cai no fallback de instrução
       var res = await fetch("/api/ai-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          system: systemPrompt,
-          messages: apiMsgs,
-        })
+        body: JSON.stringify({ system: systemPrompt, messages: apiMsgs })
       });
+
+      // Se o endpoint não existir, dá instrução clara
+      if (res.status === 404 || res.status === 405) {
+        throw new Error("__ENDPOINT_NAO_EXISTE__");
+      }
+
       if (!res.ok) {
         var errTxt = await res.text();
         throw new Error("Servidor respondeu "+res.status+": "+errTxt.slice(0,200));
       }
       var data = await res.json();
-      var reply = (data.content||[]).find(function(b){return b.type==="text";})?.text || data.reply || "Sem resposta.";
+      var reply = (data.content||[]).find(function(b){return b.type==="text";})?.text || data.reply || data.text || "Sem resposta.";
       setMsgs(function(m){ return [...m, { role: "assistant", content: reply }]; });
     } catch(e) {
-      var msgErro = e.message.includes("404") || e.message.includes("Failed to fetch")
-        ? "O servidor ainda não tem a rota /api/ai-chat configurada. É necessário criar esse endpoint no backend (Vercel) para que o chat funcione — peça ao desenvolvedor para adicionar o arquivo api/ai-chat.js."
-        : "Erro ao conectar com a IA: " + e.message;
+            var msgErro;
+      if (e.message === "__ENDPOINT_NAO_EXISTE__") {
+        msgErro = "Para ativar o Assistente IA, crie o arquivo api/ai-chat.js no Vercel e adicione a variavel ANTHROPIC_API_KEY em Settings > Environment Variables. Fale com o desenvolvedor para fazer essa configuracao.";
+      } else {
+        msgErro = "Erro ao conectar com a IA: " + e.message;
+      }
       setMsgs(function(m){ return [...m, { role: "assistant", content: msgErro }]; });
     }
     setLoading(false);
@@ -12361,6 +12367,10 @@ function PublicidadeTab({ token, sellerId }) {
   const [periodo, setPeriodo] = useState("LAST_7_DAYS");
   const [totalMetricas, setTotalMetricas] = useState(null);
   const [ultimaAtualizacao, setUltimaAtualizacao] = useState(null);
+  const [expandedCamp, setExpandedCamp] = useState({});   // {campId: true/false}
+  const [anunciosCamp, setAnunciosCamp] = useState({});   // {campId: [...items]}
+  const [loadingAnuncios, setLoadingAnuncios] = useState({});
+  const [advertiserId, setAdvertiserId] = useState(null);
 
   var periodos = [
     { k:"TODAY",       l:"Hoje" },
@@ -12408,6 +12418,7 @@ function PublicidadeTab({ token, sellerId }) {
         throw new Error("Nenhum 'advertiser' encontrado para esta conta. O Product Ads pode não estar habilitado — acesse Mercado Livre > Seu perfil > Publicidade.");
       }
       var advertiserId = advertisers[0].advertiser_id || advertisers[0].id;
+      setAdvertiserId(advertiserId);
 
       // ── 2. Buscar campanhas desse advertiser (endpoint oficial documentado) ──
       var campUrl = "/api/ml/advertising/advertisers/"+advertiserId+"/product_ads/campaigns?limit=50&offset=0";
@@ -12473,6 +12484,43 @@ function PublicidadeTab({ token, sellerId }) {
   }
 
   useEffect(function(){ if(token&&sellerId) carregarCampanhas(); }, [token, sellerId, periodo]);
+
+  async function toggleCampanha(campId) {
+    var novoEstado = !expandedCamp[campId];
+    setExpandedCamp(function(p){ return Object.assign({},p,{[campId]:novoEstado}); });
+    if (!novoEstado || anunciosCamp[campId]) return; // já carregou ou fechando
+    if (!advertiserId) return;
+    setLoadingAnuncios(function(p){ return Object.assign({},p,{[campId]:true}); });
+    try {
+      var headers = { Authorization: "Bearer "+token, "Content-Type": "application/json", "Api-Version": "2" };
+      // Buscar anúncios da campanha
+      var r = await fetch("/api/ml/advertising/advertisers/"+advertiserId+"/product_ads/ads?campaign_id="+campId+"&limit=50&offset=0", { headers: headers });
+      var txt = await r.text();
+      console.log("[PUBLICIDADE] ads camp "+campId+" status "+r.status+":", txt.slice(0,400));
+      if (r.status === 200) {
+        var data = JSON.parse(txt);
+        var ads = Array.isArray(data) ? data : (data.results || data.ads || data.data || []);
+        // Buscar métricas dos anúncios também
+        try {
+          var datas = (function(p){
+            var hoje=new Date(), fmt=function(d){return d.toISOString().slice(0,10);}, sub=function(n){var d=new Date(hoje);d.setDate(d.getDate()-n);return d;};
+            if(p==="LAST_7_DAYS") return {from:fmt(sub(7)),to:fmt(hoje)};
+            if(p==="LAST_30_DAYS") return {from:fmt(sub(30)),to:fmt(hoje)};
+            if(p==="THIS_MONTH"){var d=new Date(hoje.getFullYear(),hoje.getMonth(),1);return{from:fmt(d),to:fmt(hoje)};}
+            return {from:fmt(sub(7)),to:fmt(hoje)};
+          })(periodo);
+          var mr = await fetch("/api/ml/advertising/advertisers/"+advertiserId+"/product_ads/ads?campaign_id="+campId+"&limit=50&date_from="+datas.from+"&date_to="+datas.to+"&metrics=clicks,prints,cost,direct_amount,direct_items_quantity,acos", { headers: headers });
+          if (mr.status === 200) {
+            var mdata = JSON.parse(await mr.text());
+            var adsComMetricas = Array.isArray(mdata) ? mdata : (mdata.results || mdata.ads || []);
+            if (adsComMetricas.length > 0) ads = adsComMetricas;
+          }
+        } catch {}
+        setAnunciosCamp(function(p){ return Object.assign({},p,{[campId]:ads}); });
+      }
+    } catch(e) { console.warn("[PUBLICIDADE] erro ao buscar anúncios:", e.message); }
+    setLoadingAnuncios(function(p){ return Object.assign({},p,{[campId]:false}); });
+  }
 
   function fmtR(n){ return "R$ "+(parseFloat(n||0)).toFixed(2).replace(".",","); }
   function fmtN(n){ return parseInt(n||0).toLocaleString("pt-BR"); }
@@ -12585,7 +12633,8 @@ function PublicidadeTab({ token, sellerId }) {
                 var roasObjN   = parseFloat(c.acos_target||c.roas_target||0);
 
                 return (
-                  <tr key={c.id} style={{ borderBottom:"1px solid #f1f5f9", background:i%2===0?"#fff":"#fafafa" }}>
+                  <React.Fragment key={c.id}>
+                  <tr style={{ borderBottom:"1px solid #f1f5f9", background:i%2===0?"#fff":"#fafafa" }}>
                     {/* Toggle status visual */}
                     <td style={{ padding:"10px 12px" }}>
                       <div style={{ width:36, height:20, borderRadius:10, background:isAtiva?"#22c55e":"#e2e8f0", position:"relative", cursor:"default" }}>
@@ -12593,8 +12642,16 @@ function PublicidadeTab({ token, sellerId }) {
                       </div>
                     </td>
                     <td style={{ padding:"10px 12px", minWidth:180 }}>
-                      <div style={{ fontSize:13, fontWeight:700, color:"#1d4ed8" }}>{c.name||c.nome||"Campanha #"+c.id}</div>
-                      {c.type && <div style={{ fontSize:10, color:"#94a3b8", marginTop:2 }}>{c.type} · ID: {c.id}</div>}
+                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                        <button onClick={function(){ toggleCampanha(c.id); }}
+                          style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:22, height:22, borderRadius:5, cursor:"pointer", fontSize:12, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                          {expandedCamp[c.id] ? "▼" : "▶"}
+                        </button>
+                        <div>
+                          <div style={{ fontSize:13, fontWeight:700, color:"#1d4ed8" }}>{c.name||c.nome||"Campanha #"+c.id}</div>
+                          {c.type && <div style={{ fontSize:10, color:"#94a3b8", marginTop:2 }}>{c.type} · ID: {c.id}</div>}
+                        </div>
+                      </div>
                     </td>
                     <td style={{ padding:"10px 12px" }}>
                       <span style={{ fontSize:11, fontWeight:700, color:sCorText, background:sCorText+"18", padding:"3px 8px", borderRadius:6 }}>
@@ -12649,6 +12706,66 @@ function PublicidadeTab({ token, sellerId }) {
                       </a>
                     </td>
                   </tr>
+                  {/* Linha expansível com anúncios da campanha */}
+                  {expandedCamp[c.id] && (
+                    <tr key={c.id+"_ads"}>
+                      <td colSpan={14} style={{ background:"#f8fafc", padding:"0 0 0 48px", borderBottom:"2px solid #e2e8f0" }}>
+                        {loadingAnuncios[c.id] ? (
+                          <div style={{ padding:"14px", fontSize:12, color:"#94a3b8" }}>⏳ Carregando anúncios...</div>
+                        ) : (anunciosCamp[c.id]||[]).length === 0 ? (
+                          <div style={{ padding:"14px", fontSize:12, color:"#94a3b8" }}>Nenhum anúncio encontrado nesta campanha.</div>
+                        ) : (
+                          <table style={{ borderCollapse:"collapse", width:"100%", fontSize:11 }}>
+                            <thead>
+                              <tr style={{ background:"#f1f5f9" }}>
+                                {["","Anúncio","Impressões","ROAS","Cliques","Custo/clique","Receita","Gasto","ACOS","Vendas"].map(function(h){
+                                  return <th key={h} style={{ padding:"7px 10px", textAlign:"left", color:"#64748b", fontWeight:600, textTransform:"uppercase", fontSize:10 }}>{h}</th>;
+                                })}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(anunciosCamp[c.id]||[]).map(function(ad, ai) {
+                                var am = ad.metrics || ad;
+                                var aImpr = parseFloat(am.prints||am.impressions||0);
+                                var aCliq = parseFloat(am.clicks||0);
+                                var aVend = parseFloat(am.direct_items_quantity||0);
+                                var aRec  = parseFloat(am.direct_amount||0);
+                                var aGast = parseFloat(am.cost||0);
+                                var aRoas = aGast>0 ? aRec/aGast : 0;
+                                var aAcos = am.acos!=null ? parseFloat(am.acos) : (aRec>0?(aGast/aRec)*100:0);
+                                var aCpc  = aCliq>0 ? aGast/aCliq : 0;
+                                var thumb = ad.item?.thumbnail || ad.thumbnail;
+                                var title = ad.item?.title || ad.title || ad.item_id || ("Anúncio #"+(ai+1));
+                                var itemId = ad.item_id || ad.item?.id;
+                                return (
+                                  <tr key={ad.id||ai} style={{ borderBottom:"1px solid #f1f5f9", background:ai%2===0?"#fff":"#fafafa" }}>
+                                    <td style={{ padding:"7px 10px", width:40 }}>
+                                      {thumb && <img src={thumb} alt="" style={{ width:32, height:32, borderRadius:4, objectFit:"cover" }} />}
+                                    </td>
+                                    <td style={{ padding:"7px 10px", maxWidth:280, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                                      <div style={{ fontSize:12, fontWeight:600, color:"#0f172a" }}>{title}</div>
+                                      {itemId && <div style={{ fontSize:10, color:"#94a3b8" }}>{itemId}</div>}
+                                    </td>
+                                    <td style={{ padding:"7px 10px" }}>{aImpr>0?fmtN(aImpr):"—"}</td>
+                                    <td style={{ padding:"7px 10px", fontWeight:700, color:aRoas>0?(aRoas>=5?"#15803d":"#d97706"):"#94a3b8" }}>{aGast>0?aRoas.toFixed(2)+"x":"—"}</td>
+                                    <td style={{ padding:"7px 10px" }}>{aCliq>0?fmtN(aCliq):"—"}</td>
+                                    <td style={{ padding:"7px 10px" }}>{aCpc>0?"R$ "+aCpc.toFixed(2).replace(".",","):"—"}</td>
+                                    <td style={{ padding:"7px 10px", color:"#15803d", fontWeight:600 }}>{aRec>0?fmtR(aRec):"—"}</td>
+                                    <td style={{ padding:"7px 10px", color:"#dc2626" }}>{aGast>0?fmtR(aGast):"—"}</td>
+                                    <td style={{ padding:"7px 10px" }}>
+                                      {aGast>0 ? <span style={{ color:aAcos<10?"#15803d":aAcos<20?"#d97706":"#dc2626", fontWeight:700 }}>{aAcos.toFixed(1)}%</span> : "—"}
+                                    </td>
+                                    <td style={{ padding:"7px 10px", fontWeight:700 }}>{aVend>0?aVend:"—"}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 );
               })}
             </tbody>
@@ -12695,9 +12812,18 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
 
       // Tenta múltiplos endpoints de busca do ML (a API pública de search
       // foi restringida pelo ML para apps de terceiros — tentamos alternativas)
+      // Limpar título para busca mais eficaz: remover anos, medidas, cores
+      var queryLimpa = query
+        .replace(/\d{4}\s*(a|à|A)\s*\d{4}/g, "")  // remove "2009 a 2013"
+        .replace(/\d{4}/g, "")                       // remove anos soltos
+        .replace(/\s+/g, " ").trim()
+        .split(" ").slice(0, 6).join(" ");           // limita a 6 palavras-chave
+
       var tentativasBusca = [
-        "/api/ml/sites/MLB/search?q="+encodeURIComponent(query)+"&limit=30",
-        "/api/ml/products/search?q="+encodeURIComponent(query)+"&site_id=MLB&limit=30",
+        // Busca autenticada via proxy — funciona com token do seller
+        "/api/ml/sites/MLB/search?q="+encodeURIComponent(queryLimpa)+"&limit=30",
+        "/api/ml/sites/MLB/search?q="+encodeURIComponent(query.split(" ").slice(0,5).join(" "))+"&limit=30",
+        "/api/ml/products/search?q="+encodeURIComponent(queryLimpa)+"&site_id=MLB&limit=30",
       ];
       var data = null, ultimoStatus = null, ultimoErro = null;
       for (var bi = 0; bi < tentativasBusca.length; bi++) {
@@ -12734,34 +12860,71 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
 
       // Tenta extrair um item_id comparável usando várias possibilidades de campo,
       // pois o formato de /products/search pode variar (catálogo vs item direto)
-      var candidatos = rawResults.map(function(r){
-        var itemIdBuyBox =
-          r.buy_box_winner_item_id ||
-          r.buy_box_winner?.item_id ||
-          r.item_id ||
-          r.id || // fallback: às vezes "id" já é o item MLB diretamente
-          null;
-        var precoDireto =
-          r.buy_box_winner_price ??
-          r.buy_box_winner?.price ??
-          r.price ??
-          null;
-        return {
-          productId: r.id,
-          itemId: itemIdBuyBox,
-          title: r.name || r.title,
-          precoDireto: precoDireto,
-          thumbnail: r.pictures?.[0]?.url || r.pictures?.[0]?.secure_url || r.thumbnail,
-          permalink: r.permalink || (r.id ? "https://www.mercadolivre.com.br/p/"+r.id : null),
-          rawKeys: Object.keys(r), // para diagnóstico
-        };
-      }).filter(function(r){ return r.itemId && r.itemId !== listing.id; });
+      console.log("[CONCORRENCIA] estrutura resultado[0]:", JSON.stringify(rawResults[0]||{}).slice(0,600));
 
-      console.log("[CONCORRENCIA] candidatos extraídos:", JSON.stringify(candidatos.slice(0,5), null, 2));
+      // Detectar formato da resposta:
+      // Formato A (/sites/MLB/search): itens diretos com price, seller{}, shipping{}
+      // Formato B (/products/search): catálogo com buy_box_winner_item_id
+      var isFormatoA = rawResults.length > 0 && rawResults[0].price !== undefined;
+
+      var candidatos;
+      if (isFormatoA) {
+        // Formato direto — cada resultado JÁ é um anúncio com preço e vendedor
+        candidatos = rawResults.map(function(r){
+          return {
+            id: r.id,
+            title: r.title,
+            price: r.price,
+            original_price: r.original_price,
+            thumbnail: r.thumbnail,
+            permalink: r.permalink,
+            seller_id: r.seller?.id,
+            seller_nickname: r.seller?.nickname || "—",
+            sold_quantity: r.sold_quantity || 0,
+            free_shipping: r.shipping?.free_shipping || false,
+            listing_type_id: r.listing_type_id,
+            condition: r.condition,
+          };
+        }).filter(function(r){ return r.id !== listing.id && r.price > 0; });
+      } else {
+        // Formato catálogo — precisa extrair item_id e buscar detalhes
+        candidatos = rawResults.map(function(r){
+          var itemId = r.buy_box_winner_item_id || r.buy_box_winner?.item_id || r.item_id || r.id || null;
+          return { itemId: itemId, title: r.name||r.title, thumbnail: r.pictures?.[0]?.url||r.thumbnail };
+        }).filter(function(r){ return r.itemId && r.itemId !== listing.id; });
+      }
 
       if (candidatos.length === 0) {
-        var amostraChaves = rawResults.length>0 ? Object.keys(rawResults[0]).join(", ") : "nenhum resultado";
-        throw new Error("A busca retornou "+rawResults.length+" resultado(s), mas nenhum tinha um identificador de item reconhecível. Campos disponíveis no resultado: ["+amostraChaves+"]. Abra o console (F12) para ver a estrutura completa.");
+        throw new Error("Nenhum anúncio comparável encontrado ("+rawResults.length+" resultados brutos, mas sem preço ou item_id válido).");
+      }
+
+      // Para formato catálogo, busca detalhes individuais dos itens
+      var results;
+      if (isFormatoA) {
+        results = candidatos;
+      } else {
+        var detalhesPromises = candidatos.slice(0,15).map(async function(cand){
+          try {
+            var ir = await fetch("/api/ml/items/"+cand.itemId, { headers: token ? { Authorization: "Bearer "+token } : {} });
+            if (!ir.ok) return null;
+            var item = await ir.json();
+            if (item.error) return null;
+            return {
+              id: item.id, title: item.title||cand.title, price: item.price,
+              original_price: item.original_price,
+              thumbnail: item.thumbnail||cand.thumbnail, permalink: item.permalink,
+              seller_id: item.seller_id, seller_nickname: "—",
+              sold_quantity: item.sold_quantity||0,
+              free_shipping: item.shipping?.free_shipping||false,
+              listing_type_id: item.listing_type_id, condition: item.condition,
+            };
+          } catch { return null; }
+        });
+        results = (await Promise.all(detalhesPromises)).filter(function(r){ return r && r.price > 0; });
+      }
+
+      if (results.length === 0) {
+        throw new Error("Encontramos "+candidatos.length+" produtos similares, mas não foi possível obter preços. Use o botão de busca manual.");
       }
 
       // Buscar detalhes reais de cada item (preço, vendedor, frete) via /items/{id}

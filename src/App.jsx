@@ -6634,6 +6634,19 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                       qtdBaixadas++;
                     });
 
+                    // Recalcular estoqueAtual com base nas movimentações reais
+                    var saldoMap = {};
+                    movsUpd.forEach(function(m) {
+                      if (!m.produtoId) return;
+                      if (!saldoMap[m.produtoId]) saldoMap[m.produtoId] = 0;
+                      if (m.tipo === "entrada") saldoMap[m.produtoId] += parseInt(m.qtd||0);
+                      if (m.tipo === "saida")   saldoMap[m.produtoId] -= parseInt(m.qtd||0);
+                    });
+                    produtosUpd2 = produtosUpd2.map(function(p) {
+                      if (saldoMap[p.id] === undefined) return p;
+                      return Object.assign({}, p, { estoqueAtual: String(Math.max(0, saldoMap[p.id])) });
+                    });
+
                     // Salvar tudo
                     localStorage.setItem("produtos_cadastro", JSON.stringify(produtosUpd2));
                     localStorage.setItem("mov_estoque", JSON.stringify(movsUpd));
@@ -13698,12 +13711,28 @@ export default function App() {
         qtdOk++;
       });
 
+      // ── Recalcular estoqueAtual de TODOS os produtos com base nas movimentações reais ──
+      // (garante que estoqueAtual bate com o saldo calculado pelas movimentações)
+      var saldoPorProduto = {};
+      movsUpd.forEach(function(m) {
+        if (!m.produtoId) return;
+        if (!saldoPorProduto[m.produtoId]) saldoPorProduto[m.produtoId] = 0;
+        if (m.tipo === "entrada") saldoPorProduto[m.produtoId] += parseInt(m.qtd||0);
+        if (m.tipo === "saida")   saldoPorProduto[m.produtoId] -= parseInt(m.qtd||0);
+      });
+
+      produtosUpd = produtosUpd.map(function(p) {
+        if (saldoPorProduto[p.id] === undefined) return p;
+        var saldo = Math.max(0, saldoPorProduto[p.id]);
+        return Object.assign({}, p, { estoqueAtual: String(saldo) });
+      });
+
       // Salvar tudo
       localStorage.setItem("produtos_cadastro", JSON.stringify(produtosUpd));
       localStorage.setItem("mov_estoque", JSON.stringify(movsUpd));
       localStorage.setItem("vendas_estoque_baixadas", JSON.stringify([...baixadas]));
       setProdutos(produtosUpd);
-      console.log("[ESTOQUE] Auto-baixa concluída: " + qtdOk + " com produto, " + qtdSemProd + " sem produto.");
+      console.log("[ESTOQUE] Auto-baixa concluída: " + qtdOk + " com produto, " + qtdSemProd + " sem produto. Saldos recalculados por movimentação.");
     } catch(e) {
       console.warn("[ESTOQUE] Erro na auto-baixa:", e.message);
     }

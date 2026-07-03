@@ -9208,7 +9208,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
           { key:"receber", label:"📥 Contas a Receber", perm:"fin_receber" },
           { key:"contas",  label:"🏦 Caixas e Bancos",  perm:"fin_bancos" },
           { key:"ia",      label:"✦ Consultoria IA",    perm:"fin_pagar" },
-          { key:"config",  label:"⚙️ Configurações",    perm:"fin_config" },
+
         ].filter(function(t) {
           if (currentUser?.admin) return true;
           var perms = currentUser?.permissoes || [];
@@ -13683,6 +13683,118 @@ function PainelUsuarios({ currentUser, onClose }) {
   );
 }
 
+
+// ════════════════════════════════════════════════════════════
+//  PainelConfiguracoesGlobal — ⚙️ Config + 👥 Usuários
+// ════════════════════════════════════════════════════════════
+function PainelConfiguracoesGlobal({ currentUser, abaInicial, impostos, setImpostos, custosFixos, setCustosFixos, faturamentoMes, onClose }) {
+  const [aba, setAba] = useState(abaInicial || "config");
+  const [usuarios, setUsuarios] = useState(getUsuarios);
+  const [editingUser, setEditingUser] = useState(null);
+  const [showModalUser, setShowModalUser] = useState(false);
+
+  function saveUser(user) {
+    var lista = getUsuarios();
+    var updated = lista.find(function(u){ return u.id===user.id; })
+      ? lista.map(function(u){ return u.id===user.id?user:u; })
+      : [...lista, user];
+    saveUsuarios(updated);
+    setUsuarios(updated);
+    setShowModalUser(false);
+    setEditingUser(null);
+  }
+
+  function deleteUser(id) {
+    if (id === currentUser.id) { alert("Você não pode excluir seu próprio usuário."); return; }
+    if (!window.confirm("Excluir este usuário?")) return;
+    var updated = getUsuarios().filter(function(u){ return u.id !== id; });
+    saveUsuarios(updated);
+    setUsuarios(updated);
+  }
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.55)", backdropFilter:"blur(4px)", zIndex:800, display:"flex", alignItems:"flex-start", justifyContent:"flex-end", padding:"56px 8px 8px" }}>
+      <div style={{ background:"#fff", borderRadius:14, width:680, maxHeight:"calc(100vh - 68px)", display:"flex", flexDirection:"column", boxShadow:"0 20px 60px rgba(0,0,0,.22)", overflow:"hidden" }}>
+
+        {/* Header */}
+        <div style={{ background:"#0f172a", padding:"13px 18px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div style={{ color:"#fff", fontWeight:700, fontSize:15 }}>⚙️ Configurações do Sistema</div>
+          <button onClick={onClose} style={{ background:"transparent", border:"none", color:"#94a3b8", fontSize:20, cursor:"pointer", lineHeight:1 }}>✕</button>
+        </div>
+
+        {/* Abas */}
+        <div style={{ display:"flex", borderBottom:"2px solid #f1f5f9" }}>
+          {[
+            { k:"config",   l:"⚙️ Impostos & Custos" },
+            { k:"usuarios", l:"👥 Usuários" },
+          ].map(function(t){
+            var a = aba===t.k;
+            return (
+              <button key={t.k} onClick={function(){ setAba(t.k); }}
+                style={{ flex:1, padding:"10px", border:"none", borderBottom:a?"2px solid #0f172a":"2px solid transparent",
+                  background:"transparent", color:a?"#0f172a":"#94a3b8", fontWeight:a?700:400, fontSize:13, cursor:"pointer", fontFamily:"inherit", marginBottom:-2 }}>
+                {t.l}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Conteúdo */}
+        <div style={{ flex:1, overflowY:"auto", padding:"16px 18px" }}>
+          {aba === "config" ? (
+            <ImpostosCompacto
+              impostos={impostos} setImpostos={setImpostos}
+              custosFixos={custosFixos} setCustosFixos={setCustosFixos}
+              faturamentoMes={faturamentoMes||0}
+            />
+          ) : (
+            <div>
+              {usuarios.map(function(u){
+                var isMe = u.id === currentUser.id;
+                return (
+                  <div key={u.id} style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px", marginBottom:8, display:"flex", alignItems:"center", gap:10 }}>
+                    <div style={{ width:36, height:36, borderRadius:9, background:"#0f172a", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:800, color:"#ffe000", flexShrink:0 }}>
+                      {u.nome?.charAt(0).toUpperCase()}
+                    </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontWeight:700, fontSize:13, color:"#0f172a" }}>
+                        {u.nome}
+                        {isMe && <span style={{ fontSize:10, color:"#0891b2", background:"#eff6ff", padding:"1px 5px", borderRadius:4, marginLeft:6 }}>você</span>}
+                      </div>
+                      <div style={{ fontSize:11, color:"#64748b" }}>@{u.usuario} · {u.admin?"Admin":"Usuário"} · <span style={{ color:u.ativo?"#15803d":"#dc2626", fontWeight:600 }}>{u.ativo?"Ativo":"Inativo"}</span></div>
+                      {u.email && <div style={{ fontSize:10, color:"#94a3b8", marginTop:1 }}>📧 {u.email}</div>}
+                    </div>
+                    <div style={{ display:"flex", gap:6 }}>
+                      <button onClick={function(){ setEditingUser(u); setShowModalUser(true); }}
+                        style={{ background:"#eff6ff", border:"1px solid #bfdbfe", color:"#1d4ed8", padding:"4px 10px", borderRadius:7, cursor:"pointer", fontSize:11, fontWeight:600 }}>
+                        ✎ Editar
+                      </button>
+                      {!isMe && (
+                        <button onClick={function(){ deleteUser(u.id); }}
+                          style={{ background:"#fef2f2", border:"1px solid #fecaca", color:"#dc2626", padding:"4px 8px", borderRadius:7, cursor:"pointer", fontSize:11 }}>
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              <button onClick={function(){ setEditingUser(null); setShowModalUser(true); }}
+                style={{ width:"100%", background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"10px", borderRadius:9, cursor:"pointer", fontSize:13, marginTop:8 }}>
+                + Novo Usuário
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {showModalUser && (
+        <ModalUsuario usuario={editingUser} onSave={saveUser} onClose={function(){ setShowModalUser(false); setEditingUser(null); }} />
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   // ── Auth do dashboard ─────────────────────────────────────
   const [tab, setTab] = useState(() => {
@@ -13818,6 +13930,8 @@ export default function App() {
   const [showNotif, setShowNotif] = useState(false);
   const [showBackup, setShowBackup] = useState(false);
   const [showUserPanel, setShowUserPanel] = useState(false);
+  const [showConfigPanel, setShowConfigPanel] = useState(false);
+  const [configPanelTab, setConfigPanelTab] = useState("config"); // config | usuarios
   const [notificacoes, setNotificacoes] = useState(() => {
     try { return JSON.parse(localStorage.getItem("ml_notificacoes") || "[]"); } catch { return []; }
   });
@@ -15022,6 +15136,10 @@ export default function App() {
               <div style={{ color:"#94a3b8", fontSize:10 }}>{currentUser?.admin?"Admin ▾":"Usuário"}</div>
             </div>
           </div>
+          <button onClick={function(){ setShowConfigPanel(true); setConfigPanelTab("config"); }}
+            style={{ background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", fontWeight:600, padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+            ⚙️ Config
+          </button>
           <button onClick={() => { clearSession(); clearSavedTokens(); setCurrentUser(null); setToken(null); setUser(null); }}
             style={{ background:"#fef2f2", border:"1px solid #fecaca", color:"#dc2626", fontWeight:600, padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
             Sair
@@ -15206,14 +15324,15 @@ export default function App() {
                     })}
                   </FiltroGrupo>
                   <FiltroGrupo titulo="Ordenar">
-                    <select value={sortBy} onChange={function(e){setSortBy(e.target.value);}}
-                      style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"7px 8px", borderRadius:8, fontSize:12 }}>
-                      <option value="score">Pior score primeiro</option>
-                      <option value="margin">Maior margem</option>
-                      <option value="profit">Maior lucro</option>
-                      <option value="sales_desc">Mais vendidos</option>
-                      <option value="sales_asc">Menos vendidos</option>
-                    </select>
+                    {[
+                      {k:"score",      l:"⚠ Pior score"},
+                      {k:"margin",     l:"📈 Maior margem"},
+                      {k:"profit",     l:"💰 Maior lucro"},
+                      {k:"sales_desc", l:"🔥 Mais vendidos"},
+                      {k:"sales_asc",  l:"📉 Menos vendidos"},
+                    ].map(function(o){
+                      return <FiltroBotao key={o.k} label={o.l} active={sortBy===o.k} cor="#0f172a" bg="#f1f5f9" onClick={function(){setSortBy(o.k);}} />;
+                    })}
                   </FiltroGrupo>
                   <div style={{ fontSize:11, color:"#94a3b8", marginTop:"auto" }}>{sorted.length} anúncio(s)</div>
                 </>
@@ -15705,6 +15824,16 @@ export default function App() {
       {showMLModal && <MLConnectModal onConnect={handleConnect} onClose={() => setShowMLModal(false)} />}
       {showUserPanel && currentUser?.admin && (
         <PainelUsuarios currentUser={currentUser} onClose={function(){ setShowUserPanel(false); }} />
+      )}
+      {showConfigPanel && (
+        <PainelConfiguracoesGlobal
+          currentUser={currentUser}
+          abaInicial={configPanelTab}
+          impostos={impostos} setImpostos={setImpostos}
+          custosFixos={custosFixos} setCustosFixos={setCustosFixos}
+          faturamentoMes={faturamentoMes}
+          onClose={function(){ setShowConfigPanel(false); }}
+        />
       )}
       {selectedListing && <AIPanel listing={selectedListing} onClose={() => setSelectedListing(null)} />}
       {currentUser && <ChatInternoWidget currentUser={currentUser} />}

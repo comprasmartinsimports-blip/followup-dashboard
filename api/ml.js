@@ -1,7 +1,50 @@
 // api/ml.js
-// Proxy para a API do Mercado Livre — usa token do cookie automaticamente
+// Proxy para a API do Mercado Livre + rota interna /api/ml/_users para sincronização de usuários
+
+// Cache de usuários em memória (persiste enquanto serverless estiver ativo)
+let _usersCache = null;
+
+const ADMIN_PADRAO = [{
+  id: "admin",
+  nome: "Administrador",
+  usuario: "admin",
+  senhaHash: "1143424611",
+  ativo: true,
+  admin: true,
+  permissoes: ["overview","listings","orders","financeiro","produtos","admin","nfe","full"],
+  criadoEm: new Date().toISOString().slice(0,10),
+}];
+
+async function lerUsuarios() {
+  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+    try {
+      const r = await fetch(process.env.KV_REST_API_URL + "/get/mlmargem_users", {
+        headers: { Authorization: "Bearer " + process.env.KV_REST_API_TOKEN }
+      });
+      const d = await r.json();
+      if (d && d.result) return JSON.parse(d.result);
+    } catch {}
+  }
+  return _usersCache || ADMIN_PADRAO;
+}
+
+async function salvarUsuarios(usuarios) {
+  _usersCache = usuarios;
+  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+    try {
+      await fetch(process.env.KV_REST_API_URL + "/set/mlmargem_users", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + process.env.KV_REST_API_TOKEN,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ value: JSON.stringify(usuarios) })
+      });
+    } catch {}
+  }
+}
+
 export default async function handler(req, res) {
-  // Pegar token: 1) cookie httpOnly, 2) header Authorization (modo manual legado)
   const cookies = Object.fromEntries(
     (req.headers.cookie || "").split(";").map(c => {
       const [k, ...v] = c.trim().split("=");
@@ -9,9 +52,51 @@ export default async function handler(req, res) {
     })
   );
 
-  let token = cookies.ml_access_token;
+  const path = req.url.replace(/^\/api\/ml/, "");
 
-  // Fallback para header Authorization (compatibilidade com modo manual)
+  // ── Rota interna: /api/ml/_users (sincronização de usuários) ──
+  if (path === "/_users" || path.startsWith("/_users?")) {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    if (req.method === "OPTIONS") return res.status(200).end();
+
+    if (req.method === "GET") {
+      const usuarios = await lerUsuarios();
+      const seguros = usuarios.map(function(u) {
+        const s = Object.assign({}, u);
+        delete s.senhaHash;
+        return s;
+      });
+      return res.status(200).json(seguros);
+    }
+
+    if (req.method === "POST") {
+      const body = req.body;
+      if (!body || !Array.isArray(body.usuarios)) {
+        return res.status(400).json({ error: "Formato inválido" });
+      }
+      const atual = await lerUsuarios();
+      const mapaAtual = {};
+      atual.forEach(function(u) { mapaAtual[u.id] = u; });
+      const novos = body.usuarios.map(function(u) {
+        const hashMap = body.senhaHashMap || {};
+        return Object.assign(
+          {},
+          mapaAtual[u.id] || {},
+          u,
+          { senhaHash: hashMap[u.id] || (mapaAtual[u.id] && mapaAtual[u.id].senhaHash) || "1143424611" }
+        );
+      });
+      await salvarUsuarios(novos);
+      return res.status(200).json({ ok: true, total: novos.length });
+    }
+
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  // ── Proxy normal para a API do Mercado Livre ──
+  let token = cookies.ml_access_token;
   if (!token && req.headers.authorization) {
     token = req.headers.authorization.replace("Bearer ", "");
   }
@@ -20,7 +105,6 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: "Não autenticado. Faça login com o Mercado Livre." });
   }
 
-  const path = req.url.replace(/^\/api\/ml/, "");
   const mlUrl = `https://api.mercadolibre.com${path}`;
 
   try {
@@ -34,7 +118,6 @@ export default async function handler(req, res) {
       body: req.method !== "GET" && req.method !== "HEAD" ? JSON.stringify(req.body) : undefined,
     });
 
-    // Se token expirou, tentar renovar automaticamente
     if (mlRes.status === 401) {
       const refreshToken = cookies.ml_refresh_token;
       if (refreshToken) {
@@ -45,7 +128,6 @@ export default async function handler(req, res) {
           });
           if (refreshRes.ok) {
             const refreshData = await refreshRes.json();
-            // Tentar novamente com o novo token
             const retryRes = await fetch(mlUrl, {
               method: req.method,
               headers: {
@@ -55,7 +137,6 @@ export default async function handler(req, res) {
               },
               body: req.method !== "GET" ? JSON.stringify(req.body) : undefined,
             });
-            // Passar Set-Cookie do refresh
             const setCookie = refreshRes.headers.get("set-cookie");
             if (setCookie) res.setHeader("Set-Cookie", setCookie);
             const data = await retryRes.json();

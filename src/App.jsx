@@ -14813,7 +14813,7 @@ export default function App() {
                 currentUser?.permissoes?.includes("orders")     && { key:"nfe_saida",  label:"NF Saída",    badge:null },
 
                 currentUser?.permissoes?.includes("listings")   && { key:"precificacao",  label:"💲 Precificação", badge:null },
-                currentUser?.permissoes?.includes("listings")   && { key:"publicidade",   label:"📣 Publicidade",  badge:null },
+
                                                                    { key:"ia_chat",       label:"✦ Assistente IA", badge:null },
               ].filter(Boolean);
               return navTabs.map(function(t) {
@@ -15581,9 +15581,7 @@ export default function App() {
           />
         )}
 
-        {tab === "publicidade" && currentUser?.permissoes?.includes("listings") && (
-          <PublicidadeTab token={token} sellerId={user?.id} enriched={enriched} />
-        )}
+
 
         {tab === "concorrencia" && currentUser?.permissoes?.includes("listings") && (
           <ConcorrenciaTab enriched={enriched} token={token} sellerId={user?.id} />

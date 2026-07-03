@@ -1056,7 +1056,7 @@ function getUsuarios() {
 
 function saveUsuarios(usuarios) {
   localStorage.setItem(AUTH_KEY, JSON.stringify(usuarios));
-  // Sincroniza com o servidor para que outros dispositivos vejam os novos usuários
+  // Sincroniza com o servidor — envia SEMPRE com senhaHash para persistir no cache
   try {
     var senhaHashMap = {};
     usuarios.forEach(function(u){ if(u.senhaHash) senhaHashMap[u.id]=u.senhaHash; });
@@ -1071,26 +1071,43 @@ function saveUsuarios(usuarios) {
 // Sincroniza usuários do servidor para o localStorage (chamado na inicialização do app)
 async function sincronizarUsuariosDoServidor() {
   try {
+    var locais = getUsuarios();
+
+    // Primeiro envia os usuários locais para o servidor (com senhaHash)
+    // para que o servidor sempre tenha a versão mais recente
+    if (locais.length > 0) {
+      var senhaHashMap = {};
+      locais.forEach(function(u){ if(u.senhaHash) senhaHashMap[u.id] = u.senhaHash; });
+      fetch("/api/ml/_users", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ usuarios: locais, senhaHashMap: senhaHashMap })
+      }).catch(function(){});
+    }
+
+    // Depois busca do servidor para pegar usuários criados em outros dispositivos
     var res = await fetch("/api/ml/_users");
     if (!res.ok) return;
     var usuariosServidor = await res.json();
     if (!usuariosServidor || !usuariosServidor.length) return;
-    var locais = getUsuarios();
-    // Mescla: servidor tem prioridade, mas mantém senhaHash local
+
+    // Mescla: mantém senhaHash local, adiciona usuários novos do servidor
     var mapaLocal = {};
     locais.forEach(function(u){ mapaLocal[u.id] = u; });
     var mesclados = usuariosServidor.map(function(us){
       var local = mapaLocal[us.id];
-      return Object.assign({}, us, { senhaHash: (local && local.senhaHash) || us.senhaHash || hashSenha("123456") });
+      return Object.assign({}, us, {
+        senhaHash: (local && local.senhaHash) || hashSenha("123456")
+      });
     });
-    // Adiciona usuários locais que não estão no servidor ainda
+    // Preserva usuários locais não encontrados no servidor
     locais.forEach(function(l){
       if (!mesclados.find(function(m){ return m.id===l.id; })) mesclados.push(l);
     });
     localStorage.setItem(AUTH_KEY, JSON.stringify(mesclados));
-    console.log("[USUÁRIOS] Sincronizados do servidor:", mesclados.length);
+    console.log("[USUÁRIOS] Sincronizados:", mesclados.length);
   } catch(e) {
-    console.warn("[USUÁRIOS] Sem sincronização com servidor:", e.message);
+    console.warn("[USUÁRIOS] Erro na sincronização:", e.message);
   }
 }
 

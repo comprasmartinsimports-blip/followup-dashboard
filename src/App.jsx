@@ -1036,7 +1036,7 @@ function getUsuarios() {
   try {
     const data = localStorage.getItem(AUTH_KEY);
     if (!data) {
-      // Cria admin padrão na primeira vez
+      // Cria admin padrão na primeira vez (antes da sincronização com servidor)
       const adminPadrao = [{
         id: "admin",
         nome: "Administrador",
@@ -1056,6 +1056,42 @@ function getUsuarios() {
 
 function saveUsuarios(usuarios) {
   localStorage.setItem(AUTH_KEY, JSON.stringify(usuarios));
+  // Sincroniza com o servidor para que outros dispositivos vejam os novos usuários
+  try {
+    var senhaHashMap = {};
+    usuarios.forEach(function(u){ if(u.senhaHash) senhaHashMap[u.id]=u.senhaHash; });
+    fetch("/api/users", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ usuarios: usuarios, senhaHashMap: senhaHashMap })
+    }).catch(function(){});
+  } catch {}
+}
+
+// Sincroniza usuários do servidor para o localStorage (chamado na inicialização do app)
+async function sincronizarUsuariosDoServidor() {
+  try {
+    var res = await fetch("/api/users");
+    if (!res.ok) return;
+    var usuariosServidor = await res.json();
+    if (!usuariosServidor || !usuariosServidor.length) return;
+    var locais = getUsuarios();
+    // Mescla: servidor tem prioridade, mas mantém senhaHash local
+    var mapaLocal = {};
+    locais.forEach(function(u){ mapaLocal[u.id] = u; });
+    var mesclados = usuariosServidor.map(function(us){
+      var local = mapaLocal[us.id];
+      return Object.assign({}, us, { senhaHash: (local && local.senhaHash) || us.senhaHash || hashSenha("123456") });
+    });
+    // Adiciona usuários locais que não estão no servidor ainda
+    locais.forEach(function(l){
+      if (!mesclados.find(function(m){ return m.id===l.id; })) mesclados.push(l);
+    });
+    localStorage.setItem(AUTH_KEY, JSON.stringify(mesclados));
+    console.log("[USUÁRIOS] Sincronizados do servidor:", mesclados.length);
+  } catch(e) {
+    console.warn("[USUÁRIOS] Sem sincronização com servidor:", e.message);
+  }
 }
 
 function getSession() {
@@ -1081,10 +1117,16 @@ function LoginScreen({ onLogin }) {
   const [erro, setErro] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Sincroniza usuários do servidor ao abrir tela de login
+  useEffect(function(){
+    sincronizarUsuariosDoServidor();
+  }, []);
+
   function handleLogin() {
     if (!usuario || !senha) return;
     setLoading(true); setErro("");
-    setTimeout(() => {
+    // Tenta sincronizar do servidor antes de validar (garante usuários atualizados)
+    sincronizarUsuariosDoServidor().finally(function(){
       const usuarios = getUsuarios();
       const user = usuarios.find(u =>
         u.usuario.toLowerCase() === usuario.toLowerCase() &&
@@ -13464,6 +13506,11 @@ export default function App() {
   const [loadingMsg, setLoadingMsg] = useState("");
   // ── Auth ──────────────────────────────────────────────────
   const [currentUser, setCurrentUser] = useState(() => getSession());
+
+  // Sincroniza usuários do servidor ao iniciar (garante que todos os dispositivos veem os mesmos usuários)
+  useEffect(function(){
+    sincronizarUsuariosDoServidor();
+  }, []);
   const [lastUpdate, setLastUpdate] = useState(() => localStorage.getItem("ml_last_update"));
   const [minutesTick, setMinutesTick] = useState(0);
   const [showMLModal, setShowMLModal] = useState(false);

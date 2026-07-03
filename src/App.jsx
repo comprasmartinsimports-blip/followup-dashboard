@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, Children, cloneElement } from "react";
+import React, { useState, useMemo, useEffect, useRef, Children, cloneElement } from "react";
 
 const ML = (path) => `/api/ml${path}`;
 const fmt = (n) => `R$ ${Number(n).toFixed(2).replace(".", ",")}`;
@@ -12417,11 +12417,11 @@ function PublicidadeTab({ token, sellerId }) {
       if (!advertisers.length) {
         throw new Error("Nenhum 'advertiser' encontrado para esta conta. O Product Ads pode não estar habilitado — acesse Mercado Livre > Seu perfil > Publicidade.");
       }
-      var advertiserId = advertisers[0].advertiser_id || advertisers[0].id;
-      setAdvertiserId(advertiserId);
+      var advId = advertisers[0].advertiser_id || advertisers[0].id;
+      setAdvertiserId(advId);
 
       // ── 2. Buscar campanhas desse advertiser (endpoint oficial documentado) ──
-      var campUrl = "/api/ml/advertising/advertisers/"+advertiserId+"/product_ads/campaigns?limit=50&offset=0";
+      var campUrl = "/api/ml/advertising/advertisers/"+advId+"/product_ads/campaigns?limit=50&offset=0";
       var res = await fetch(campUrl, { headers: headers });
       var txt = await res.text();
       console.log("[PUBLICIDADE] campanhas status "+res.status+":", txt.slice(0,500));
@@ -12444,7 +12444,7 @@ function PublicidadeTab({ token, sellerId }) {
       var totais = { impressoes:0, cliques:0, vendas:0, receita:0, gasto:0 };
 
       var metricsParam = "clicks,prints,cost,acos,direct_amount,direct_items_quantity";
-      var campWithMetricsUrl = "/api/ml/advertising/advertisers/"+advertiserId+"/product_ads/campaigns"+
+      var campWithMetricsUrl = "/api/ml/advertising/advertisers/"+advId+"/product_ads/campaigns"+
         "?limit=50&offset=0&date_from="+datas.from+"&date_to="+datas.to+"&metrics="+metricsParam;
       try {
         var mr = await fetch(campWithMetricsUrl, { headers: headers });

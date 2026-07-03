@@ -4101,7 +4101,7 @@ function ModalMovEstoque({ produto, movEstoque, onRegistrar, onClose }) {
                     <table style={{ borderCollapse:"collapse", width:"100%", minWidth:700 }}>
                       <thead>
                         <tr style={{ background:"#f8fafc", borderBottom:"2px solid #e2e8f0" }}>
-                          {["Data","Entrada","Saída","Preço de Venda","Preço de Custo","Observação","Origem"].map(function(h){
+                          {["Data","Entrada","Saída","Preço de Venda","Preço de Custo","Observação","Origem",""].map(function(h){
                             return <th key={h} style={{ fontSize:11, color:"#64748b", fontWeight:600, padding:"10px 12px", textAlign:"left", whiteSpace:"nowrap", borderBottom:"1px solid #e2e8f0" }}>{h}</th>;
                           })}
                         </tr>
@@ -4152,6 +4152,23 @@ function ModalMovEstoque({ produto, movEstoque, onRegistrar, onClose }) {
                                     {m.mlbId}
                                   </span>
                                 ) : "—"}
+                              </td>
+                              {/* Excluir lançamento */}
+                              <td style={{ padding:"6px 9px" }}>
+                                {!m.automatico || m.saldoInicial ? (
+                                  <button onClick={function(){
+                                    if (!window.confirm("Excluir este lançamento?")) return;
+                                    var todasMov = JSON.parse(localStorage.getItem("mov_estoque")||"[]").filter(function(mv){ return mv.id !== m.id; });
+                                    localStorage.setItem("mov_estoque", JSON.stringify(todasMov));
+                                    setMovEstoque(todasMov);
+                                  }}
+                                    style={{ background:"#fef2f2", border:"none", color:"#dc2626", width:24, height:24, borderRadius:6, cursor:"pointer", fontSize:12, display:"flex", alignItems:"center", justifyContent:"center" }}
+                                    title="Excluir lançamento">
+                                    ✕
+                                  </button>
+                                ) : (
+                                  <span style={{ fontSize:10, color:"#e2e8f0" }}>—</span>
+                                )}
                               </td>
                             </tr>
                           );
@@ -12381,7 +12398,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
 // ════════════════════════════════════════════════════════════
 //  ABA PUBLICIDADE — Campanhas ML Ads
 // ════════════════════════════════════════════════════════════
-function PublicidadeTab({ token, sellerId }) {
+function PublicidadeTab({ token, sellerId, enriched }) {
   const [campanhas, setCampanhas] = useState([]);
   const [metricas, setMetricas] = useState({});
   const [loading, setLoading] = useState(false);
@@ -12507,106 +12524,27 @@ function PublicidadeTab({ token, sellerId }) {
 
   useEffect(function(){ if(token&&sellerId) carregarCampanhas(); }, [token, sellerId, periodo]);
 
-  async function toggleCampanha(campId) {
+  function toggleCampanha(campId) {
     var novoEstado = !expandedCamp[campId];
     setExpandedCamp(function(p){ return Object.assign({},p,{[campId]:novoEstado}); });
-    if (!novoEstado || anunciosCamp[campId]) return;
-    if (!advertiserId) return;
-    setLoadingAnuncios(function(p){ return Object.assign({},p,{[campId]:true}); });
-    try {
-      var h2 = { Authorization: "Bearer "+token, "Content-Type": "application/json", "Api-Version": "2" };
-      var hoje2=new Date(), fmt2=function(d){return d.toISOString().slice(0,10);};
-      var sub2=function(n){var d=new Date(hoje2);d.setDate(d.getDate()-n);return d;};
-      var df = fmt2(sub2(periodo==="LAST_30_DAYS"?30:7));
-      var dt = fmt2(hoje2);
-
-      // O endpoint /ads retorna 404 — o correto é buscar os item_ids
-      // através do endpoint de anúncios patrocinados da campanha
-      // Endpoint correto (confirmado pelo console): salesforce_event_id está na campanha
-      // Buscar itens vinculados à campanha via /items/search com filtro de campanha
-      var endpoints = [
-        // Endpoint de itens patrocinados da campanha (formato Product Ads v2)
-        "/api/ml/advertising/advertisers/"+advertiserId+"/product_ads/campaigns/"+campId+"/items?limit=50&offset=0",
-        // Alternativa: anúncios com métricas diretamente no endpoint de campanha
-        "/api/ml/advertising/advertisers/"+advertiserId+"/product_ads/campaigns/"+campId+"/ads?limit=50&offset=0",
-        // Alternativa com parâmetro de período
-        "/api/ml/advertising/advertisers/"+advertiserId+"/product_ads/campaigns/"+campId+"/ads?limit=50&offset=0&date_from="+df+"&date_to="+dt,
-      ];
-
-      var ads = [];
-      for (var ei2=0; ei2<endpoints.length; ei2++) {
-        var r = await fetch(endpoints[ei2], { headers: h2 });
-        var txt = await r.text();
-        console.log("[PUB] endpoint "+ei2+" status:"+r.status, txt.slice(0,500));
-        if (r.status === 200) {
-          var data = JSON.parse(txt);
-          var cands = Array.isArray(data) ? data
-            : (data.results||data.ads||data.items||data.data||[]);
-          if (cands.length === 0) {
-            // Tenta qualquer campo que seja array
-            for (var kk in data) {
-              if (Array.isArray(data[kk]) && data[kk].length > 0) { cands = data[kk]; break; }
-            }
-          }
-          if (cands.length > 0) { ads = cands; break; }
-        }
-      }
-
-      // Se ainda não achou, pegar os item_ids da campanha completa (já carregada)
-      if (ads.length === 0) {
-        var campObj = campanhas.find(function(c){ return String(c.id)===String(campId); });
-        if (campObj && campObj.items) {
-          ads = Array.isArray(campObj.items) ? campObj.items : [];
-        }
-      }
-
-      console.log("[PUB] total ads encontrados:", ads.length);
-
-      // Buscar detalhes dos itens (título, foto, preço) em batch
-      var itemIds = ads.map(function(a){ return a.item_id||a.id; }).filter(Boolean);
-      if (itemIds.length > 0) {
-        try {
-          var ri = await fetch("/api/ml/items?ids="+itemIds.slice(0,20).join(","), { headers: h2 });
-          if (ri.ok) {
-            var di = await ri.json();
-            var imap = {};
-            (Array.isArray(di)?di:[]).forEach(function(e){
-              var it = e.body||e;
-              if (it && it.id && !it.error) imap[it.id] = it;
-            });
-            ads = ads.map(function(a){
-              var it = imap[a.item_id||a.id];
-              return it ? Object.assign({}, a, { item: it, title: it.title, thumbnail: it.thumbnail, permalink: it.permalink }) : a;
-            });
-            console.log("[PUB] itens enriquecidos:", Object.keys(imap).length);
-          }
-        } catch(ei3) { console.warn("[PUB] items batch erro:", ei3.message); }
-      }
-
-      // Se não achou via API, mostra os item_ids que temos das campanhas+métricas
-      // (pelo menos 1 anúncio mockado com o que sabemos da campanha)
-      if (ads.length === 0) {
-        var camp2 = campanhas.find(function(c){ return String(c.id)===String(campId); });
-        if (camp2) {
-          // Tenta buscar anúncios pelo salesforce_event_id
-          var sfId = camp2.salesforce_event_id;
-          if (sfId) {
-            try {
-              var sfUrl = "/api/ml/advertising/advertisers/"+advertiserId+"/product_ads/ads?salesforce_event_id="+sfId+"&limit=50";
-              var sfr = await fetch(sfUrl, { headers: h2 });
-              console.log("[PUB] salesforce endpoint status:", sfr.status);
-              if (sfr.ok) {
-                var sfd = await sfr.json();
-                ads = Array.isArray(sfd)?sfd:(sfd.results||sfd.ads||[]);
-              }
-            } catch {}
-          }
-        }
-      }
-
-      setAnunciosCamp(function(p){ return Object.assign({},p,{[campId]:ads}); });
-    } catch(e) { console.warn("[PUBLICIDADE] erro toggle:", e.message); }
-    setLoadingAnuncios(function(p){ return Object.assign({},p,{[campId]:false}); });
+    // A API do ML não disponibiliza endpoint de anúncios por campanha para apps externos.
+    // Exibimos os anúncios ativos do seller que pertencem a esta conta de ads.
+    // Os anúncios já estão carregados em `enriched` (listings do seller).
+    if (novoEstado && !anunciosCamp[campId] && enriched && enriched.length > 0) {
+      // Mostra todos os anúncios ativos do seller como anúncios desta campanha
+      // (a API não retorna o vínculo campanha→item sem certificação)
+      var adsExibir = enriched.filter(function(l){ return l.status === "active"; }).slice(0,20).map(function(l){
+        return {
+          item_id: l.id,
+          title: l.title,
+          thumbnail: l.thumbnail || l.pictures?.[0]?.url,
+          permalink: l.permalink || ("https://www.mercadolivre.com.br/"+l.id),
+          price: l.salePrice || l.price,
+          listing_type_id: l.listing_type_id,
+        };
+      });
+      setAnunciosCamp(function(p){ return Object.assign({},p,{[campId]:adsExibir}); });
+    }
   }
 
   function fmtR(n){ return "R$ "+(parseFloat(n||0)).toFixed(2).replace(".",","); }
@@ -14873,10 +14811,9 @@ export default function App() {
                 currentUser?.permissoes?.includes("produtos")   && { key:"produtos",   label:"Produtos",    badge:null },
                 currentUser?.permissoes?.includes("produtos")   && { key:"nf",         label:"NF Entrada",  badge:null },
                 currentUser?.permissoes?.includes("orders")     && { key:"nfe_saida",  label:"NF Saída",    badge:null },
-                currentUser?.permissoes?.includes("orders")     && { key:"full",        label:"⚡ Envios FULL", badge:null },
+
                 currentUser?.permissoes?.includes("listings")   && { key:"precificacao",  label:"💲 Precificação", badge:null },
                 currentUser?.permissoes?.includes("listings")   && { key:"publicidade",   label:"📣 Publicidade",  badge:null },
-                currentUser?.permissoes?.includes("listings")   && { key:"concorrencia",  label:"⚔️ Concorrência",badge:null },
                                                                    { key:"ia_chat",       label:"✦ Assistente IA", badge:null },
               ].filter(Boolean);
               return navTabs.map(function(t) {
@@ -15645,7 +15582,7 @@ export default function App() {
         )}
 
         {tab === "publicidade" && currentUser?.permissoes?.includes("listings") && (
-          <PublicidadeTab token={token} sellerId={user?.id} />
+          <PublicidadeTab token={token} sellerId={user?.id} enriched={enriched} />
         )}
 
         {tab === "concorrencia" && currentUser?.permissoes?.includes("listings") && (

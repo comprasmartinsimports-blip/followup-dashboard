@@ -14298,9 +14298,14 @@ export default function App() {
     if (filterListingExtra === "com_promo")  results = results.filter(l => l.hasPromo);
     if (filterListingExtra === "sem_promo")  results = results.filter(l => !l.hasPromo);
     if (filterListingExtra === "sem_atacado") {
-      // Anúncios sem preço de atacado (wholesale_price) preenchido
+      // Anúncios sem preço de atacado preenchido
+      // ML armazena em wholesale_prices[] ou como tag "wholesale"
       results = results.filter(function(l) {
-        return !l.wholesale_prices || !l.wholesale_prices.length || l.wholesale_prices.every(function(w){ return !w.price || w.price <= 0; });
+        var hasWholesale =
+          (l.wholesale_prices && l.wholesale_prices.length > 0 && l.wholesale_prices.some(function(w){ return w.price > 0; })) ||
+          (l.sale_conditions && l.sale_conditions.available_conditions && l.sale_conditions.available_conditions.includes("1")) ||
+          (l.tags && l.tags.some(function(t){ return String(t).toLowerCase().includes("wholesale"); }));
+        return !hasWholesale;
       });
     }
     if (filterListingExtra === "frete_alto") {
@@ -14669,24 +14674,13 @@ export default function App() {
             setNotificacoes={setNotificacoes}
             darkMode={darkMode}
           />
-          <button onClick={() => setShowBackup(true)}
-            title="Backup e Restauração"
-            style={{ background: darkMode?"#1e293b":"#f1f5f9", border:`1px solid ${darkMode?"#334155":"#e2e8f0"}`, color: darkMode?"#94a3b8":"#64748b", width:36, height:36, borderRadius:8, cursor:"pointer", fontSize:16 }}>
-            💾
-          </button>
-          <button onClick={() => { const n = !darkMode; setDarkMode(n); localStorage.setItem("darkMode", n?"1":"0"); }}
-            style={{ background: darkMode?"#334155":"#f1f5f9", border:"none", color: darkMode?"#fff":"#475569", width:36, height:36, borderRadius:8, cursor:"pointer", fontSize:18 }}>
-            {darkMode ? "☀️" : "🌙"}
-          </button>
-          <div onClick={function(){ if(currentUser?.admin){ setShowConfigPanel(true); setConfigPanelTab("usuarios"); } }}
-            style={{ display:"flex", alignItems:"center", gap:8, background: darkMode?"#1e293b":"#f8fafc", border:`1px solid ${darkMode?"#334155":"#e2e8f0"}`, borderRadius:8, padding:"5px 10px", cursor:currentUser?.admin?"pointer":"default" }}
-            title={currentUser?.admin?"Gerenciar usuários":""}>
+          <div style={{ display:"flex", alignItems:"center", gap:6, background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:8, padding:"5px 10px" }}>
             <div style={{ width:26, height:26, borderRadius:8, background:"#0f172a", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:800, color:"#ffe000" }}>
               {currentUser?.nome?.charAt(0).toUpperCase()}
             </div>
             <div style={{ fontSize:12, lineHeight:1.3 }}>
-              <div style={{ fontWeight:600, color: darkMode?"#e2e8f0":"#0f172a" }}>{currentUser?.nome}</div>
-              <div style={{ color:"#94a3b8", fontSize:10 }}>{currentUser?.admin?"Admin ▾":"Usuário"}</div>
+              <div style={{ fontWeight:600, color:"#0f172a" }}>{currentUser?.nome}</div>
+              <div style={{ color:"#94a3b8", fontSize:10 }}>{currentUser?.admin?"Admin":"Usuário"}</div>
             </div>
           </div>
           <button onClick={function(){ setShowConfigPanel(true); setConfigPanelTab("config"); }}

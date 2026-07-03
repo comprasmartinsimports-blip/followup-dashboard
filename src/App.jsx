@@ -12488,36 +12488,58 @@ function PublicidadeTab({ token, sellerId }) {
   async function toggleCampanha(campId) {
     var novoEstado = !expandedCamp[campId];
     setExpandedCamp(function(p){ return Object.assign({},p,{[campId]:novoEstado}); });
-    if (!novoEstado || anunciosCamp[campId]) return; // já carregou ou fechando
+    if (!novoEstado || anunciosCamp[campId]) return;
     if (!advertiserId) return;
     setLoadingAnuncios(function(p){ return Object.assign({},p,{[campId]:true}); });
     try {
       var headers = { Authorization: "Bearer "+token, "Content-Type": "application/json", "Api-Version": "2" };
-      // Buscar anúncios da campanha
-      var r = await fetch("/api/ml/advertising/advertisers/"+advertiserId+"/product_ads/ads?campaign_id="+campId+"&limit=50&offset=0", { headers: headers });
-      var txt = await r.text();
-      console.log("[PUBLICIDADE] ads camp "+campId+" status "+r.status+":", txt.slice(0,400));
-      if (r.status === 200) {
-        var data = JSON.parse(txt);
-        var ads = Array.isArray(data) ? data : (data.results || data.ads || data.data || []);
-        // Buscar métricas dos anúncios também
-        try {
-          var datas = (function(p){
-            var hoje=new Date(), fmt=function(d){return d.toISOString().slice(0,10);}, sub=function(n){var d=new Date(hoje);d.setDate(d.getDate()-n);return d;};
-            if(p==="LAST_7_DAYS") return {from:fmt(sub(7)),to:fmt(hoje)};
-            if(p==="LAST_30_DAYS") return {from:fmt(sub(30)),to:fmt(hoje)};
-            if(p==="THIS_MONTH"){var d=new Date(hoje.getFullYear(),hoje.getMonth(),1);return{from:fmt(d),to:fmt(hoje)};}
-            return {from:fmt(sub(7)),to:fmt(hoje)};
-          })(periodo);
-          var mr = await fetch("/api/ml/advertising/advertisers/"+advertiserId+"/product_ads/ads?campaign_id="+campId+"&limit=50&date_from="+datas.from+"&date_to="+datas.to+"&metrics=clicks,prints,cost,direct_amount,direct_items_quantity,acos", { headers: headers });
-          if (mr.status === 200) {
-            var mdata = JSON.parse(await mr.text());
-            var adsComMetricas = Array.isArray(mdata) ? mdata : (mdata.results || mdata.ads || []);
-            if (adsComMetricas.length > 0) ads = adsComMetricas;
+      var hoje2=new Date(), fmt2=function(d){return d.toISOString().slice(0,10);}, sub2=function(n){var d=new Date(hoje2);d.setDate(d.getDate()-n);return d;};
+      var datas2 = periodo==="LAST_7_DAYS"?{from:fmt2(sub2(7)),to:fmt2(hoje2)}:periodo==="LAST_30_DAYS"?{from:fmt2(sub2(30)),to:fmt2(hoje2)}:{from:fmt2(sub2(7)),to:fmt2(hoje2)};
+
+      // Tenta diferentes endpoints/formatos da API de anúncios
+      var tentativas = [
+        "/api/ml/advertising/advertisers/"+advertiserId+"/product_ads/ads?campaign_id="+campId+"&limit=50&offset=0&date_from="+datas2.from+"&date_to="+datas2.to+"&metrics=clicks,prints,cost,direct_amount,direct_items_quantity,acos",
+        "/api/ml/advertising/advertisers/"+advertiserId+"/product_ads/ads?campaign_id="+campId+"&limit=50&offset=0",
+      ];
+      var ads = [];
+      for (var ti=0; ti<tentativas.length; ti++) {
+        var r = await fetch(tentativas[ti], { headers: headers });
+        var txt = await r.text();
+        console.log("[PUBLICIDADE] ads camp "+campId+" tentativa "+ti+" status "+r.status+":", txt.slice(0,600));
+        if (r.status === 200) {
+          var data = JSON.parse(txt);
+          // A resposta pode ter vários formatos:
+          var candidatos = Array.isArray(data) ? data
+            : (data.results || data.ads || data.data || data.items || []);
+          // Às vezes vem paginado com "paging" e os itens em outro campo
+          if (candidatos.length === 0 && data.paging) {
+            // Tenta pegar o primeiro campo que seja array
+            var keys = Object.keys(data).filter(function(k){ return Array.isArray(data[k]); });
+            if (keys.length > 0) candidatos = data[keys[0]];
           }
-        } catch {}
-        setAnunciosCamp(function(p){ return Object.assign({},p,{[campId]:ads}); });
+          console.log("[PUBLICIDADE] ads encontrados:", candidatos.length, "estrutura[0]:", JSON.stringify(candidatos[0]||{}).slice(0,300));
+          if (candidatos.length > 0) { ads = candidatos; break; }
+        }
       }
+      // Enriquecer com informações do item (título, thumbnail) se não vieram
+      if (ads.length > 0 && !ads[0].item && ads[0].item_id) {
+        var itemIds = ads.map(function(a){ return a.item_id; }).filter(Boolean).slice(0,20);
+        try {
+          var ir = await fetch("/api/ml/items?ids="+itemIds.join(","), { headers: headers });
+          if (ir.ok) {
+            var idata = await ir.json();
+            var itemMap = {};
+            (Array.isArray(idata)?idata:idata.body||[]).forEach(function(entry){
+              var item = entry.body || entry;
+              if (item.id) itemMap[item.id] = item;
+            });
+            ads = ads.map(function(a){
+              return itemMap[a.item_id] ? Object.assign({}, a, { item: itemMap[a.item_id] }) : a;
+            });
+          }
+        } catch(e2) { console.warn("[PUBLICIDADE] erro ao buscar itens:", e2.message); }
+      }
+      setAnunciosCamp(function(p){ return Object.assign({},p,{[campId]:ads}); });
     } catch(e) { console.warn("[PUBLICIDADE] erro ao buscar anúncios:", e.message); }
     setLoadingAnuncios(function(p){ return Object.assign({},p,{[campId]:false}); });
   }
@@ -12860,110 +12882,83 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
 
       // Tenta extrair um item_id comparável usando várias possibilidades de campo,
       // pois o formato de /products/search pode variar (catálogo vs item direto)
-      console.log("[CONCORRENCIA] estrutura resultado[0]:", JSON.stringify(rawResults[0]||{}).slice(0,600));
+      console.log("[CONCORRENCIA] total resultados:", rawResults.length, "estrutura[0]:", JSON.stringify(rawResults[0]||{}).slice(0,500));
 
-      // Detectar formato da resposta:
-      // Formato A (/sites/MLB/search): itens diretos com price, seller{}, shipping{}
-      // Formato B (/products/search): catálogo com buy_box_winner_item_id
-      var isFormatoA = rawResults.length > 0 && rawResults[0].price !== undefined;
+      // Detectar formato: /sites/MLB/search retorna itens com price direto
+      // /products/search retorna catálogo com IDs de itens
+      var isItemDireto = rawResults.length > 0 && typeof rawResults[0].price === "number";
 
-      var candidatos;
-      if (isFormatoA) {
-        // Formato direto — cada resultado JÁ é um anúncio com preço e vendedor
-        candidatos = rawResults.map(function(r){
+      var results;
+      if (isItemDireto) {
+        // Já temos tudo — monta direto
+        results = rawResults.map(function(r){
           return {
-            id: r.id,
-            title: r.title,
-            price: r.price,
-            original_price: r.original_price,
-            thumbnail: r.thumbnail,
-            permalink: r.permalink,
-            seller_id: r.seller?.id,
-            seller_nickname: r.seller?.nickname || "—",
-            sold_quantity: r.sold_quantity || 0,
-            free_shipping: r.shipping?.free_shipping || false,
-            listing_type_id: r.listing_type_id,
-            condition: r.condition,
+            id: r.id, title: r.title, price: r.price,
+            original_price: r.original_price, thumbnail: r.thumbnail,
+            permalink: r.permalink, seller_id: r.seller?.id,
+            seller_nickname: r.seller?.nickname||"—",
+            sold_quantity: r.sold_quantity||0,
+            free_shipping: r.shipping?.free_shipping||false,
+            listing_type_id: r.listing_type_id, condition: r.condition,
           };
         }).filter(function(r){ return r.id !== listing.id && r.price > 0; });
       } else {
-        // Formato catálogo — precisa extrair item_id e buscar detalhes
-        candidatos = rawResults.map(function(r){
-          var itemId = r.buy_box_winner_item_id || r.buy_box_winner?.item_id || r.item_id || r.id || null;
-          return { itemId: itemId, title: r.name||r.title, thumbnail: r.pictures?.[0]?.url||r.thumbnail };
-        }).filter(function(r){ return r.itemId && r.itemId !== listing.id; });
-      }
+        // Catálogo: extrair item_ids e buscar via /items?ids=... (batch)
+        var itemIds = rawResults.map(function(r){
+          return r.buy_box_winner_item_id || r.buy_box_winner?.item_id || r.item_id || null;
+        }).filter(function(id){ return id && id !== listing.id; }).slice(0,20);
 
-      if (candidatos.length === 0) {
-        throw new Error("Nenhum anúncio comparável encontrado ("+rawResults.length+" resultados brutos, mas sem preço ou item_id válido).");
-      }
-
-      // Para formato catálogo, busca detalhes individuais dos itens
-      var results;
-      if (isFormatoA) {
-        results = candidatos;
-      } else {
-        var detalhesPromises = candidatos.slice(0,15).map(async function(cand){
-          try {
-            var ir = await fetch("/api/ml/items/"+cand.itemId, { headers: token ? { Authorization: "Bearer "+token } : {} });
-            if (!ir.ok) return null;
-            var item = await ir.json();
-            if (item.error) return null;
-            return {
-              id: item.id, title: item.title||cand.title, price: item.price,
-              original_price: item.original_price,
-              thumbnail: item.thumbnail||cand.thumbnail, permalink: item.permalink,
-              seller_id: item.seller_id, seller_nickname: "—",
-              sold_quantity: item.sold_quantity||0,
-              free_shipping: item.shipping?.free_shipping||false,
-              listing_type_id: item.listing_type_id, condition: item.condition,
-            };
-          } catch { return null; }
+        var titleMap = {}, thumbMap = {};
+        rawResults.forEach(function(r){
+          var id = r.buy_box_winner_item_id || r.buy_box_winner?.item_id || r.item_id;
+          if(id){ titleMap[id]=r.name||r.title; thumbMap[id]=r.pictures?.[0]?.url||r.thumbnail; }
         });
-        results = (await Promise.all(detalhesPromises)).filter(function(r){ return r && r.price > 0; });
-      }
 
-      if (results.length === 0) {
-        throw new Error("Encontramos "+candidatos.length+" produtos similares, mas não foi possível obter preços. Use o botão de busca manual.");
-      }
+        console.log("[CONCORRENCIA] item_ids para batch:", itemIds.slice(0,5));
 
-      // Buscar detalhes reais de cada item (preço, vendedor, frete) via /items/{id}
-      // Limita a 15 para não sobrecarregar
-      var detalhesPromises = candidatos.slice(0,15).map(async function(cand){
+        if (itemIds.length === 0) {
+          throw new Error("Encontramos "+rawResults.length+" produtos no catálogo, mas nenhum tinha item_id válido.");
+        }
+
+        // Busca em batch (até 20 itens de uma vez)
+        var batchResults = [];
         try {
-          var ir = await fetch("/api/ml/items/"+cand.itemId, { headers: token ? { Authorization: "Bearer "+token } : {} });
-          if (!ir.ok) return null;
-          var item = await ir.json();
-          if (item.error) return null;
-          return {
-            id: item.id,
-            title: item.title || cand.title,
-            price: item.price ?? cand.precoDireto,
-            original_price: item.original_price,
-            thumbnail: item.thumbnail || cand.thumbnail,
-            permalink: item.permalink || cand.permalink,
-            seller_id: item.seller_id,
-            seller_nickname: "—", // /items não retorna nickname do vendedor
-            sold_quantity: item.sold_quantity || 0,
-            free_shipping: item.shipping?.free_shipping || false,
-            listing_type_id: item.listing_type_id,
-            condition: item.condition,
-          };
-        } catch(e5) { return null; }
-      });
+          var batchUrl = "/api/ml/items?ids="+itemIds.join(",");
+          var br = await fetch(batchUrl, { headers: { Authorization: "Bearer "+token } });
+          var btxt = await br.text();
+          console.log("[CONCORRENCIA] batch /items status "+br.status+":", btxt.slice(0,400));
+          if (br.ok) {
+            var bdata = JSON.parse(btxt);
+            var barray = Array.isArray(bdata) ? bdata : [];
+            barray.forEach(function(entry){
+              var item = entry.body || entry;
+              if (!item || item.error || !item.price) return;
+              batchResults.push({
+                id: item.id, title: item.title||titleMap[item.id],
+                price: item.price, original_price: item.original_price,
+                thumbnail: item.thumbnail||thumbMap[item.id],
+                permalink: item.permalink, seller_id: item.seller_id,
+                seller_nickname: "—",
+                sold_quantity: item.sold_quantity||0,
+                free_shipping: item.shipping?.free_shipping||false,
+                listing_type_id: item.listing_type_id, condition: item.condition,
+              });
+            });
+          }
+        } catch(e2) { console.warn("[CONCORRENCIA] erro batch:", e2.message); }
 
-      var detalhes = (await Promise.all(detalhesPromises)).filter(Boolean);
-      console.log("[CONCORRENCIA] detalhes resolvidos:", detalhes.length, "de", candidatos.length);
+        results = batchResults;
 
-      var results = detalhes.filter(function(r){
-        return r.id && r.id !== listing.id && r.price != null && r.price > 0;
-      });
-
-      if (results.length === 0) {
-        throw new Error("Encontramos "+candidatos.length+" produtos similares no catálogo, mas não foi possível obter preço/vendedor de nenhum (a busca individual de itens falhou). Use o botão de busca manual abaixo.");
+        if (results.length === 0) {
+          throw new Error("Encontramos "+itemIds.length+" produtos similares no catálogo, mas não foi possível buscar os preços (batch /items falhou). Use a busca manual no ML.");
+        }
       }
 
-      var concorrenciaReal = results.filter(function(r){ return String(r.seller_id) !== String(sellerId); });
+      if (results.length === 0) {
+        throw new Error("Nenhum produto similar com preço válido encontrado.");
+      }
+
+            var concorrenciaReal = results.filter(function(r){ return String(r.seller_id) !== String(sellerId); });
 
       // Ordenar concorrência por preço
       concorrenciaReal.sort(function(a,b){ return a.price - b.price; });

@@ -1155,9 +1155,7 @@ function LoginScreen({ onLogin }) {
           </div>
         </div>
 
-        <div style={{ textAlign:"center", marginTop:20, fontSize:11, color:"#334155" }}>
-          Primeiro acesso: usuário <strong style={{ color:"#64748b" }}>admin</strong> / senha <strong style={{ color:"#64748b" }}>admin123</strong>
-        </div>
+
       </div>
     </div>
   );
@@ -3487,71 +3485,10 @@ function NotasFiscaisTab({ notasFiscais, setNotasFiscais, fornecedores, produtos
     console.log("[NF] saveNF chamado. isNew:", isNew, "atualizarEstoque:", form.atualizarEstoque, "itens:", form.itens?.length, "itens vinculados:", form.itens?.filter(function(it){return it.produtoCadastradoId;}).length);
 
     if (isNew) {
-      // Atualizar estoque dos produtos vinculados + registrar movimentação de ENTRADA
-      if (form.atualizarEstoque) {
-        var hoje = new Date().toLocaleDateString("sv-SE");
-        var horaAgora = new Date().toLocaleTimeString("pt-BR", {hour:"2-digit", minute:"2-digit"});
-        var movsNovas = [];
-
-        const novoProdutos = produtos.map(p => {
-          const item = form.itens.find(it => it.produtoCadastradoId === p.id);
-          if (!item) return p;
-          const qtdEntrada = parseFloat(item.qCom || 0);
-          const novoEstoque = parseFloat(p.estoqueAtual || 0) + qtdEntrada;
-
-          // Registrar movimentação de entrada vinculada à NF
-          movsNovas.push({
-            id: "nf_" + form.id + "_" + p.id,
-            produtoId: p.id,
-            mlbId: p.mlbVinculado || (p.mlbsVinculados||[])[0] || null,
-            sku: p.sku || item.cProd || "",
-            tipo: "entrada",
-            qtd: qtdEntrada,
-            preco: parseFloat(item.vUnCom || 0) || null,
-            motivo: "NF " + form.numero + "/" + form.serie + " — " + (form.fornecedorNome || "Fornecedor"),
-            nfId: form.id,
-            data: form.dataEmissao || hoje,
-            hora: horaAgora,
-            automatico: true,
-          });
-
-          return { ...p, estoqueAtual: String(novoEstoque) };
-        });
-
-        setProdutos(novoProdutos);
-        try { localStorage.setItem("produtos_cadastro", JSON.stringify(novoProdutos)); } catch {}
-
-        // Salvar as movimentações no histórico de estoque (mov_estoque)
-        if (movsNovas.length > 0) {
-          try {
-            var movAtual = JSON.parse(localStorage.getItem("mov_estoque") || "[]");
-            var movFinal = [...movAtual, ...movsNovas];
-            localStorage.setItem("mov_estoque", JSON.stringify(movFinal));
-          } catch (e) { console.warn("[NF] Erro ao salvar movimentação de estoque:", e); }
-        }
-      }
-
-      // Gerar contas a pagar para cada duplicata
-      if (form.gerarContaPagar && form.duplicatas.length > 0) {
-        const cfg = form.contaPagarConfig;
-        const novasContas = form.duplicatas.map((d, i) => ({
-          id: Date.now() + i,
-          descricao: `NF ${form.numero}/${form.serie} — ${form.fornecedorNome} — Dup. ${d.nDup || String(i+1).padStart(3,"0")}`,
-          categoria: cfg.categoria || "Fornecedor",
-          valor: String(d.vDup),
-          vencimento: d.dVenc,
-          status: "Pendente",
-          observacao: `Nota Fiscal ${form.numero} — Chave: ${form.chave?.slice(0,20)}...`,
-          multaPct: cfg.multaPct, multaTipo: cfg.multaTipo,
-          jurosDia: cfg.jurosDia, jurosTipo: cfg.jurosTipo,
-          temProtesto: cfg.temProtesto, diasProtesto: cfg.diasProtesto, cartorio: cfg.cartorio,
-          nfId: form.id,
-        }));
-        const updatedContas = [...contasPagar, ...novasContas];
-        setContasPagar(updatedContas);
-        try { localStorage.setItem("contas_pagar", JSON.stringify(updatedContas)); } catch {}
-      }
+      // Auto-lançamento de contas e estoque desativado.
+      // Use os 3 pontinhos da NF para lançar manualmente.
     }
+
     setEditingNF(null);
   }
 
@@ -6087,15 +6024,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
       {/* ── LISTA DE PRODUTOS ── */}
       {prodTab === "lista" && (
         <div>
-          {estoqueBaixo.length > 0 && (
-            <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"12px 16px", marginBottom:8, display:"flex", alignItems:"center", gap:10 }}>
-              <span style={{ fontSize:18 }}>⚠️</span>
-              <div>
-                <div style={{ fontWeight:700, color:"#dc2626", fontSize:13 }}>Estoque crítico em {estoqueBaixo.length} produto(s)</div>
-                <div style={{ fontSize:12, color:"#b91c1c" }}>{estoqueBaixo.map(p => p.titulo?.slice(0,30)).join(", ")}</div>
-              </div>
-            </div>
-          )}
+
 
           <LayoutFiltros
             filtros={
@@ -11979,6 +11908,71 @@ function IAChatTab({ enriched, rawOrders, produtos, contasPagar, token }) {
 // ════════════════════════════════════════════════════════════
 //  ABA PRECIFICAÇÃO — Calculadora vinculada aos anúncios
 // ════════════════════════════════════════════════════════════
+
+function NovoProdutoPrecForm({ onSave, onClose }) {
+  const [f, setF] = useState({ nome:"", sku:"", custo:"", precoVenda:"", frete:"", taxaMl:"12", desconto:"0" });
+  var set = function(k,v){ setF(function(p){ return Object.assign({},p,{[k]:v}); }); };
+  var custo=parseFloat(f.custo||0), bruto=parseFloat(f.precoVenda||0);
+  var taxa=bruto*(parseFloat(f.taxaMl||12)/100);
+  var frete=parseFloat(f.frete||0);
+  var lucro=bruto-custo-frete-taxa;
+  var margem=bruto>0?(lucro/bruto)*100:0;
+  var mCor=margem>=20?"#15803d":margem>=0?"#d97706":"#dc2626";
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+        <div>
+          <div style={{ fontSize:10, color:"#94a3b8", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Nome do Produto *</div>
+          <input value={f.nome} onChange={function(e){set("nome",e.target.value);}} placeholder="Ex: Lanterna Traseira Uno"
+            style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
+        </div>
+        <div>
+          <div style={{ fontSize:10, color:"#94a3b8", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>SKU *</div>
+          <input value={f.sku} onChange={function(e){set("sku",e.target.value);}} placeholder="Ex: 1234"
+            style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none", fontFamily:"monospace" }} />
+        </div>
+        <div>
+          <div style={{ fontSize:10, color:"#94a3b8", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Custo (R$)</div>
+          <input type="number" step="0.01" value={f.custo} onChange={function(e){set("custo",e.target.value);}} placeholder="0,00"
+            style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
+        </div>
+        <div>
+          <div style={{ fontSize:10, color:"#94a3b8", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Preço de Venda (R$)</div>
+          <input type="number" step="0.01" value={f.precoVenda} onChange={function(e){set("precoVenda",e.target.value);}} placeholder="0,00"
+            style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
+        </div>
+        <div>
+          <div style={{ fontSize:10, color:"#94a3b8", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Frete (R$)</div>
+          <input type="number" step="0.01" value={f.frete} onChange={function(e){set("frete",e.target.value);}} placeholder="0,00"
+            style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
+        </div>
+        <div>
+          <div style={{ fontSize:10, color:"#94a3b8", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Taxa ML (%)</div>
+          <select value={f.taxaMl} onChange={function(e){set("taxaMl",e.target.value);}}
+            style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 10px", borderRadius:8, fontSize:12 }}>
+            <option value="12">12% — Clássico</option>
+            <option value="17">17% — Premium</option>
+          </select>
+        </div>
+      </div>
+      {bruto > 0 && custo > 0 && (
+        <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:8, padding:"10px 14px", display:"flex", gap:16 }}>
+          <div><div style={{ fontSize:10, color:"#94a3b8" }}>Lucro</div><div style={{ fontWeight:700, color:lucro>=0?"#0891b2":"#dc2626" }}>R$ {lucro.toFixed(2).replace(".",",")}</div></div>
+          <div><div style={{ fontSize:10, color:"#94a3b8" }}>Margem</div><div style={{ fontWeight:700, color:mCor }}>{margem.toFixed(1)}%</div></div>
+          <div><div style={{ fontSize:10, color:"#94a3b8" }}>Taxa ML</div><div style={{ fontWeight:700, color:"#dc2626" }}>R$ {taxa.toFixed(2).replace(".",",")}</div></div>
+        </div>
+      )}
+      <div style={{ display:"flex", gap:8, marginTop:4 }}>
+        <button onClick={onClose} style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"9px", borderRadius:9, cursor:"pointer" }}>Cancelar</button>
+        <button onClick={function(){ if(f.nome&&f.sku) onSave(f); }} disabled={!f.nome||!f.sku}
+          style={{ flex:2, background:f.nome&&f.sku?"#7c3aed":"#f1f5f9", border:"none", color:f.nome&&f.sku?"#fff":"#94a3b8", fontWeight:700, padding:"9px", borderRadius:9, cursor:f.nome&&f.sku?"pointer":"not-allowed" }}>
+          Salvar e Acompanhar
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFretesAndSave, rawOrders }) {
   const [busca, setBusca] = useState("");
   const [margemAlvo, setMargemAlvo] = useState(20);
@@ -11996,6 +11990,27 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
   }
   // Preços de venda sugeridos (digitados pelo usuário)
   const [editingPrecoId, setEditingPrecoId] = useState(null);
+  const [showNovoProdutoPrec, setShowNovoProdutoPrec] = useState(false);
+  const [produtosExtras, setProdutosExtras] = useState(function(){
+    try { return JSON.parse(localStorage.getItem("precificacao_extras")||"[]"); } catch { return []; }
+  });
+  function saveProdutosExtras(next) {
+    setProdutosExtras(next);
+    try { localStorage.setItem("precificacao_extras", JSON.stringify(next)); } catch {}
+    // Quando um produto extra tiver SKU que agora existe em enriched, vincula automaticamente
+  }
+  // Auto-vincular produtos extras a anúncios quando o SKU for encontrado nos enriched listings
+  useEffect(function(){
+    if (!enriched || !produtosExtras.length) return;
+    var atualizados = false;
+    var novaLista = produtosExtras.map(function(p){
+      if (p.vinculado) return p; // já vinculado
+      var match = enriched.find(function(l){ return l.seller_sku && l.seller_sku.trim() === p.sku.trim(); });
+      if (match) { atualizados = true; return Object.assign({}, p, { vinculado: true, mlbVinculado: match.id, titulo: match.title }); }
+      return p;
+    });
+    if (atualizados) saveProdutosExtras(novaLista);
+  }, [enriched]);
   const [precosVendaConfig, setPrecosVendaConfig] = useState(function(){
     try { return JSON.parse(localStorage.getItem("precos_venda_config")||"{}"); } catch { return {}; }
   });
@@ -12126,8 +12141,12 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
         </div>
       )}
 
-      {/* Busca */}
-      <div style={{ display:"flex", gap:7, margin:"14px 0" }}>
+      {/* Botão novo produto + Busca */}
+      <div style={{ display:"flex", gap:7, margin:"14px 0", alignItems:"center" }}>
+        <button onClick={function(){ setShowNovoProdutoPrec(true); }}
+          style={{ background:"#7c3aed", border:"none", color:"#fff", fontWeight:700, padding:"9px 14px", borderRadius:9, cursor:"pointer", fontSize:12, whiteSpace:"nowrap", flexShrink:0 }}>
+          + Precificar Novo Produto
+        </button>
         <div style={{ position:"relative", flex:1 }}>
           <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:14 }}>🔍</span>
           <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar por título, MLB ou SKU..."
@@ -12140,6 +12159,55 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
           {listsFiltrados.length} anúncio(s)
         </div>
       </div>
+
+      {/* Modal novo produto para precificação */}
+      {showNovoProdutoPrec && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.5)", zIndex:600, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div style={{ background:"#fff", borderRadius:14, width:480, padding:20 }}>
+            <div style={{ fontWeight:700, fontSize:15, marginBottom:14 }}>+ Precificar Novo Produto</div>
+            <NovoProdutoPrecForm
+              onSave={function(p){
+                saveProdutosExtras([...produtosExtras, Object.assign({id:"extra_"+Date.now()}, p)]);
+                setShowNovoProdutoPrec(false);
+              }}
+              onClose={function(){ setShowNovoProdutoPrec(false); }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Produtos extras (ainda não anunciados) */}
+      {produtosExtras.filter(function(p){return !p.vinculado;}).length > 0 && (
+        <div style={{ marginBottom:10 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:"#7c3aed", textTransform:"uppercase", marginBottom:6 }}>📦 Produtos aguardando anúncio no ML</div>
+          {produtosExtras.filter(function(p){return !p.vinculado;}).map(function(p){
+            var custo = parseFloat(p.custo||0);
+            var bruto = parseFloat(p.precoVenda||0);
+            var taxa = bruto * (parseFloat(p.taxaMl||12)/100);
+            var frete = parseFloat(p.frete||0);
+            var lucro = bruto - custo - frete - taxa;
+            var margem = bruto>0?(lucro/bruto)*100:0;
+            var mCor = margem>=margemAlvo?"#15803d":margem>=0?"#d97706":"#dc2626";
+            return (
+              <div key={p.id} style={{ display:"flex", gap:10, alignItems:"center", background:"#faf5ff", border:"1px solid #ddd6fe", borderRadius:10, padding:"10px 14px", marginBottom:6 }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:"#0f172a" }}>{p.nome}</div>
+                  <div style={{ fontSize:11, color:"#7c3aed" }}>SKU: {p.sku} · Aguardando anúncio no ML</div>
+                </div>
+                <div style={{ fontSize:12, color:"#64748b" }}>Custo: R$ {custo.toFixed(2).replace(".",",")}</div>
+                <div style={{ fontSize:12, fontWeight:700, color:"#0f172a" }}>Venda: R$ {bruto.toFixed(2).replace(".",",")}</div>
+                <span style={{ fontSize:12, fontWeight:700, color:mCor, background:mCor+"18", padding:"2px 8px", borderRadius:6 }}>
+                  {margem.toFixed(1)}%
+                </span>
+                <button onClick={function(){
+                  if(!window.confirm("Remover este produto?")) return;
+                  saveProdutosExtras(produtosExtras.filter(function(x){return x.id!==p.id;}));
+                }} style={{ background:"#fef2f2", border:"none", color:"#dc2626", width:24, height:24, borderRadius:6, cursor:"pointer", fontSize:11 }}>✕</button>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Tabela */}
       <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
@@ -12808,441 +12876,6 @@ function PublicidadeTab({ token, sellerId, enriched }) {
 }
 
 
-// ════════════════════════════════════════════════════════════
-//  ABA CONCORRÊNCIA — Comparativo com anúncios similares no ML
-// ════════════════════════════════════════════════════════════
-function ConcorrenciaTab({ enriched, token, sellerId }) {
-  const [selectedListing, setSelectedListing] = useState(null);
-  const [busca, setBusca] = useState("");
-  const [concorrentes, setConcorrentes] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [erro, setErro] = useState(null);
-  const [historico, setHistorico] = useState(function(){
-    try { return JSON.parse(localStorage.getItem("concorrencia_historico")||"{}"); } catch { return {}; }
-  });
-
-  var listsFiltrados = (enriched||[]).filter(function(l) {
-    if (!busca.trim()) return true;
-    var q = busca.trim().toLowerCase();
-    return (l.title||"").toLowerCase().includes(q) || (l.id||"").includes(q) || (l.seller_sku||"").toLowerCase().includes(q);
-  });
-
-  async function buscarConcorrentes(listing) {
-    setSelectedListing(listing);
-    setLoading(true); setErro(null); setConcorrentes([]);
-    try {
-      var query = (listing.title||"").trim();
-
-      // Tenta múltiplos endpoints de busca do ML (a API pública de search
-      // foi restringida pelo ML para apps de terceiros — tentamos alternativas)
-      // Limpar query: tirar anos e manter termos principais
-      var palavras = query.replace(/\d{4}/g,"").replace(/\s+/g," ").trim().split(" ").filter(Boolean);
-      var queryCurta = palavras.slice(0,5).join(" ");
-      var queryMedia = palavras.slice(0,8).join(" ");
-
-      var tentativasBusca = [
-        // /sites/MLB/search com token funciona (busca autenticada)
-        "/api/ml/sites/MLB/search?q="+encodeURIComponent(queryCurta)+"&limit=30&sort=relevance",
-        "/api/ml/sites/MLB/search?q="+encodeURIComponent(queryMedia)+"&limit=30",
-        // Fallback: busca de catálogo
-        "/api/ml/products/search?q="+encodeURIComponent(queryCurta)+"&site_id=MLB&limit=30",
-      ];
-      var data = null, ultimoStatus = null, ultimoErro = null;
-      for (var bi = 0; bi < tentativasBusca.length; bi++) {
-        try {
-          var bres = await fetch(tentativasBusca[bi], { headers: token ? { Authorization: "Bearer "+token } : {} });
-          var btxt = await bres.text();
-          console.log("[CONCORRENCIA] tentativa "+bi+" ("+tentativasBusca[bi]+") status "+bres.status+":", btxt.slice(0,800));
-          ultimoStatus = bres.status;
-          if (bres.status === 200) {
-            var bdata = JSON.parse(btxt);
-            if (!bdata.error) { data = bdata; break; }
-            ultimoErro = bdata.message||bdata.error;
-          } else {
-            ultimoErro = "status "+bres.status;
-          }
-        } catch(e4) { ultimoErro = e4.message; }
-      }
-
-      if (!data) {
-        throw new Error(
-          "A API de busca do Mercado Livre recusou a consulta (" + (ultimoErro||ultimoStatus) + "). " +
-          "O ML restringiu esse endpoint para a maioria dos apps de terceiros. " +
-          "Use o botão \"Buscar no ML ↗\" abaixo para comparar manualmente."
-        );
-      }
-
-      var rawResults = data.results || [];
-
-      // Diagnóstico: mostra a estrutura COMPLETA do primeiro resultado para
-      // entendermos exatamente quais campos a API está retornando
-      if (rawResults.length > 0) {
-        console.log("[CONCORRENCIA] estrutura completa do 1º resultado:", JSON.stringify(rawResults[0], null, 2));
-      }
-
-      // Tenta extrair um item_id comparável usando várias possibilidades de campo,
-      // pois o formato de /products/search pode variar (catálogo vs item direto)
-      console.log("[CONCORRENCIA] total resultados:", rawResults.length, "estrutura[0]:", JSON.stringify(rawResults[0]||{}).slice(0,500));
-
-      // Detectar formato: /sites/MLB/search retorna itens com price direto
-      // /products/search retorna catálogo com IDs de itens
-      var isItemDireto = rawResults.length > 0 && typeof rawResults[0].price === "number";
-
-      var results;
-      if (isItemDireto) {
-        // Já temos tudo — monta direto
-        results = rawResults.map(function(r){
-          return {
-            id: r.id, title: r.title, price: r.price,
-            original_price: r.original_price, thumbnail: r.thumbnail,
-            permalink: r.permalink, seller_id: r.seller?.id,
-            seller_nickname: r.seller?.nickname||"—",
-            sold_quantity: r.sold_quantity||0,
-            free_shipping: r.shipping?.free_shipping||false,
-            listing_type_id: r.listing_type_id, condition: r.condition,
-          };
-        }).filter(function(r){ return r.id !== listing.id && r.price > 0; });
-      } else {
-        // Catálogo: extrair item_ids e buscar via /items?ids=... (batch)
-        var itemIds = rawResults.map(function(r){
-          return r.buy_box_winner_item_id || r.buy_box_winner?.item_id || r.item_id || null;
-        }).filter(function(id){ return id && id !== listing.id; }).slice(0,20);
-
-        var titleMap = {}, thumbMap = {};
-        rawResults.forEach(function(r){
-          var id = r.buy_box_winner_item_id || r.buy_box_winner?.item_id || r.item_id;
-          if(id){ titleMap[id]=r.name||r.title; thumbMap[id]=r.pictures?.[0]?.url||r.thumbnail; }
-        });
-
-        console.log("[CONCORRENCIA] item_ids para batch:", itemIds.slice(0,5));
-
-        if (itemIds.length === 0) {
-          throw new Error("Encontramos "+rawResults.length+" produtos no catálogo, mas nenhum tinha item_id válido.");
-        }
-
-        // Busca em batch (até 20 itens de uma vez)
-        var batchResults = [];
-        // Verificar se os IDs são realmente item IDs (MLB...) ou IDs de catálogo (MLC...)
-        var itemIdsValidos = itemIds.filter(function(id){ return /^MLB/i.test(String(id)); });
-        var idsCatalogo = itemIds.filter(function(id){ return !/^MLB/i.test(String(id)); });
-        console.log("[CONCORRENCIA] itemIds MLB válidos:", itemIdsValidos.length, "catálogo:", idsCatalogo.length);
-
-        if (itemIdsValidos.length > 0) {
-          try {
-            var batchUrl = "/api/ml/items?ids="+itemIdsValidos.join(",");
-            var br = await fetch(batchUrl, { headers: { Authorization: "Bearer "+token } });
-            var btxt = await br.text();
-            console.log("[CONCORRENCIA] batch /items status "+br.status+":", btxt.slice(0,400));
-            if (br.ok) {
-              var bdata = JSON.parse(btxt);
-              var barray = Array.isArray(bdata) ? bdata : [];
-              barray.forEach(function(entry){
-                var item = entry.body || entry;
-                if (!item || item.error || !item.price) return;
-                batchResults.push({
-                  id: item.id, title: item.title||titleMap[item.id],
-                  price: item.price, original_price: item.original_price,
-                  thumbnail: item.thumbnail||thumbMap[item.id],
-                  permalink: item.permalink, seller_id: item.seller_id,
-                  seller_nickname: "—",
-                  sold_quantity: item.sold_quantity||0,
-                  free_shipping: item.shipping?.free_shipping||false,
-                  listing_type_id: item.listing_type_id, condition: item.condition,
-                });
-              });
-            }
-          } catch(e2) { console.warn("[CONCORRENCIA] erro batch:", e2.message); }
-        }
-
-        results = batchResults;
-
-        if (results.length === 0) {
-          // IDs de catálogo (MLC...) não funcionam com /items — a API só busca a catalog page
-          throw new Error("Encontramos "+itemIds.length+" produto(s) no catálogo ML, mas os IDs retornados são de catálogo (não de anúncios individuais). O ML restringe a busca de anúncios individuais de terceiros para apps não certificados. Use o botão de busca manual.");
-        }
-      }
-
-      if (results.length === 0) {
-        throw new Error("Nenhum produto similar com preço válido encontrado.");
-      }
-
-            var concorrenciaReal = results.filter(function(r){ return String(r.seller_id) !== String(sellerId); });
-
-      // Ordenar concorrência por preço
-      concorrenciaReal.sort(function(a,b){ return a.price - b.price; });
-
-      var processado = concorrenciaReal.slice(0,15);
-
-      if (processado.length === 0) {
-        throw new Error("A busca encontrou resultados, mas nenhum continha preço/vendedor utilizável (formato de resposta inesperado da API do ML).");
-      }
-
-      setConcorrentes(processado);
-
-      // Salvar no histórico para acompanhamento ao longo do tempo
-      var precoMin = processado.length ? Math.min.apply(null, processado.map(function(p){return p.price;})) : null;
-      var precoMed = processado.length ? processado.reduce(function(s,p){return s+p.price;},0)/processado.length : null;
-      var hoje = new Date().toLocaleDateString("sv-SE");
-      var novoHist = Object.assign({}, historico);
-      if (!novoHist[listing.id]) novoHist[listing.id] = [];
-      novoHist[listing.id] = novoHist[listing.id].filter(function(h){return h.data!==hoje;});
-      novoHist[listing.id].push({
-        data: hoje,
-        meuPreco: listing.price,
-        precoMin: precoMin,
-        precoMedio: precoMed,
-        qtdConcorrentes: processado.length,
-      });
-      // Manter só últimos 30 registros por anúncio
-      novoHist[listing.id] = novoHist[listing.id].slice(-30);
-      setHistorico(novoHist);
-      try { localStorage.setItem("concorrencia_historico", JSON.stringify(novoHist)); } catch {}
-
-    } catch(e) {
-      setErro("Erro ao buscar concorrentes: "+e.message);
-    }
-    setLoading(false);
-  }
-
-  function fmt2(n){ return "R$ "+(parseFloat(n||0)).toFixed(2).replace(".",","); }
-
-  var meuPreco = selectedListing?.price || 0;
-  var precosOrdenados = concorrentes.map(function(c){return c.price;}).sort(function(a,b){return a-b;});
-  var minhaPosicao = precosOrdenados.filter(function(p){return p < meuPreco;}).length + 1;
-  var totalNaLista = precosOrdenados.length + 1;
-  var precoMinimo = precosOrdenados.length ? precosOrdenados[0] : null;
-  var precoMaximo = precosOrdenados.length ? precosOrdenados[precosOrdenados.length-1] : null;
-  var precoMedio = precosOrdenados.length ? precosOrdenados.reduce(function(s,p){return s+p;},0)/precosOrdenados.length : null;
-  var diferencaMedia = precoMedio!=null ? ((meuPreco-precoMedio)/precoMedio)*100 : null;
-
-  var histAtual = selectedListing ? (historico[selectedListing.id]||[]) : [];
-
-  return (
-    <div style={{ padding:"0 12px" }}>
-      {/* Header */}
-      <div style={{ padding:"12px 0 8px", borderBottom:"1px solid #e2e8f0", marginBottom:14 }}>
-        <div style={{ fontWeight:800, fontSize:20, color:"#0f172a", marginBottom:4 }}>⚔️ Análise de Concorrência</div>
-        <div style={{ fontSize:13, color:"#64748b" }}>Compare seus anúncios com produtos similares de outros vendedores no Mercado Livre</div>
-      </div>
-
-      <div style={{ display:"flex", gap:14 }}>
-        {/* Painel esquerdo — lista de anúncios para selecionar */}
-        <div style={{ width:320, flexShrink:0 }}>
-          <div style={{ position:"relative", marginBottom:10 }}>
-            <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
-            <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar seu anúncio..."
-              style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px 8px 30px", borderRadius:9, fontSize:12, outline:"none" }} />
-          </div>
-          <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:10, maxHeight:"calc(100vh - 220px)", overflowY:"auto" }}>
-            {listsFiltrados.slice(0,80).map(function(l){
-              var isSelected = selectedListing?.id === l.id;
-              var hist = historico[l.id];
-              var ultimoHist = hist && hist.length ? hist[hist.length-1] : null;
-              return (
-                <div key={l.id} onClick={function(){ buscarConcorrentes(l); }}
-                  style={{ padding:"10px 12px", borderBottom:"1px solid #f1f5f9", cursor:"pointer",
-                    background: isSelected?"#eff6ff":"#fff", borderLeft: isSelected?"3px solid #1d4ed8":"3px solid transparent" }}>
-                  <div style={{ fontSize:12, fontWeight:600, color:"#0f172a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{l.title}</div>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:3 }}>
-                    <span style={{ fontSize:11, color:"#64748b" }}>R$ {l.price?.toFixed(2).replace(".",",")}</span>
-                    {ultimoHist && (
-                      <span style={{ fontSize:10, fontWeight:600,
-                        color: ultimoHist.meuPreco <= (ultimoHist.precoMin||999999) ? "#15803d" : "#dc2626" }}>
-                        {ultimoHist.meuPreco <= (ultimoHist.precoMin||999999) ? "✓ menor preço" : "↑ acima do mín."}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-            {listsFiltrados.length === 0 && (
-              <div style={{ padding:30, textAlign:"center", color:"#94a3b8", fontSize:12 }}>Nenhum anúncio encontrado</div>
-            )}
-          </div>
-        </div>
-
-        {/* Painel direito — resultado da comparação */}
-        <div style={{ flex:1, minWidth:0 }}>
-          {!selectedListing ? (
-            <div style={{ textAlign:"center", padding:"80px 20px", color:"#94a3b8" }}>
-              <div style={{ fontSize:48, marginBottom:12 }}>⚔️</div>
-              <div style={{ fontWeight:700, fontSize:16, color:"#0f172a", marginBottom:8 }}>Selecione um anúncio</div>
-              <div style={{ fontSize:13 }}>Escolha um produto na lista à esquerda para comparar com a concorrência</div>
-            </div>
-          ) : (
-            <>
-              {/* Card do meu anúncio */}
-              <div style={{ background:"#fff", border:"2px solid #1d4ed8", borderRadius:12, padding:"14px 16px", marginBottom:14, display:"flex", gap:14, alignItems:"center" }}>
-                {selectedListing.thumbnail && <img src={selectedListing.thumbnail} alt="" style={{ width:64, height:64, borderRadius:8, objectFit:"cover" }} />}
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontSize:10, fontWeight:700, color:"#1d4ed8", textTransform:"uppercase", marginBottom:2 }}>🏠 MEU ANÚNCIO</div>
-                  <div style={{ fontSize:14, fontWeight:700, color:"#0f172a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{selectedListing.title}</div>
-                  <div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{selectedListing.id}</div>
-                </div>
-                <div style={{ textAlign:"right" }}>
-                  <div style={{ fontSize:22, fontWeight:800, color:"#0f172a" }}>{fmt2(meuPreco)}</div>
-                  <a href={"https://www.mercadolivre.com.br/seller-admin/listing/edit?itemId="+selectedListing.id} target="_blank" rel="noreferrer"
-                    style={{ fontSize:11, color:"#0891b2", textDecoration:"none" }}>Editar ↗</a>
-                </div>
-              </div>
-
-              {loading ? (
-                <div style={{ textAlign:"center", padding:60, color:"#94a3b8" }}>
-                  <div style={{ fontSize:32, marginBottom:10 }}>⏳</div>
-                  <div>Buscando concorrentes no Mercado Livre...</div>
-                </div>
-              ) : erro ? (
-                <div>
-                  <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:14, color:"#dc2626", fontSize:13, marginBottom:10 }}>⚠️ {erro}</div>
-                  <a href={"https://lista.mercadolivre.com.br/"+encodeURIComponent((selectedListing?.title||"").trim())}
-                    target="_blank" rel="noreferrer"
-                    style={{ display:"inline-block", background:"#ffe000", color:"#0f172a", fontWeight:700, padding:"10px 20px", borderRadius:10, textDecoration:"none", fontSize:13 }}>
-                    🔍 Buscar "{selectedListing?.title?.slice(0,40)}..." no ML ↗
-                  </a>
-                </div>
-              ) : concorrentes.length === 0 ? (
-                <div style={{ textAlign:"center", padding:50, color:"#94a3b8" }}>
-                  <div style={{ fontSize:32, marginBottom:10 }}>🔍</div>
-                  <div>Nenhum concorrente similar encontrado</div>
-                </div>
-              ) : (
-                <>
-                  {/* Cards de resumo comparativo */}
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:10, marginBottom:14 }}>
-                    <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px" }}>
-                      <div style={{ fontSize:9, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:3 }}>Sua posição</div>
-                      <div style={{ fontSize:18, fontWeight:800, color: minhaPosicao===1?"#15803d":minhaPosicao<=3?"#d97706":"#dc2626" }}>
-                        {minhaPosicao}º de {totalNaLista}
-                      </div>
-                    </div>
-                    <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px" }}>
-                      <div style={{ fontSize:9, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:3 }}>Menor preço</div>
-                      <div style={{ fontSize:18, fontWeight:800, color:"#15803d" }}>{fmt2(precoMinimo)}</div>
-                    </div>
-                    <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px" }}>
-                      <div style={{ fontSize:9, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:3 }}>Preço médio</div>
-                      <div style={{ fontSize:18, fontWeight:800, color:"#0891b2" }}>{fmt2(precoMedio)}</div>
-                    </div>
-                    <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px" }}>
-                      <div style={{ fontSize:9, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:3 }}>Maior preço</div>
-                      <div style={{ fontSize:18, fontWeight:800, color:"#dc2626" }}>{fmt2(precoMaximo)}</div>
-                    </div>
-                    <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px" }}>
-                      <div style={{ fontSize:9, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:3 }}>Vs. média</div>
-                      <div style={{ fontSize:18, fontWeight:800, color: diferencaMedia<=0?"#15803d":"#dc2626" }}>
-                        {diferencaMedia>0?"+":""}{diferencaMedia?.toFixed(1)}%
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Alerta se estiver acima do mínimo */}
-                  {precoMinimo!=null && meuPreco > precoMinimo && (
-                    <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:10, padding:"10px 14px", marginBottom:14, fontSize:12, color:"#92400e" }}>
-                      ⚠️ Você está <b>{fmt2(meuPreco-precoMinimo)}</b> ({(((meuPreco-precoMinimo)/precoMinimo)*100).toFixed(1)}%) acima do menor preço encontrado.
-                    </div>
-                  )}
-                  {precoMinimo!=null && meuPreco <= precoMinimo && (
-                    <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:10, padding:"10px 14px", marginBottom:14, fontSize:12, color:"#166534" }}>
-                      ✓ Você tem o menor preço entre os concorrentes encontrados!
-                    </div>
-                  )}
-
-                  {/* Tabela de concorrentes */}
-                  <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
-                    <table style={{ borderCollapse:"collapse", width:"100%" }}>
-                      <thead>
-                        <tr style={{ background:"#f8fafc" }}>
-                          {["","Anúncio Concorrente","Vendedor","Preço","Vs. Você","Vendidos","Frete","Tipo",""].map(function(h){
-                            return <th key={h} style={{ fontSize:10, color:"#64748b", fontWeight:600, textTransform:"uppercase", padding:"8px 10px", textAlign:"left", whiteSpace:"nowrap" }}>{h}</th>;
-                          })}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {concorrentes.map(function(c, i) {
-                          var diff = meuPreco>0 ? ((c.price-meuPreco)/meuPreco)*100 : 0;
-                          var isPremiumC = c.listing_type_id==="gold_premium"||c.listing_type_id==="gold_pro";
-                          return (
-                            <tr key={c.id} style={{ borderBottom:"1px solid #f1f5f9", background:i%2===0?"#fff":"#fafafa" }}>
-                              <td style={{ padding:"6px 8px" }}>
-                                {c.thumbnail && <img src={c.thumbnail} alt="" style={{ width:36, height:36, borderRadius:6, objectFit:"cover" }} />}
-                              </td>
-                              <td style={{ padding:"6px 8px", maxWidth:240, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                                <a href={c.permalink} target="_blank" rel="noreferrer" style={{ fontSize:12, fontWeight:600, color:"#1d4ed8", textDecoration:"none" }}>
-                                  {c.title}
-                                </a>
-                              </td>
-                              <td style={{ padding:"6px 8px", fontSize:11, color:"#64748b" }}>{c.seller_nickname}</td>
-                              <td style={{ padding:"6px 8px", fontSize:13, fontWeight:700, color: c.price<meuPreco?"#15803d":c.price>meuPreco?"#dc2626":"#64748b" }}>
-                                {fmt2(c.price)}
-                              </td>
-                              <td style={{ padding:"6px 8px" }}>
-                                <span style={{ fontSize:11, fontWeight:700, color: diff<0?"#15803d":diff>0?"#dc2626":"#94a3b8" }}>
-                                  {diff>0?"+":""}{diff.toFixed(1)}%
-                                </span>
-                              </td>
-                              <td style={{ padding:"6px 8px", fontSize:11, color:"#64748b" }}>{c.sold_quantity}</td>
-                              <td style={{ padding:"6px 8px" }}>
-                                {c.free_shipping ? (
-                                  <span style={{ fontSize:10, fontWeight:600, color:"#15803d", background:"#f0fdf4", padding:"2px 6px", borderRadius:4 }}>Grátis</span>
-                                ) : (
-                                  <span style={{ fontSize:10, color:"#94a3b8" }}>—</span>
-                                )}
-                              </td>
-                              <td style={{ padding:"6px 8px" }}>
-                                <span style={{ fontSize:10, fontWeight:600, padding:"2px 6px", borderRadius:4,
-                                  background:isPremiumC?"#f5f3ff":"#eff6ff", color:isPremiumC?"#7c3aed":"#1d4ed8" }}>
-                                  {isPremiumC?"Premium":"Clássico"}
-                                </span>
-                              </td>
-                              <td style={{ padding:"6px 8px" }}>
-                                <a href={c.permalink} target="_blank" rel="noreferrer" style={{ fontSize:11, color:"#0891b2", textDecoration:"none" }}>Ver ↗</a>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Histórico de acompanhamento */}
-                  {histAtual.length > 1 && (
-                    <div style={{ marginTop:14, background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"14px 16px" }}>
-                      <div style={{ fontWeight:700, fontSize:13, color:"#0f172a", marginBottom:10 }}>📈 Histórico de Acompanhamento</div>
-                      <div style={{ overflowX:"auto" }}>
-                        <table style={{ borderCollapse:"collapse", width:"100%", fontSize:11 }}>
-                          <thead>
-                            <tr style={{ background:"#f8fafc" }}>
-                              {["Data","Meu Preço","Menor Concorrente","Preço Médio","Concorrentes"].map(function(h){
-                                return <th key={h} style={{ padding:"6px 10px", textAlign:"left", color:"#94a3b8", fontWeight:600 }}>{h}</th>;
-                              })}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {histAtual.slice().reverse().map(function(h,i){
-                              return (
-                                <tr key={i} style={{ borderBottom:"1px solid #f1f5f9" }}>
-                                  <td style={{ padding:"5px 10px" }}>{new Date(h.data).toLocaleDateString("pt-BR")}</td>
-                                  <td style={{ padding:"5px 10px", fontWeight:700 }}>{fmt2(h.meuPreco)}</td>
-                                  <td style={{ padding:"5px 10px", color:"#15803d" }}>{h.precoMin!=null?fmt2(h.precoMin):"—"}</td>
-                                  <td style={{ padding:"5px 10px", color:"#0891b2" }}>{h.precoMedio!=null?fmt2(h.precoMedio):"—"}</td>
-                                  <td style={{ padding:"5px 10px", color:"#64748b" }}>{h.qtdConcorrentes}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 
 // ════════════════════════════════════════════════════════════
@@ -13594,110 +13227,25 @@ function ModalNovaTarefa({ usuarios, onSave, onClose }) {
 // ════════════════════════════════════════════════════════════
 //  Painel de Usuários (acessado pelo header)
 // ════════════════════════════════════════════════════════════
-function PainelUsuarios({ currentUser, onClose }) {
-  const [usuarios, setUsuarios] = useState(getUsuarios);
-  const [editingUser, setEditingUser] = useState(null);
-  const [showModal, setShowModal] = useState(false);
 
-  function saveUser(user) {
-    const lista = getUsuarios();
-    const updated = lista.find(u => u.id === user.id)
-      ? lista.map(u => u.id === user.id ? user : u)
-      : [...lista, user];
-    saveUsuarios(updated);
-    setUsuarios(updated);
-    setShowModal(false);
-    setEditingUser(null);
-  }
+function PainelConfiguracoesGlobal(props) {
+  var currentUser=props.currentUser, abaInicial=props.abaInicial;
+  var impostos=props.impostos, setImpostos=props.setImpostos;
+  var custosFixos=props.custosFixos, setCustosFixos=props.setCustosFixos;
+  var faturamentoMes=props.faturamentoMes||0;
+  var darkMode=props.darkMode, setDarkMode=props.setDarkMode;
+  var onClose=props.onClose;
 
-  function deleteUser(id) {
-    if (id === currentUser.id) { alert("Você não pode excluir seu próprio usuário."); return; }
-    if (!window.confirm("Excluir este usuário?")) return;
-    const updated = getUsuarios().filter(u => u.id !== id);
-    saveUsuarios(updated);
-    setUsuarios(updated);
-  }
-
-  return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", zIndex:800, display:"flex", alignItems:"flex-start", justifyContent:"flex-end", padding:"60px 16px 16px" }}>
-      <div style={{ background:"#fff", borderRadius:14, width:480, maxHeight:"calc(100vh - 80px)", display:"flex", flexDirection:"column", boxShadow:"0 20px 60px rgba(0,0,0,.2)", overflow:"hidden" }}>
-        {/* Header */}
-        <div style={{ padding:"16px 20px", borderBottom:"1px solid #e2e8f0", display:"flex", justifyContent:"space-between", alignItems:"center", background:"#0f172a" }}>
-          <div style={{ fontWeight:700, fontSize:15, color:"#fff" }}>👥 Usuários do Sistema</div>
-          <button onClick={onClose} style={{ background:"transparent", border:"none", color:"#94a3b8", fontSize:20, cursor:"pointer" }}>✕</button>
-        </div>
-
-        {/* Lista */}
-        <div style={{ flex:1, overflowY:"auto", padding:"12px 16px" }}>
-          {usuarios.map(function(u) {
-            var isMe = u.id === currentUser.id;
-            return (
-              <div key={u.id} style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"12px 14px", marginBottom:8, display:"flex", alignItems:"center", gap:12 }}>
-                <div style={{ width:38, height:38, borderRadius:10, background:"#0f172a", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:800, color:"#ffe000", flexShrink:0 }}>
-                  {u.nome?.charAt(0).toUpperCase()}
-                </div>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontWeight:700, fontSize:13, color:"#0f172a" }}>
-                    {u.nome} {isMe && <span style={{ fontSize:10, color:"#0891b2", background:"#eff6ff", padding:"1px 5px", borderRadius:4 }}>você</span>}
-                  </div>
-                  <div style={{ fontSize:11, color:"#64748b" }}>@{u.usuario} · {u.admin?"Admin":"Usuário"}</div>
-                  {u.email && <div style={{ fontSize:10, color:"#94a3b8", marginTop:1 }}>📧 {u.email}</div>}
-                  <div style={{ fontSize:10, marginTop:2 }}>
-                    <span style={{ color:u.ativo?"#15803d":"#dc2626", fontWeight:600 }}>{u.ativo?"● Ativo":"○ Inativo"}</span>
-                  </div>
-                </div>
-                <div style={{ display:"flex", gap:6 }}>
-                  <button onClick={function(){ setEditingUser(u); setShowModal(true); }}
-                    style={{ background:"#eff6ff", border:"1px solid #bfdbfe", color:"#1d4ed8", padding:"5px 10px", borderRadius:7, cursor:"pointer", fontSize:12, fontWeight:600 }}>
-                    ✎ Editar
-                  </button>
-                  {!isMe && (
-                    <button onClick={function(){ deleteUser(u.id); }}
-                      style={{ background:"#fef2f2", border:"1px solid #fecaca", color:"#dc2626", padding:"5px 10px", borderRadius:7, cursor:"pointer", fontSize:12 }}>
-                      ✕
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Footer */}
-        <div style={{ padding:"12px 16px", borderTop:"1px solid #e2e8f0" }}>
-          <button onClick={function(){ setEditingUser(null); setShowModal(true); }}
-            style={{ width:"100%", background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
-            + Novo Usuário
-          </button>
-        </div>
-      </div>
-
-      {showModal && (
-        <ModalUsuario
-          usuario={editingUser}
-          onSave={saveUser}
-          onClose={function(){ setShowModal(false); setEditingUser(null); }}
-        />
-      )}
-    </div>
-  );
-}
-
-
-// ════════════════════════════════════════════════════════════
-//  PainelConfiguracoesGlobal — ⚙️ Config + 👥 Usuários
-// ════════════════════════════════════════════════════════════
-function PainelConfiguracoesGlobal({ currentUser, abaInicial, impostos, setImpostos, custosFixos, setCustosFixos, faturamentoMes, onClose }) {
-  const [aba, setAba] = useState(abaInicial || "config");
-  const [usuarios, setUsuarios] = useState(getUsuarios);
-  const [editingUser, setEditingUser] = useState(null);
-  const [showModalUser, setShowModalUser] = useState(false);
+  var [aba, setAba] = useState(abaInicial||"config");
+  var [usuarios, setUsuarios] = useState(getUsuarios);
+  var [editingUser, setEditingUser] = useState(null);
+  var [showModalUser, setShowModalUser] = useState(false);
 
   function saveUser(user) {
     var lista = getUsuarios();
-    var updated = lista.find(function(u){ return u.id===user.id; })
-      ? lista.map(function(u){ return u.id===user.id?user:u; })
-      : [...lista, user];
+    var updated = lista.find(function(u){return u.id===user.id;})
+      ? lista.map(function(u){return u.id===user.id?user:u;})
+      : lista.concat([user]);
     saveUsuarios(updated);
     setUsuarios(updated);
     setShowModalUser(false);
@@ -13705,95 +13253,95 @@ function PainelConfiguracoesGlobal({ currentUser, abaInicial, impostos, setImpos
   }
 
   function deleteUser(id) {
-    if (id === currentUser.id) { alert("Você não pode excluir seu próprio usuário."); return; }
-    if (!window.confirm("Excluir este usuário?")) return;
-    var updated = getUsuarios().filter(function(u){ return u.id !== id; });
+    if (id===currentUser.id){alert("Voce nao pode excluir seu proprio usuario.");return;}
+    if (!window.confirm("Excluir este usuario?")) return;
+    var updated = getUsuarios().filter(function(u){return u.id!==id;});
     saveUsuarios(updated);
     setUsuarios(updated);
   }
 
+  var ABAS = [
+    {k:"config",    l:"Impostos & Custos"},
+    {k:"aparencia", l:"Aparencia"},
+    {k:"backup",    l:"Backup"},
+    {k:"usuarios",  l:"Usuarios"},
+  ];
+
   return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.55)", backdropFilter:"blur(4px)", zIndex:800, display:"flex", alignItems:"flex-start", justifyContent:"flex-end", padding:"56px 8px 8px" }}>
-      <div style={{ background:"#fff", borderRadius:14, width:680, maxHeight:"calc(100vh - 68px)", display:"flex", flexDirection:"column", boxShadow:"0 20px 60px rgba(0,0,0,.22)", overflow:"hidden" }}>
-
-        {/* Header */}
-        <div style={{ background:"#0f172a", padding:"13px 18px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <div style={{ color:"#fff", fontWeight:700, fontSize:15 }}>⚙️ Configurações do Sistema</div>
-          <button onClick={onClose} style={{ background:"transparent", border:"none", color:"#94a3b8", fontSize:20, cursor:"pointer", lineHeight:1 }}>✕</button>
-        </div>
-
-        {/* Abas */}
-        <div style={{ display:"flex", borderBottom:"2px solid #f1f5f9" }}>
-          {[
-            { k:"config",   l:"⚙️ Impostos & Custos" },
-            { k:"usuarios", l:"👥 Usuários" },
-          ].map(function(t){
-            var a = aba===t.k;
-            return (
-              <button key={t.k} onClick={function(){ setAba(t.k); }}
-                style={{ flex:1, padding:"10px", border:"none", borderBottom:a?"2px solid #0f172a":"2px solid transparent",
-                  background:"transparent", color:a?"#0f172a":"#94a3b8", fontWeight:a?700:400, fontSize:13, cursor:"pointer", fontFamily:"inherit", marginBottom:-2 }}>
-                {t.l}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Conteúdo */}
-        <div style={{ flex:1, overflowY:"auto", padding:"16px 18px" }}>
-          {aba === "config" ? (
-            <ImpostosCompacto
-              impostos={impostos} setImpostos={setImpostos}
-              custosFixos={custosFixos} setCustosFixos={setCustosFixos}
-              faturamentoMes={faturamentoMes||0}
-            />
-          ) : (
-            <div>
-              {usuarios.map(function(u){
-                var isMe = u.id === currentUser.id;
-                return (
-                  <div key={u.id} style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px", marginBottom:8, display:"flex", alignItems:"center", gap:10 }}>
-                    <div style={{ width:36, height:36, borderRadius:9, background:"#0f172a", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:800, color:"#ffe000", flexShrink:0 }}>
-                      {u.nome?.charAt(0).toUpperCase()}
-                    </div>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontWeight:700, fontSize:13, color:"#0f172a" }}>
-                        {u.nome}
-                        {isMe && <span style={{ fontSize:10, color:"#0891b2", background:"#eff6ff", padding:"1px 5px", borderRadius:4, marginLeft:6 }}>você</span>}
-                      </div>
-                      <div style={{ fontSize:11, color:"#64748b" }}>@{u.usuario} · {u.admin?"Admin":"Usuário"} · <span style={{ color:u.ativo?"#15803d":"#dc2626", fontWeight:600 }}>{u.ativo?"Ativo":"Inativo"}</span></div>
-                      {u.email && <div style={{ fontSize:10, color:"#94a3b8", marginTop:1 }}>📧 {u.email}</div>}
-                    </div>
-                    <div style={{ display:"flex", gap:6 }}>
-                      <button onClick={function(){ setEditingUser(u); setShowModalUser(true); }}
-                        style={{ background:"#eff6ff", border:"1px solid #bfdbfe", color:"#1d4ed8", padding:"4px 10px", borderRadius:7, cursor:"pointer", fontSize:11, fontWeight:600 }}>
-                        ✎ Editar
-                      </button>
-                      {!isMe && (
-                        <button onClick={function(){ deleteUser(u.id); }}
-                          style={{ background:"#fef2f2", border:"1px solid #fecaca", color:"#dc2626", padding:"4px 8px", borderRadius:7, cursor:"pointer", fontSize:11 }}>
-                          ✕
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-              <button onClick={function(){ setEditingUser(null); setShowModalUser(true); }}
-                style={{ width:"100%", background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"10px", borderRadius:9, cursor:"pointer", fontSize:13, marginTop:8 }}>
-                + Novo Usuário
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {showModalUser && (
-        <ModalUsuario usuario={editingUser} onSave={saveUser} onClose={function(){ setShowModalUser(false); setEditingUser(null); }} />
-      )}
-    </div>
+    React.createElement("div", {style:{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",backdropFilter:"blur(4px)",zIndex:800,display:"flex",alignItems:"flex-start",justifyContent:"flex-end",padding:"56px 8px 8px"}},
+      React.createElement("div", {style:{background:"#fff",borderRadius:14,width:700,maxHeight:"calc(100vh - 68px)",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,.22)",overflow:"hidden"}},
+        React.createElement("div", {style:{background:"#0f172a",padding:"13px 18px",display:"flex",justifyContent:"space-between",alignItems:"center"}},
+          React.createElement("div", {style:{color:"#fff",fontWeight:700,fontSize:15}}, "Configuracoes do Sistema"),
+          React.createElement("button", {onClick:onClose, style:{background:"transparent",border:"none",color:"#94a3b8",fontSize:20,cursor:"pointer",lineHeight:1}}, "x")
+        ),
+        React.createElement("div", {style:{display:"flex",borderBottom:"2px solid #f1f5f9"}},
+          ABAS.map(function(t){
+            var a=aba===t.k;
+            return React.createElement("button",{key:t.k,onClick:function(){setAba(t.k);},style:{flex:1,padding:"10px",border:"none",borderBottom:a?"2px solid #0f172a":"2px solid transparent",background:"transparent",color:a?"#0f172a":"#94a3b8",fontWeight:a?700:400,fontSize:12,cursor:"pointer",fontFamily:"inherit",marginBottom:-2}}, t.l);
+          })
+        ),
+        React.createElement("div", {style:{flex:1,overflowY:"auto",padding:"16px 18px"}},
+          aba==="config" ? React.createElement(ImpostosCompacto, {impostos:impostos,setImpostos:setImpostos,custosFixos:custosFixos,setCustosFixos:setCustosFixos,faturamentoMes:faturamentoMes}) :
+          aba==="aparencia" ? React.createElement("div", {style:{display:"flex",gap:10}},
+            [{v:false,l:"Claro"},{v:true,l:"Escuro"}].map(function(t){
+              return React.createElement("button",{key:String(t.v),onClick:function(){setDarkMode(t.v);localStorage.setItem("darkMode",t.v?"1":"0");},style:{flex:1,padding:14,borderRadius:10,border:"2px solid "+(darkMode===t.v?"#0f172a":"#e2e8f0"),background:darkMode===t.v?"#0f172a":"#fff",color:darkMode===t.v?"#fff":"#334155",fontWeight:700,fontSize:14,cursor:"pointer"}}, t.v?"Escuro":"Claro");
+            })
+          ) :
+          aba==="backup" ? React.createElement("div", {style:{display:"flex",flexDirection:"column",gap:14}},
+            React.createElement("div", {style:{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:12,padding:16}},
+              React.createElement("div", {style:{fontWeight:700,fontSize:14,marginBottom:12}}, "Exportar Backup"),
+              React.createElement("button", {
+                onClick:function(){
+                  var chaves=["produtos_cadastro","mov_estoque","vendas_estoque_baixadas","ml_orders_cache","contas_pagar","contas_bancarias","lancamentos","nfe_entrada","nfe_saida","costs_config","fretes_config","descontos_config","precos_venda_config","precos_pendentes_ml","icms_por_estado","irpj_csll_config","fornecedores_db","chat_interno_mensagens","chat_interno_tarefas","min_stock_anuncios","depositos_estoque"];
+                  var bk={versao:2,data:new Date().toISOString(),dados:{}};
+                  chaves.forEach(function(k){try{bk.dados[k]=JSON.parse(localStorage.getItem(k)||"null");}catch{}});
+                  var blob=new Blob([JSON.stringify(bk,null,2)],{type:"application/json"});
+                  var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="mlmargem_backup_"+new Date().toLocaleDateString("sv-SE")+".json";a.click();
+                },
+                style:{background:"#0f172a",border:"none",color:"#fff",fontWeight:700,padding:"10px 20px",borderRadius:9,cursor:"pointer",fontSize:13}
+              }, "Exportar Backup")
+            ),
+            React.createElement("div", {style:{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:12,padding:16}},
+              React.createElement("div", {style:{fontWeight:700,fontSize:14,marginBottom:4}}, "Restaurar Backup"),
+              React.createElement("label", {style:{background:"#fff",border:"2px dashed #e2e8f0",borderRadius:9,padding:14,display:"block",textAlign:"center",cursor:"pointer",fontSize:13,color:"#64748b"}},
+                "Clique para selecionar arquivo de backup (.json)",
+                React.createElement("input", {type:"file",accept:".json",style:{display:"none"},onChange:function(e){
+                  var file=e.target.files[0];if(!file)return;
+                  if(!window.confirm("Isso vai substituir TODOS os dados atuais. Confirmar?"))return;
+                  var reader=new FileReader();
+                  reader.onload=function(ev){try{var bk=JSON.parse(ev.target.result);if(!bk.dados)throw new Error("Formato invalido");Object.keys(bk.dados).forEach(function(k){if(bk.dados[k]!=null)localStorage.setItem(k,JSON.stringify(bk.dados[k]));});alert("Backup restaurado! Recarregando...");window.location.reload();}catch(err){alert("Erro ao restaurar: "+err.message);}};
+                  reader.readAsText(file);
+                }})
+              )
+            )
+          ) :
+          React.createElement("div", null,
+            usuarios.map(function(u){
+              var isMe=u.id===currentUser.id;
+              return React.createElement("div",{key:u.id,style:{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:10}},
+                React.createElement("div",{style:{width:36,height:36,borderRadius:9,background:"#0f172a",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:"#ffe000",flexShrink:0}}, u.nome&&u.nome.charAt(0).toUpperCase()),
+                React.createElement("div",{style:{flex:1,minWidth:0}},
+                  React.createElement("div",{style:{fontWeight:700,fontSize:13,color:"#0f172a"}}, u.nome, isMe&&React.createElement("span",{style:{fontSize:10,color:"#0891b2",background:"#eff6ff",padding:"1px 5px",borderRadius:4,marginLeft:6}},"voce")),
+                  React.createElement("div",{style:{fontSize:11,color:"#64748b"}}, "@"+u.usuario+" - "+(u.admin?"Admin":"Usuario")+" - ",React.createElement("span",{style:{color:u.ativo?"#15803d":"#dc2626",fontWeight:600}},u.ativo?"Ativo":"Inativo")),
+                  u.email&&React.createElement("div",{style:{fontSize:10,color:"#94a3b8",marginTop:1}}, u.email)
+                ),
+                React.createElement("div",{style:{display:"flex",gap:6}},
+                  React.createElement("button",{onClick:function(){setEditingUser(u);setShowModalUser(true);},style:{background:"#eff6ff",border:"1px solid #bfdbfe",color:"#1d4ed8",padding:"4px 10px",borderRadius:7,cursor:"pointer",fontSize:11,fontWeight:600}},"Editar"),
+                  !isMe&&React.createElement("button",{onClick:function(){deleteUser(u.id);},style:{background:"#fef2f2",border:"1px solid #fecaca",color:"#dc2626",padding:"4px 8px",borderRadius:7,cursor:"pointer",fontSize:11}},"X")
+                )
+              );
+            }),
+            React.createElement("button",{onClick:function(){setEditingUser(null);setShowModalUser(true);},style:{width:"100%",background:"#0f172a",border:"none",color:"#fff",fontWeight:700,padding:10,borderRadius:9,cursor:"pointer",fontSize:13,marginTop:8}},
+              "+ Novo Usuario"
+            )
+          )
+        )
+      ),
+      showModalUser&&React.createElement(ModalUsuario,{usuario:editingUser,onSave:saveUser,onClose:function(){setShowModalUser(false);setEditingUser(null);}})
+    )
   );
 }
+
 
 export default function App() {
   // ── Auth do dashboard ─────────────────────────────────────
@@ -13929,7 +13477,6 @@ export default function App() {
   });
   const [showNotif, setShowNotif] = useState(false);
   const [showBackup, setShowBackup] = useState(false);
-  const [showUserPanel, setShowUserPanel] = useState(false);
   const [showConfigPanel, setShowConfigPanel] = useState(false);
   const [configPanelTab, setConfigPanelTab] = useState("config"); // config | usuarios
   const [notificacoes, setNotificacoes] = useState(() => {
@@ -14750,6 +14297,12 @@ export default function App() {
     if (filterListingExtra === "sem_custo")  results = results.filter(l => !(costs[l.id] > 0));
     if (filterListingExtra === "com_promo")  results = results.filter(l => l.hasPromo);
     if (filterListingExtra === "sem_promo")  results = results.filter(l => !l.hasPromo);
+    if (filterListingExtra === "sem_atacado") {
+      // Anúncios sem preço de atacado (wholesale_price) preenchido
+      results = results.filter(function(l) {
+        return !l.wholesale_prices || !l.wholesale_prices.length || l.wholesale_prices.every(function(w){ return !w.price || w.price <= 0; });
+      });
+    }
     if (filterListingExtra === "frete_alto") {
       var fretesConf = {};
       try { fretesConf = JSON.parse(localStorage.getItem("fretes_config") || "{}"); } catch {}
@@ -15125,7 +14678,7 @@ export default function App() {
             style={{ background: darkMode?"#334155":"#f1f5f9", border:"none", color: darkMode?"#fff":"#475569", width:36, height:36, borderRadius:8, cursor:"pointer", fontSize:18 }}>
             {darkMode ? "☀️" : "🌙"}
           </button>
-          <div onClick={function(){ if(currentUser?.admin) setShowUserPanel(true); }}
+          <div onClick={function(){ if(currentUser?.admin){ setShowConfigPanel(true); setConfigPanelTab("usuarios"); } }}
             style={{ display:"flex", alignItems:"center", gap:8, background: darkMode?"#1e293b":"#f8fafc", border:`1px solid ${darkMode?"#334155":"#e2e8f0"}`, borderRadius:8, padding:"5px 10px", cursor:currentUser?.admin?"pointer":"default" }}
             title={currentUser?.admin?"Gerenciar usuários":""}>
             <div style={{ width:26, height:26, borderRadius:8, background:"#0f172a", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:800, color:"#ffe000" }}>
@@ -15317,7 +14870,7 @@ export default function App() {
                     })}
                   </FiltroGrupo>
                   <FiltroGrupo titulo="Situação">
-                    {[{k:"all",l:"Todos"},{k:"sem_custo",l:"⚠️ Sem custo",cor:"#dc2626",bg:"#fef2f2"},{k:"com_promo",l:"🔥 Com promoção",cor:"#7c3aed",bg:"#f5f3ff"},{k:"sem_promo",l:"○ Sem promoção",cor:"#64748b",bg:"#f8fafc"},{k:"frete_alto",l:"🚚 Frete acima do config.",cor:"#ea580c",bg:"#fff7ed"}].map(function(f){
+                    {[{k:"all",l:"Todos"},{k:"sem_custo",l:"⚠️ Sem custo",cor:"#dc2626",bg:"#fef2f2"},{k:"sem_atacado",l:"🏷 Sem preço atacado",cor:"#7c3aed",bg:"#f5f3ff"},{k:"com_promo",l:"🔥 Com promoção",cor:"#7c3aed",bg:"#f5f3ff"},{k:"sem_promo",l:"○ Sem promoção",cor:"#64748b",bg:"#f8fafc"},{k:"frete_alto",l:"🚚 Frete acima do config.",cor:"#ea580c",bg:"#fff7ed"}].map(function(f){
                       return <FiltroBotao key={f.k} label={f.l} active={filterListingExtra===f.k}
                         cor={f.cor||"#0f172a"} bg={f.bg||"#f1f5f9"}
                         onClick={function(){setFilterListingExtra(f.k);setPaginaAnuncios(1);}} />;
@@ -15822,16 +15375,14 @@ export default function App() {
       {showBackup && <PainelBackup onClose={() => setShowBackup(false)} />}
 
       {showMLModal && <MLConnectModal onConnect={handleConnect} onClose={() => setShowMLModal(false)} />}
-      {showUserPanel && currentUser?.admin && (
-        <PainelUsuarios currentUser={currentUser} onClose={function(){ setShowUserPanel(false); }} />
-      )}
       {showConfigPanel && (
         <PainelConfiguracoesGlobal
           currentUser={currentUser}
           abaInicial={configPanelTab}
           impostos={impostos} setImpostos={setImpostos}
           custosFixos={custosFixos} setCustosFixos={setCustosFixos}
-          faturamentoMes={faturamentoMes}
+          faturamentoMes={0}
+          darkMode={darkMode} setDarkMode={setDarkMode}
           onClose={function(){ setShowConfigPanel(false); }}
         />
       )}

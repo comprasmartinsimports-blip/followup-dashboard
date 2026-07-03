@@ -12042,16 +12042,13 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
   const [buscaSku, setBuscaSku] = useState("");
 
   var listsFiltrados = (enriched||[]).filter(function(l) {
-    // Filtro SKU específico
-    if (buscaSku.trim()) {
-      var skuQ = buscaSku.trim().toLowerCase();
-      var sku = (l.seller_sku||l.sku||"").toLowerCase();
-      if (!sku.includes(skuQ)) return false;
-    }
-    // Filtro busca geral
+    // Campo único busca por título, MLB e SKU
     if (busca.trim()) {
       var q = busca.trim().toLowerCase();
-      return (l.title||"").toLowerCase().includes(q) || (l.id||"").includes(q) || (l.seller_sku||"").toLowerCase().includes(q);
+      var matchTitulo = (l.title||"").toLowerCase().includes(q);
+      var matchMlb    = (l.id||"").toLowerCase().includes(q);
+      var matchSku    = (l.seller_sku||l.sku||"").toLowerCase().includes(q);
+      return matchTitulo || matchMlb || matchSku;
     }
     return true;
   });
@@ -12127,15 +12124,10 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
       <div style={{ display:"flex", gap:7, margin:"14px 0" }}>
         <div style={{ position:"relative", flex:1 }}>
           <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:14 }}>🔍</span>
-          <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar por título ou MLB..."
+          <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar por título, MLB ou SKU..."
             style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"10px 14px 10px 36px", borderRadius:10, fontSize:13, outline:"none" }} />
-        </div>
-        <div style={{ position:"relative", width:200 }}>
-          <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:12, fontWeight:700 }}>#</span>
-          <input value={buscaSku} onChange={function(e){setBuscaSku(e.target.value);}} placeholder="Filtrar por SKU..."
-            style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"10px 14px 10px 28px", borderRadius:10, fontSize:13, outline:"none" }} />
-          {buscaSku && (
-            <button onClick={function(){setBuscaSku("");}} style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:"#94a3b8", cursor:"pointer", fontSize:16, lineHeight:1 }}>×</button>
+          {busca && (
+            <button onClick={function(){setBusca("");}} style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:"#94a3b8", cursor:"pointer", fontSize:18, lineHeight:1 }}>×</button>
           )}
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:8, background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"0 14px", fontSize:12, color:"#64748b", whiteSpace:"nowrap" }}>

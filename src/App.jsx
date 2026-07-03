@@ -3092,7 +3092,7 @@ function ModalNF({ nf, fornecedores, produtos, categoriasPagar, onSave, onClose 
                   <div style={{ display:"flex", gap:8, marginTop:8, alignItems:"center", flexWrap:"wrap" }}>
                     <div style={{ flex:1, minWidth:110 }}>
                       <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4, fontWeight:600 }}>BUSCAR POR SKU</div>
-                      <input style={{ ...inp, fontSize:12 }} placeholder="Digite o SKU..."
+                      <input placeholder="Digite o SKU..."
                         value={it.skuBusca!==undefined ? it.skuBusca : ""}
                         onChange={function(e){
                           var val = e.target.value;
@@ -14281,7 +14281,6 @@ export default function App() {
       permalink: item?.item?.id ? `https://www.mercadolivre.com.br/p/${item.item.id}` : null,
       status: o.status ?? "paid",
       tags: o.tags ?? [],
-      fulfilled: o.fulfilled,
       shipment_status: shipmentStatuses[String(o.id)] ?? null,
       // Dados do comprador
       buyerName: buyer.nickname || (buyer.first_name ? (buyer.first_name + " " + (buyer.last_name||"")).trim() : null),

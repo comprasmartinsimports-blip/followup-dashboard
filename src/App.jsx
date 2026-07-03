@@ -6225,7 +6225,23 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                     // mlbsVinculados: array com todos os MLBs; mlbVinculado: retrocompatibilidade
                     var todosMLBs = p.mlbsVinculados || (p.mlbVinculado ? [p.mlbVinculado] : []);
                     const mlListing = listings.find(l => l.id === p.mlbVinculado);
-                    const estBaixo = p.estoqueMinimo && p.estoqueAtual && parseFloat(p.estoqueAtual) <= parseFloat(p.estoqueMinimo);
+                    // Para produto COMPOSTO (kit): saldo = mínimo entre (estoque do componente / qtd necessária)
+                    var estoqueExibir = parseInt(p.estoqueAtual||0);
+                    var isKit = p.tipoProduto === "composto" && (p.composicao||[]).length > 0;
+                    if (isKit) {
+                      var saldoKit = Infinity;
+                      (p.composicao||[]).forEach(function(comp) {
+                        var prodComp = produtos.find(function(x){ return x.sku && x.sku.trim() === comp.skuComponente.trim(); });
+                        if (prodComp) {
+                          var saldoComp = Math.floor(parseInt(prodComp.estoqueAtual||0) / (parseInt(comp.qtd)||1));
+                          if (saldoComp < saldoKit) saldoKit = saldoComp;
+                        } else {
+                          saldoKit = 0; // componente não encontrado = sem estoque
+                        }
+                      });
+                      estoqueExibir = saldoKit === Infinity ? 0 : saldoKit;
+                    }
+                    const estBaixo = p.estoqueMinimo && estoqueExibir <= parseFloat(p.estoqueMinimo);
                     return (
                       <tr key={p.id} style={{ background: prodSel.includes(p.id)?"#eff6ff":i%2===0?"#f8fafc":"#fff" }}>
                         <td style={{ padding:"10px 14px", textAlign:"center" }}>
@@ -6271,9 +6287,15 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
                         </td>
                         <td style={{ padding:"10px 14px" }}>
                           <div style={{ fontWeight:700, fontSize:13, color:estBaixo?"#dc2626":"#0f172a" }}>
-                            {p.estoqueAtual || "0"} un {estBaixo?"⚠️":""}
+                            {estoqueExibir} un {estBaixo?"⚠️":""}
+                            {isKit && <span style={{ fontSize:9, color:"#7c3aed", background:"#f5f3ff", padding:"1px 4px", borderRadius:3, marginLeft:4 }}>KIT</span>}
                           </div>
                           {p.estoqueMinimo && <div style={{ fontSize:10, color:"#94a3b8" }}>mín: {p.estoqueMinimo}</div>}
+                          {isKit && (
+                            <div style={{ fontSize:9, color:"#64748b" }}>
+                              {(p.composicao||[]).map(function(c){ return c.skuComponente+"×"+c.qtd; }).join(" + ")}
+                            </div>
+                          )}
                         </td>
                         <td style={{ padding:"10px 14px" }}>
                           <span style={{ fontSize:11, fontWeight:600, color:p.status==="Ativo"?"#15803d":"#94a3b8", background:p.status==="Ativo"?"#f0fdf4":"#f8fafc", padding:"3px 8px", borderRadius:6 }}>{p.status}</span>
@@ -12492,55 +12514,81 @@ function PublicidadeTab({ token, sellerId }) {
     if (!advertiserId) return;
     setLoadingAnuncios(function(p){ return Object.assign({},p,{[campId]:true}); });
     try {
-      var headers = { Authorization: "Bearer "+token, "Content-Type": "application/json", "Api-Version": "2" };
-      var hoje2=new Date(), fmt2=function(d){return d.toISOString().slice(0,10);}, sub2=function(n){var d=new Date(hoje2);d.setDate(d.getDate()-n);return d;};
-      var datas2 = periodo==="LAST_7_DAYS"?{from:fmt2(sub2(7)),to:fmt2(hoje2)}:periodo==="LAST_30_DAYS"?{from:fmt2(sub2(30)),to:fmt2(hoje2)}:{from:fmt2(sub2(7)),to:fmt2(hoje2)};
+      var h2 = { Authorization: "Bearer "+token, "Content-Type": "application/json", "Api-Version": "2" };
+      var hoje2=new Date(), fmt2=function(d){return d.toISOString().slice(0,10);};
+      var sub2=function(n){var d=new Date(hoje2);d.setDate(d.getDate()-n);return d;};
+      var df = fmt2(sub2(periodo==="LAST_30_DAYS"?30:periodo==="THIS_MONTH"?new Date(hoje2.getFullYear(),hoje2.getMonth(),1).getDate()-1:7));
+      var dt = fmt2(hoje2);
 
-      // Tenta diferentes endpoints/formatos da API de anúncios
-      var tentativas = [
-        "/api/ml/advertising/advertisers/"+advertiserId+"/product_ads/ads?campaign_id="+campId+"&limit=50&offset=0&date_from="+datas2.from+"&date_to="+datas2.to+"&metrics=clicks,prints,cost,direct_amount,direct_items_quantity,acos",
-        "/api/ml/advertising/advertisers/"+advertiserId+"/product_ads/ads?campaign_id="+campId+"&limit=50&offset=0",
-      ];
+      // Endpoint oficial documentado ML Ads para listar anúncios de uma campanha
+      var url = "/api/ml/advertising/advertisers/"+advertiserId+"/product_ads/ads?campaign_id="+campId+"&limit=100&offset=0";
+      var r = await fetch(url, { headers: h2 });
+      var txt = await r.text();
+      console.log("[PUB] ads camp "+campId+" status:"+r.status+" resp:", txt.slice(0,800));
+
+      if (r.status !== 200) {
+        setAnunciosCamp(function(p){ return Object.assign({},p,{[campId]:[]}); });
+        setLoadingAnuncios(function(p){ return Object.assign({},p,{[campId]:false}); });
+        return;
+      }
+
+      var data = JSON.parse(txt);
+      console.log("[PUB] chaves da resposta:", Object.keys(data));
+
+      // Extrai array de anúncios independente do formato
       var ads = [];
-      for (var ti=0; ti<tentativas.length; ti++) {
-        var r = await fetch(tentativas[ti], { headers: headers });
-        var txt = await r.text();
-        console.log("[PUBLICIDADE] ads camp "+campId+" tentativa "+ti+" status "+r.status+":", txt.slice(0,600));
-        if (r.status === 200) {
-          var data = JSON.parse(txt);
-          // A resposta pode ter vários formatos:
-          var candidatos = Array.isArray(data) ? data
-            : (data.results || data.ads || data.data || data.items || []);
-          // Às vezes vem paginado com "paging" e os itens em outro campo
-          if (candidatos.length === 0 && data.paging) {
-            // Tenta pegar o primeiro campo que seja array
-            var keys = Object.keys(data).filter(function(k){ return Array.isArray(data[k]); });
-            if (keys.length > 0) candidatos = data[keys[0]];
+      if (Array.isArray(data)) {
+        ads = data;
+      } else {
+        // Pega o primeiro campo que seja array com pelo menos 1 item
+        for (var k in data) {
+          if (Array.isArray(data[k]) && data[k].length > 0) {
+            ads = data[k];
+            console.log("[PUB] anúncios encontrados em campo:", k, "qtd:", ads.length);
+            break;
           }
-          console.log("[PUBLICIDADE] ads encontrados:", candidatos.length, "estrutura[0]:", JSON.stringify(candidatos[0]||{}).slice(0,300));
-          if (candidatos.length > 0) { ads = candidatos; break; }
         }
       }
-      // Enriquecer com informações do item (título, thumbnail) se não vieram
-      if (ads.length > 0 && !ads[0].item && ads[0].item_id) {
-        var itemIds = ads.map(function(a){ return a.item_id; }).filter(Boolean).slice(0,20);
+
+      console.log("[PUB] total anúncios:", ads.length, "primeiro:", JSON.stringify(ads[0]||{}).slice(0,400));
+
+      // Buscar métricas do período para cada anúncio (se não vieram junto)
+      if (ads.length > 0 && !ads[0].metrics && !ads[0].prints && !ads[0].clicks) {
         try {
-          var ir = await fetch("/api/ml/items?ids="+itemIds.join(","), { headers: headers });
-          if (ir.ok) {
-            var idata = await ir.json();
-            var itemMap = {};
-            (Array.isArray(idata)?idata:idata.body||[]).forEach(function(entry){
-              var item = entry.body || entry;
-              if (item.id) itemMap[item.id] = item;
-            });
-            ads = ads.map(function(a){
-              return itemMap[a.item_id] ? Object.assign({}, a, { item: itemMap[a.item_id] }) : a;
-            });
+          var urlM = "/api/ml/advertising/advertisers/"+advertiserId+"/product_ads/ads?campaign_id="+campId+"&limit=100&date_from="+df+"&date_to="+dt+"&metrics=clicks,prints,cost,direct_amount,direct_items_quantity,acos";
+          var rm = await fetch(urlM, { headers: h2 });
+          if (rm.status === 200) {
+            var dm = JSON.parse(await rm.text());
+            var adsM = Array.isArray(dm) ? dm : (Object.values(dm).find(function(v){ return Array.isArray(v)&&v.length>0; })||[]);
+            if (adsM.length > 0) {
+              // Mescla métricas por item_id
+              var metMap = {};
+              adsM.forEach(function(a){ if(a.item_id||a.id) metMap[a.item_id||a.id]=a; });
+              ads = ads.map(function(a){ var m=metMap[a.item_id||a.id]; return m?Object.assign({},a,m):a; });
+              console.log("[PUB] métricas mescladas para", Object.keys(metMap).length, "anúncios");
+            }
           }
-        } catch(e2) { console.warn("[PUBLICIDADE] erro ao buscar itens:", e2.message); }
+        } catch(em) { console.warn("[PUB] erro métricas:", em.message); }
       }
+
+      // Buscar título/thumbnail dos itens em batch
+      var semTitulo = ads.filter(function(a){ return !a.title && !a.item?.title && a.item_id; });
+      if (semTitulo.length > 0) {
+        try {
+          var ids = semTitulo.map(function(a){ return a.item_id; }).filter(Boolean).slice(0,20).join(",");
+          var ri = await fetch("/api/ml/items?ids="+ids, { headers: h2 });
+          if (ri.ok) {
+            var di = await ri.json();
+            var imap = {};
+            (Array.isArray(di)?di:[]).forEach(function(e){ var it=e.body||e; if(it.id) imap[it.id]=it; });
+            ads = ads.map(function(a){ return imap[a.item_id]?Object.assign({},a,{item:imap[a.item_id]}):a; });
+            console.log("[PUB] itens enriquecidos:", Object.keys(imap).length);
+          }
+        } catch(ei) { console.warn("[PUB] erro items batch:", ei.message); }
+      }
+
       setAnunciosCamp(function(p){ return Object.assign({},p,{[campId]:ads}); });
-    } catch(e) { console.warn("[PUBLICIDADE] erro ao buscar anúncios:", e.message); }
+    } catch(e) { console.warn("[PUBLICIDADE] erro:", e.message); }
     setLoadingAnuncios(function(p){ return Object.assign({},p,{[campId]:false}); });
   }
 
@@ -12834,18 +12882,17 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
 
       // Tenta múltiplos endpoints de busca do ML (a API pública de search
       // foi restringida pelo ML para apps de terceiros — tentamos alternativas)
-      // Limpar título para busca mais eficaz: remover anos, medidas, cores
-      var queryLimpa = query
-        .replace(/\d{4}\s*(a|à|A)\s*\d{4}/g, "")  // remove "2009 a 2013"
-        .replace(/\d{4}/g, "")                       // remove anos soltos
-        .replace(/\s+/g, " ").trim()
-        .split(" ").slice(0, 6).join(" ");           // limita a 6 palavras-chave
+      // Limpar query: tirar anos e manter termos principais
+      var palavras = query.replace(/\d{4}/g,"").replace(/\s+/g," ").trim().split(" ").filter(Boolean);
+      var queryCurta = palavras.slice(0,5).join(" ");
+      var queryMedia = palavras.slice(0,8).join(" ");
 
       var tentativasBusca = [
-        // Busca autenticada via proxy — funciona com token do seller
-        "/api/ml/sites/MLB/search?q="+encodeURIComponent(queryLimpa)+"&limit=30",
-        "/api/ml/sites/MLB/search?q="+encodeURIComponent(query.split(" ").slice(0,5).join(" "))+"&limit=30",
-        "/api/ml/products/search?q="+encodeURIComponent(queryLimpa)+"&site_id=MLB&limit=30",
+        // /sites/MLB/search com token funciona (busca autenticada)
+        "/api/ml/sites/MLB/search?q="+encodeURIComponent(queryCurta)+"&limit=30&sort=relevance",
+        "/api/ml/sites/MLB/search?q="+encodeURIComponent(queryMedia)+"&limit=30",
+        // Fallback: busca de catálogo
+        "/api/ml/products/search?q="+encodeURIComponent(queryCurta)+"&site_id=MLB&limit=30",
       ];
       var data = null, ultimoStatus = null, ultimoErro = null;
       for (var bi = 0; bi < tentativasBusca.length; bi++) {
@@ -12922,35 +12969,43 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
 
         // Busca em batch (até 20 itens de uma vez)
         var batchResults = [];
-        try {
-          var batchUrl = "/api/ml/items?ids="+itemIds.join(",");
-          var br = await fetch(batchUrl, { headers: { Authorization: "Bearer "+token } });
-          var btxt = await br.text();
-          console.log("[CONCORRENCIA] batch /items status "+br.status+":", btxt.slice(0,400));
-          if (br.ok) {
-            var bdata = JSON.parse(btxt);
-            var barray = Array.isArray(bdata) ? bdata : [];
-            barray.forEach(function(entry){
-              var item = entry.body || entry;
-              if (!item || item.error || !item.price) return;
-              batchResults.push({
-                id: item.id, title: item.title||titleMap[item.id],
-                price: item.price, original_price: item.original_price,
-                thumbnail: item.thumbnail||thumbMap[item.id],
-                permalink: item.permalink, seller_id: item.seller_id,
-                seller_nickname: "—",
-                sold_quantity: item.sold_quantity||0,
-                free_shipping: item.shipping?.free_shipping||false,
-                listing_type_id: item.listing_type_id, condition: item.condition,
+        // Verificar se os IDs são realmente item IDs (MLB...) ou IDs de catálogo (MLC...)
+        var itemIdsValidos = itemIds.filter(function(id){ return /^MLB/i.test(String(id)); });
+        var idsCatalogo = itemIds.filter(function(id){ return !/^MLB/i.test(String(id)); });
+        console.log("[CONCORRENCIA] itemIds MLB válidos:", itemIdsValidos.length, "catálogo:", idsCatalogo.length);
+
+        if (itemIdsValidos.length > 0) {
+          try {
+            var batchUrl = "/api/ml/items?ids="+itemIdsValidos.join(",");
+            var br = await fetch(batchUrl, { headers: { Authorization: "Bearer "+token } });
+            var btxt = await br.text();
+            console.log("[CONCORRENCIA] batch /items status "+br.status+":", btxt.slice(0,400));
+            if (br.ok) {
+              var bdata = JSON.parse(btxt);
+              var barray = Array.isArray(bdata) ? bdata : [];
+              barray.forEach(function(entry){
+                var item = entry.body || entry;
+                if (!item || item.error || !item.price) return;
+                batchResults.push({
+                  id: item.id, title: item.title||titleMap[item.id],
+                  price: item.price, original_price: item.original_price,
+                  thumbnail: item.thumbnail||thumbMap[item.id],
+                  permalink: item.permalink, seller_id: item.seller_id,
+                  seller_nickname: "—",
+                  sold_quantity: item.sold_quantity||0,
+                  free_shipping: item.shipping?.free_shipping||false,
+                  listing_type_id: item.listing_type_id, condition: item.condition,
+                });
               });
-            });
-          }
-        } catch(e2) { console.warn("[CONCORRENCIA] erro batch:", e2.message); }
+            }
+          } catch(e2) { console.warn("[CONCORRENCIA] erro batch:", e2.message); }
+        }
 
         results = batchResults;
 
         if (results.length === 0) {
-          throw new Error("Encontramos "+itemIds.length+" produtos similares no catálogo, mas não foi possível buscar os preços (batch /items falhou). Use a busca manual no ML.");
+          // IDs de catálogo (MLC...) não funcionam com /items — a API só busca a catalog page
+          throw new Error("Encontramos "+itemIds.length+" produto(s) no catálogo ML, mas os IDs retornados são de catálogo (não de anúncios individuais). O ML restringe a busca de anúncios individuais de terceiros para apps não certificados. Use o botão de busca manual.");
         }
       }
 

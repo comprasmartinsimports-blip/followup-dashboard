@@ -1218,6 +1218,12 @@ function ModalUsuario({ usuario, onSave, onClose }) {
           </div>
 
           <div>
+            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Email (para notificações de tarefas)</div>
+            <input type="email" value={form.email||""} onChange={e=>set("email",e.target.value)} placeholder="usuario@empresa.com"
+              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+          </div>
+
+          <div>
             <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>
               {usuario ? "Nova senha (deixe vazio para manter)" : "Senha *"}
             </div>
@@ -13343,6 +13349,27 @@ function ChatInternoWidget({ currentUser }) {
     var next = [...tarefas, nova];
     setTarefas(next); saveTarefas(next);
     setShowNovaTarefa(false);
+
+    // Enviar email de notificação ao responsável (via mailto: como fallback sem servidor)
+    var responsavel = usuarios.find(function(u){ return u.id===form.responsavelId; });
+    if (responsavel && responsavel.email) {
+      var prazoTxt = form.prazo ? " - Prazo: "+new Date(form.prazo).toLocaleDateString("pt-BR") : "";
+      var assunto = encodeURIComponent("[ML Margem] Nova tarefa: "+form.titulo);
+      var linhas = [
+        "Ola "+responsavel.nome+",",
+        "",
+        "Voce recebeu uma nova tarefa no ML Margem:",
+        "",
+        "Tarefa: "+form.titulo,
+        form.descricao ? "Descricao: "+form.descricao : "",
+        "Prioridade: "+form.prioridade,
+        prazoTxt,
+        "Criado por: "+currentUser.nome,
+        "",
+        "Acesse o sistema para ver mais detalhes.",
+      ].filter(function(l){ return l !== ""; }).join("%0A");
+      window.open("mailto:"+responsavel.email+"?subject="+assunto+"&body="+linhas, "_blank");
+    }
   }
 
   function mudarStatusTarefa(id, status) {
@@ -13563,6 +13590,99 @@ function ModalNovaTarefa({ usuarios, onSave, onClose }) {
   );
 }
 
+
+// ════════════════════════════════════════════════════════════
+//  Painel de Usuários (acessado pelo header)
+// ════════════════════════════════════════════════════════════
+function PainelUsuarios({ currentUser, onClose }) {
+  const [usuarios, setUsuarios] = useState(getUsuarios);
+  const [editingUser, setEditingUser] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+
+  function saveUser(user) {
+    const lista = getUsuarios();
+    const updated = lista.find(u => u.id === user.id)
+      ? lista.map(u => u.id === user.id ? user : u)
+      : [...lista, user];
+    saveUsuarios(updated);
+    setUsuarios(updated);
+    setShowModal(false);
+    setEditingUser(null);
+  }
+
+  function deleteUser(id) {
+    if (id === currentUser.id) { alert("Você não pode excluir seu próprio usuário."); return; }
+    if (!window.confirm("Excluir este usuário?")) return;
+    const updated = getUsuarios().filter(u => u.id !== id);
+    saveUsuarios(updated);
+    setUsuarios(updated);
+  }
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", zIndex:800, display:"flex", alignItems:"flex-start", justifyContent:"flex-end", padding:"60px 16px 16px" }}>
+      <div style={{ background:"#fff", borderRadius:14, width:480, maxHeight:"calc(100vh - 80px)", display:"flex", flexDirection:"column", boxShadow:"0 20px 60px rgba(0,0,0,.2)", overflow:"hidden" }}>
+        {/* Header */}
+        <div style={{ padding:"16px 20px", borderBottom:"1px solid #e2e8f0", display:"flex", justifyContent:"space-between", alignItems:"center", background:"#0f172a" }}>
+          <div style={{ fontWeight:700, fontSize:15, color:"#fff" }}>👥 Usuários do Sistema</div>
+          <button onClick={onClose} style={{ background:"transparent", border:"none", color:"#94a3b8", fontSize:20, cursor:"pointer" }}>✕</button>
+        </div>
+
+        {/* Lista */}
+        <div style={{ flex:1, overflowY:"auto", padding:"12px 16px" }}>
+          {usuarios.map(function(u) {
+            var isMe = u.id === currentUser.id;
+            return (
+              <div key={u.id} style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"12px 14px", marginBottom:8, display:"flex", alignItems:"center", gap:12 }}>
+                <div style={{ width:38, height:38, borderRadius:10, background:"#0f172a", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:800, color:"#ffe000", flexShrink:0 }}>
+                  {u.nome?.charAt(0).toUpperCase()}
+                </div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontWeight:700, fontSize:13, color:"#0f172a" }}>
+                    {u.nome} {isMe && <span style={{ fontSize:10, color:"#0891b2", background:"#eff6ff", padding:"1px 5px", borderRadius:4 }}>você</span>}
+                  </div>
+                  <div style={{ fontSize:11, color:"#64748b" }}>@{u.usuario} · {u.admin?"Admin":"Usuário"}</div>
+                  {u.email && <div style={{ fontSize:10, color:"#94a3b8", marginTop:1 }}>📧 {u.email}</div>}
+                  <div style={{ fontSize:10, marginTop:2 }}>
+                    <span style={{ color:u.ativo?"#15803d":"#dc2626", fontWeight:600 }}>{u.ativo?"● Ativo":"○ Inativo"}</span>
+                  </div>
+                </div>
+                <div style={{ display:"flex", gap:6 }}>
+                  <button onClick={function(){ setEditingUser(u); setShowModal(true); }}
+                    style={{ background:"#eff6ff", border:"1px solid #bfdbfe", color:"#1d4ed8", padding:"5px 10px", borderRadius:7, cursor:"pointer", fontSize:12, fontWeight:600 }}>
+                    ✎ Editar
+                  </button>
+                  {!isMe && (
+                    <button onClick={function(){ deleteUser(u.id); }}
+                      style={{ background:"#fef2f2", border:"1px solid #fecaca", color:"#dc2626", padding:"5px 10px", borderRadius:7, cursor:"pointer", fontSize:12 }}>
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding:"12px 16px", borderTop:"1px solid #e2e8f0" }}>
+          <button onClick={function(){ setEditingUser(null); setShowModal(true); }}
+            style={{ width:"100%", background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
+            + Novo Usuário
+          </button>
+        </div>
+      </div>
+
+      {showModal && (
+        <ModalUsuario
+          usuario={editingUser}
+          onSave={saveUser}
+          onClose={function(){ setShowModal(false); setEditingUser(null); }}
+        />
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   // ── Auth do dashboard ─────────────────────────────────────
   const [tab, setTab] = useState(() => {
@@ -13697,6 +13817,7 @@ export default function App() {
   });
   const [showNotif, setShowNotif] = useState(false);
   const [showBackup, setShowBackup] = useState(false);
+  const [showUserPanel, setShowUserPanel] = useState(false);
   const [notificacoes, setNotificacoes] = useState(() => {
     try { return JSON.parse(localStorage.getItem("ml_notificacoes") || "[]"); } catch { return []; }
   });
@@ -14799,7 +14920,7 @@ export default function App() {
                 currentUser?.permissoes?.includes("listings")   && { key:"listings",   label:"Anúncios",    badge:enriched.length },
                 currentUser?.permissoes?.includes("orders")     && { key:"orders",     label:"Pedidos",     badge:enrichedOrders.length },
                 currentUser?.permissoes?.includes("financeiro") && { key:"financeiro", label:"Financeiro",  badge:null },
-                currentUser?.admin                              && { key:"admin",       label:"Usuários",    badge:null },
+
                 currentUser?.permissoes?.includes("produtos")   && { key:"produtos",   label:"Produtos",    badge:null },
                 currentUser?.permissoes?.includes("produtos")   && { key:"nf",         label:"NF Entrada",  badge:null },
                 currentUser?.permissoes?.includes("orders")     && { key:"nfe_saida",  label:"NF Saída",    badge:null },
@@ -14890,13 +15011,15 @@ export default function App() {
             style={{ background: darkMode?"#334155":"#f1f5f9", border:"none", color: darkMode?"#fff":"#475569", width:36, height:36, borderRadius:8, cursor:"pointer", fontSize:18 }}>
             {darkMode ? "☀️" : "🌙"}
           </button>
-          <div style={{ display:"flex", alignItems:"center", gap:8, background: darkMode?"#1e293b":"#f8fafc", border:`1px solid ${darkMode?"#334155":"#e2e8f0"}`, borderRadius:8, padding:"5px 10px" }}>
+          <div onClick={function(){ if(currentUser?.admin) setShowUserPanel(true); }}
+            style={{ display:"flex", alignItems:"center", gap:8, background: darkMode?"#1e293b":"#f8fafc", border:`1px solid ${darkMode?"#334155":"#e2e8f0"}`, borderRadius:8, padding:"5px 10px", cursor:currentUser?.admin?"pointer":"default" }}
+            title={currentUser?.admin?"Gerenciar usuários":""}>
             <div style={{ width:26, height:26, borderRadius:8, background:"#0f172a", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:800, color:"#ffe000" }}>
               {currentUser?.nome?.charAt(0).toUpperCase()}
             </div>
             <div style={{ fontSize:12, lineHeight:1.3 }}>
               <div style={{ fontWeight:600, color: darkMode?"#e2e8f0":"#0f172a" }}>{currentUser?.nome}</div>
-              <div style={{ color:"#94a3b8", fontSize:10 }}>{currentUser?.admin?"Admin":"Usuário"}</div>
+              <div style={{ color:"#94a3b8", fontSize:10 }}>{currentUser?.admin?"Admin ▾":"Usuário"}</div>
             </div>
           </div>
           <button onClick={() => { clearSession(); clearSavedTokens(); setCurrentUser(null); setToken(null); setUser(null); }}
@@ -15528,9 +15651,7 @@ export default function App() {
           />
         )}
 
-        {tab === "admin" && currentUser?.admin && (
-          <AdminTab currentUser={currentUser} />
-        )}
+
 
         {tab === "full" && currentUser?.permissoes?.includes("orders") && (
           <EnviosFULLTab
@@ -15582,6 +15703,9 @@ export default function App() {
       {showBackup && <PainelBackup onClose={() => setShowBackup(false)} />}
 
       {showMLModal && <MLConnectModal onConnect={handleConnect} onClose={() => setShowMLModal(false)} />}
+      {showUserPanel && currentUser?.admin && (
+        <PainelUsuarios currentUser={currentUser} onClose={function(){ setShowUserPanel(false); }} />
+      )}
       {selectedListing && <AIPanel listing={selectedListing} onClose={() => setSelectedListing(null)} />}
       {currentUser && <ChatInternoWidget currentUser={currentUser} />}
     </div>

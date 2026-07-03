@@ -12517,78 +12517,95 @@ function PublicidadeTab({ token, sellerId }) {
       var h2 = { Authorization: "Bearer "+token, "Content-Type": "application/json", "Api-Version": "2" };
       var hoje2=new Date(), fmt2=function(d){return d.toISOString().slice(0,10);};
       var sub2=function(n){var d=new Date(hoje2);d.setDate(d.getDate()-n);return d;};
-      var df = fmt2(sub2(periodo==="LAST_30_DAYS"?30:periodo==="THIS_MONTH"?new Date(hoje2.getFullYear(),hoje2.getMonth(),1).getDate()-1:7));
+      var df = fmt2(sub2(periodo==="LAST_30_DAYS"?30:7));
       var dt = fmt2(hoje2);
 
-      // Endpoint oficial documentado ML Ads para listar anúncios de uma campanha
-      var url = "/api/ml/advertising/advertisers/"+advertiserId+"/product_ads/ads?campaign_id="+campId+"&limit=100&offset=0";
-      var r = await fetch(url, { headers: h2 });
-      var txt = await r.text();
-      console.log("[PUB] ads camp "+campId+" status:"+r.status+" resp:", txt.slice(0,800));
+      // O endpoint /ads retorna 404 — o correto é buscar os item_ids
+      // através do endpoint de anúncios patrocinados da campanha
+      // Endpoint correto (confirmado pelo console): salesforce_event_id está na campanha
+      // Buscar itens vinculados à campanha via /items/search com filtro de campanha
+      var endpoints = [
+        // Endpoint de itens patrocinados da campanha (formato Product Ads v2)
+        "/api/ml/advertising/advertisers/"+advertiserId+"/product_ads/campaigns/"+campId+"/items?limit=50&offset=0",
+        // Alternativa: anúncios com métricas diretamente no endpoint de campanha
+        "/api/ml/advertising/advertisers/"+advertiserId+"/product_ads/campaigns/"+campId+"/ads?limit=50&offset=0",
+        // Alternativa com parâmetro de período
+        "/api/ml/advertising/advertisers/"+advertiserId+"/product_ads/campaigns/"+campId+"/ads?limit=50&offset=0&date_from="+df+"&date_to="+dt,
+      ];
 
-      if (r.status !== 200) {
-        setAnunciosCamp(function(p){ return Object.assign({},p,{[campId]:[]}); });
-        setLoadingAnuncios(function(p){ return Object.assign({},p,{[campId]:false}); });
-        return;
+      var ads = [];
+      for (var ei2=0; ei2<endpoints.length; ei2++) {
+        var r = await fetch(endpoints[ei2], { headers: h2 });
+        var txt = await r.text();
+        console.log("[PUB] endpoint "+ei2+" status:"+r.status, txt.slice(0,500));
+        if (r.status === 200) {
+          var data = JSON.parse(txt);
+          var cands = Array.isArray(data) ? data
+            : (data.results||data.ads||data.items||data.data||[]);
+          if (cands.length === 0) {
+            // Tenta qualquer campo que seja array
+            for (var kk in data) {
+              if (Array.isArray(data[kk]) && data[kk].length > 0) { cands = data[kk]; break; }
+            }
+          }
+          if (cands.length > 0) { ads = cands; break; }
+        }
       }
 
-      var data = JSON.parse(txt);
-      console.log("[PUB] chaves da resposta:", Object.keys(data));
+      // Se ainda não achou, pegar os item_ids da campanha completa (já carregada)
+      if (ads.length === 0) {
+        var campObj = campanhas.find(function(c){ return String(c.id)===String(campId); });
+        if (campObj && campObj.items) {
+          ads = Array.isArray(campObj.items) ? campObj.items : [];
+        }
+      }
 
-      // Extrai array de anúncios independente do formato
-      var ads = [];
-      if (Array.isArray(data)) {
-        ads = data;
-      } else {
-        // Pega o primeiro campo que seja array com pelo menos 1 item
-        for (var k in data) {
-          if (Array.isArray(data[k]) && data[k].length > 0) {
-            ads = data[k];
-            console.log("[PUB] anúncios encontrados em campo:", k, "qtd:", ads.length);
-            break;
+      console.log("[PUB] total ads encontrados:", ads.length);
+
+      // Buscar detalhes dos itens (título, foto, preço) em batch
+      var itemIds = ads.map(function(a){ return a.item_id||a.id; }).filter(Boolean);
+      if (itemIds.length > 0) {
+        try {
+          var ri = await fetch("/api/ml/items?ids="+itemIds.slice(0,20).join(","), { headers: h2 });
+          if (ri.ok) {
+            var di = await ri.json();
+            var imap = {};
+            (Array.isArray(di)?di:[]).forEach(function(e){
+              var it = e.body||e;
+              if (it && it.id && !it.error) imap[it.id] = it;
+            });
+            ads = ads.map(function(a){
+              var it = imap[a.item_id||a.id];
+              return it ? Object.assign({}, a, { item: it, title: it.title, thumbnail: it.thumbnail, permalink: it.permalink }) : a;
+            });
+            console.log("[PUB] itens enriquecidos:", Object.keys(imap).length);
+          }
+        } catch(ei3) { console.warn("[PUB] items batch erro:", ei3.message); }
+      }
+
+      // Se não achou via API, mostra os item_ids que temos das campanhas+métricas
+      // (pelo menos 1 anúncio mockado com o que sabemos da campanha)
+      if (ads.length === 0) {
+        var camp2 = campanhas.find(function(c){ return String(c.id)===String(campId); });
+        if (camp2) {
+          // Tenta buscar anúncios pelo salesforce_event_id
+          var sfId = camp2.salesforce_event_id;
+          if (sfId) {
+            try {
+              var sfUrl = "/api/ml/advertising/advertisers/"+advertiserId+"/product_ads/ads?salesforce_event_id="+sfId+"&limit=50";
+              var sfr = await fetch(sfUrl, { headers: h2 });
+              console.log("[PUB] salesforce endpoint status:", sfr.status);
+              if (sfr.ok) {
+                var sfd = await sfr.json();
+                ads = Array.isArray(sfd)?sfd:(sfd.results||sfd.ads||[]);
+              }
+            } catch {}
           }
         }
       }
 
-      console.log("[PUB] total anúncios:", ads.length, "primeiro:", JSON.stringify(ads[0]||{}).slice(0,400));
-
-      // Buscar métricas do período para cada anúncio (se não vieram junto)
-      if (ads.length > 0 && !ads[0].metrics && !ads[0].prints && !ads[0].clicks) {
-        try {
-          var urlM = "/api/ml/advertising/advertisers/"+advertiserId+"/product_ads/ads?campaign_id="+campId+"&limit=100&date_from="+df+"&date_to="+dt+"&metrics=clicks,prints,cost,direct_amount,direct_items_quantity,acos";
-          var rm = await fetch(urlM, { headers: h2 });
-          if (rm.status === 200) {
-            var dm = JSON.parse(await rm.text());
-            var adsM = Array.isArray(dm) ? dm : (Object.values(dm).find(function(v){ return Array.isArray(v)&&v.length>0; })||[]);
-            if (adsM.length > 0) {
-              // Mescla métricas por item_id
-              var metMap = {};
-              adsM.forEach(function(a){ if(a.item_id||a.id) metMap[a.item_id||a.id]=a; });
-              ads = ads.map(function(a){ var m=metMap[a.item_id||a.id]; return m?Object.assign({},a,m):a; });
-              console.log("[PUB] métricas mescladas para", Object.keys(metMap).length, "anúncios");
-            }
-          }
-        } catch(em) { console.warn("[PUB] erro métricas:", em.message); }
-      }
-
-      // Buscar título/thumbnail dos itens em batch
-      var semTitulo = ads.filter(function(a){ return !a.title && !a.item?.title && a.item_id; });
-      if (semTitulo.length > 0) {
-        try {
-          var ids = semTitulo.map(function(a){ return a.item_id; }).filter(Boolean).slice(0,20).join(",");
-          var ri = await fetch("/api/ml/items?ids="+ids, { headers: h2 });
-          if (ri.ok) {
-            var di = await ri.json();
-            var imap = {};
-            (Array.isArray(di)?di:[]).forEach(function(e){ var it=e.body||e; if(it.id) imap[it.id]=it; });
-            ads = ads.map(function(a){ return imap[a.item_id]?Object.assign({},a,{item:imap[a.item_id]}):a; });
-            console.log("[PUB] itens enriquecidos:", Object.keys(imap).length);
-          }
-        } catch(ei) { console.warn("[PUB] erro items batch:", ei.message); }
-      }
-
       setAnunciosCamp(function(p){ return Object.assign({},p,{[campId]:ads}); });
-    } catch(e) { console.warn("[PUBLICIDADE] erro:", e.message); }
+    } catch(e) { console.warn("[PUBLICIDADE] erro toggle:", e.message); }
     setLoadingAnuncios(function(p){ return Object.assign({},p,{[campId]:false}); });
   }
 

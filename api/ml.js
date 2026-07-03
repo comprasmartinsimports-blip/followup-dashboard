@@ -1,7 +1,6 @@
 // api/ml.js
-// Proxy para a API do Mercado Livre + rota interna /api/ml/_users para sincronização de usuários
+// Proxy para a API do Mercado Livre + rota interna /_users (sem exigir token ML)
 
-// Cache de usuários em memória (persiste enquanto serverless estiver ativo)
 let _usersCache = null;
 
 const ADMIN_PADRAO = [{
@@ -45,16 +44,9 @@ async function salvarUsuarios(usuarios) {
 }
 
 export default async function handler(req, res) {
-  const cookies = Object.fromEntries(
-    (req.headers.cookie || "").split(";").map(c => {
-      const [k, ...v] = c.trim().split("=");
-      return [k.trim(), v.join("=")];
-    })
-  );
-
   const path = req.url.replace(/^\/api\/ml/, "");
 
-  // ── Rota interna: /api/ml/_users (sincronização de usuários) ──
+  // ── Rota de usuários — NÃO exige token do ML ──
   if (path === "/_users" || path.startsWith("/_users?")) {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -63,6 +55,7 @@ export default async function handler(req, res) {
 
     if (req.method === "GET") {
       const usuarios = await lerUsuarios();
+      // Retorna sem senhaHash
       const seguros = usuarios.map(function(u) {
         const s = Object.assign({}, u);
         delete s.senhaHash;
@@ -79,6 +72,7 @@ export default async function handler(req, res) {
       const atual = await lerUsuarios();
       const mapaAtual = {};
       atual.forEach(function(u) { mapaAtual[u.id] = u; });
+
       const novos = body.usuarios.map(function(u) {
         const hashMap = body.senhaHashMap || {};
         return Object.assign(
@@ -95,7 +89,14 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // ── Proxy normal para a API do Mercado Livre ──
+  // ── Proxy normal ML — exige token ──
+  const cookies = Object.fromEntries(
+    (req.headers.cookie || "").split(";").map(c => {
+      const [k, ...v] = c.trim().split("=");
+      return [k.trim(), v.join("=")];
+    })
+  );
+
   let token = cookies.ml_access_token;
   if (!token && req.headers.authorization) {
     token = req.headers.authorization.replace("Bearer ", "");

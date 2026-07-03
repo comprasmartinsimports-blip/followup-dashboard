@@ -1060,7 +1060,7 @@ function saveUsuarios(usuarios) {
   try {
     var senhaHashMap = {};
     usuarios.forEach(function(u){ if(u.senhaHash) senhaHashMap[u.id]=u.senhaHash; });
-    fetch("/api/users", {
+    fetch("/api/ml/_users", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify({ usuarios: usuarios, senhaHashMap: senhaHashMap })
@@ -1071,7 +1071,7 @@ function saveUsuarios(usuarios) {
 // Sincroniza usuários do servidor para o localStorage (chamado na inicialização do app)
 async function sincronizarUsuariosDoServidor() {
   try {
-    var res = await fetch("/api/users");
+    var res = await fetch("/api/ml/_users");
     if (!res.ok) return;
     var usuariosServidor = await res.json();
     if (!usuariosServidor || !usuariosServidor.length) return;

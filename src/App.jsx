@@ -11327,7 +11327,7 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
 // ════════════════════════════════════════════════════════════
 //  NOTAS FISCAIS DE SAÍDA (ML)
 // ════════════════════════════════════════════════════════════
-function NfSaidaTab({ enrichedOrders, nfeSaida, setNfeSaida, loadingNfe, setLoadingNfe, token, getValidToken }) {
+function NfSaidaTab({ enrichedOrders, nfeSaida, setNfeSaida, loadingNfe, setLoadingNfe, token, getValidToken, sellerId }) {
   const [search, setSearch] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos"); // todos | com_nf | sem_nf
   const [filtroDe, setFiltroDe] = useState("");
@@ -11366,6 +11366,7 @@ function NfSaidaTab({ enrichedOrders, nfeSaida, setNfeSaida, loadingNfe, setLoad
       else if (Array.isArray(d.results)) candidatos = d.results;
       else if (Array.isArray(d.fiscal_documents)) candidatos = d.fiscal_documents;
       else if (Array.isArray(d.invoices)) candidatos = d.invoices;
+      else if (Array.isArray(d.reference_invoices)) candidatos = d.reference_invoices;
       else if (d.invoice_data) candidatos = [d.invoice_data];
       else if (d.billing_info) candidatos = [d.billing_info];
       else if (d.nfe || d.nfce || d.nfs) candidatos = [d.nfe || d.nfce || d.nfs];
@@ -11380,10 +11381,12 @@ function NfSaidaTab({ enrichedOrders, nfeSaida, setNfeSaida, loadingNfe, setLoad
         if (chave && chave.length !== 44) { var m = String(chave).match(/\d{44}/); chave = m ? m[0] : null; }
         var serie  = doc.serie || doc.series || null;
         var dataEm = doc.emission_date || doc.date_created || doc.issued_date || doc.date || null;
-        var xmlUrl  = doc.xml_url || doc.xml || null;
+        // xml_location é o campo real retornado por /users/{id}/invoices/order|shipments/{id}
+        var xmlUrl  = doc.xml_location || doc.xml_url || doc.xml || null;
         var danfeUrl = doc.pdf_url || doc.danfe_url || doc.danfe || doc.document_url || null;
+        var statusNF = doc.status || doc.transaction_status || null;
         if (numero || chave || xmlUrl) {
-          return { numero: numero, chave: chave, serie: serie, dataEmissao: dataEm, xmlUrl: xmlUrl, danfeUrl: danfeUrl, raw: doc };
+          return { numero: numero, chave: chave, serie: serie, dataEmissao: dataEm, xmlUrl: xmlUrl, danfeUrl: danfeUrl, status: statusNF, raw: doc };
         }
       }
       return null;
@@ -11398,70 +11401,63 @@ function NfSaidaTab({ enrichedOrders, nfeSaida, setNfeSaida, loadingNfe, setLoad
         valor: o.price * o.qty,
       };
 
-      // ── Endpoint principal: GET /orders/{id} com invoice_data ──────────
-      // O ML retorna invoice_data dentro do próprio pedido quando NF foi emitida
-      try {
-        var rOrder = await fetch("/api/ml/orders/" + o.id, {
-          headers: { Authorization: "Bearer " + tk }
-        });
-        if (rOrder.ok) {
-          var dOrder = await rOrder.json();
-          // invoice_data dentro do pedido
-          if (dOrder.invoice_data) {
-            nfDados = extrairNF(dOrder.invoice_data);
-          }
-          // fiscal_documents dentro do pedido
-          if (!nfDados && dOrder.fiscal_documents) {
-            nfDados = extrairNF(dOrder.fiscal_documents);
-          }
-          // Atualizar packId se disponível
-          if (dOrder.pack_id) o.packId = String(dOrder.pack_id);
-        } else {
-          registrarErro(rOrder.status);
-        }
-      } catch(e) {}
-
-      // ── Endpoint 2: orders/{id}/billing_info ──────────────────────────
-      if (!nfDados) {
+      // ── Endpoint principal: GET /users/{seller_id}/invoices/order/{order_id} ──
+      // Este é o endpoint oficial para consultar a nota fiscal já emitida pelo ML
+      // a partir do ID do pedido (documentação: developers.mercadolivre.com.br/pt_br/obtendo-nota-fiscal)
+      if (sellerId) {
         try {
-          var r2 = await fetch("/api/ml/orders/" + o.id + "/billing_info", {
+          var r1 = await fetch("/api/ml/users/" + sellerId + "/invoices/order/" + o.id, {
+            headers: { Authorization: "Bearer " + tk }
+          });
+          if (r1.ok) {
+            nfDados = extrairNF(await r1.json());
+          } else if (r1.status !== 404) {
+            registrarErro(r1.status);
+          }
+        } catch(e) {}
+      }
+
+      // ── Endpoint 2: GET /users/{seller_id}/invoices/shipments/{shipment_id} ──
+      // Mesma API de notas fiscais, buscando agora pelo ID do envio
+      if (!nfDados && sellerId && o.shipping?.id) {
+        try {
+          var r2 = await fetch("/api/ml/users/" + sellerId + "/invoices/shipments/" + o.shipping.id, {
             headers: { Authorization: "Bearer " + tk }
           });
           if (r2.ok) {
-            var d2 = await r2.json();
-            nfDados = extrairNF(d2);
-            // Às vezes vem dentro de invoice_data
-            if (!nfDados && d2.invoice_data) nfDados = extrairNF(d2.invoice_data);
+            nfDados = extrairNF(await r2.json());
           } else if (r2.status !== 404) {
             registrarErro(r2.status);
           }
         } catch(e) {}
       }
 
-      // ── Endpoint 3: packs/{packId}/billing_info ───────────────────────
+      // ── Endpoint 3: GET /packs/{packId}/fiscal_documents ──────────────
+      // Para notas fiscais enviadas manualmente (fora do emissor automático do ML)
       if (!nfDados && o.packId) {
         try {
-          var r3 = await fetch("/api/ml/packs/" + o.packId + "/billing_info", {
+          var r3 = await fetch("/api/ml/packs/" + o.packId + "/fiscal_documents", {
             headers: { Authorization: "Bearer " + tk }
           });
-          if (r3.ok) {
-            var d3 = await r3.json();
-            nfDados = extrairNF(d3);
-            if (!nfDados && d3.invoice_data) nfDados = extrairNF(d3.invoice_data);
-          } else if (r3.status !== 404) {
-            registrarErro(r3.status);
-          }
+          if (r3.ok) nfDados = extrairNF(await r3.json());
+          else if (r3.status !== 404) registrarErro(r3.status);
         } catch(e) {}
       }
 
-      // ── Endpoint 4: packs/{packId}/fiscal_documents ───────────────────
-      if (!nfDados && o.packId) {
+      // ── Endpoint 4 (fallback): GET /orders/{id} — invoice_data embutido ──
+      if (!nfDados) {
         try {
-          var r4 = await fetch("/api/ml/packs/" + o.packId + "/fiscal_documents", {
+          var r4 = await fetch("/api/ml/orders/" + o.id, {
             headers: { Authorization: "Bearer " + tk }
           });
-          if (r4.ok) nfDados = extrairNF(await r4.json());
-          else if (r4.status !== 404) registrarErro(r4.status);
+          if (r4.ok) {
+            var d4 = await r4.json();
+            if (d4.invoice_data) nfDados = extrairNF(d4.invoice_data);
+            if (!nfDados && d4.fiscal_documents) nfDados = extrairNF(d4.fiscal_documents);
+            if (d4.pack_id) o.packId = String(d4.pack_id);
+          } else if (r4.status !== 404) {
+            registrarErro(r4.status);
+          }
         } catch(e) {}
       }
 
@@ -15979,6 +15975,7 @@ export default function App() {
             setLoadingNfe={setLoadingNfe}
             token={token}
             getValidToken={getValidToken}
+            sellerId={user?.id}
           />
         )}
 

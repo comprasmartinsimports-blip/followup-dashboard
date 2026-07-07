@@ -3411,12 +3411,208 @@ function ModalNF({ nf, fornecedores, produtos, categoriasPagar, onSave, onClose 
   );
 }
 
+// ── Precificar direto da NF Entrada — mesma lógica/fórmulas da aba Precificação ──
+// Usa as mesmas chaves de localStorage (fretes_config, precos_venda_config, descontos_config)
+// que a aba Precificação, então qualquer ajuste feito aqui já aparece lá também.
+function ModalPrecificarNF({ nf, produtos, enriched, costs, setCosts, onClose }) {
+  const [margemAlvo] = useState(20);
+  const [custosLocais, setCustosLocais] = useState({});
+  const [fretesConfig, setFretesConfigState] = useState(function(){
+    try { return JSON.parse(localStorage.getItem("fretes_config")||"{}"); } catch { return {}; }
+  });
+  function setFretesAndSave(updater) {
+    setFretesConfigState(function(prev){
+      var next = typeof updater === "function" ? updater(prev) : updater;
+      try { localStorage.setItem("fretes_config", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
+  const [descontosConfig, setDescontosConfig] = useState(function(){
+    try { return JSON.parse(localStorage.getItem("descontos_config")||"{}"); } catch { return {}; }
+  });
+  function setDesconto(id, pct) {
+    var next = Object.assign({}, descontosConfig, { [id]: pct });
+    setDescontosConfig(next);
+    try { localStorage.setItem("descontos_config", JSON.stringify(next)); } catch {}
+  }
+  const [precosVendaConfig, setPrecosVendaConfig] = useState(function(){
+    try { return JSON.parse(localStorage.getItem("precos_venda_config")||"{}"); } catch { return {}; }
+  });
+  function setPrecoVenda(id, preco) {
+    var next = Object.assign({}, precosVendaConfig, { [id]: preco });
+    setPrecosVendaConfig(next);
+    try { localStorage.setItem("precos_venda_config", JSON.stringify(next)); } catch {}
+  }
+  const [editingCampo, setEditingCampo] = useState(null); // `${mlbId}:${campo}`
+
+  // Produtos desta NF que têm produto cadastrado vinculado a pelo menos um MLB
+  const itensPrecificaveis = (nf.itens || []).filter(function(it){ return it.produtoCadastradoId; }).map(function(it){
+    var prod = produtos.find(function(p){ return p.id === it.produtoCadastradoId; });
+    var mlbs = prod ? (prod.mlbsVinculados || (prod.mlbVinculado ? [prod.mlbVinculado] : [])) : [];
+    return { item: it, produto: prod, mlbs: mlbs };
+  }).filter(function(x){ return x.mlbs.length > 0; });
+
+  var linhas = [];
+  itensPrecificaveis.forEach(function(x){
+    x.mlbs.forEach(function(mlbId){
+      var l = enriched.find(function(e){ return e.id === mlbId; });
+      if (l) linhas.push({ produto: x.produto, listing: l });
+    });
+  });
+
+  function fmt2(n) { return "R$ " + Number(n||0).toFixed(2).replace(".",","); }
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.65)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:700, padding:16 }}>
+      <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:960, maxHeight:"92vh", display:"flex", flexDirection:"column", boxShadow:"0 20px 60px rgba(0,0,0,.25)" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"14px 20px", borderBottom:"1px solid #f1f5f9" }}>
+          <div>
+            <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>📊 Precificar itens da NF {nf.numero}/{nf.serie}</div>
+            <div style={{ fontSize:12, color:"#94a3b8", marginTop:2 }}>{nf.fornecedorNome} — mesma lógica da aba Precificação: defina o preço de venda desejado (com desconto) e o sistema calcula o preço a anunciar</div>
+          </div>
+          <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:30, height:30, borderRadius:8, cursor:"pointer", fontSize:14 }}>✕</button>
+        </div>
+
+        <div style={{ flex:1, overflowY:"auto", padding:"12px 20px" }}>
+          {linhas.length === 0 ? (
+            <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"16px", color:"#dc2626", fontSize:13 }}>
+              ⚠ Nenhum item desta NF está vinculado a um produto cadastrado com anúncio (MLB) associado. Vincule os itens da NF a um produto, e o produto a um anúncio, para poder precificar aqui.
+            </div>
+          ) : linhas.map(function(row){
+            var l = row.listing;
+            var custo = custosLocais[l.id] !== undefined ? custosLocais[l.id] : (costs[l.id]||0);
+            var bruto = l.price || 0;
+            var taxa = l.fee || bruto * 0.13;
+            var freteReal = l.freteSeller || 0;
+            var freteConfig = parseFloat(fretesConfig&&fretesConfig[l.id]||0);
+            var frete = freteConfig > 0 ? freteConfig : freteReal;
+            var precoVendaDesejado = parseFloat(precosVendaConfig&&precosVendaConfig[l.id]||0);
+            var descPct = parseFloat(descontosConfig&&descontosConfig[l.id]||0);
+            var precoParaAnunciar = precoVendaDesejado > 0
+              ? (descPct > 0 ? precoVendaDesejado / (1 - descPct/100) : precoVendaDesejado)
+              : 0;
+            var precoComDesc = precoVendaDesejado > 0 ? precoVendaDesejado : (descPct > 0 ? bruto * (1 - descPct/100) : bruto);
+            var feeRate = taxa > 0 && bruto > 0 ? taxa/bruto : (l.feeRate||0.12);
+            var taxaSobreDesc = precoComDesc * feeRate;
+            var lucroFinal = precoComDesc - custo - frete - taxaSobreDesc;
+            var margemFinal = precoComDesc > 0 ? (lucroFinal/precoComDesc)*100 : 0;
+            var mCor = margemFinal >= margemAlvo ? "#15803d" : margemFinal >= margemAlvo*0.6 ? "#d97706" : "#dc2626";
+
+            return (
+              <div key={l.id} style={{ border:"1px solid #e2e8f0", borderRadius:12, padding:"14px 16px", marginBottom:10 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10, gap:10 }}>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontWeight:700, fontSize:13, color:"#0f172a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{l.title}</div>
+                    <div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>SKU: {row.produto?.sku || "—"} · MLB: {l.id}</div>
+                  </div>
+                  <div style={{ textAlign:"right", flexShrink:0 }}>
+                    <div style={{ fontSize:10, color:"#94a3b8" }}>Margem simulada</div>
+                    <div style={{ fontSize:16, fontWeight:800, color:mCor }}>{margemFinal.toFixed(1)}%</div>
+                  </div>
+                </div>
+
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))", gap:10 }}>
+                  {/* Custo */}
+                  <div>
+                    <div style={{ fontSize:10, color:"#94a3b8", marginBottom:3 }}>Custo</div>
+                    {editingCampo === l.id+":custo" ? (
+                      <input type="number" step="0.01" defaultValue={custo} autoFocus
+                        onBlur={function(e){ var v=parseFloat(e.target.value)||0; setCustosLocais(function(c){return {...c,[l.id]:v};}); setCosts(function(c){return {...c,[l.id]:v};}); setEditingCampo(null); }}
+                        style={{ width:"100%", background:"#fff", border:"1px solid #0891b2", color:"#0f172a", padding:"5px 8px", borderRadius:6, fontSize:12, outline:"none" }} />
+                    ) : (
+                      <div onClick={function(){setEditingCampo(l.id+":custo");}} style={{ cursor:"pointer", fontSize:13, fontWeight:700, color:custo>0?"#334155":"#dc2626" }}>
+                        {custo>0?fmt2(custo):"✎ definir"}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Preço Atual */}
+                  <div>
+                    <div style={{ fontSize:10, color:"#94a3b8", marginBottom:3 }}>Preço atual</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:"#0f172a", padding:"5px 0" }}>{fmt2(bruto)}</div>
+                  </div>
+
+                  {/* Frete */}
+                  <div>
+                    <div style={{ fontSize:10, color:"#94a3b8", marginBottom:3 }}>Frete (real {fmt2(freteReal)})</div>
+                    {editingCampo === l.id+":frete" ? (
+                      <input type="number" step="0.01" defaultValue={freteConfig||""} placeholder="0,00" autoFocus
+                        onBlur={function(e){ var v=parseFloat(e.target.value)||0; setFretesAndSave(function(f){return Object.assign({},f,{[l.id]:v});}); setEditingCampo(null); }}
+                        style={{ width:"100%", background:"#fff", border:"1px solid #0891b2", color:"#0f172a", padding:"5px 8px", borderRadius:6, fontSize:12, outline:"none" }} />
+                    ) : (
+                      <div onClick={function(){setEditingCampo(l.id+":frete");}} style={{ cursor:"pointer", fontSize:13, fontWeight:600, color:freteConfig>0?"#d97706":"#94a3b8" }}>
+                        {freteConfig>0?fmt2(freteConfig):"✎ usar real"}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* % Desconto */}
+                  <div>
+                    <div style={{ fontSize:10, color:"#94a3b8", marginBottom:3 }}>% Desconto promoção</div>
+                    {editingCampo === l.id+":desc" ? (
+                      <input type="number" min="0" max="80" step="1" defaultValue={descPct||""} placeholder="0" autoFocus
+                        onBlur={function(e){ var v=Math.min(80,Math.max(0,parseFloat(e.target.value)||0)); setDesconto(l.id,v); setEditingCampo(null); }}
+                        style={{ width:"100%", background:"#fff", border:"1px solid #7c3aed", color:"#0f172a", padding:"5px 8px", borderRadius:6, fontSize:12, outline:"none" }} />
+                    ) : (
+                      <div onClick={function(){setEditingCampo(l.id+":desc");}} style={{ cursor:"pointer", fontSize:13, fontWeight:600, color:descPct>0?"#7c3aed":"#94a3b8" }}>
+                        {descPct>0?descPct+"%":"✎ definir"}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Vender por → Anunciar por */}
+                  <div style={{ gridColumn:"span 2" }}>
+                    <div style={{ fontSize:10, color:"#94a3b8", marginBottom:3 }}>Vender por (c/ desconto) → anunciar por</div>
+                    {editingCampo === l.id+":venda" ? (
+                      <input type="number" step="0.01" min="0" defaultValue={precoVendaDesejado||""} placeholder={bruto.toFixed(2)} autoFocus
+                        onBlur={function(e){ var v=parseFloat(e.target.value)||0; setPrecoVenda(l.id,v); setEditingCampo(null); }}
+                        style={{ width:"100%", background:"#fff", border:"1px solid #7c3aed", color:"#0f172a", padding:"5px 8px", borderRadius:6, fontSize:12, outline:"none" }} />
+                    ) : (
+                      <div onClick={function(){setEditingCampo(l.id+":venda");}} style={{ cursor:"pointer" }}>
+                        {precoVendaDesejado > 0 ? (
+                          <span style={{ fontSize:13, fontWeight:800, color:"#7c3aed" }}>
+                            {fmt2(precoVendaDesejado)} 📢 anunciar {fmt2(precoParaAnunciar)}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize:12, color:"#94a3b8" }}>✎ definir preço de venda</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ display:"flex", gap:16, marginTop:10, paddingTop:10, borderTop:"1px solid #f1f5f9" }}>
+                  <div>
+                    <div style={{ fontSize:10, color:"#94a3b8" }}>Taxa ML</div>
+                    <div style={{ fontSize:12, fontWeight:700, color:"#dc2626" }}>{fmt2(taxaSobreDesc)}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:10, color:"#94a3b8" }}>Lucro simulado</div>
+                    <div style={{ fontSize:12, fontWeight:700, color:lucroFinal>=0?"#0891b2":"#dc2626" }}>{fmt2(lucroFinal)}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ padding:"12px 20px", borderTop:"1px solid #f1f5f9", display:"flex", justifyContent:"flex-end" }}>
+          <button onClick={onClose} style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"10px 24px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
+            ✓ Concluir
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Menu de 3 pontinhos para NF ─────────────────────────────
-function MenuAcoes({ nf, produtos, setProdutos, contasPagar, setContasPagar, categoriasPagar, costs, setCosts }) {
+function MenuAcoes({ nf, produtos, setProdutos, contasPagar, setContasPagar, categoriasPagar, costs, setCosts, enriched }) {
   const [aberto, setAberto] = useState(false);
   const [modalEstoque, setModalEstoque] = useState(false);
   const [modalContas, setModalContas] = useState(false);
   const [modalCusto, setModalCusto] = useState(false);
+  const [modalPrecificar, setModalPrecificar] = useState(false);
   const btnRef = useRef(null);
   const [menuPos, setMenuPos] = useState(null);
 
@@ -3443,6 +3639,12 @@ function MenuAcoes({ nf, produtos, setProdutos, contasPagar, setContasPagar, cat
   const itensComProduto = (nf.itens || []).filter(it => it.produtoCadastradoId);
   // Itens vinculados que têm valor unitário informado na NF (podem atualizar custo)
   const itensComCusto = itensComProduto.filter(it => parseFloat(it.vUnCom || 0) > 0);
+  // Itens vinculados a um produto que por sua vez está vinculado a pelo menos um anúncio (MLB) — podem ser precificados
+  const itensComMlb = itensComProduto.filter(it => {
+    const p = produtos.find(pp => pp.id === it.produtoCadastradoId);
+    const mlbs = p ? (p.mlbsVinculados || (p.mlbVinculado ? [p.mlbVinculado] : [])) : [];
+    return mlbs.length > 0;
+  });
   // Duplicatas ainda não lançadas como conta a pagar
   const dupsJaLancadas = new Set(contasPagar.filter(c => c.nfId === nf.id).map(c => c.id));
   const dupsDisponiveis = nf.duplicatas || [];
@@ -3555,6 +3757,18 @@ function MenuAcoes({ nf, produtos, setProdutos, contasPagar, setContasPagar, cat
               </div>
             </button>
             <div style={{ height:1, background:"#f1f5f9" }} />
+            {/* Precificar itens da NF */}
+            <button onClick={() => { setAberto(false); setModalPrecificar(true); }}
+              style={{ width:"100%", background:"none", border:"none", padding:"12px 16px", textAlign:"left", cursor:"pointer", display:"flex", alignItems:"center", gap:7, fontSize:13, color:"#0f172a" }}
+              onMouseEnter={e=>e.currentTarget.style.background="#f5f3ff"}
+              onMouseLeave={e=>e.currentTarget.style.background="none"}>
+              <span style={{ fontSize:16 }}>📊</span>
+              <div>
+                <div style={{ fontWeight:600 }}>Precificar</div>
+                <div style={{ fontSize:11, color:"#94a3b8" }}>{itensComMlb.length} produto(s) com anúncio vinculado</div>
+              </div>
+            </button>
+            <div style={{ height:1, background:"#f1f5f9" }} />
             {/* Lançar Ambos */}
             <button onClick={() => { lancarEstoque(); setTimeout(() => setModalContas(true), 100); }}
               style={{ width:"100%", background:"none", border:"none", padding:"12px 16px", textAlign:"left", cursor:"pointer", display:"flex", alignItems:"center", gap:7, fontSize:13, color:"#0f172a" }}
@@ -3653,6 +3867,18 @@ function MenuAcoes({ nf, produtos, setProdutos, contasPagar, setContasPagar, cat
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de precificação dos itens da NF */}
+      {modalPrecificar && (
+        <ModalPrecificarNF
+          nf={nf}
+          produtos={produtos}
+          enriched={enriched || []}
+          costs={costs}
+          setCosts={setCosts}
+          onClose={() => setModalPrecificar(false)}
+        />
       )}
     </div>
   );
@@ -3761,15 +3987,17 @@ function ModalLancarContas({ nf, categoriasPagar, onConfirm, onClose }) {
 
 
 // ── Aba Principal de Notas Fiscais ───────────────────────────
-function NotasFiscaisTab({ notasFiscais, setNotasFiscais, fornecedores, produtos, setProdutos, contasPagar, setContasPagar, categoriasPagar, costs, setCosts }) {
+function NotasFiscaisTab({ notasFiscais, setNotasFiscais, fornecedores, produtos, setProdutos, contasPagar, setContasPagar, categoriasPagar, costs, setCosts, enriched }) {
   const [showModal, setShowModal] = useState(false);
   const [editingNF, setEditingNF] = useState(null);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [nfParaPrecificar, setNfParaPrecificar] = useState(null);
 
   function saveNF(form) {
     const isNew = !notasFiscais.find(n => n.id === form.id);
-    const updated = isNew ? [{ ...form, lancadaEm: new Date().toLocaleDateString("sv-SE") }, ...notasFiscais]
+    const savedForm = isNew ? { ...form, lancadaEm: new Date().toLocaleDateString("sv-SE") } : form;
+    const updated = isNew ? [savedForm, ...notasFiscais]
                           : notasFiscais.map(n => n.id === form.id ? form : n);
     setNotasFiscais(updated);
     saveNFs(updated);
@@ -3779,6 +4007,16 @@ function NotasFiscaisTab({ notasFiscais, setNotasFiscais, fornecedores, produtos
     if (isNew) {
       // Auto-lançamento de contas e estoque desativado.
       // Use os 3 pontinhos da NF para lançar manualmente.
+
+      // Se a NF já tem itens vinculados a produto + anúncio (MLB), oferece precificar na hora,
+      // pra não precisar ir até a aba Precificação separadamente.
+      var temPrecificavel = (savedForm.itens||[]).some(function(it){
+        if (!it.produtoCadastradoId) return false;
+        var p = produtos.find(function(pp){ return pp.id === it.produtoCadastradoId; });
+        var mlbs = p ? (p.mlbsVinculados || (p.mlbVinculado ? [p.mlbVinculado] : [])) : [];
+        return mlbs.length > 0;
+      });
+      if (temPrecificavel) setNfParaPrecificar(savedForm);
     }
 
     setEditingNF(null);
@@ -3930,6 +4168,7 @@ function NotasFiscaisTab({ notasFiscais, setNotasFiscais, fornecedores, produtos
                         categoriasPagar={categoriasPagar}
                         costs={costs}
                         setCosts={setCosts}
+                        enriched={enriched}
                       />
                     </div>
                   </td>
@@ -3948,6 +4187,18 @@ function NotasFiscaisTab({ notasFiscais, setNotasFiscais, fornecedores, produtos
           categoriasPagar={categoriasPagar}
           onSave={saveNF}
           onClose={() => { setShowModal(false); setEditingNF(null); }}
+        />
+      )}
+
+      {/* Abre automaticamente após lançar uma NF nova com itens já vinculados a anúncios */}
+      {nfParaPrecificar && (
+        <ModalPrecificarNF
+          nf={nfParaPrecificar}
+          produtos={produtos}
+          enriched={enriched || []}
+          costs={costs}
+          setCosts={setCosts}
+          onClose={() => setNfParaPrecificar(null)}
         />
       )}
     </div>
@@ -11076,19 +11327,35 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
 // ════════════════════════════════════════════════════════════
 //  NOTAS FISCAIS DE SAÍDA (ML)
 // ════════════════════════════════════════════════════════════
-function NfSaidaTab({ enrichedOrders, nfeSaida, setNfeSaida, loadingNfe, setLoadingNfe, token }) {
+function NfSaidaTab({ enrichedOrders, nfeSaida, setNfeSaida, loadingNfe, setLoadingNfe, token, getValidToken }) {
   const [search, setSearch] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos"); // todos | com_nf | sem_nf
   const [filtroDe, setFiltroDe] = useState("");
   const [filtroAte, setFiltroAte] = useState("");
   const [expandido, setExpandido] = useState(null);
+  const [erroBusca, setErroBusca] = useState(null);
 
   async function buscarNFs() {
     if (!token) { alert("Reconecte ao ML primeiro"); return; }
     setLoadingNfe(true);
+    setErroBusca(null);
     setNfeSaida({});
     var mapa = {};
     var pedidos = enrichedOrders.filter(function(o){ return o.status === "paid"; }).slice(0, 200);
+
+    // Garante um token válido (renova automaticamente se estiver perto de expirar) —
+    // evita que a busca falhe silenciosamente por token vencido.
+    var tk = token;
+    if (typeof getValidToken === "function") {
+      try { tk = (await getValidToken()) || token; } catch(e) {}
+    }
+
+    var contagemErros = { 401: 0, 403: 0, outros: 0 };
+    function registrarErro(status) {
+      if (status === 401) contagemErros[401]++;
+      else if (status === 403) contagemErros[403]++;
+      else contagemErros.outros++;
+    }
 
     // Helper robusto para extrair NF de qualquer formato ML
     function extrairNF(d) {
@@ -11135,7 +11402,7 @@ function NfSaidaTab({ enrichedOrders, nfeSaida, setNfeSaida, loadingNfe, setLoad
       // O ML retorna invoice_data dentro do próprio pedido quando NF foi emitida
       try {
         var rOrder = await fetch("/api/ml/orders/" + o.id, {
-          headers: { Authorization: "Bearer " + token }
+          headers: { Authorization: "Bearer " + tk }
         });
         if (rOrder.ok) {
           var dOrder = await rOrder.json();
@@ -11149,6 +11416,8 @@ function NfSaidaTab({ enrichedOrders, nfeSaida, setNfeSaida, loadingNfe, setLoad
           }
           // Atualizar packId se disponível
           if (dOrder.pack_id) o.packId = String(dOrder.pack_id);
+        } else {
+          registrarErro(rOrder.status);
         }
       } catch(e) {}
 
@@ -11156,13 +11425,15 @@ function NfSaidaTab({ enrichedOrders, nfeSaida, setNfeSaida, loadingNfe, setLoad
       if (!nfDados) {
         try {
           var r2 = await fetch("/api/ml/orders/" + o.id + "/billing_info", {
-            headers: { Authorization: "Bearer " + token }
+            headers: { Authorization: "Bearer " + tk }
           });
           if (r2.ok) {
             var d2 = await r2.json();
             nfDados = extrairNF(d2);
             // Às vezes vem dentro de invoice_data
             if (!nfDados && d2.invoice_data) nfDados = extrairNF(d2.invoice_data);
+          } else if (r2.status !== 404) {
+            registrarErro(r2.status);
           }
         } catch(e) {}
       }
@@ -11171,12 +11442,14 @@ function NfSaidaTab({ enrichedOrders, nfeSaida, setNfeSaida, loadingNfe, setLoad
       if (!nfDados && o.packId) {
         try {
           var r3 = await fetch("/api/ml/packs/" + o.packId + "/billing_info", {
-            headers: { Authorization: "Bearer " + token }
+            headers: { Authorization: "Bearer " + tk }
           });
           if (r3.ok) {
             var d3 = await r3.json();
             nfDados = extrairNF(d3);
             if (!nfDados && d3.invoice_data) nfDados = extrairNF(d3.invoice_data);
+          } else if (r3.status !== 404) {
+            registrarErro(r3.status);
           }
         } catch(e) {}
       }
@@ -11185,9 +11458,10 @@ function NfSaidaTab({ enrichedOrders, nfeSaida, setNfeSaida, loadingNfe, setLoad
       if (!nfDados && o.packId) {
         try {
           var r4 = await fetch("/api/ml/packs/" + o.packId + "/fiscal_documents", {
-            headers: { Authorization: "Bearer " + token }
+            headers: { Authorization: "Bearer " + tk }
           });
           if (r4.ok) nfDados = extrairNF(await r4.json());
+          else if (r4.status !== 404) registrarErro(r4.status);
         } catch(e) {}
       }
 
@@ -11205,6 +11479,17 @@ function NfSaidaTab({ enrichedOrders, nfeSaida, setNfeSaida, loadingNfe, setLoad
     }
     setNfeSaida(Object.assign({}, mapa));
     setLoadingNfe(false);
+
+    // Diagnóstico: se a maioria das tentativas voltou 401/403, o token está inválido/sem permissão —
+    // isso explica "não consegue comunicar com o ML" sem nenhum erro visível antes desta correção.
+    var totalErros = contagemErros[401] + contagemErros[403] + contagemErros.outros;
+    if (contagemErros[401] > pedidos.length) {
+      setErroBusca("⚠️ Token de acesso expirado ou inválido (erro 401 do Mercado Livre). Clique em \"Reconectar\" no topo da página e tente buscar novamente.");
+    } else if (contagemErros[403] > pedidos.length) {
+      setErroBusca("⚠️ Sua conta/aplicação no Mercado Livre não tem permissão para acessar dados fiscais (erro 403). Isso geralmente exige uma solicitação de acesso especial à API de faturamento junto ao Mercado Livre.");
+    } else if (totalErros > pedidos.length * 2) {
+      setErroBusca("⚠️ Muitos erros de comunicação com o Mercado Livre durante a busca (" + totalErros + " falhas). Tente novamente em alguns instantes.");
+    }
   }
 
   var pedidosFiltrados = enrichedOrders.filter(function(o) {
@@ -11243,6 +11528,13 @@ function NfSaidaTab({ enrichedOrders, nfeSaida, setNfeSaida, loadingNfe, setLoad
           {loadingNfe ? "⏳ Buscando NFs..." : "🔄 Buscar NFs no ML"}
         </button>
       </div>
+
+      {erroBusca && (
+        <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"12px 16px", marginBottom:10, color:"#991b1b", fontSize:13, display:"flex", justifyContent:"space-between", alignItems:"center", gap:10 }}>
+          <span>{erroBusca}</span>
+          <button onClick={function(){ setErroBusca(null); }} style={{ background:"none", border:"none", color:"#991b1b", cursor:"pointer", fontSize:16, flexShrink:0 }}>✕</button>
+        </div>
+      )}
 
       {/* Cards resumo */}
       {Object.keys(nfeSaida).length > 0 && (
@@ -12588,11 +12880,11 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
               {[
                 "SKU","MLB","Tipo","Anúncio",
                 "Custo","Preço Atual","Frete Real","Frete Config.",
-                "💡 Preço Venda Simulado","🏷 % Desc. Promoção",
+                "💡 Vender por → Anunciar por","🏷 % Desc. Promoção",
                 "Taxa ML (s/ desconto)",
                 "Lucro Simulado","Margem Simulada","Ação"
               ].map(function(h){
-                var isSimul = ["💡 Preço Venda Simulado","Lucro Simulado","Margem Simulada","Taxa ML (s/ desconto)"].includes(h);
+                var isSimul = ["💡 Vender por → Anunciar por","Lucro Simulado","Margem Simulada","Taxa ML (s/ desconto)"].includes(h);
                 return <th key={h} style={{ fontSize:10, color: isSimul?"#7c3aed":"#64748b", fontWeight:600, textTransform:"uppercase", padding:"8px 10px", borderBottom:"1px solid #e2e8f0", textAlign:"left", whiteSpace:"nowrap", background: isSimul?"#faf5ff":"transparent" }}>{h}</th>;
               })}
             </tr>
@@ -12605,13 +12897,19 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
               var freteReal = l.freteSeller || 0;
               var freteConfig = parseFloat(fretesConfig&&fretesConfig[l.id]||0);
               var frete = freteConfig > 0 ? freteConfig : freteReal;
-              var precoVendaSimul = parseFloat(precosVendaConfig&&precosVendaConfig[l.id]||0);
+              var precoVendaDesejado = parseFloat(precosVendaConfig&&precosVendaConfig[l.id]||0);
               var descPct = parseFloat(descontosConfig&&descontosConfig[l.id]||0);
 
-              // Preço base: simulado > atual
-              var precoBase = precoVendaSimul > 0 ? precoVendaSimul : bruto;
-              // Preço após desconto de promoção
-              var precoComDesc = descPct > 0 ? precoBase * (1 - descPct/100) : precoBase;
+              // Preço a ANUNCIAR: se o usuário definiu o preço de venda desejado (o que o cliente
+              // deve pagar depois do desconto), calculamos o preço de anúncio necessário para que,
+              // após aplicar o % de desconto da promoção, o cliente pague exatamente esse valor.
+              var precoParaAnunciar = precoVendaDesejado > 0
+                ? (descPct > 0 ? precoVendaDesejado / (1 - descPct/100) : precoVendaDesejado)
+                : 0;
+              // Preço base para exibição/comparação (o que está ou ficará anunciado)
+              var precoBase = precoParaAnunciar > 0 ? precoParaAnunciar : bruto;
+              // Preço que o cliente efetivamente paga (com desconto aplicado)
+              var precoComDesc = precoVendaDesejado > 0 ? precoVendaDesejado : (descPct > 0 ? bruto * (1 - descPct/100) : bruto);
               // Taxa ML calculada sobre o preço COM desconto (promoção)
               var feeRate = taxa > 0 && bruto > 0 ? taxa/bruto : (l.feeRate||0.12);
               var taxaSobreDesc = precoComDesc * feeRate;
@@ -12697,28 +12995,32 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                     )}
                   </td>
 
-                  {/* 💡 Preço Venda Simulado (editável) */}
+                  {/* 💡 Preço de Venda Desejado → Preço a Anunciar (editável) */}
                   <td style={{ padding:"6px 8px", background:"#faf5ff" }}>
                     {editingPrecoId === l.id ? (
-                      <div style={{ display:"flex", alignItems:"center", gap:3 }}>
-                        <span style={{ fontSize:10, color:"#94a3b8" }}>R$</span>
-                        <input type="number" step="0.01" min="0"
-                          defaultValue={precoVendaSimul||""}
-                          placeholder={bruto.toFixed(2)}
-                          autoFocus
-                          onBlur={function(e){ var v=parseFloat(e.target.value)||0; setPrecoVenda(l.id,v); setEditingPrecoId(null); }}
-                          onKeyDown={function(e){ if(e.key==="Enter"||e.key==="Escape") e.target.blur(); }}
-                          style={{ width:78, background:"#fff", border:"1px solid #7c3aed", color:"#0f172a", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none", textAlign:"right" }} />
+                      <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
+                        <span style={{ fontSize:9, color:"#94a3b8" }}>Vender por (c/ desconto):</span>
+                        <div style={{ display:"flex", alignItems:"center", gap:3 }}>
+                          <span style={{ fontSize:10, color:"#94a3b8" }}>R$</span>
+                          <input type="number" step="0.01" min="0"
+                            defaultValue={precoVendaDesejado||""}
+                            placeholder={bruto.toFixed(2)}
+                            autoFocus
+                            onBlur={function(e){ var v=parseFloat(e.target.value)||0; setPrecoVenda(l.id,v); setEditingPrecoId(null); }}
+                            onKeyDown={function(e){ if(e.key==="Enter"||e.key==="Escape") e.target.blur(); }}
+                            style={{ width:78, background:"#fff", border:"1px solid #7c3aed", color:"#0f172a", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none", textAlign:"right" }} />
+                        </div>
                       </div>
                     ) : (
-                      <div onClick={function(){ setEditingPrecoId(l.id); }} title="Clique para simular preço de venda" style={{ cursor:"pointer" }}>
-                        {precoVendaSimul > 0 ? (
+                      <div onClick={function(){ setEditingPrecoId(l.id); }} title="Clique para definir o preço de venda que você quer receber (já com desconto) — o sistema calcula o preço a anunciar" style={{ cursor:"pointer" }}>
+                        {precoVendaDesejado > 0 ? (
                           <div>
                             <span style={{ fontSize:13, fontWeight:800, color:"#7c3aed" }}>
-                              R$ {precoVendaSimul.toFixed(2).replace(".",",")}
+                              📢 R$ {precoParaAnunciar.toFixed(2).replace(".",",")}
                             </span>
-                            <div style={{ fontSize:10, color:precoVendaSimul>bruto?"#15803d":"#dc2626" }}>
-                              {precoVendaSimul>bruto?"▲":"▼"} atual: R$ {bruto.toFixed(2).replace(".",",")}
+                            <div style={{ fontSize:10, color:"#64748b" }}>
+                              vender por R$ {precoVendaDesejado.toFixed(2).replace(".",",")}
+                              {descPct > 0 && <span style={{ color:"#94a3b8" }}> (-{descPct}%)</span>}
                             </div>
                             {pendentesAtualizacao[l.id] && (
                               <div style={{ fontSize:9, fontWeight:700, color:"#d97706", background:"#fffbeb", border:"1px solid #fde68a", padding:"1px 5px", borderRadius:4, marginTop:2, display:"inline-block" }}>
@@ -12756,7 +13058,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                               {descPct}%
                             </span>
                             <div style={{ fontSize:10, color:"#7c3aed", marginTop:1 }}>
-                              → R$ {precoComDesc.toFixed(2).replace(".",",")}
+                              cliente paga R$ {precoComDesc.toFixed(2).replace(".",",")}
                             </div>
                           </div>
                         ) : (
@@ -15640,6 +15942,7 @@ export default function App() {
             categoriasPagar={categoriasPagar}
             costs={costs}
             setCosts={setCostsAndSave}
+            enriched={enriched}
           />
         )}
 
@@ -15675,6 +15978,7 @@ export default function App() {
             loadingNfe={loadingNfe}
             setLoadingNfe={setLoadingNfe}
             token={token}
+            getValidToken={getValidToken}
           />
         )}
 

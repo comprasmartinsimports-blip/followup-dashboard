@@ -97,9 +97,12 @@ export default async function handler(req, res) {
     })
   );
 
-  let token = cookies.ml_access_token;
-  if (!token && req.headers.authorization) {
-    token = req.headers.authorization.replace("Bearer ", "");
+  // Prioriza o header Authorization: o front-end renova o token ativamente (getValidToken) e
+  // sempre envia o valor mais atual nesse header. O cookie ml_access_token só é usado como
+  // fallback, pois pode ficar desatualizado entre renovações e "esconder" um token mais novo.
+  let token = req.headers.authorization ? req.headers.authorization.replace("Bearer ", "") : null;
+  if (!token) {
+    token = cookies.ml_access_token;
   }
 
   if (!token) {

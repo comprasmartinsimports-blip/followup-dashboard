@@ -2517,14 +2517,26 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
             var pedidosPeriodo = rawOrders.filter(function(o){ return o.status==="paid" && o.date>=dashRange.de && o.date<=dashRange.ate; });
             var porCliente={};
             pedidosPeriodo.forEach(function(o){
-              var nick=o.buyer_nickname||o.buyer_id||"Desconhecido";
-              if(!porCliente[nick]) porCliente[nick]={nick,pedidos:0,receita:0,primeiroId:o.id};
-              porCliente[nick].pedidos++;
-              porCliente[nick].receita+=o.price*(o.qty||1);
+              // Chave única do cliente: prioriza o documento (CPF/CNPJ), depois nome, por último o id do pedido
+              var doc=(o.buyerDoc||"").replace(/\D/g,"");
+              var nome=o.buyerName||o.buyerFirstName||"Cliente sem nome";
+              var chave=doc||nome||("pedido_"+o.id);
+              if(!porCliente[chave]) porCliente[chave]={chave,nome:nome,doc:o.buyerDoc||"",docType:o.buyerDocType||"",pedidos:0,receita:0,primeiroId:o.id};
+              // Preenche nome/doc se algum pedido anterior do mesmo cliente não tinha essa info
+              if(!porCliente[chave].nome||porCliente[chave].nome==="Cliente sem nome") porCliente[chave].nome=nome;
+              if(!porCliente[chave].doc && o.buyerDoc) { porCliente[chave].doc=o.buyerDoc; porCliente[chave].docType=o.buyerDocType||""; }
+              porCliente[chave].pedidos++;
+              porCliente[chave].receita+=o.price*(o.qty||1);
             });
             var ranking=Object.values(porCliente).sort(function(a,b){return b.receita-a.receita;});
             var totalReceita=ranking.reduce(function(s,c){return s+c.receita;},0);
             var recorrentes=ranking.filter(function(c){return c.pedidos>1;}).length;
+            function fmtDoc(d){
+              var n=(d||"").replace(/\D/g,"");
+              if(n.length===11) return n.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,"$1.$2.$3-$4");
+              if(n.length===14) return n.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,"$1.$2.$3/$4-$5");
+              return d||"—";
+            }
             return (
               <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12 }}>
@@ -2532,7 +2544,7 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
                     {l:"Clientes Únicos",v:ranking.length,cor:"#0f172a"},
                     {l:"Clientes Recorrentes",v:recorrentes,cor:"#15803d"},
                     {l:"Ticket Médio/Cliente",v:fmt(ranking.length>0?totalReceita/ranking.length:0),cor:"#0891b2"},
-                    {l:"Top Cliente",v:ranking[0]?.nick?.slice(0,20)||"—",cor:"#d97706"},
+                    {l:"Top Cliente",v:ranking[0]?.nome?.slice(0,20)||"—",cor:"#d97706"},
                   ].map(function(k){ return <div key={k.l} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"14px 16px" }}>
                     <div style={{ fontSize:9, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", marginBottom:3 }}>{k.l}</div>
                     <div style={{ fontSize:k.l.includes("Top")?13:20, fontWeight:800, color:k.cor }}>{k.v}</div>
@@ -2541,10 +2553,11 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
                 <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
                   <div style={{ padding:"10px 14px", borderBottom:"1px solid #f1f5f9", fontWeight:700, fontSize:15, color:"#0f172a" }}>Top Clientes por Receita</div>
                   <table style={{ borderCollapse:"collapse", width:"100%" }}>
-                    <thead><tr>{["#","Cliente (nickname ML)","Pedidos","Receita Total","Ticket Médio","Part. %"].map(function(h){ return <th key={h} style={{ fontSize:10, color:"#94a3b8", textTransform:"uppercase", padding:"8px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa" }}>{h}</th>; })}</tr></thead>
-                    <tbody>{ranking.slice(0,50).map(function(c,i){ return <tr key={c.nick} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
+                    <thead><tr>{["#","Cliente","CPF/CNPJ","Pedidos","Receita Total","Ticket Médio","Part. %"].map(function(h){ return <th key={h} style={{ fontSize:10, color:"#94a3b8", textTransform:"uppercase", padding:"8px 14px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa" }}>{h}</th>; })}</tr></thead>
+                    <tbody>{ranking.slice(0,50).map(function(c,i){ return <tr key={c.chave} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
                       <td style={{ padding:"8px 14px", fontSize:13, fontWeight:800, color:i===0?"#d97706":"#94a3b8" }}>{i+1}</td>
-                      <td style={{ padding:"8px 14px", fontSize:12, color:"#0f172a", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.nick}</td>
+                      <td style={{ padding:"8px 14px", fontSize:12, color:"#0f172a", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.nome}</td>
+                      <td style={{ padding:"8px 14px", fontSize:11, color:"#64748b", fontFamily:"monospace", whiteSpace:"nowrap" }}>{fmtDoc(c.doc)}</td>
                       <td style={{ padding:"8px 14px", textAlign:"center", fontWeight:700, color:c.pedidos>1?"#15803d":"#64748b" }}>{c.pedidos}{c.pedidos>1&&<span style={{fontSize:10,marginLeft:4,color:"#15803d"}}>✓ recorrente</span>}</td>
                       <td style={{ padding:"8px 14px", fontWeight:700, color:"#15803d" }}>{fmt(c.receita)}</td>
                       <td style={{ padding:"8px 14px", fontSize:12, color:"#64748b" }}>{fmt(c.receita/c.pedidos)}</td>
@@ -2973,8 +2986,8 @@ function ModalNF({ nf, fornecedores, produtos, categoriasPagar, onSave, onClose 
   ];
 
   return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.65)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:16 }}>
-      <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:820, maxHeight:"94vh", display:"flex", flexDirection:"column", boxShadow:"0 20px 60px rgba(0,0,0,.2)" }}>
+    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.65)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:12 }}>
+      <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:"98vw", height:"96vh", maxHeight:"96vh", display:"flex", flexDirection:"column", boxShadow:"0 20px 60px rgba(0,0,0,.2)" }}>
         {/* Header */}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 16px", borderBottom:"1px solid #f1f5f9" }}>
           <div>
@@ -3282,10 +3295,11 @@ function ModalNF({ nf, fornecedores, produtos, categoriasPagar, onSave, onClose 
 }
 
 // ── Menu de 3 pontinhos para NF ─────────────────────────────
-function MenuAcoes({ nf, produtos, setProdutos, contasPagar, setContasPagar, categoriasPagar }) {
+function MenuAcoes({ nf, produtos, setProdutos, contasPagar, setContasPagar, categoriasPagar, costs, setCosts }) {
   const [aberto, setAberto] = useState(false);
   const [modalEstoque, setModalEstoque] = useState(false);
   const [modalContas, setModalContas] = useState(false);
+  const [modalCusto, setModalCusto] = useState(false);
   const btnRef = useRef(null);
   const [menuPos, setMenuPos] = useState(null);
 
@@ -3293,7 +3307,7 @@ function MenuAcoes({ nf, produtos, setProdutos, contasPagar, setContasPagar, cat
     if (!aberto && btnRef.current) {
       const rect = btnRef.current.getBoundingClientRect();
       const menuWidth = 240;
-      const menuHeightEstimado = 170; // 3 opções ~56px cada
+      const menuHeightEstimado = 220; // 4 opções ~56px cada
       const espacoAbaixo = window.innerHeight - rect.bottom;
       const abrirParaCima = espacoAbaixo < menuHeightEstimado && rect.top > menuHeightEstimado;
       let left = rect.right - menuWidth;
@@ -3310,6 +3324,8 @@ function MenuAcoes({ nf, produtos, setProdutos, contasPagar, setContasPagar, cat
 
   // Itens que têm produto vinculado
   const itensComProduto = (nf.itens || []).filter(it => it.produtoCadastradoId);
+  // Itens vinculados que têm valor unitário informado na NF (podem atualizar custo)
+  const itensComCusto = itensComProduto.filter(it => parseFloat(it.vUnCom || 0) > 0);
   // Duplicatas ainda não lançadas como conta a pagar
   const dupsJaLancadas = new Set(contasPagar.filter(c => c.nfId === nf.id).map(c => c.id));
   const dupsDisponiveis = nf.duplicatas || [];
@@ -3325,6 +3341,33 @@ function MenuAcoes({ nf, produtos, setProdutos, contasPagar, setContasPagar, cat
     try { localStorage.setItem("produtos_cadastro", JSON.stringify(novoProdutos)); } catch {}
     alert(`✅ Estoque atualizado para ${itensComProduto.length} produto(s)!`);
     setAberto(false);
+  }
+
+  function atualizarPrecosCusto() {
+    if (itensComCusto.length === 0) { alert("Nenhum item desta NF está vinculado a um produto cadastrado com valor unitário informado."); return; }
+    // Atualiza o preço de custo no cadastro do produto
+    const novoProdutos = produtos.map(p => {
+      const item = itensComCusto.find(it => it.produtoCadastradoId === p.id);
+      if (!item) return p;
+      return { ...p, precoCusto: String(parseFloat(item.vUnCom)) };
+    });
+    setProdutos(novoProdutos);
+    try { localStorage.setItem("produtos_cadastro", JSON.stringify(novoProdutos)); } catch {}
+
+    // Sincroniza custo com os anúncios (ML) e com a tela de Precificação — ambos usam o mesmo mapa `costs` por MLB
+    if (setCosts) {
+      const newCosts = {};
+      novoProdutos.forEach(p => {
+        const item = itensComCusto.find(it => it.produtoCadastradoId === p.id);
+        if (!item) return;
+        const mlbs = p.mlbsVinculados || (p.mlbVinculado ? [p.mlbVinculado] : []);
+        mlbs.forEach(m => { newCosts[m] = parseFloat(item.vUnCom); });
+      });
+      if (Object.keys(newCosts).length > 0) setCosts(c => ({ ...c, ...newCosts }));
+    }
+
+    alert(`✅ Preço de custo atualizado para ${itensComCusto.length} produto(s) — refletido no cadastro, anúncios e precificação!`);
+    setAberto(false); setModalCusto(false);
   }
 
   function lancarContasPagar(cfg) {
@@ -3380,6 +3423,18 @@ function MenuAcoes({ nf, produtos, setProdutos, contasPagar, setContasPagar, cat
               <div>
                 <div style={{ fontWeight:600 }}>Lançar Contas a Pagar</div>
                 <div style={{ fontSize:11, color:"#94a3b8" }}>{dupsDisponiveis.length} duplicata(s)</div>
+              </div>
+            </button>
+            <div style={{ height:1, background:"#f1f5f9" }} />
+            {/* Atualizar Preços de Custo */}
+            <button onClick={() => { setAberto(false); setModalCusto(true); }}
+              style={{ width:"100%", background:"none", border:"none", padding:"12px 16px", textAlign:"left", cursor:"pointer", display:"flex", alignItems:"center", gap:7, fontSize:13, color:"#0f172a" }}
+              onMouseEnter={e=>e.currentTarget.style.background="#fffbeb"}
+              onMouseLeave={e=>e.currentTarget.style.background="none"}>
+              <span style={{ fontSize:16 }}>💲</span>
+              <div>
+                <div style={{ fontWeight:600 }}>Atualizar Preços de Custo</div>
+                <div style={{ fontSize:11, color:"#94a3b8" }}>{itensComCusto.length} produto(s) com valor na NF</div>
               </div>
             </button>
             <div style={{ height:1, background:"#f1f5f9" }} />
@@ -3441,6 +3496,46 @@ function MenuAcoes({ nf, produtos, setProdutos, contasPagar, setContasPagar, cat
           onConfirm={lancarContasPagar}
           onClose={() => setModalContas(false)}
         />
+      )}
+
+      {/* Modal de confirmação de atualização de preço de custo */}
+      {modalCusto && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:24 }}>
+          <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:480, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.15)" }}>
+            <div style={{ fontWeight:800, fontSize:17, color:"#0f172a", marginBottom:6 }}>💲 Atualizar Preços de Custo</div>
+            <div style={{ fontSize:13, color:"#64748b", marginBottom:8 }}>O preço de custo será atualizado no cadastro do produto, nos anúncios vinculados e na tela de Precificação:</div>
+            {itensComCusto.length === 0 ? (
+              <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"12px 16px", color:"#dc2626", fontSize:13, marginBottom:8 }}>
+                ⚠ Nenhum item desta NF está vinculado a um produto cadastrado com valor unitário informado.
+              </div>
+            ) : (
+              <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:10, padding:"12px 16px", marginBottom:8, maxHeight:280, overflowY:"auto" }}>
+                {itensComCusto.map((it, i) => {
+                  const prod = produtos.find(p => p.id === it.produtoCadastradoId);
+                  const custoAtual = parseFloat(prod?.precoCusto || 0);
+                  const custoNovo = parseFloat(it.vUnCom);
+                  return (
+                    <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 0", borderBottom:i<itensComCusto.length-1?"1px solid #fde68a":"none" }}>
+                      <span style={{ fontSize:13, color:"#0f172a" }}>{prod?.titulo?.slice(0,36) || it.xProd?.slice(0,36)}</span>
+                      <span style={{ fontSize:12, whiteSpace:"nowrap" }}>
+                        <span style={{ color:"#94a3b8", textDecoration: custoAtual !== custoNovo ? "line-through" : "none" }}>R$ {custoAtual.toFixed(2).replace(".",",")}</span>
+                        {custoAtual !== custoNovo && <span style={{ color:"#b45309", fontWeight:700 }}> → R$ {custoNovo.toFixed(2).replace(".",",")}</span>}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div style={{ display:"flex", gap:8 }}>
+              <button onClick={() => setModalCusto(false)}
+                style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
+              <button onClick={atualizarPrecosCusto} disabled={itensComCusto.length === 0}
+                style={{ flex:2, background:itensComCusto.length>0?"#b45309":"#f1f5f9", border:"none", color:itensComCusto.length>0?"#fff":"#94a3b8", fontWeight:700, padding:"11px", borderRadius:10, cursor:itensComCusto.length>0?"pointer":"not-allowed" }}>
+                ✓ Confirmar Atualização
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -3549,7 +3644,7 @@ function ModalLancarContas({ nf, categoriasPagar, onConfirm, onClose }) {
 
 
 // ── Aba Principal de Notas Fiscais ───────────────────────────
-function NotasFiscaisTab({ notasFiscais, setNotasFiscais, fornecedores, produtos, setProdutos, contasPagar, setContasPagar, categoriasPagar }) {
+function NotasFiscaisTab({ notasFiscais, setNotasFiscais, fornecedores, produtos, setProdutos, contasPagar, setContasPagar, categoriasPagar, costs, setCosts }) {
   const [showModal, setShowModal] = useState(false);
   const [editingNF, setEditingNF] = useState(null);
   const [search, setSearch] = useState("");
@@ -3716,6 +3811,8 @@ function NotasFiscaisTab({ notasFiscais, setNotasFiscais, fornecedores, produtos
                         contasPagar={contasPagar}
                         setContasPagar={setContasPagar}
                         categoriasPagar={categoriasPagar}
+                        costs={costs}
+                        setCosts={setCosts}
                       />
                     </div>
                   </td>
@@ -5132,8 +5229,8 @@ function ModalPedidoCompra({ pedido, produtos, fornecedores, onSave, onClose }) 
   var fmt2=function(n){return "R$ "+Number(n).toFixed(2).replace(".",",");};
 
   return (
-    <div style={{ position:"fixed",inset:0,background:"rgba(15,23,42,.65)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:600,padding:24 }}>
-      <div style={{ background:"#fff",borderRadius:16,width:"100%",maxWidth:820,maxHeight:"94vh",display:"flex",flexDirection:"column",boxShadow:"0 24px 64px rgba(0,0,0,.2)" }}>
+    <div style={{ position:"fixed",inset:0,background:"rgba(15,23,42,.65)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:600,padding:12 }}>
+      <div style={{ background:"#fff",borderRadius:16,width:"100%",maxWidth:"98vw",height:"96vh",maxHeight:"96vh",display:"flex",flexDirection:"column",boxShadow:"0 24px 64px rgba(0,0,0,.2)" }}>
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 16px",borderBottom:"1px solid #f1f5f9" }}>
           <div style={{ fontWeight:800,fontSize:17,color:"#0f172a" }}>{pedido?"Editar Pedido de Compra":"Novo Pedido de Compra"}</div>
           <button onClick={onClose} style={{ background:"#f1f5f9",border:"none",color:"#64748b",width:32,height:32,borderRadius:8,cursor:"pointer",fontSize:16 }}>✕</button>
@@ -5370,6 +5467,63 @@ function RelatoriosEstoqueTab({ produtos, fornecedores, movEstoque, listings }) 
     return true;
   });
 
+  var dadosExport = useMemo(function(){
+    if (!relAtivo) return null;
+    if (relAtivo === "entradas_saidas") {
+      var headers = ["Data","Produto","SKU","Tipo","Qtd","Motivo","Preço un."];
+      var rows = movsFiltradas.slice().sort(function(a,b){return (b.id||0)-(a.id||0);}).slice(0,500).map(function(m){
+        var prod=produtos.find(function(p){return p.id===m.produtoId;});
+        var isE=m.tipo==="entrada";
+        return [fmtDate(m.data), prod?.titulo||"—", prod?.sku||"—", isE?"Entrada":"Saída", (isE?"+":"-")+m.qtd, m.motivo||"—", m.preco?fmt2(m.preco):"—"];
+      });
+      return { titulo:"Entradas e Saídas de Estoque", headers:headers, rows:rows };
+    }
+    if (relAtivo === "saldo_atual") {
+      var headers2=["Produto","SKU","Categoria","Estoque","Mín","Vlr Custo","Vlr Venda","Total Custo","Total Venda","Status"];
+      var rows2 = produtos.filter(function(p){return !filtroProd||(p.titulo||"").toLowerCase().includes(filtroProd.toLowerCase())||(p.sku||"").toLowerCase().includes(filtroProd.toLowerCase());}).map(function(p){
+        var est=parseInt(p.estoqueAtual||0),min=parseInt(p.estoqueMinimo||0);
+        var critico=min>0&&est<=min, zerado=est<=0;
+        var status = zerado?"Zerado":critico?"Crítico":"OK";
+        return [p.titulo, p.sku||"—", p.categoria||"—", est, min||"—", p.precoCusto?fmt2(p.precoCusto):"—", p.precoVenda?fmt2(p.precoVenda):"—", p.precoCusto?fmt2(parseFloat(p.precoCusto)*est):"—", p.precoVenda?fmt2(parseFloat(p.precoVenda)*est):"—", status];
+      });
+      return { titulo:"Relatório de Saldo em Estoque", headers:headers2, rows:rows2 };
+    }
+    if (relAtivo === "abaixo_minimo") {
+      var headers3=["Produto","SKU","Fornecedor","Estoque Atual","Estoque Mínimo","Diferença","Custo Unit.","Custo Reposição"];
+      var rows3 = produtos.filter(function(p){return p.estoqueMinimo&&parseInt(p.estoqueAtual||0)<=parseInt(p.estoqueMinimo||0);}).map(function(p){
+        var est=parseInt(p.estoqueAtual||0),min=parseInt(p.estoqueMinimo||0),diff=min-est;
+        var forn=fornecedores.find(function(f){return f.id===p.fornecedorId;});
+        return [p.titulo, p.sku||"—", forn?.nome||"—", est, min, "-"+diff, p.precoCusto?fmt2(p.precoCusto):"—", p.precoCusto?fmt2(parseFloat(p.precoCusto)*diff):"—"];
+      });
+      return { titulo:"Produtos Abaixo do Estoque Mínimo", headers:headers3, rows:rows3 };
+    }
+    if (relAtivo === "sem_movimentacao" || relAtivo === "maior_circulacao") {
+      var movsProd={};
+      movsFiltradas.forEach(function(m){ movsProd[m.produtoId]=(movsProd[m.produtoId]||0)+m.qtd; });
+      var prods=relAtivo==="sem_movimentacao"
+        ? produtos.filter(function(p){return !movsProd[p.id];})
+        : produtos.filter(function(p){return movsProd[p.id]>0;}).sort(function(a,b){return (movsProd[b.id]||0)-(movsProd[a.id]||0);}).slice(0,50);
+      var headers4=["#","Produto","SKU","Estoque Atual","Movimentação Total","Custo Unit."];
+      var rows4 = prods.slice(0,100).map(function(p,i){
+        return [i+1, p.titulo, p.sku||"—", p.estoqueAtual||0, movsProd[p.id]||0, p.precoCusto?fmt2(p.precoCusto):"—"];
+      });
+      return { titulo: relAtivo==="sem_movimentacao"?"Produtos sem Movimentação":"Produtos com Maior Circulação", headers:headers4, rows:rows4 };
+    }
+    if (relAtivo === "visao_financeira") {
+      var headers5=["Produto","SKU","Estoque","Custo Unit.","Venda Unit.","Total Custo","Total Venda","Lucro","Margem"];
+      var rows5 = produtos.filter(function(p){return parseInt(p.estoqueAtual||0)>0;}).map(function(p){
+        var est=parseInt(p.estoqueAtual||0);
+        var custo=parseFloat(p.precoCusto||0)*est;
+        var venda=parseFloat(p.precoVenda||0)*est;
+        var lucro=venda-custo;
+        var margem=venda>0?(lucro/venda)*100:0;
+        return [p.titulo, p.sku||"—", est, p.precoCusto?fmt2(p.precoCusto):"—", p.precoVenda?fmt2(p.precoVenda):"—", custo>0?fmt2(custo):"—", venda>0?fmt2(venda):"—", (venda>0&&custo>0)?fmt2(lucro):"—", (venda>0&&custo>0)?margem.toFixed(1)+"%":"—"];
+      });
+      return { titulo:"Visão Financeira do Estoque", headers:headers5, rows:rows5 };
+    }
+    return null;
+  }, [relAtivo, produtos, fornecedores, movsFiltradas, filtroProd]);
+
   return (
     <div>
       <div style={{ fontWeight:800,fontSize:18,color:"#0f172a",marginBottom:4 }}>📊 Relatórios de Estoque</div>
@@ -5409,6 +5563,15 @@ function RelatoriosEstoqueTab({ produtos, fornecedores, movEstoque, listings }) 
             <input value={filtroProd} onChange={function(e){setFiltroProd(e.target.value);}} placeholder="Filtrar produto..."
               style={{ background:"#fff",border:"1px solid #e2e8f0",color:"#0f172a",padding:"6px 10px",borderRadius:8,fontSize:12,outline:"none",width:160 }} />
             {(filtroDe||filtroAte||filtroProd)&&<button onClick={function(){setFiltroDe("");setFiltroAte("");setFiltroProd("");}} style={{ background:"#f1f5f9",border:"1px solid #e2e8f0",color:"#64748b",padding:"5px 10px",borderRadius:8,cursor:"pointer",fontSize:12 }}>✕ Limpar</button>}
+            {dadosExport && (
+              <div style={{ marginLeft:"auto" }}>
+                <BotaoExportar
+                  onCSV={function(){ exportarCSV(dadosExport.titulo, dadosExport.headers, dadosExport.rows); }}
+                  onXLS={function(){ exportarXLS(dadosExport.titulo, dadosExport.headers, dadosExport.rows); }}
+                  onPDF={function(){ exportarPDF(dadosExport.titulo, dadosExport.titulo, dadosExport.headers, dadosExport.rows); }}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -5804,6 +5967,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
   const [paginaProdutos, setPaginaProdutos] = useState(1);
   const POR_PAG_PROD = 50;
   const [search, setSearch] = useState("");
+  const [searchSkuExato, setSearchSkuExato] = useState(false);
   const [filterCat, setFilterCat] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filtroTipo, setFiltroTipo] = useState("todos");
@@ -6056,7 +6220,9 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
 
   const produtosFiltrados = useMemo(() => {
     let r = produtos;
-    if (search) r = r.filter(p =>
+    if (search && searchSkuExato) {
+      r = r.filter(p => (p.sku||"").toLowerCase().trim() === search.toLowerCase().trim());
+    } else if (search) r = r.filter(p =>
       (p.titulo||"").toLowerCase().includes(search.toLowerCase()) ||
       (p.sku||"").toLowerCase().includes(search.toLowerCase()) ||
       (p.ean||"").includes(search) ||
@@ -6131,10 +6297,16 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
               </>
             }
             busca={
-              <div style={{ position:"relative" }}>
-                <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
-                <input value={search} onChange={function(e){ setSearch(e.target.value); setPaginaProdutos(1); }} placeholder="Buscar por título, SKU, EAN, cód. fornecedor..."
-                  style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px 8px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <div style={{ position:"relative", flex:1 }}>
+                  <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
+                  <input value={search} onChange={function(e){ setSearch(e.target.value); setPaginaProdutos(1); }} placeholder={searchSkuExato ? "Digite o SKU exato..." : "Buscar por título, SKU, EAN, cód. fornecedor..."}
+                    style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px 8px 32px", borderRadius:8, fontSize:13, outline:"none" }} />
+                </div>
+                <label style={{ display:"flex", alignItems:"center", gap:5, fontSize:12, color:"#334155", whiteSpace:"nowrap", cursor:"pointer", background:searchSkuExato?"#eff6ff":"#f8fafc", border:`1px solid ${searchSkuExato?"#bfdbfe":"#e2e8f0"}`, padding:"7px 10px", borderRadius:8 }}>
+                  <input type="checkbox" checked={searchSkuExato} onChange={function(e){ setSearchSkuExato(e.target.checked); setPaginaProdutos(1); }} style={{ cursor:"pointer" }} />
+                  SKU exato
+                </label>
               </div>
             }
             acoes={
@@ -12296,9 +12468,9 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
             <tr style={{ background:"#f8fafc" }}>
               {[
                 "SKU","MLB","Tipo","Anúncio",
-                "Preço Atual","Frete Real",
+                "Custo","Preço Atual","Frete Real","Frete Config.",
                 "💡 Preço Venda Simulado","🏷 % Desc. Promoção",
-                "Taxa ML (s/ desconto)","Frete Config.","Custo",
+                "Taxa ML (s/ desconto)",
                 "Lucro Simulado","Margem Simulada","Ação"
               ].map(function(h){
                 var isSimul = ["💡 Preço Venda Simulado","Lucro Simulado","Margem Simulada","Taxa ML (s/ desconto)"].includes(h);
@@ -12362,6 +12534,22 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                     <div style={{ fontSize:12, fontWeight:600, color:"#0f172a" }}>{l.title}</div>
                   </td>
 
+                  {/* Custo (editável) */}
+                  <td style={{ padding:"6px 8px" }}>
+                    {isEditing ? (
+                      <input type="number" step="0.01" defaultValue={custo}
+                        onBlur={function(e){ var v=parseFloat(e.target.value)||0; setCustosLocais(function(c){return {...c,[l.id]:v};}); setCostsAndSave(function(c){return {...c,[l.id]:v};}); setSelectedId(null); }}
+                        autoFocus
+                        style={{ width:72, background:"#fff", border:"1px solid #0891b2", color:"#0f172a", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
+                    ) : (
+                      <span onClick={function(){setSelectedId(l.id);}} title="Clique para editar custo"
+                        style={{ cursor:"pointer", fontSize:12, fontWeight:600, color:custo>0?"#334155":"#dc2626",
+                          background:custo>0?"transparent":"#fef2f2", padding:custo>0?"0":"2px 6px", borderRadius:4 }}>
+                        {custo>0?"R$ "+custo.toFixed(2).replace(".",","): "✎ Sem custo"}
+                      </span>
+                    )}
+                  </td>
+
                   {/* Preço Atual */}
                   <td style={{ padding:"6px 8px", fontSize:12, fontWeight:700, color:"#0f172a", whiteSpace:"nowrap" }}>
                     R$ {bruto.toFixed(2).replace(".",",")}
@@ -12370,6 +12558,24 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                   {/* Frete Real */}
                   <td style={{ padding:"6px 8px", fontSize:12, color:"#d97706", whiteSpace:"nowrap" }}>
                     R$ {freteReal.toFixed(2).replace(".",",")}
+                  </td>
+
+                  {/* Frete Config (editável) */}
+                  <td style={{ padding:"6px 8px" }}>
+                    {editingFreteId === l.id ? (
+                      <input type="number" step="0.01" min="0" defaultValue={freteConfig||""} placeholder="0,00"
+                        onBlur={function(e){ var v=parseFloat(e.target.value)||0; setFretesAndSave(function(f){return Object.assign({},f,{[l.id]:v});}); setEditingFreteId(null); }}
+                        autoFocus
+                        style={{ width:72, background:"#fff", border:"1px solid #0891b2", color:"#0f172a", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
+                    ) : (
+                      <span onClick={function(){setEditingFreteId(l.id);}} title="Frete esperado"
+                        style={{ cursor:"pointer", fontSize:12, fontWeight:600,
+                          color:freteConfig>0?"#d97706":"#94a3b8",
+                          background:freteConfig>0?"transparent":"#f8fafc",
+                          padding:freteConfig>0?"0":"2px 6px", borderRadius:4 }}>
+                        {freteConfig>0?"R$ "+freteConfig.toFixed(2).replace(".",","):"✎ definir"}
+                      </span>
+                    )}
                   </td>
 
                   {/* 💡 Preço Venda Simulado (editável) */}
@@ -12451,40 +12657,6 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                     <div style={{ fontSize:10, color:"#94a3b8" }}>
                       {(feeRate*100).toFixed(0)}% s/ {descPct>0?"desc":"atual"}
                     </div>
-                  </td>
-
-                  {/* Frete Config (editável) */}
-                  <td style={{ padding:"6px 8px" }}>
-                    {editingFreteId === l.id ? (
-                      <input type="number" step="0.01" min="0" defaultValue={freteConfig||""} placeholder="0,00"
-                        onBlur={function(e){ var v=parseFloat(e.target.value)||0; setFretesAndSave(function(f){return Object.assign({},f,{[l.id]:v});}); setEditingFreteId(null); }}
-                        autoFocus
-                        style={{ width:72, background:"#fff", border:"1px solid #0891b2", color:"#0f172a", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
-                    ) : (
-                      <span onClick={function(){setEditingFreteId(l.id);}} title="Frete esperado"
-                        style={{ cursor:"pointer", fontSize:12, fontWeight:600,
-                          color:freteConfig>0?"#d97706":"#94a3b8",
-                          background:freteConfig>0?"transparent":"#f8fafc",
-                          padding:freteConfig>0?"0":"2px 6px", borderRadius:4 }}>
-                        {freteConfig>0?"R$ "+freteConfig.toFixed(2).replace(".",","):"✎ definir"}
-                      </span>
-                    )}
-                  </td>
-
-                  {/* Custo (editável) */}
-                  <td style={{ padding:"6px 8px" }}>
-                    {isEditing ? (
-                      <input type="number" step="0.01" defaultValue={custo}
-                        onBlur={function(e){ var v=parseFloat(e.target.value)||0; setCustosLocais(function(c){return {...c,[l.id]:v};}); setCostsAndSave(function(c){return {...c,[l.id]:v};}); setSelectedId(null); }}
-                        autoFocus
-                        style={{ width:72, background:"#fff", border:"1px solid #0891b2", color:"#0f172a", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
-                    ) : (
-                      <span onClick={function(){setSelectedId(l.id);}} title="Clique para editar custo"
-                        style={{ cursor:"pointer", fontSize:12, fontWeight:600, color:custo>0?"#334155":"#dc2626",
-                          background:custo>0?"transparent":"#fef2f2", padding:custo>0?"0":"2px 6px", borderRadius:4 }}>
-                        {custo>0?"R$ "+custo.toFixed(2).replace(".",","): "✎ Sem custo"}
-                      </span>
-                    )}
                   </td>
 
                   {/* Lucro Simulado (com desconto se houver) */}
@@ -15385,6 +15557,8 @@ export default function App() {
             contasPagar={contasPagar}
             setContasPagar={setContasPagar}
             categoriasPagar={categoriasPagar}
+            costs={costs}
+            setCosts={setCostsAndSave}
           />
         )}
 

@@ -3286,6 +3286,27 @@ function MenuAcoes({ nf, produtos, setProdutos, contasPagar, setContasPagar, cat
   const [aberto, setAberto] = useState(false);
   const [modalEstoque, setModalEstoque] = useState(false);
   const [modalContas, setModalContas] = useState(false);
+  const btnRef = useRef(null);
+  const [menuPos, setMenuPos] = useState(null);
+
+  function toggleMenu() {
+    if (!aberto && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      const menuWidth = 240;
+      const menuHeightEstimado = 170; // 3 opções ~56px cada
+      const espacoAbaixo = window.innerHeight - rect.bottom;
+      const abrirParaCima = espacoAbaixo < menuHeightEstimado && rect.top > menuHeightEstimado;
+      let left = rect.right - menuWidth;
+      if (left < 8) left = 8;
+      if (left + menuWidth > window.innerWidth - 8) left = window.innerWidth - menuWidth - 8;
+      setMenuPos(
+        abrirParaCima
+          ? { position:"fixed", left, bottom: window.innerHeight - rect.top + 6, top:"auto", width:menuWidth }
+          : { position:"fixed", left, top: rect.bottom + 6, bottom:"auto", width:menuWidth }
+      );
+    }
+    setAberto(a => !a);
+  }
 
   // Itens que têm produto vinculado
   const itensComProduto = (nf.itens || []).filter(it => it.produtoCadastradoId);
@@ -3329,15 +3350,15 @@ function MenuAcoes({ nf, produtos, setProdutos, contasPagar, setContasPagar, cat
 
   return (
     <div style={{ position:"relative" }}>
-      <button onClick={() => setAberto(a => !a)}
+      <button ref={btnRef} onClick={toggleMenu}
         style={{ background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700 }}>
         ⋯
       </button>
 
-      {aberto && (
+      {aberto && menuPos && (
         <>
           <div onClick={() => setAberto(false)} style={{ position:"fixed", inset:0, zIndex:299 }} />
-          <div style={{ position:"absolute", right:0, top:32, background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, boxShadow:"0 8px 24px rgba(0,0,0,.12)", zIndex:300, minWidth:220, overflow:"hidden" }}>
+          <div style={{ ...menuPos, background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, boxShadow:"0 8px 24px rgba(0,0,0,.12)", zIndex:300, minWidth:220, overflow:"hidden" }}>
             {/* Lançar Estoque */}
             <button onClick={() => { setAberto(false); setModalEstoque(true); }}
               style={{ width:"100%", background:"none", border:"none", padding:"12px 16px", textAlign:"left", cursor:"pointer", display:"flex", alignItems:"center", gap:7, fontSize:13, color:"#0f172a" }}

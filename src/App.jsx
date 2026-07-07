@@ -318,6 +318,124 @@ async function fetchSellerShippingCost(itemId, userId, tk) {
   } catch { return 0; }
 }
 
+// ── Busca custo de frete + status de envio para uma lista de pedidos (em lotes de 5) ──
+// Extraído para ser reutilizado tanto na carga completa (handleConnect) quanto na
+// atualização automática incremental (refreshOrdersIncremental), evitando duplicar a lógica.
+async function fetchShippingForOrders(ordersList, validTk, onBatch) {
+  const shippingMap = {};
+  const statusMap = {};
+  const withShipping = ordersList.filter(o => o.shipping?.id);
+  for (let i = 0; i < withShipping.length; i += 5) {
+    const batch = withShipping.slice(i, i + 5);
+    await Promise.all(batch.map(async o => {
+      try {
+        const [costsRes, shipRes] = await Promise.all([
+          fetch(ML(`/shipments/${o.shipping.id}/costs`), { headers: { Authorization: `Bearer ${validTk}` } }),
+          fetch(ML(`/shipments/${o.shipping.id}`), { headers: { Authorization: `Bearer ${validTk}` } })
+        ]);
+        const costsData = await costsRes.json();
+        const shipData = await shipRes.json();
+        var sender = costsData?.senders?.[0] || {};
+        var save = parseFloat(sender.save ?? sender.cost ?? sender.list_cost ?? 0);
+        var cost = parseFloat(sender.cost ?? sender.list_cost ?? 0);
+        var buyerPaidShip = parseFloat(costsData?.receivers?.[0]?.cost ?? 0);
+        var freteVendedor = 0;
+        if (save > 0) freteVendedor = save;
+        else if (cost > 0 && buyerPaidShip === 0) freteVendedor = cost;
+        else if (cost > 0 && buyerPaidShip < cost) freteVendedor = cost - buyerPaidShip;
+        if (freteVendedor === 0 && shipData?.base_cost > 0) freteVendedor = parseFloat(shipData.base_cost);
+        shippingMap[String(o.id)] = freteVendedor;
+        statusMap[String(o.id)] = shipData?.status ?? null;
+        if (shipData?.logistic_type) statusMap[String(o.id) + "_logistic"] = shipData.logistic_type;
+        if (shipData?.mode) statusMap[String(o.id) + "_mode"] = shipData.mode;
+        if (shipData?.type) statusMap[String(o.id) + "_type"] = shipData.type;
+        if (shipData?.service_id) statusMap[String(o.id) + "_service"] = String(shipData.service_id);
+        if (shipData?.substatus) statusMap[String(o.id) + "_substatus"] = shipData.substatus;
+      } catch { shippingMap[String(o.id)] = 0; }
+    }));
+    if (onBatch) onBatch(shippingMap, statusMap, Math.min(i + 5, withShipping.length), withShipping.length);
+    await new Promise(r => setTimeout(r, 100));
+  }
+  return { shippingMap, statusMap };
+}
+
+// ── Busca dados de pagamento (valor líquido, data de liberação) para uma lista de pedidos pagos ──
+async function fetchPaymentForOrders(ordersList, validTk, onBatch) {
+  const paymentMap = {};
+  const paidOrders = ordersList.filter(o => o.status === "paid");
+  for (let i = 0; i < paidOrders.length; i += 5) {
+    const batch = paidOrders.slice(i, i + 5);
+    await Promise.all(batch.map(async o => {
+      const oid = String(o.id);
+      try {
+        const res = await fetch(ML(`/orders/${o.id}`), { headers: { Authorization: `Bearer ${validTk}` } });
+        const data = await res.json();
+        if (data.error) return;
+        var paymentId = null;
+        if (Array.isArray(data.payments) && data.payments.length > 0) {
+          var pmtRef = data.payments.find(function(p){ return p.status === "approved"; }) || data.payments[0];
+          paymentId = pmtRef?.id || null;
+        }
+        var paymentDetail = null;
+        if (paymentId) {
+          try {
+            var pmtRes = await fetch(ML(`/collections/${paymentId}`), { headers: { Authorization: `Bearer ${validTk}` } });
+            var pmtData = await pmtRes.json();
+            if (!pmtData.error && pmtData.collection) paymentDetail = pmtData.collection;
+            else if (!pmtData.error) paymentDetail = pmtData;
+          } catch {}
+        }
+        var bruto = parseFloat(data.total_amount || o.total_amount || 0);
+        var saleFeeTotal = 0;
+        if (Array.isArray(data.order_items)) {
+          data.order_items.forEach(function(item) { saleFeeTotal += parseFloat(item.sale_fee || 0); });
+        }
+        var tarifaFinal = saleFeeTotal > 0 ? saleFeeTotal : parseFloat(data.marketplace_fee || 0);
+        var netAmount = bruto > 0 && tarifaFinal > 0 ? bruto - tarifaFinal : 0;
+        var freteCusto = 0;
+        var tarifaML = tarifaFinal;
+        if (Array.isArray(data.order_items)) {
+          data.order_items.forEach(function(item) { freteCusto += parseFloat(item.shipping_cost || 0); });
+          if (freteCusto > 0) tarifaML = tarifaFinal - freteCusto;
+        }
+        var releaseDate = null;
+        var isReleased = false;
+        var hoje2 = new Date().toLocaleDateString("sv-SE");
+        if (paymentDetail) {
+          var rdRaw = paymentDetail.money_release_date || paymentDetail.date_approved || null;
+          var rdStatus = paymentDetail.money_release_status || paymentDetail.release_status || "";
+          if (rdRaw) {
+            releaseDate = rdRaw.slice(0, 10);
+            isReleased = rdStatus === "released" || rdStatus === "released_for_seller" || releaseDate <= hoje2;
+          }
+        }
+        if (!releaseDate && Array.isArray(data.payments) && data.payments.length > 0) {
+          var pmt = data.payments.find(function(p){ return p.status === "approved"; }) || data.payments[0];
+          if (pmt) {
+            var rdRaw2 = pmt.money_release_date || null;
+            var rdStatus2 = pmt.money_release_status || pmt.release_status || "";
+            if (rdRaw2) {
+              releaseDate = rdRaw2.slice(0, 10);
+              isReleased = rdStatus2 === "released" || rdStatus2 === "released_for_seller" || releaseDate <= hoje2;
+            }
+          }
+        }
+        if (netAmount > 0 || releaseDate) {
+          paymentMap[oid] = {
+            releaseDate, isReleased,
+            netAmount: netAmount > 0 ? netAmount : bruto * 0.87,
+            bruto, tarifaML, freteCusto,
+            isCalculated: saleFeeTotal <= 0,
+          };
+        }
+      } catch {}
+    }));
+    if (onBatch) onBatch(paymentMap, Math.min(i + 5, paidOrders.length), paidOrders.length);
+    await new Promise(r => setTimeout(r, 150));
+  }
+  return paymentMap;
+}
+
 async function fetchShipmentCost(shipmentId, tk) {
   if (!shipmentId) return 0;
   try {
@@ -1509,17 +1627,16 @@ function getIcmsConfig() {
 }
 function saveIcmsConfig(cfg) { try { localStorage.setItem("icms_por_estado", JSON.stringify(cfg)); } catch {} }
 
-function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, faturamentoMes }) {
+function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, faturamentoMes, irpjCsllConfig, setIrpjCsllConfig }) {
   const [novoCusto, setNovoCusto] = useState({ nome:"", valor:"", tipo:"R$" });
   const [icmsConfig, setIcmsConfig] = useState(getIcmsConfig);
   const [showIcmsTable, setShowIcmsTable] = useState(false);
-  const [irpjPct, setIrpjPct] = useState(function(){ try { return JSON.parse(localStorage.getItem("irpj_csll_config")||"{}").irpj || "15"; } catch { return "15"; } });
-  const [irpjAdicionalPct, setIrpjAdicionalPct] = useState(function(){ try { return JSON.parse(localStorage.getItem("irpj_csll_config")||"{}").irpjAdicional || "10"; } catch { return "10"; } });
-  const [csllPct, setCsllPct] = useState(function(){ try { return JSON.parse(localStorage.getItem("irpj_csll_config")||"{}").csll || "9"; } catch { return "9"; } });
+  const irpjPct = irpjCsllConfig.irpj ?? "15";
+  const irpjAdicionalPct = irpjCsllConfig.irpjAdicional ?? "10";
+  const csllPct = irpjCsllConfig.csll ?? "9";
 
   function salvarIrpjCsll(novoIrpj, novoIrpjAd, novoCsll) {
-    var cfg = { irpj: novoIrpj, irpjAdicional: novoIrpjAd, csll: novoCsll };
-    try { localStorage.setItem("irpj_csll_config", JSON.stringify(cfg)); } catch {}
+    setIrpjCsllConfig({ irpj: novoIrpj, irpjAdicional: novoIrpjAd, csll: novoCsll });
   }
 
   function setIcmsEstado(uf, valor) {
@@ -1592,7 +1709,7 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
               <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4 }}>IRPJ base (%)</div>
               <div style={{ display:"flex", alignItems:"center", gap:4 }}>
                 <input type="number" step="0.01" value={irpjPct}
-                  onChange={function(e){ setIrpjPct(e.target.value); salvarIrpjCsll(e.target.value, irpjAdicionalPct, csllPct); }}
+                  onChange={function(e){ salvarIrpjCsll(e.target.value, irpjAdicionalPct, csllPct); }}
                   style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"7px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
                 <span style={{ fontSize:12, color:"#94a3b8" }}>%</span>
               </div>
@@ -1601,7 +1718,7 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
               <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4 }}>IRPJ adicional (%)</div>
               <div style={{ display:"flex", alignItems:"center", gap:4 }}>
                 <input type="number" step="0.01" value={irpjAdicionalPct}
-                  onChange={function(e){ setIrpjAdicionalPct(e.target.value); salvarIrpjCsll(irpjPct, e.target.value, csllPct); }}
+                  onChange={function(e){ salvarIrpjCsll(irpjPct, e.target.value, csllPct); }}
                   style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"7px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
                 <span style={{ fontSize:12, color:"#94a3b8" }}>%</span>
               </div>
@@ -1611,7 +1728,7 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
               <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4 }}>CSLL (%)</div>
               <div style={{ display:"flex", alignItems:"center", gap:4 }}>
                 <input type="number" step="0.01" value={csllPct}
-                  onChange={function(e){ setCsllPct(e.target.value); salvarIrpjCsll(irpjPct, irpjAdicionalPct, e.target.value); }}
+                  onChange={function(e){ salvarIrpjCsll(irpjPct, irpjAdicionalPct, e.target.value); }}
                   style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"7px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
                 <span style={{ fontSize:12, color:"#94a3b8" }}>%</span>
               </div>
@@ -9015,7 +9132,7 @@ function BotaoExportar({ onCSV, onXLS, onPDF }) {
 }
 
 
-function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], setContasBancarias, categoriasPagar=[], setCategoriasPagar, lancamentos=[], setLancamentos, enrichedOrders=[], rawOrders=[], shipmentStatuses, paymentData, finTab, setFinTab, impostos=[], setImpostos, custosFixos=[], setCustosFixos, fornecedores=[], currentUser=null }) {
+function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], setContasBancarias, categoriasPagar=[], setCategoriasPagar, lancamentos=[], setLancamentos, enrichedOrders=[], rawOrders=[], shipmentStatuses, paymentData, finTab, setFinTab, impostos=[], setImpostos, custosFixos=[], setCustosFixos, fornecedores=[], currentUser=null, irpjCsllConfig={}, setIrpjCsllConfig }) {
   const [paginaPagar, setPaginaPagar] = useState(1);
   const [paginaReceber, setPaginaReceber] = useState(1);
   const POR_PAG_FIN = 30;
@@ -10838,6 +10955,8 @@ function FinanceiroTab({ contasPagar=[], setContasPagar, contasBancarias=[], set
               custosFixos={custosFixos}
               setCustosFixos={setCustosFixos}
               faturamentoMes={enrichedOrders.filter(o=>o.date?.startsWith(new Date().toLocaleDateString("sv-SE").slice(0,7))).reduce((s,o)=>s+o.revenue*o.qty,0)}
+              irpjCsllConfig={irpjCsllConfig}
+              setIrpjCsllConfig={setIrpjCsllConfig}
             />
           </div>
 
@@ -13484,6 +13603,7 @@ function PainelConfiguracoesGlobal(props) {
   var currentUser=props.currentUser, abaInicial=props.abaInicial;
   var impostos=props.impostos, setImpostos=props.setImpostos;
   var custosFixos=props.custosFixos, setCustosFixos=props.setCustosFixos;
+  var irpjCsllConfig=props.irpjCsllConfig||{}, setIrpjCsllConfig=props.setIrpjCsllConfig;
   var faturamentoMes=props.faturamentoMes||0;
   var darkMode=props.darkMode, setDarkMode=props.setDarkMode;
   var onClose=props.onClose;
@@ -13533,7 +13653,7 @@ function PainelConfiguracoesGlobal(props) {
           })
         ),
         React.createElement("div", {style:{flex:1,overflowY:"auto",padding:"16px 18px"}},
-          aba==="config" ? React.createElement(ImpostosCompacto, {impostos:impostos,setImpostos:setImpostos,custosFixos:custosFixos,setCustosFixos:setCustosFixos,faturamentoMes:faturamentoMes}) :
+          aba==="config" ? React.createElement(ImpostosCompacto, {impostos:impostos,setImpostos:setImpostos,custosFixos:custosFixos,setCustosFixos:setCustosFixos,faturamentoMes:faturamentoMes,irpjCsllConfig:irpjCsllConfig,setIrpjCsllConfig:setIrpjCsllConfig}) :
           aba==="aparencia" ? React.createElement("div", {style:{display:"flex",gap:10}},
             [{v:false,l:"Claro"},{v:true,l:"Escuro"}].map(function(t){
               return React.createElement("button",{key:String(t.v),onClick:function(){setDarkMode(t.v);localStorage.setItem("darkMode",t.v?"1":"0");},style:{flex:1,padding:14,borderRadius:10,border:"2px solid "+(darkMode===t.v?"#0f172a":"#e2e8f0"),background:darkMode===t.v?"#0f172a":"#fff",color:darkMode===t.v?"#fff":"#334155",fontWeight:700,fontSize:14,cursor:"pointer"}}, t.v?"Escuro":"Claro");
@@ -13732,6 +13852,15 @@ export default function App() {
   const [custosFixos, setCustosFixos] = useState(() => {
     try { return JSON.parse(localStorage.getItem("custos_fixos_config") || "[]"); } catch { return []; }
   });
+  // Config de IRPJ/CSLL (usada para calcular "Impostos (mês)" no resumo) — elevada ao componente raiz
+  // para que o card do resumo reaja imediatamente quando o usuário edita os percentuais, sem precisar recarregar.
+  const [irpjCsllConfig, setIrpjCsllConfigState] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("irpj_csll_config") || "{}"); } catch { return {}; }
+  });
+  function setIrpjCsllConfig(cfg) {
+    setIrpjCsllConfigState(cfg);
+    try { localStorage.setItem("irpj_csll_config", JSON.stringify(cfg)); } catch {}
+  }
   const [showNotif, setShowNotif] = useState(false);
   const [showBackup, setShowBackup] = useState(false);
   const [showConfigPanel, setShowConfigPanel] = useState(false);
@@ -14184,173 +14313,21 @@ export default function App() {
       setSellerShipping(shippingMap);
 
       // Buscar frete real via /shipments/{id}/costs → senders[0].save
-      // Confirmado: senders[0].save = 28.35 = valor exato debitado do vendedor
       setLoadingMsg("Buscando frete dos pedidos...");
-      const orderShippingMap = {};
-      const shipmentStatusMap = {};
-      const ordersWithShipping = orders.filter(o => o.shipping?.id);
-      for (let i = 0; i < ordersWithShipping.length; i += 5) {
-        const batch = ordersWithShipping.slice(i, i + 5);
-        await Promise.all(batch.map(async o => {
-          try {
-            // Buscar /costs para frete e /shipments para status
-            const [costsRes, shipRes] = await Promise.all([
-              fetch(ML(`/shipments/${o.shipping.id}/costs`), { headers: { Authorization: `Bearer ${validTk}` } }),
-              fetch(ML(`/shipments/${o.shipping.id}`), { headers: { Authorization: `Bearer ${tk}` } })
-            ]);
-            const costsData = await costsRes.json();
-            const shipData = await shipRes.json();
-
-            // Tentar vários campos para obter o custo real do frete para o vendedor
-            var sender = costsData?.senders?.[0] || {};
-            // save = valor subsidiado pelo vendedor, cost = custo total, list_cost = tabela
-            var save    = parseFloat(sender.save    ?? sender.cost ?? sender.list_cost ?? 0);
-            var cost    = parseFloat(sender.cost    ?? sender.list_cost ?? 0);
-            var listCost = parseFloat(sender.list_cost ?? 0);
-
-            // O frete cobrado do vendedor é: cost - (o que o comprador pagou)
-            // Se save > 0 = é o desconto dado ao comprador (frete grátis) = custo do vendedor
-            // Se save == 0 mas cost > 0 = comprador pagou tudo, vendedor não paga
-            var buyerPaidShip = parseFloat(costsData?.receivers?.[0]?.cost ?? 0);
-            var freteVendedor = 0;
-
-            if (save > 0) {
-              freteVendedor = save; // frete grátis: vendedor paga 'save'
-            } else if (cost > 0 && buyerPaidShip === 0) {
-              freteVendedor = cost; // comprador não pagou nada = vendedor paga tudo
-            } else if (cost > 0 && buyerPaidShip < cost) {
-              freteVendedor = cost - buyerPaidShip; // vendedor paga a diferença
-            }
-
-            // Fallback: usar base_cost do shipment se disponível
-            if (freteVendedor === 0 && shipData?.base_cost > 0) {
-              freteVendedor = parseFloat(shipData.base_cost);
-            }
-
-            orderShippingMap[String(o.id)] = freteVendedor;
-            // status: "delivered", "shipped", "ready_to_ship", "pending", etc
-            shipmentStatusMap[String(o.id)] = shipData?.status ?? null;
-            // Guardar método de envio
-            var lt = shipData?.logistic_type || "";
-            // Log para pedidos de referência (FULL, Flex, ME Normal)
-
-            if (lt) shipmentStatusMap[String(o.id) + "_logistic"] = lt;
-            if (shipData?.mode) shipmentStatusMap[String(o.id) + "_mode"] = shipData.mode;
-            if (shipData?.type) shipmentStatusMap[String(o.id) + "_type"] = shipData.type;
-            // Salvar service_id e substatus para identificação mais precisa
-            if (shipData?.service_id) shipmentStatusMap[String(o.id) + "_service"] = String(shipData.service_id);
-            if (shipData?.substatus) shipmentStatusMap[String(o.id) + "_substatus"] = shipData.substatus;
-          } catch { orderShippingMap[String(o.id)] = 0; }
-        }));
-        if (i % 20 === 0) setShipmentCosts({...orderShippingMap});
-        await new Promise(r => setTimeout(r, 100));
-      }
+      const { shippingMap: orderShippingMap, statusMap: shipmentStatusMap } = await fetchShippingForOrders(orders, validTk, function(partialShipping, partialStatus, done, total) {
+        setShipmentCosts({...partialShipping});
+        setLoadingMsg(`Buscando frete dos pedidos... ${done}/${total}`);
+      });
       setShipmentCosts({...orderShippingMap});
       setShipmentStatuses({...shipmentStatusMap});
 
       // Buscar dados de pagamento usando /orders/{id} com campo completo de payment
       // Isso retorna os dados reais de valor líquido e data de liberação
       setLoadingMsg("Buscando dados de pagamento...");
-      const paymentMap = {};
-      const paidOrders = orders.filter(o => o.status === "paid");
-      for (let i = 0; i < paidOrders.length; i += 5) {
-        const batch = paidOrders.slice(i, i + 5);
-        await Promise.all(batch.map(async o => {
-          const oid = String(o.id);
-          try {
-            // Buscar o pedido completo com todos os campos de pagamento
-            const res = await fetch(ML(`/orders/${o.id}`), { headers: { Authorization: `Bearer ${validTk}` } });
-            const data = await res.json();
-            if (data.error) return;
-
-            // Buscar dados atualizados do payment para ter money_release_date real
-            var paymentId = null;
-            if (Array.isArray(data.payments) && data.payments.length > 0) {
-              var pmtRef = data.payments.find(function(p){ return p.status === "approved"; }) || data.payments[0];
-              paymentId = pmtRef?.id || null;
-            }
-            var paymentDetail = null;
-            if (paymentId) {
-              try {
-                var pmtRes = await fetch(ML(`/collections/${paymentId}`), { headers: { Authorization: `Bearer ${validTk}` } });
-                var pmtData = await pmtRes.json();
-                if (!pmtData.error && pmtData.collection) paymentDetail = pmtData.collection;
-                else if (!pmtData.error) paymentDetail = pmtData;
-              } catch {}
-            }
-
-            // Fórmula correta: total_amount - sale_fee (sale_fee já inclui tarifa ML + custo frete)
-            var bruto = parseFloat(data.total_amount || o.total_amount || 0);
-
-            // sale_fee de cada item (inclui tarifa de venda + custo envio cobrado pelo ML)
-            var saleFeeTotal = 0;
-            if (Array.isArray(data.order_items)) {
-              data.order_items.forEach(function(item) {
-                saleFeeTotal += parseFloat(item.sale_fee || 0);
-              });
-            }
-
-            // Se sale_fee não disponível, usar marketplace_fee como fallback
-            var tarifaFinal = saleFeeTotal > 0 ? saleFeeTotal : parseFloat(data.marketplace_fee || 0);
-
-            // Valor líquido = bruto - sale_fee (tarifa ML + frete seller)
-            var netAmount = bruto > 0 && tarifaFinal > 0 ? bruto - tarifaFinal : 0;
-
-            // Calcular frete e tarifa separados para exibição
-            var freteCusto = 0;
-            var tarifaML = tarifaFinal;
-            if (Array.isArray(data.order_items)) {
-              data.order_items.forEach(function(item) {
-                freteCusto += parseFloat(item.shipping_cost || 0);
-              });
-              if (freteCusto > 0) tarifaML = tarifaFinal - freteCusto;
-            }
-
-            // Data de liberação real
-            // Prioridade: /collections/{id} > payments[].money_release_date
-            var releaseDate = null;
-            var isReleased = false;
-            var hoje2 = new Date().toLocaleDateString("sv-SE");
-
-            if (paymentDetail) {
-              // /collections retorna dados mais atualizados
-              var rdRaw = paymentDetail.money_release_date || paymentDetail.date_approved || null;
-              var rdStatus = paymentDetail.money_release_status || paymentDetail.release_status || "";
-              if (rdRaw) {
-                releaseDate = rdRaw.slice(0, 10);
-                isReleased = rdStatus === "released" || rdStatus === "released_for_seller" || releaseDate <= hoje2;
-              }
-            }
-
-            // Fallback: usar payments[] do pedido
-            if (!releaseDate && Array.isArray(data.payments) && data.payments.length > 0) {
-              var pmt = data.payments.find(function(p){ return p.status === "approved"; }) || data.payments[0];
-              if (pmt) {
-                var rdRaw2 = pmt.money_release_date || null;
-                var rdStatus2 = pmt.money_release_status || pmt.release_status || "";
-                if (rdRaw2) {
-                  releaseDate = rdRaw2.slice(0, 10);
-                  isReleased = rdStatus2 === "released" || rdStatus2 === "released_for_seller" || releaseDate <= hoje2;
-                }
-              }
-            }
-
-            if (netAmount > 0 || releaseDate) {
-              paymentMap[oid] = {
-                releaseDate,
-                isReleased,
-                netAmount: netAmount > 0 ? netAmount : bruto * 0.87,
-                bruto,
-                tarifaML: tarifaML,
-                freteCusto: freteCusto,
-                isCalculated: saleFeeTotal <= 0,
-              };
-            }
-          } catch {}
-        }));
-        if (i % 20 === 0) setPaymentData({...paymentMap});
-        await new Promise(r => setTimeout(r, 150));
-      }
+      const paymentMap = await fetchPaymentForOrders(orders, validTk, function(partial, done, total) {
+        setPaymentData({...partial});
+        setLoadingMsg(`Buscando dados de pagamento... ${done}/${total}`);
+      });
       setPaymentData({...paymentMap});
 
       setLoadingMsg("Buscando promoções...");
@@ -14428,6 +14405,93 @@ export default function App() {
       }
     }
   }
+
+  // ── Atualização automática em tempo real (leve, sem precisar clicar em "Reconectar") ──
+  // handleConnect faz a carga completa: TODOS os anúncios, frete por anúncio, TODOS os pedidos,
+  // e frete/pagamento de TODOS os pedidos — por isso demora. Esta função só busca a lista de
+  // pedidos (rápido) e enriquece com frete/pagamento apenas os pedidos que ainda não tinham
+  // esses dados (pedidos novos desde a última sincronização), então roda em segundos e pode
+  // ficar rodando sozinha em segundo plano.
+  const autoRefreshingRef = useRef(false);
+  async function refreshOrdersIncremental() {
+    if (!token || !user?.id || loading || autoRefreshingRef.current) return;
+    autoRefreshingRef.current = true;
+    try {
+      const validTk = await getValidToken();
+      if (!validTk) return;
+      const orders = await fetchAllOrders(user.id, validTk);
+      setRealOrders(orders);
+      try {
+        var ordersLeve = orders.map(function(o){
+          return { id:o.id, listing_id:o.listing_id, status:o.status, qty:o.qty||1, price:o.price, date:o.date, title:o.title, seller_sku:o.seller_sku||"" };
+        });
+        localStorage.setItem("ml_orders_cache", JSON.stringify(ordersLeve));
+      } catch(e) {}
+
+      // Enriquecer só os pedidos que ainda não têm frete/pagamento calculados (novos desde a última sync)
+      const ordersNovos = orders.filter(o => shipmentCosts[String(o.id)] === undefined);
+      if (ordersNovos.length > 0) {
+        const { shippingMap, statusMap } = await fetchShippingForOrders(ordersNovos, validTk);
+        setShipmentCosts(prev => ({ ...prev, ...shippingMap }));
+        setShipmentStatuses(prev => ({ ...prev, ...statusMap }));
+
+        const pagosNovos = ordersNovos.filter(o => o.status === "paid" && paymentData[String(o.id)] === undefined);
+        if (pagosNovos.length > 0) {
+          const novoPaymentMap = await fetchPaymentForOrders(pagosNovos, validTk);
+          setPaymentData(prev => ({ ...prev, ...novoPaymentMap }));
+        }
+      }
+
+      // Notifica pedidos novos (mesma lógica de handleConnect, de forma incremental)
+      const savedIds = JSON.parse(localStorage.getItem("ml_ultimos_pedidos") || "[]");
+      const novasNotifsInc = [];
+      orders.forEach(o => {
+        if (o.status === "paid" && !savedIds.includes(String(o.id))) {
+          const valor = (o.price || 0) * (o.qty || 1);
+          novasNotifsInc.push({
+            id: `order_${o.id}_${Date.now()}`,
+            tipo: "pedido",
+            titulo: "🛒 Novo pedido!",
+            msg: `Pedido #${o.id} — ${o.title || "Item"} — R$ ${parseFloat(valor).toFixed(2).replace(".",",")}`,
+            data: new Date().toLocaleString("pt-BR"),
+            lido: false,
+          });
+        }
+      });
+      if (novasNotifsInc.length > 0) {
+        const todosIdsInc = [...new Set([...savedIds, ...orders.map(o => String(o.id))])];
+        localStorage.setItem("ml_ultimos_pedidos", JSON.stringify(todosIdsInc));
+        setUltimosPedidosIds(todosIdsInc);
+        const todasNotifsInc = [...novasNotifsInc, ...JSON.parse(localStorage.getItem("ml_notificacoes") || "[]")].slice(0, 50);
+        localStorage.setItem("ml_notificacoes", JSON.stringify(todasNotifsInc));
+        setNotificacoes(todasNotifsInc);
+        if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+          novasNotifsInc.slice(0,3).forEach(n => { try { new Notification(n.titulo, { body: n.msg }); } catch {} });
+        }
+      }
+
+      const now = Date.now().toString();
+      localStorage.setItem("ml_last_update", now);
+      setLastUpdate(now);
+    } catch (e) {
+      console.warn("[Auto-atualização] falhou:", e.message);
+    } finally {
+      autoRefreshingRef.current = false;
+    }
+  }
+
+  // Guarda sempre a versão mais recente de refreshOrdersIncremental (evita "stale closure" no
+  // setInterval — sem isso, o intervalo ficaria preso aos valores de token/pedidos do momento
+  // em que foi criado, em vez de sempre usar o estado mais atual).
+  const refreshOrdersIncrementalRef = useRef(refreshOrdersIncremental);
+  refreshOrdersIncrementalRef.current = refreshOrdersIncremental;
+
+  // Dispara a atualização automática a cada 3 minutos, sozinha, sem precisar de nenhum clique.
+  useEffect(function(){
+    if (!token) return;
+    var intervalId = setInterval(function(){ refreshOrdersIncrementalRef.current(); }, 180000); // 3 minutos
+    return function(){ clearInterval(intervalId); };
+  }, [token]);
 
   const MOCK_LISTINGS = [
     {
@@ -14734,6 +14798,13 @@ export default function App() {
   const totalFees = ordersValidos.reduce((s, o) => s + o.fee * o.qty, 0);
   const totalFreteSeller = ordersValidos.reduce((s, o) => s + (o.freteSeller ?? 0), 0);
   const avgMargin = ordersValidos.length > 0 ? ordersValidos.reduce((s, o) => s + (o.margin ?? 0), 0) / ordersValidos.length : 0;
+  // Custo de Mercadorias Vendidas (CMV) — soma do custo unitário cadastrado × quantidade vendida no período
+  const totalCMV = ordersValidos.reduce((s, o) => s + (o.cost ?? 0) * o.qty, 0);
+  // Impostos (mês) — usa o percentual de IRPJ+CSLL pré-cadastrado em Financeiro > Configurações, aplicado sobre o faturamento do período
+  const pctImpostos = (parseFloat(irpjCsllConfig.irpj || 0) + parseFloat(irpjCsllConfig.irpjAdicional || 0) + parseFloat(irpjCsllConfig.csll || 0)) / 100;
+  const totalImpostosMes = totalRevenue * pctImpostos;
+  const totalCustosFixosMes = custosFixos.reduce((s, c) => s + (c.tipo === "%" ? (totalRevenue * (parseFloat(c.valor || 0) / 100)) : parseFloat(c.valor || 0)), 0);
+  const lucroReal = fatLiquido - totalFees - totalFreteSeller - totalCMV - totalImpostosMes - totalCustosFixosMes;
   const avgScore = Math.round(enriched.reduce((s, l) => s + l.score, 0) / (enriched.length || 1));
 
   function getFreteDisplay(l) {
@@ -14921,6 +14992,13 @@ export default function App() {
               </div>
             );
           })()}
+          {token && (
+            <button onClick={function(){ refreshOrdersIncrementalRef.current(); }} disabled={autoRefreshingRef.current}
+              title="Busca pedidos novos e atualiza os dados sem recarregar tudo"
+              style={{ background: "#f8fafc", border: "1px solid #e2e8f0", color: "#334155", fontWeight: 600, padding: "8px 14px", borderRadius: 8, cursor: "pointer", fontSize: 13, display:"flex", alignItems:"center", gap:5 }}>
+              🔄 Atualizar
+            </button>
+          )}
           <button onClick={function(){ window.location.href = "/api/auth/login"; }}
             style={{ background: "#0f172a", border: "none", color: "#fff", fontWeight: 700, padding: "8px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>
             {token ? "Reconectar" : "Conectar ML"}
@@ -15036,10 +15114,11 @@ export default function App() {
             { label: "Fat. Líquido", value: fmt(fatLiquido), color: fatLiquido >= fatBruto ? "#0f172a" : "#dc2626", desc: canceladosDevolvidos.length > 0 ? `-${canceladosDevolvidos.length} cancel./devolv.` : "sem cancelamentos" },
             { label: "Tarifas ML", value: fmt(totalFees), color: "#d97706" },
             { label: "Frete (seu custo)", value: fmt(totalFreteSeller), color: "#7c3aed" },
+            { label: "CMV (mercadorias)", value: fmt(totalCMV), color: "#be123c" },
             { label: "Margem média", value: fmtPct(avgMargin), color: avgMargin >= .25 ? "#15803d" : avgMargin >= .15 ? "#d97706" : "#dc2626" },
-            { label: "Impostos (mês)", value: (() => { const v = impostos.reduce((s,i)=>s+(i.tipo==="%"?(totalRevenue*(parseFloat(i.valor||0)/100)):(parseFloat(i.valor||0))),0); return `R$ ${v.toFixed(2).replace(".",",")}` })(), color: "#dc2626" },
-            { label: "Custos Fixos (mês)", value: (() => { const v = custosFixos.reduce((s,c)=>s+(c.tipo==="%"?(totalRevenue*(parseFloat(c.valor||0)/100)):(parseFloat(c.valor||0))),0); return `R$ ${v.toFixed(2).replace(".",",")}` })(), color: "#d97706" },
-            { label: "Lucro Real", value: (() => { const imp = impostos.reduce((s,i)=>s+(i.tipo==="%"?(totalRevenue*(parseFloat(i.valor||0)/100)):(parseFloat(i.valor||0))),0); const fix = custosFixos.reduce((s,c)=>s+(c.tipo==="%"?(totalRevenue*(parseFloat(c.valor||0)/100)):(parseFloat(c.valor||0))),0); const lucro = fatLiquido - totalFees - totalFreteSeller - imp - fix; return `R$ ${lucro.toFixed(2).replace(".",",")}` })(), color: (() => { const imp = impostos.reduce((s,i)=>s+(i.tipo==="%"?(totalRevenue*(parseFloat(i.valor||0)/100)):(parseFloat(i.valor||0))),0); const fix = custosFixos.reduce((s,c)=>s+(c.tipo==="%"?(totalRevenue*(parseFloat(c.valor||0)/100)):(parseFloat(c.valor||0))),0); const lucro = fatLiquido - totalFees - totalFreteSeller - imp - fix; return lucro>=0?"#15803d":"#dc2626" })() },
+            { label: "Impostos (mês)", value: fmt(totalImpostosMes), color: "#dc2626", desc: pctImpostos > 0 ? `${(pctImpostos*100).toFixed(2)}% (IRPJ+CSLL)` : "configure em Financeiro" },
+            { label: "Custos Fixos (mês)", value: fmt(totalCustosFixosMes), color: "#d97706" },
+            { label: "Lucro Real", value: fmt(lucroReal), color: lucroReal >= 0 ? "#15803d" : "#dc2626" },
             { label: "Score médio", value: `${avgScore}/100`, color: scoreColor(avgScore) },
             { label: "Total anúncios", value: enriched.length, color: "#0f172a" },
             { label: "Pedidos período", value: enrichedOrders.length, color: "#0f172a" },
@@ -15544,6 +15623,8 @@ export default function App() {
             setCustosFixos={setCustosFixos}
             fornecedores={fornecedores}
             currentUser={currentUser}
+            irpjCsllConfig={irpjCsllConfig}
+            setIrpjCsllConfig={setIrpjCsllConfig}
           />
         )}
 
@@ -15633,7 +15714,8 @@ export default function App() {
           abaInicial={configPanelTab}
           impostos={impostos} setImpostos={setImpostos}
           custosFixos={custosFixos} setCustosFixos={setCustosFixos}
-          faturamentoMes={0}
+          irpjCsllConfig={irpjCsllConfig} setIrpjCsllConfig={setIrpjCsllConfig}
+          faturamentoMes={enrichedOrders.filter(o=>o.date?.startsWith(new Date().toLocaleDateString("sv-SE").slice(0,7))).reduce((s,o)=>s+o.revenue*o.qty,0)}
           darkMode={darkMode} setDarkMode={setDarkMode}
           onClose={function(){ setShowConfigPanel(false); }}
         />

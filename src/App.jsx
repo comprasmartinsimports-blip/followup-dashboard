@@ -4,6 +4,28 @@ const ML = (path) => `/api/ml${path}`;
 const fmt = (n) => `R$ ${Number(n).toFixed(2).replace(".", ",")}`;
 const fmtPct = (n) => `${(n * 100).toFixed(1)}%`;
 
+// ── Sincronização de dados de negócio entre TODOS os usuários (NF Entrada, Precificação) ──
+// Usa a rota /api/ml/_sync (KV compartilhado) — o mesmo mecanismo já usado para compartilhar
+// a lista de usuários e a conexão com o ML. Chamado tanto para "puxar" o que outros usuários
+// salvaram quanto para "empurrar" uma mudança feita localmente.
+async function kvSyncPull(key) {
+  try {
+    const res = await fetch("/api/ml/_sync?key=" + encodeURIComponent(key));
+    if (!res.ok) return null;
+    const d = await res.json();
+    return d && d.value !== undefined ? d.value : null;
+  } catch { return null; }
+}
+async function kvSyncPush(key, value) {
+  try {
+    await fetch("/api/ml/_sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, value }),
+    });
+  } catch {}
+}
+
 function getSku(listing) {
   if (listing.seller_sku) return listing.seller_sku;
   const skuAttr = listing.attributes?.find(a =>
@@ -3016,7 +3038,10 @@ function DashboardSubAbas({ fat30, ultimos30, maxFat30, totalFat30, mediaFat30, 
 //  NOTAS FISCAIS DE ENTRADA
 // ════════════════════════════════════════════════════════════
 
-function saveNFs(v) { try { localStorage.setItem("notas_fiscais_entrada", JSON.stringify(v)); } catch {} }
+function saveNFs(v) {
+  try { localStorage.setItem("notas_fiscais_entrada", JSON.stringify(v)); } catch {}
+  kvSyncPush("notas_fiscais_entrada", v);
+}
 
 // ── Parser de XML de NF-e ────────────────────────────────────
 function parseNFeXML(xmlText) {
@@ -3481,34 +3506,14 @@ function ModalNF({ nf, fornecedores, produtos, categoriasPagar, onSave, onClose 
 // ── Precificar direto da NF Entrada — mesma lógica/fórmulas da aba Precificação ──
 // Usa as mesmas chaves de localStorage (fretes_config, precos_venda_config, descontos_config)
 // que a aba Precificação, então qualquer ajuste feito aqui já aparece lá também.
-function ModalPrecificarNF({ nf, produtos, enriched, costs, setCosts, onClose }) {
+function ModalPrecificarNF({ nf, produtos, enriched, costs, setCosts, fretesConfig, setFretesAndSave, descontosConfig, setDescontosAndSave, precosVendaConfig, setPrecosVendaAndSave, onClose }) {
   const [margemAlvo] = useState(20);
   const [custosLocais, setCustosLocais] = useState({});
-  const [fretesConfig, setFretesConfigState] = useState(function(){
-    try { return JSON.parse(localStorage.getItem("fretes_config")||"{}"); } catch { return {}; }
-  });
-  function setFretesAndSave(updater) {
-    setFretesConfigState(function(prev){
-      var next = typeof updater === "function" ? updater(prev) : updater;
-      try { localStorage.setItem("fretes_config", JSON.stringify(next)); } catch {}
-      return next;
-    });
-  }
-  const [descontosConfig, setDescontosConfig] = useState(function(){
-    try { return JSON.parse(localStorage.getItem("descontos_config")||"{}"); } catch { return {}; }
-  });
   function setDesconto(id, pct) {
-    var next = Object.assign({}, descontosConfig, { [id]: pct });
-    setDescontosConfig(next);
-    try { localStorage.setItem("descontos_config", JSON.stringify(next)); } catch {}
+    setDescontosAndSave(function(prev){ return Object.assign({}, prev, { [id]: pct }); });
   }
-  const [precosVendaConfig, setPrecosVendaConfig] = useState(function(){
-    try { return JSON.parse(localStorage.getItem("precos_venda_config")||"{}"); } catch { return {}; }
-  });
   function setPrecoVenda(id, preco) {
-    var next = Object.assign({}, precosVendaConfig, { [id]: preco });
-    setPrecosVendaConfig(next);
-    try { localStorage.setItem("precos_venda_config", JSON.stringify(next)); } catch {}
+    setPrecosVendaAndSave(function(prev){ return Object.assign({}, prev, { [id]: preco }); });
   }
   const [editingCampo, setEditingCampo] = useState(null); // `${mlbId}:${campo}`
 
@@ -3674,7 +3679,7 @@ function ModalPrecificarNF({ nf, produtos, enriched, costs, setCosts, onClose })
 }
 
 // ── Menu de 3 pontinhos para NF ─────────────────────────────
-function MenuAcoes({ nf, produtos, setProdutos, contasPagar, setContasPagar, categoriasPagar, costs, setCosts, enriched }) {
+function MenuAcoes({ nf, produtos, setProdutos, contasPagar, setContasPagar, categoriasPagar, costs, setCosts, enriched, fretesConfig, setFretesAndSave, descontosConfig, setDescontosAndSave, precosVendaConfig, setPrecosVendaAndSave }) {
   const [aberto, setAberto] = useState(false);
   const [modalEstoque, setModalEstoque] = useState(false);
   const [modalContas, setModalContas] = useState(false);
@@ -3944,6 +3949,12 @@ function MenuAcoes({ nf, produtos, setProdutos, contasPagar, setContasPagar, cat
           enriched={enriched || []}
           costs={costs}
           setCosts={setCosts}
+          fretesConfig={fretesConfig}
+          setFretesAndSave={setFretesAndSave}
+          descontosConfig={descontosConfig}
+          setDescontosAndSave={setDescontosAndSave}
+          precosVendaConfig={precosVendaConfig}
+          setPrecosVendaAndSave={setPrecosVendaAndSave}
           onClose={() => setModalPrecificar(false)}
         />
       )}
@@ -4054,7 +4065,7 @@ function ModalLancarContas({ nf, categoriasPagar, onConfirm, onClose }) {
 
 
 // ── Aba Principal de Notas Fiscais ───────────────────────────
-function NotasFiscaisTab({ notasFiscais, setNotasFiscais, fornecedores, produtos, setProdutos, contasPagar, setContasPagar, categoriasPagar, costs, setCosts, enriched }) {
+function NotasFiscaisTab({ notasFiscais, setNotasFiscais, fornecedores, produtos, setProdutos, contasPagar, setContasPagar, categoriasPagar, costs, setCosts, enriched, fretesConfig, setFretesAndSave, descontosConfig, setDescontosAndSave, precosVendaConfig, setPrecosVendaAndSave }) {
   const [showModal, setShowModal] = useState(false);
   const [editingNF, setEditingNF] = useState(null);
   const [search, setSearch] = useState("");
@@ -4236,6 +4247,12 @@ function NotasFiscaisTab({ notasFiscais, setNotasFiscais, fornecedores, produtos
                         costs={costs}
                         setCosts={setCosts}
                         enriched={enriched}
+                        fretesConfig={fretesConfig}
+                        setFretesAndSave={setFretesAndSave}
+                        descontosConfig={descontosConfig}
+                        setDescontosAndSave={setDescontosAndSave}
+                        precosVendaConfig={precosVendaConfig}
+                        setPrecosVendaAndSave={setPrecosVendaAndSave}
                       />
                     </div>
                   </td>
@@ -4265,6 +4282,12 @@ function NotasFiscaisTab({ notasFiscais, setNotasFiscais, fornecedores, produtos
           enriched={enriched || []}
           costs={costs}
           setCosts={setCosts}
+          fretesConfig={fretesConfig}
+          setFretesAndSave={setFretesAndSave}
+          descontosConfig={descontosConfig}
+          setDescontosAndSave={setDescontosAndSave}
+          precosVendaConfig={precosVendaConfig}
+          setPrecosVendaAndSave={setPrecosVendaAndSave}
           onClose={() => setNfParaPrecificar(null)}
         />
       )}
@@ -12699,20 +12722,15 @@ function NovoProdutoPrecForm({ onSave, onClose }) {
   );
 }
 
-function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFretesAndSave, rawOrders }) {
+function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFretesAndSave, descontosConfig, setDescontosAndSave, precosVendaConfig, setPrecosVendaAndSave, rawOrders }) {
   const [busca, setBusca] = useState("");
   const [margemAlvo, setMargemAlvo] = useState(20);
   const [selectedId, setSelectedId] = useState(null);
   const [editingFreteId, setEditingFreteId] = useState(null);
   const [editingDescId, setEditingDescId] = useState(null);
   const [custosLocais, setCustosLocais] = useState({});
-  const [descontosConfig, setDescontosConfig] = useState(function(){
-    try { return JSON.parse(localStorage.getItem("descontos_config")||"{}"); } catch { return {}; }
-  });
   function setDesconto(id, pct) {
-    var next = Object.assign({}, descontosConfig, { [id]: pct });
-    setDescontosConfig(next);
-    try { localStorage.setItem("descontos_config", JSON.stringify(next)); } catch {}
+    setDescontosAndSave(function(prev){ return Object.assign({}, prev, { [id]: pct }); });
   }
   // Preços de venda sugeridos (digitados pelo usuário)
   const [editingPrecoId, setEditingPrecoId] = useState(null);
@@ -12737,13 +12755,8 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
     });
     if (atualizados) saveProdutosExtras(novaLista);
   }, [enriched]);
-  const [precosVendaConfig, setPrecosVendaConfig] = useState(function(){
-    try { return JSON.parse(localStorage.getItem("precos_venda_config")||"{}"); } catch { return {}; }
-  });
   function setPrecoVenda(id, preco) {
-    var next = Object.assign({}, precosVendaConfig, { [id]: preco });
-    setPrecosVendaConfig(next);
-    try { localStorage.setItem("precos_venda_config", JSON.stringify(next)); } catch {}
+    setPrecosVendaAndSave(function(prev){ return Object.assign({}, prev, { [id]: preco }); });
     // Marca como pendente de atualização no ML (preço simulado != preço atual)
     marcarPendente(id, preco);
   }
@@ -14148,10 +14161,19 @@ export default function App() {
   const [fretesConfig, setFretesConfig] = useState(function() {
     try { return JSON.parse(localStorage.getItem("fretes_config") || "{}"); } catch { return {}; }
   });
+  // % de desconto de promoção configurado por anúncio na Precificação
+  const [descontosConfig, setDescontosConfig] = useState(function() {
+    try { return JSON.parse(localStorage.getItem("descontos_config") || "{}"); } catch { return {}; }
+  });
+  // Preço de venda desejado configurado por anúncio na Precificação
+  const [precosVendaConfig, setPrecosVendaConfig] = useState(function() {
+    try { return JSON.parse(localStorage.getItem("precos_venda_config") || "{}"); } catch { return {}; }
+  });
   function setFretesAndSave(updater) {
     setFretesConfig(function(prev) {
       var next = typeof updater === "function" ? updater(prev) : updater;
       try { localStorage.setItem("fretes_config", JSON.stringify(next)); } catch {}
+      kvSyncPush("fretes_config", next);
       return next;
     });
   }
@@ -14159,6 +14181,23 @@ export default function App() {
     setCosts(function(prev) {
       var next = typeof updater === "function" ? updater(prev) : updater;
       try { localStorage.setItem("costs_config", JSON.stringify(next)); } catch {}
+      kvSyncPush("costs_config", next);
+      return next;
+    });
+  }
+  function setDescontosAndSave(updater) {
+    setDescontosConfig(function(prev) {
+      var next = typeof updater === "function" ? updater(prev) : updater;
+      try { localStorage.setItem("descontos_config", JSON.stringify(next)); } catch {}
+      kvSyncPush("descontos_config", next);
+      return next;
+    });
+  }
+  function setPrecosVendaAndSave(updater) {
+    setPrecosVendaConfig(function(prev) {
+      var next = typeof updater === "function" ? updater(prev) : updater;
+      try { localStorage.setItem("precos_venda_config", JSON.stringify(next)); } catch {}
+      kvSyncPush("precos_venda_config", next);
       return next;
     });
   }
@@ -14470,6 +14509,30 @@ export default function App() {
   const [notasFiscais, setNotasFiscais] = useState(() => {
     try { return JSON.parse(localStorage.getItem("notas_fiscais_entrada") || "[]"); } catch { return []; }
   });
+  // Puxa do servidor (o que outros usuários salvaram) ao abrir o sistema, e periodicamente,
+  // mantendo NF Entrada e Precificação sincronizadas entre todo mundo, não só neste navegador.
+  useEffect(function(){
+    var sincronizarTudo = function(){
+      kvSyncPull("notas_fiscais_entrada").then(function(v){
+        if (v != null) { setNotasFiscais(v); try { localStorage.setItem("notas_fiscais_entrada", JSON.stringify(v)); } catch {} }
+      });
+      kvSyncPull("costs_config").then(function(v){
+        if (v != null) { setCosts(v); try { localStorage.setItem("costs_config", JSON.stringify(v)); } catch {} }
+      });
+      kvSyncPull("fretes_config").then(function(v){
+        if (v != null) { setFretesConfig(v); try { localStorage.setItem("fretes_config", JSON.stringify(v)); } catch {} }
+      });
+      kvSyncPull("descontos_config").then(function(v){
+        if (v != null) { setDescontosConfig(v); try { localStorage.setItem("descontos_config", JSON.stringify(v)); } catch {} }
+      });
+      kvSyncPull("precos_venda_config").then(function(v){
+        if (v != null) { setPrecosVendaConfig(v); try { localStorage.setItem("precos_venda_config", JSON.stringify(v)); } catch {} }
+      });
+    };
+    sincronizarTudo();
+    var intervalId = setInterval(sincronizarTudo, 60000); // a cada 1 minuto
+    return function(){ clearInterval(intervalId); };
+  }, []);
   const [paymentData, setPaymentData] = useState({}); // orderId → { releaseDate, netAmount }
   const [loadError, setLoadError] = useState(null);
 
@@ -15520,19 +15583,19 @@ export default function App() {
 
         {(tab === "overview" || tab === "listings" || tab === "orders") && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 24 }} className="fade-up">
           {[
-            { label: "Fat. Bruto", value: fmt(fatBruto), color: "#0f172a", desc: `${allOrdersPeriodo.filter(o=>o.status==="paid").length} pedidos` },
-            { label: "Fat. Líquido", value: fmt(fatLiquido), color: fatLiquido >= fatBruto ? "#0f172a" : "#dc2626", desc: canceladosDevolvidos.length > 0 ? `-${canceladosDevolvidos.length} cancel./devolv.` : "sem cancelamentos" },
-            { label: "Tarifas ML", value: fmt(totalFees), color: "#d97706" },
-            { label: "Frete (seu custo)", value: fmt(totalFreteSeller), color: "#7c3aed" },
-            { label: "CMV (mercadorias)", value: fmt(totalCMV), color: "#be123c" },
-            { label: "Margem média", value: fmtPct(avgMargin), color: avgMargin >= .25 ? "#15803d" : avgMargin >= .15 ? "#d97706" : "#dc2626" },
-            { label: "Impostos (mês)", value: fmt(totalImpostosMes), color: "#dc2626", desc: pctImpostos > 0 ? `${(pctImpostos*100).toFixed(2)}% (IRPJ+CSLL)` : "configure em Financeiro" },
-            { label: "Custos Fixos (mês)", value: fmt(totalCustosFixosMes), color: "#d97706" },
-            { label: "Lucro Real", value: fmt(lucroReal), color: lucroReal >= 0 ? "#15803d" : "#dc2626" },
+            { label: "Fat. Bruto", value: fmt(fatBruto), color: "#0f172a", desc: `${allOrdersPeriodo.filter(o=>o.status==="paid").length} pedidos`, financeiro:true },
+            { label: "Fat. Líquido", value: fmt(fatLiquido), color: fatLiquido >= fatBruto ? "#0f172a" : "#dc2626", desc: canceladosDevolvidos.length > 0 ? `-${canceladosDevolvidos.length} cancel./devolv.` : "sem cancelamentos", financeiro:true },
+            { label: "Tarifas ML", value: fmt(totalFees), color: "#d97706", financeiro:true },
+            { label: "Frete (seu custo)", value: fmt(totalFreteSeller), color: "#7c3aed", financeiro:true },
+            { label: "CMV (mercadorias)", value: fmt(totalCMV), color: "#be123c", financeiro:true },
+            { label: "Margem média", value: fmtPct(avgMargin), color: avgMargin >= .25 ? "#15803d" : avgMargin >= .15 ? "#d97706" : "#dc2626", financeiro:true },
+            { label: "Impostos (mês)", value: fmt(totalImpostosMes), color: "#dc2626", desc: pctImpostos > 0 ? `${(pctImpostos*100).toFixed(2)}% (IRPJ+CSLL)` : "configure em Financeiro", financeiro:true },
+            { label: "Custos Fixos (mês)", value: fmt(totalCustosFixosMes), color: "#d97706", financeiro:true },
+            { label: "Lucro Real", value: fmt(lucroReal), color: lucroReal >= 0 ? "#15803d" : "#dc2626", financeiro:true },
             { label: "Score médio", value: `${avgScore}/100`, color: scoreColor(avgScore) },
             { label: "Total anúncios", value: enriched.length, color: "#0f172a" },
             { label: "Pedidos período", value: enrichedOrders.length, color: "#0f172a" },
-          ].map(k => (
+          ].filter(function(k){ return !k.financeiro || currentUser?.admin; }).map(k => (
             <div key={k.label} style={{ background: darkMode?"#1e293b":"#fff", border: `1px solid ${darkMode?"#334155":"#e2e8f0"}`, borderRadius: 12, padding: "16px 18px", boxShadow: "0 1px 2px rgba(0,0,0,.04)" }}>
               <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 8, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8 }}>{k.label}</div>
               <div style={{ fontSize: 20, fontWeight: 800, color: k.color, letterSpacing: -0.5 }}>{k.value}</div>
@@ -16051,6 +16114,12 @@ export default function App() {
             costs={costs}
             setCosts={setCostsAndSave}
             enriched={enriched}
+            fretesConfig={fretesConfig}
+            setFretesAndSave={setFretesAndSave}
+            descontosConfig={descontosConfig}
+            setDescontosAndSave={setDescontosAndSave}
+            precosVendaConfig={precosVendaConfig}
+            setPrecosVendaAndSave={setPrecosVendaAndSave}
           />
         )}
 
@@ -16108,6 +16177,10 @@ export default function App() {
             setCostsAndSave={setCostsAndSave}
             fretesConfig={fretesConfig}
             setFretesAndSave={setFretesAndSave}
+            descontosConfig={descontosConfig}
+            setDescontosAndSave={setDescontosAndSave}
+            precosVendaConfig={precosVendaConfig}
+            setPrecosVendaAndSave={setPrecosVendaAndSave}
             rawOrders={rawOrders}
           />
         )}

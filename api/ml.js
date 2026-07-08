@@ -1,5 +1,6 @@
 // api/ml.js
 // Proxy para a API do Mercado Livre + rota interna /_users (sem exigir token ML)
+import { kvGet, SHARED_ML_TOKEN_KEY } from "./_kv.js";
 
 let _usersCache = null;
 
@@ -104,6 +105,12 @@ export default async function handler(req, res) {
   if (!token) {
     token = cookies.ml_access_token;
   }
+  // Último fallback: conexão compartilhada da equipe (quando este navegador nunca conectou
+  // e por algum motivo o front-end ainda não tinha enviado o header com o token compartilhado).
+  if (!token) {
+    const shared = await kvGet(SHARED_ML_TOKEN_KEY);
+    if (shared && shared.accessToken) token = shared.accessToken;
+  }
 
   if (!token) {
     return res.status(401).json({ error: "Não autenticado. Faça login com o Mercado Livre." });
@@ -123,31 +130,30 @@ export default async function handler(req, res) {
     });
 
     if (mlRes.status === 401) {
-      const refreshToken = cookies.ml_refresh_token;
-      if (refreshToken) {
-        try {
-          const refreshRes = await fetch(`${process.env.VERCEL_URL ? "https://" + process.env.VERCEL_URL : ""}/api/auth/refresh`, {
-            method: "POST",
-            headers: { cookie: req.headers.cookie || "" },
+      // Sempre tenta renovar — o endpoint /api/auth/refresh já sabe usar o refresh_token do
+      // cookie deste navegador OU, se não houver, o da conexão compartilhada da equipe.
+      try {
+        const refreshRes = await fetch(`${process.env.VERCEL_URL ? "https://" + process.env.VERCEL_URL : ""}/api/auth/refresh`, {
+          method: "POST",
+          headers: { cookie: req.headers.cookie || "" },
+        });
+        if (refreshRes.ok) {
+          const refreshData = await refreshRes.json();
+          const retryRes = await fetch(mlUrl, {
+            method: req.method,
+            headers: {
+              Authorization: `Bearer ${refreshData.access_token}`,
+              "Content-Type": "application/json",
+              "Accept": "application/json",
+            },
+            body: req.method !== "GET" ? JSON.stringify(req.body) : undefined,
           });
-          if (refreshRes.ok) {
-            const refreshData = await refreshRes.json();
-            const retryRes = await fetch(mlUrl, {
-              method: req.method,
-              headers: {
-                Authorization: `Bearer ${refreshData.access_token}`,
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-              },
-              body: req.method !== "GET" ? JSON.stringify(req.body) : undefined,
-            });
-            const setCookie = refreshRes.headers.get("set-cookie");
-            if (setCookie) res.setHeader("Set-Cookie", setCookie);
-            const data = await retryRes.json();
-            return res.status(retryRes.status).json(data);
-          }
-        } catch (e) {}
-      }
+          const setCookie = refreshRes.headers.get("set-cookie");
+          if (setCookie) res.setHeader("Set-Cookie", setCookie);
+          const data = await retryRes.json();
+          return res.status(retryRes.status).json(data);
+        }
+      } catch (e) {}
       return res.status(401).json({ error: "Token expirado. Reconecte ao Mercado Livre." });
     }
 

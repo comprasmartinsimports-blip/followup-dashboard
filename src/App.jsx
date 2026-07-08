@@ -2555,23 +2555,23 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
                           </div>
                           <BotaoExportar
                             onCSV={function(){
-                              var headers = ["Pedido","Data","Produto","Bruto","Taxa ML","Frete","Custo","Lucro","Margem"];
+                              var headers = ["Pedido","Data","Produto","SKU","Bruto","Taxa ML","Frete","Custo","Lucro","Margem"];
                               var rows = pedidosOrdenados.map(function(o){
-                                return [o.id, fmtDate(o.date), o.title||"—", fmt(o.bruto), fmt(o.taxa), fmt(o.frete), o.custo>0?fmt(o.custo):"—", o.custo>0?fmt(o.lucro):"—", o.custo>0?o.margem.toFixed(1)+"%":"sem custo"];
+                                return [o.id, fmtDate(o.date), o.title||"—", o.sku||"—", fmt(o.bruto), fmt(o.taxa), fmt(o.frete), o.custo>0?fmt(o.custo):"—", o.custo>0?fmt(o.lucro):"—", o.custo>0?o.margem.toFixed(1)+"%":"sem custo"];
                               });
                               exportarCSV("Margem por Pedido", headers, rows);
                             }}
                             onXLS={function(){
-                              var headers = ["Pedido","Data","Produto","Bruto","Taxa ML","Frete","Custo","Lucro","Margem"];
+                              var headers = ["Pedido","Data","Produto","SKU","Bruto","Taxa ML","Frete","Custo","Lucro","Margem"];
                               var rows = pedidosOrdenados.map(function(o){
-                                return [o.id, fmtDate(o.date), o.title||"—", fmt(o.bruto), fmt(o.taxa), fmt(o.frete), o.custo>0?fmt(o.custo):"—", o.custo>0?fmt(o.lucro):"—", o.custo>0?o.margem.toFixed(1)+"%":"sem custo"];
+                                return [o.id, fmtDate(o.date), o.title||"—", o.sku||"—", fmt(o.bruto), fmt(o.taxa), fmt(o.frete), o.custo>0?fmt(o.custo):"—", o.custo>0?fmt(o.lucro):"—", o.custo>0?o.margem.toFixed(1)+"%":"sem custo"];
                               });
                               exportarXLS("Margem por Pedido", headers, rows);
                             }}
                             onPDF={function(){
-                              var headers = ["Pedido","Data","Produto","Bruto","Taxa ML","Frete","Custo","Lucro","Margem"];
+                              var headers = ["Pedido","Data","Produto","SKU","Bruto","Taxa ML","Frete","Custo","Lucro","Margem"];
                               var rows = pedidosOrdenados.map(function(o){
-                                return [o.id, fmtDate(o.date), o.title||"—", fmt(o.bruto), fmt(o.taxa), fmt(o.frete), o.custo>0?fmt(o.custo):"—", o.custo>0?fmt(o.lucro):"—", o.custo>0?o.margem.toFixed(1)+"%":"sem custo"];
+                                return [o.id, fmtDate(o.date), o.title||"—", o.sku||"—", fmt(o.bruto), fmt(o.taxa), fmt(o.frete), o.custo>0?fmt(o.custo):"—", o.custo>0?fmt(o.lucro):"—", o.custo>0?o.margem.toFixed(1)+"%":"sem custo"];
                               });
                               exportarPDF("Margem por Pedido", "Margem por Pedido", headers, rows);
                             }}
@@ -2579,13 +2579,14 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
                         </div>
                       </div>
                       <table style={{ borderCollapse:"collapse", width:"100%" }}>
-                        <thead><tr>{["Pedido","Data","Produto","Bruto","Taxa ML","Frete","Custo","Lucro","Margem"].map(function(h){ return <th key={h} style={{ fontSize:10, color:"#94a3b8", textTransform:"uppercase", padding:"5px 8px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>; })}</tr></thead>
+                        <thead><tr>{["Pedido","Data","Produto","SKU","Bruto","Taxa ML","Frete","Custo","Lucro","Margem"].map(function(h){ return <th key={h} style={{ fontSize:10, color:"#94a3b8", textTransform:"uppercase", padding:"5px 8px", borderBottom:"1px solid #f1f5f9", textAlign:"left", fontWeight:600, background:"#fafafa", whiteSpace:"nowrap" }}>{h}</th>; })}</tr></thead>
                         <tbody>{pedidosOrdenados.slice(0,200).map(function(o,i){
                           var mCor=o.margem>=20?"#15803d":o.margem>=10?"#d97706":"#dc2626";
                           return <tr key={o.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
                             <td style={{ padding:"7px 12px", fontSize:11, color:"#0891b2", fontFamily:"monospace" }}>#{o.id}</td>
                             <td style={{ padding:"7px 12px", fontSize:11, color:"#64748b", whiteSpace:"nowrap" }}>{fmtDate(o.date)}</td>
                             <td style={{ padding:"7px 12px", fontSize:11, color:"#0f172a", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{o.title||"—"}</td>
+                            <td style={{ padding:"7px 12px", fontSize:11, color:"#64748b", fontFamily:"monospace", whiteSpace:"nowrap" }}>{o.sku||"—"}</td>
                             <td style={{ padding:"7px 12px", fontSize:12, fontWeight:600, color:"#0f172a" }}>{fmt(o.bruto)}</td>
                             <td style={{ padding:"7px 12px", fontSize:12, color:"#dc2626" }}>{fmt(o.taxa)}</td>
                             <td style={{ padding:"7px 12px", fontSize:12, color:"#d97706" }}>{fmt(o.frete)}</td>

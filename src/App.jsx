@@ -13639,12 +13639,14 @@ function getChatMensagens() {
 }
 function saveChatMensagens(msgs) {
   try { localStorage.setItem("chat_interno_mensagens", JSON.stringify(msgs)); } catch {}
+  kvSyncPush("chat_interno_mensagens", msgs);
 }
 function getTarefas() {
   try { return JSON.parse(localStorage.getItem("chat_interno_tarefas")||"[]"); } catch { return []; }
 }
 function saveTarefas(t) {
   try { localStorage.setItem("chat_interno_tarefas", JSON.stringify(t)); } catch {}
+  kvSyncPush("chat_interno_tarefas", t);
 }
 
 function ChatInternoWidget({ currentUser }) {
@@ -13666,14 +13668,35 @@ function ChatInternoWidget({ currentUser }) {
     if (open && bottomRef.current) bottomRef.current.scrollIntoView({ behavior:"smooth" });
   }, [mensagens, open, canalAtivo]);
 
-  // Polling simples para simular tempo real entre abas/usuários (localStorage não dispara evento na mesma aba)
+  // Busca imediatamente ao montar (sem esperar o primeiro tick do polling)
+  useEffect(function(){
+    kvSyncPull("chat_interno_mensagens").then(function(fresh){
+      if (fresh != null) { setMensagens(fresh); try { localStorage.setItem("chat_interno_mensagens", JSON.stringify(fresh)); } catch {} }
+    });
+    kvSyncPull("chat_interno_tarefas").then(function(freshT){
+      if (freshT != null) { setTarefas(freshT); try { localStorage.setItem("chat_interno_tarefas", JSON.stringify(freshT)); } catch {} }
+    });
+  }, []);
+
+  // Polling para chegar mensagens/tarefas de outros usuários (em qualquer computador) —
+  // busca do servidor compartilhado, não só do localStorage deste navegador.
   useEffect(function(){
     var interval = setInterval(function(){
-      var fresh = getChatMensagens();
-      if (JSON.stringify(fresh) !== JSON.stringify(mensagens)) setMensagens(fresh);
-      var freshT = getTarefas();
-      if (JSON.stringify(freshT) !== JSON.stringify(tarefas)) setTarefas(freshT);
-    }, 3000);
+      kvSyncPull("chat_interno_mensagens").then(function(fresh){
+        if (fresh == null) return;
+        if (JSON.stringify(fresh) !== JSON.stringify(mensagens)) {
+          setMensagens(fresh);
+          try { localStorage.setItem("chat_interno_mensagens", JSON.stringify(fresh)); } catch {}
+        }
+      });
+      kvSyncPull("chat_interno_tarefas").then(function(freshT){
+        if (freshT == null) return;
+        if (JSON.stringify(freshT) !== JSON.stringify(tarefas)) {
+          setTarefas(freshT);
+          try { localStorage.setItem("chat_interno_tarefas", JSON.stringify(freshT)); } catch {}
+        }
+      });
+    }, 4000); // 4s — chat precisa parecer quase em tempo real
     return function(){ clearInterval(interval); };
   }, [mensagens, tarefas]);
 
@@ -14509,29 +14532,93 @@ export default function App() {
   const [notasFiscais, setNotasFiscais] = useState(() => {
     try { return JSON.parse(localStorage.getItem("notas_fiscais_entrada") || "[]"); } catch { return []; }
   });
-  // Puxa do servidor (o que outros usuários salvaram) ao abrir o sistema, e periodicamente,
-  // mantendo NF Entrada e Precificação sincronizadas entre todo mundo, não só neste navegador.
+  // ══ SINCRONIZAÇÃO GERAL DO SISTEMA ENTRE TODOS OS USUÁRIOS ══════════════
+  // Cobre TODO o sistema, não só NF Entrada e Precificação: produtos, fornecedores,
+  // contas a pagar/bancárias, custos fixos, impostos, lançamentos, estoque, pedidos de
+  // compra etc. Funciona em duas frentes:
+  //  1) PUSH: varre o localStorage periodicamente e manda pro servidor qualquer chave que
+  //     mudou desde o último envio — funciona não importa em qual tela/componente a edição
+  //     foi feita, sem precisar alterar cada uma individualmente.
+  //  2) PULL: busca do servidor o que outros usuários salvaram. Para os dados que já são
+  //     estado do componente principal (produtos, fornecedores, contas a pagar...), atualiza
+  //     a tela na hora. Para os que vivem só dentro de uma aba específica (movimentação de
+  //     estoque, pedidos de compra, ICMS por estado...), atualiza o localStorage — a aba pega
+  //     o valor mais novo na próxima vez que for aberta.
+  const SYNC_ALL_KEYS = useRef([
+    "notas_fiscais_entrada","costs_config","fretes_config","descontos_config","precos_venda_config",
+    "produtos_cadastro","fornecedores_cadastro","contas_pagar","contas_bancarias","categorias_pagar",
+    "custos_fixos_config","impostos_config","irpj_csll_config","icms_por_estado","lancamentos",
+    "mov_estoque","metaMensal","min_stock_anuncios","real_fees_config","pedidos_compra",
+    "precificacao_extras","precos_pendentes_ml","depositos_estoque","estoque_depositos",
+    "envios_full","vendas_estoque_baixadas",
+  ]).current;
+  const SYNC_ROOT_SETTERS = useRef({
+    notas_fiscais_entrada: setNotasFiscais,
+    costs_config: setCosts,
+    fretes_config: setFretesConfig,
+    descontos_config: setDescontosConfig,
+    precos_venda_config: setPrecosVendaConfig,
+    produtos_cadastro: setProdutos,
+    fornecedores_cadastro: setFornecedores,
+    contas_pagar: setContasPagar,
+    contas_bancarias: setContasBancarias,
+    categorias_pagar: setCategoriasPagar,
+    custos_fixos_config: setCustosFixos,
+    impostos_config: setImpostos,
+    irpj_csll_config: setIrpjCsllConfigState,
+    lancamentos: setLancamentos,
+    metaMensal: function(v){ setMetaMensal(parseFloat(v)||0); },
+    min_stock_anuncios: setMinStock,
+    real_fees_config: setRealFees,
+  }).current;
+  const lastSyncRef = useRef({}); // key -> string JSON já sincronizado (evita reenviar/reaplicar sem necessidade)
+
   useEffect(function(){
-    var sincronizarTudo = function(){
-      kvSyncPull("notas_fiscais_entrada").then(function(v){
-        if (v != null) { setNotasFiscais(v); try { localStorage.setItem("notas_fiscais_entrada", JSON.stringify(v)); } catch {} }
+    function pushMudancasLocais() {
+      SYNC_ALL_KEYS.forEach(function(key){
+        try {
+          var raw = localStorage.getItem(key);
+          if (raw == null) return;
+          if (lastSyncRef.current[key] === raw) return; // sem mudança desde a última sincronização
+          lastSyncRef.current[key] = raw;
+          kvSyncPush(key, JSON.parse(raw));
+        } catch(e) {}
       });
-      kvSyncPull("costs_config").then(function(v){
-        if (v != null) { setCosts(v); try { localStorage.setItem("costs_config", JSON.stringify(v)); } catch {} }
+    }
+    function puxarDoServidor() {
+      var promessas = SYNC_ALL_KEYS.map(function(key){
+        return kvSyncPull(key).then(function(v){
+          if (v == null) return;
+          var raw = JSON.stringify(v);
+          if (lastSyncRef.current[key] === raw) return; // já é o que temos
+          lastSyncRef.current[key] = raw;
+          try { localStorage.setItem(key, raw); } catch(e) {}
+          var setter = SYNC_ROOT_SETTERS[key];
+          if (setter) setter(v);
+        });
       });
-      kvSyncPull("fretes_config").then(function(v){
-        if (v != null) { setFretesConfig(v); try { localStorage.setItem("fretes_config", JSON.stringify(v)); } catch {} }
-      });
-      kvSyncPull("descontos_config").then(function(v){
-        if (v != null) { setDescontosConfig(v); try { localStorage.setItem("descontos_config", JSON.stringify(v)); } catch {} }
-      });
-      kvSyncPull("precos_venda_config").then(function(v){
-        if (v != null) { setPrecosVendaConfig(v); try { localStorage.setItem("precos_venda_config", JSON.stringify(v)); } catch {} }
-      });
+      return Promise.all(promessas);
+    }
+
+    var pushInterval, pullInterval;
+    // Primeiro busca o que já existe no servidor (evita que uma cópia local desatualizada
+    // sobrescreva o que outro usuário salvou mais recentemente), só depois começa a observar
+    // mudanças locais para enviar.
+    puxarDoServidor().finally(function(){
+      pushMudancasLocais();
+      pushInterval = setInterval(pushMudancasLocais, 15000); // varre a cada 15s
+      pullInterval = setInterval(puxarDoServidor, 45000); // a cada 45s
+    });
+
+    function aoEsconderAba(){ if (document.visibilityState === "hidden") pushMudancasLocais(); }
+    document.addEventListener("visibilitychange", aoEsconderAba);
+    window.addEventListener("beforeunload", pushMudancasLocais);
+    return function(){
+      clearInterval(pushInterval);
+      clearInterval(pullInterval);
+      document.removeEventListener("visibilitychange", aoEsconderAba);
+      window.removeEventListener("beforeunload", pushMudancasLocais);
     };
-    sincronizarTudo();
-    var intervalId = setInterval(sincronizarTudo, 60000); // a cada 1 minuto
-    return function(){ clearInterval(intervalId); };
   }, []);
   const [paymentData, setPaymentData] = useState({}); // orderId → { releaseDate, netAmount }
   const [loadError, setLoadError] = useState(null);

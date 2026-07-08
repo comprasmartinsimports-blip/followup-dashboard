@@ -6,13 +6,36 @@ let _usersCache = null;
 
 // Chaves de dados de negócio que ficam sincronizadas entre TODOS os usuários (não só no
 // navegador de quem editou) — cada uma vira uma entrada no KV, prefixada para não colidir
-// com outras chaves. Adicione aqui outras coleções se quiser expandir a sincronização.
+// com outras chaves.
 const SYNC_KEYS_PERMITIDAS = [
   "notas_fiscais_entrada",
   "costs_config",
   "fretes_config",
   "precos_venda_config",
   "descontos_config",
+  "produtos_cadastro",
+  "fornecedores_cadastro",
+  "contas_pagar",
+  "contas_bancarias",
+  "categorias_pagar",
+  "custos_fixos_config",
+  "impostos_config",
+  "irpj_csll_config",
+  "icms_por_estado",
+  "lancamentos",
+  "mov_estoque",
+  "metaMensal",
+  "min_stock_anuncios",
+  "real_fees_config",
+  "pedidos_compra",
+  "precificacao_extras",
+  "precos_pendentes_ml",
+  "depositos_estoque",
+  "estoque_depositos",
+  "envios_full",
+  "vendas_estoque_baixadas",
+  "chat_interno_mensagens",
+  "chat_interno_tarefas",
 ];
 
 const ADMIN_PADRAO = [{

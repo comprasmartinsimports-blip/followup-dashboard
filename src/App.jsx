@@ -302,9 +302,15 @@ function syncListingsToProdutos(listings, produtosExistentes) {
     }
   });
 
-  // ── PASSO 4: Manter produtos manuais não-sincronizados ────────────────
+  // ── PASSO 4: Manter TODOS os produtos que não bateram com um anúncio desta busca ──
+  // Importante: isso inclui produtos criados via ML cujo anúncio não veio nesta busca
+  // específica (ex: erro de rede pontual, anúncio pausado, falha parcial na paginação).
+  // Antes, produtos com "criadoViaML: true" eram APAGADOS do cadastro nesse caso — perdendo
+  // estoque mínimo, custo e qualquer edição manual. Agora eles são sempre preservados; só
+  // deixam de receber a atualização de preço/estoque do ML até aparecerem numa sincronização
+  // futura. A exclusão de um produto deve ser sempre uma ação manual do usuário.
   produtosExistentes.forEach(function(p) {
-    if (!produtosProcessados.has(p.id) && !p.criadoViaML) {
+    if (!produtosProcessados.has(p.id)) {
       resultado.push(p);
     }
   });

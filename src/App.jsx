@@ -14600,13 +14600,22 @@ export default function App() {
     "precificacao_extras","precos_pendentes_ml","depositos_estoque","estoque_depositos",
     "envios_full","vendas_estoque_baixadas",
   ]).current;
+  // Para os dados guardados como dicionário (chave→valor, ex: custo por anúncio), mesclar em
+  // vez de substituir por inteiro — evita que um "pull" com dados parciais do servidor apague
+  // entradas que este navegador já tinha (ex: taxas reais do ML buscadas aos poucos, ou um
+  // custo editado localmente que ainda não chegou ao servidor).
+  function mesclarSetter(setter) {
+    return function(pulled) {
+      setter(function(prev) { return Object.assign({}, prev || {}, pulled || {}); });
+    };
+  }
   const SYNC_ROOT_SETTERS = useRef({
     notas_fiscais_entrada: setNotasFiscais,
-    costs_config: setCosts,
-    fretes_config: setFretesConfig,
-    descontos_config: setDescontosConfig,
-    precos_venda_config: setPrecosVendaConfig,
-    precos_pendentes_ml: setPendentesAtualizacao,
+    costs_config: mesclarSetter(setCosts),
+    fretes_config: mesclarSetter(setFretesConfig),
+    descontos_config: mesclarSetter(setDescontosConfig),
+    precos_venda_config: mesclarSetter(setPrecosVendaConfig),
+    precos_pendentes_ml: mesclarSetter(setPendentesAtualizacao),
     produtos_cadastro: setProdutos,
     fornecedores_cadastro: setFornecedores,
     contas_pagar: setContasPagar,
@@ -14614,11 +14623,11 @@ export default function App() {
     categorias_pagar: setCategoriasPagar,
     custos_fixos_config: setCustosFixos,
     impostos_config: setImpostos,
-    irpj_csll_config: setIrpjCsllConfigState,
+    irpj_csll_config: mesclarSetter(setIrpjCsllConfigState),
     lancamentos: setLancamentos,
     metaMensal: function(v){ setMetaMensal(parseFloat(v)||0); },
-    min_stock_anuncios: setMinStock,
-    real_fees_config: setRealFees,
+    min_stock_anuncios: mesclarSetter(setMinStock),
+    real_fees_config: mesclarSetter(setRealFees),
   }).current;
   // Tipo esperado de cada chave — usado para blindar contra um valor no formato errado
   // (ex: um objeto onde deveria vir uma lista) travando a tela com "x.filter is not a function".

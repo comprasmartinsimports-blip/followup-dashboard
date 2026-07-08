@@ -2532,25 +2532,50 @@ function OverviewTab({ enriched, enrichedOrders, rawOrders, contasPagar, contasB
 
                   return (
                     <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
-                      <div style={{ padding:"8px 14px", borderBottom:"1px solid #f1f5f9", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                      <div style={{ padding:"8px 14px", borderBottom:"1px solid #f1f5f9", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
                         <span style={{ fontWeight:700, fontSize:15, color:"#0f172a" }}>Margem por Pedido</span>
-                        <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                          <span style={{ fontSize:12, color:"#94a3b8" }}>Ordenar:</span>
-                          {[
-                            { k:"data",  l:"📅 Data" },
-                            { k:"maior", l:"▲ Maior margem" },
-                            { k:"menor", l:"▼ Menor margem" },
-                          ].map(function(op){
-                            var a = sortMargem === op.k;
-                            return (
-                              <button key={op.k} onClick={function(){ setSortMargem(op.k); }}
-                                style={{ padding:"3px 9px", borderRadius:8, border:"1px solid "+(a?"#0f172a":"#e2e8f0"),
-                                  background:a?"#0f172a":"#fff", color:a?"#fff":"#64748b",
-                                  fontWeight:a?700:400, fontSize:12, cursor:"pointer" }}>
-                                {op.l}
-                              </button>
-                            );
-                          })}
+                        <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
+                          <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                            <span style={{ fontSize:12, color:"#94a3b8" }}>Ordenar:</span>
+                            {[
+                              { k:"data",  l:"📅 Data" },
+                              { k:"maior", l:"▲ Maior margem" },
+                              { k:"menor", l:"▼ Menor margem" },
+                            ].map(function(op){
+                              var a = sortMargem === op.k;
+                              return (
+                                <button key={op.k} onClick={function(){ setSortMargem(op.k); }}
+                                  style={{ padding:"3px 9px", borderRadius:8, border:"1px solid "+(a?"#0f172a":"#e2e8f0"),
+                                    background:a?"#0f172a":"#fff", color:a?"#fff":"#64748b",
+                                    fontWeight:a?700:400, fontSize:12, cursor:"pointer" }}>
+                                  {op.l}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <BotaoExportar
+                            onCSV={function(){
+                              var headers = ["Pedido","Data","Produto","Bruto","Taxa ML","Frete","Custo","Lucro","Margem"];
+                              var rows = pedidosOrdenados.map(function(o){
+                                return [o.id, fmtDate(o.date), o.title||"—", fmt(o.bruto), fmt(o.taxa), fmt(o.frete), o.custo>0?fmt(o.custo):"—", o.custo>0?fmt(o.lucro):"—", o.custo>0?o.margem.toFixed(1)+"%":"sem custo"];
+                              });
+                              exportarCSV("Margem por Pedido", headers, rows);
+                            }}
+                            onXLS={function(){
+                              var headers = ["Pedido","Data","Produto","Bruto","Taxa ML","Frete","Custo","Lucro","Margem"];
+                              var rows = pedidosOrdenados.map(function(o){
+                                return [o.id, fmtDate(o.date), o.title||"—", fmt(o.bruto), fmt(o.taxa), fmt(o.frete), o.custo>0?fmt(o.custo):"—", o.custo>0?fmt(o.lucro):"—", o.custo>0?o.margem.toFixed(1)+"%":"sem custo"];
+                              });
+                              exportarXLS("Margem por Pedido", headers, rows);
+                            }}
+                            onPDF={function(){
+                              var headers = ["Pedido","Data","Produto","Bruto","Taxa ML","Frete","Custo","Lucro","Margem"];
+                              var rows = pedidosOrdenados.map(function(o){
+                                return [o.id, fmtDate(o.date), o.title||"—", fmt(o.bruto), fmt(o.taxa), fmt(o.frete), o.custo>0?fmt(o.custo):"—", o.custo>0?fmt(o.lucro):"—", o.custo>0?o.margem.toFixed(1)+"%":"sem custo"];
+                              });
+                              exportarPDF("Margem por Pedido", "Margem por Pedido", headers, rows);
+                            }}
+                          />
                         </div>
                       </div>
                       <table style={{ borderCollapse:"collapse", width:"100%" }}>

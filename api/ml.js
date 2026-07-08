@@ -1,8 +1,19 @@
 // api/ml.js
 // Proxy para a API do Mercado Livre + rota interna /_users (sem exigir token ML)
-import { kvGet, SHARED_ML_TOKEN_KEY } from "./_kv.js";
+import { kvGet, kvSet, SHARED_ML_TOKEN_KEY } from "./_kv.js";
 
 let _usersCache = null;
+
+// Chaves de dados de negócio que ficam sincronizadas entre TODOS os usuários (não só no
+// navegador de quem editou) — cada uma vira uma entrada no KV, prefixada para não colidir
+// com outras chaves. Adicione aqui outras coleções se quiser expandir a sincronização.
+const SYNC_KEYS_PERMITIDAS = [
+  "notas_fiscais_entrada",
+  "costs_config",
+  "fretes_config",
+  "precos_venda_config",
+  "descontos_config",
+];
 
 const ADMIN_PADRAO = [{
   id: "admin",
@@ -85,6 +96,37 @@ export default async function handler(req, res) {
       });
       await salvarUsuarios(novos);
       return res.status(200).json({ ok: true, total: novos.length });
+    }
+
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  // ── Rota de sincronização de dados de negócio — NÃO exige token do ML ──
+  // Compartilha NF Entrada, custos/frete/preços de venda/descontos da Precificação entre
+  // todos os usuários do sistema, independente do navegador/computador de cada um.
+  if (path === "/_sync" || path.startsWith("/_sync?")) {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    if (req.method === "OPTIONS") return res.status(200).end();
+
+    if (req.method === "GET") {
+      const key = new URLSearchParams(path.split("?")[1] || "").get("key");
+      if (!key || !SYNC_KEYS_PERMITIDAS.includes(key)) {
+        return res.status(400).json({ error: "Chave de sincronização inválida" });
+      }
+      const value = await kvGet("mlmargem_sync_" + key);
+      return res.status(200).json({ key, value: value ?? null });
+    }
+
+    if (req.method === "POST") {
+      const body = req.body || {};
+      const key = body.key;
+      if (!key || !SYNC_KEYS_PERMITIDAS.includes(key)) {
+        return res.status(400).json({ error: "Chave de sincronização inválida" });
+      }
+      await kvSet("mlmargem_sync_" + key, body.value);
+      return res.status(200).json({ ok: true });
     }
 
     return res.status(405).json({ error: "Method not allowed" });

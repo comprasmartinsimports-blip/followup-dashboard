@@ -14039,6 +14039,7 @@ export default function App() {
           .then(function(r){ return r.json(); })
           .then(function(session) {
             if (session.authenticated) {
+              if (session.expiresAt) setTokenExpiry(session.expiresAt);
               handleConnect(session.accessToken, session.userId);
             }
           }).catch(function(){});
@@ -14051,12 +14052,14 @@ export default function App() {
           .then(function(r){ return r.json(); })
           .then(function(session) {
             if (session.authenticated) {
+              if (session.expiresAt) setTokenExpiry(session.expiresAt);
               // Renovar se quase expirando
               if (session.almostExpired) {
                 fetch("/api/auth/refresh", { method: "POST" })
                   .then(function(r){ return r.json(); })
                   .then(function(d){
                     var tk = d.access_token || session.accessToken;
+                    if (d.expires_in) setTokenExpiry(Date.now() + d.expires_in * 1000);
                     handleConnect(tk, session.userId);
                   }).catch(function(){ handleConnect(session.accessToken, session.userId); });
               } else {
@@ -14120,6 +14123,9 @@ export default function App() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [filterListingExtra, setFilterListingExtra] = useState("all");
   const [token, setToken] = useState(() => loadSavedTokens()?.accessToken ?? null);
+  // Guarda quando o token atual vence (vem da sessão do servidor — cookie próprio ou conexão
+  // compartilhada da equipe). Usado por getValidToken() para saber quando renovar.
+  const [tokenExpiry, setTokenExpiry] = useState(() => loadSavedTokens()?.expiry ?? null);
   const [user, setUser] = useState(() => {
     const s = loadSavedTokens();
     return s ? { nickname: s.nickname, id: s.userId } : null;
@@ -14534,18 +14540,29 @@ export default function App() {
 
   // Renova token automaticamente se estiver próximo de vencer
   async function getValidToken() {
-    const saved = loadSavedTokens();
-    if (!saved) return token;
-    // Renova se vence em menos de 10 minutos
-    if (saved.expiry - Date.now() < 600000 && saved.refreshToken) {
+    // Sem token nenhum ainda (nem local, nem de sessão) — nada a renovar
+    if (!token) return null;
+    const vencendoEmBreve = tokenExpiry && (tokenExpiry - Date.now() < 600000);
+    if (vencendoEmBreve) {
       try {
-        const data = await refreshAccessToken(saved.refreshToken);
-        saveTokens(data.access_token, data.refresh_token, data.expires_in, saved.userId, user?.nickname || "");
-        setToken(data.access_token);
-        return data.access_token;
+        // /api/auth/refresh funciona tanto com o cookie deste navegador quanto, na ausência
+        // dele, com o refresh_token da conexão compartilhada da equipe — não depende mais do
+        // localStorage deste navegador específico.
+        const res = await fetch("/api/auth/refresh", { method: "POST" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.access_token) {
+            setToken(data.access_token);
+            setTokenExpiry(Date.now() + (data.expires_in || 21600) * 1000);
+            // Mantém o fluxo legado de localStorage em sincronia, se este navegador já o usava
+            const saved = loadSavedTokens();
+            if (saved) saveTokens(data.access_token, data.refresh_token || saved.refreshToken, data.expires_in || 21600, saved.userId || user?.id, user?.nickname || "");
+            return data.access_token;
+          }
+        }
       } catch(e) { console.warn("Falha ao renovar token:", e); }
     }
-    return saved.accessToken;
+    return token;
   }
 
   async function handleConnect(tk, userId) {

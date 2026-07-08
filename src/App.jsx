@@ -1244,7 +1244,8 @@ function getUsuarios() {
       localStorage.setItem(AUTH_KEY, JSON.stringify(adminPadrao));
       return adminPadrao;
     }
-    return JSON.parse(data);
+    var parsed = JSON.parse(data);
+    return Array.isArray(parsed) ? parsed : [];
   } catch { return []; }
 }
 
@@ -13644,14 +13645,14 @@ function PublicidadeTab({ token, sellerId, enriched }) {
 //  CHAT INTERNO — Conversa entre usuários + Tarefas + Anexos
 // ════════════════════════════════════════════════════════════
 function getChatMensagens() {
-  try { return JSON.parse(localStorage.getItem("chat_interno_mensagens")||"[]"); } catch { return []; }
+  try { var v = JSON.parse(localStorage.getItem("chat_interno_mensagens")||"[]"); return Array.isArray(v) ? v : []; } catch { return []; }
 }
 function saveChatMensagens(msgs) {
   try { localStorage.setItem("chat_interno_mensagens", JSON.stringify(msgs)); } catch {}
   kvSyncPush("chat_interno_mensagens", msgs);
 }
 function getTarefas() {
-  try { return JSON.parse(localStorage.getItem("chat_interno_tarefas")||"[]"); } catch { return []; }
+  try { var v = JSON.parse(localStorage.getItem("chat_interno_tarefas")||"[]"); return Array.isArray(v) ? v : []; } catch { return []; }
 }
 function saveTarefas(t) {
   try { localStorage.setItem("chat_interno_tarefas", JSON.stringify(t)); } catch {}
@@ -13682,10 +13683,10 @@ function ChatInternoWidget({ currentUser }) {
   // recarregar a página inteira.
   useEffect(function(){
     kvSyncPull("chat_interno_mensagens").then(function(fresh){
-      if (fresh != null) { setMensagens(fresh); try { localStorage.setItem("chat_interno_mensagens", JSON.stringify(fresh)); } catch {} }
+      if (Array.isArray(fresh)) { setMensagens(fresh); try { localStorage.setItem("chat_interno_mensagens", JSON.stringify(fresh)); } catch {} }
     });
     kvSyncPull("chat_interno_tarefas").then(function(freshT){
-      if (freshT != null) { setTarefas(freshT); try { localStorage.setItem("chat_interno_tarefas", JSON.stringify(freshT)); } catch {} }
+      if (Array.isArray(freshT)) { setTarefas(freshT); try { localStorage.setItem("chat_interno_tarefas", JSON.stringify(freshT)); } catch {} }
     });
     sincronizarUsuariosDoServidor().then(function(){
       setUsuarios(getUsuarios().filter(function(u){ return u.ativo; }));
@@ -13707,14 +13708,14 @@ function ChatInternoWidget({ currentUser }) {
   useEffect(function(){
     var interval = setInterval(function(){
       kvSyncPull("chat_interno_mensagens").then(function(fresh){
-        if (fresh == null) return;
+        if (!Array.isArray(fresh)) return;
         if (JSON.stringify(fresh) !== JSON.stringify(mensagens)) {
           setMensagens(fresh);
           try { localStorage.setItem("chat_interno_mensagens", JSON.stringify(fresh)); } catch {}
         }
       });
       kvSyncPull("chat_interno_tarefas").then(function(freshT){
-        if (freshT == null) return;
+        if (!Array.isArray(freshT)) return;
         if (JSON.stringify(freshT) !== JSON.stringify(tarefas)) {
           setTarefas(freshT);
           try { localStorage.setItem("chat_interno_tarefas", JSON.stringify(freshT)); } catch {}
@@ -14342,10 +14343,10 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "1");
   const [metaMensal, setMetaMensal] = useState(() => parseFloat(localStorage.getItem("metaMensal") || "0"));
   const [impostos, setImpostos] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("impostos_config") || "[]"); } catch { return []; }
+    try { var v = JSON.parse(localStorage.getItem("impostos_config") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
   });
   const [custosFixos, setCustosFixos] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("custos_fixos_config") || "[]"); } catch { return []; }
+    try { var v = JSON.parse(localStorage.getItem("custos_fixos_config") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
   });
   // Config de IRPJ/CSLL (usada para calcular "Impostos (mês)" no resumo) — elevada ao componente raiz
   // para que o card do resumo reaja imediatamente quando o usuário edita os percentuais, sem precisar recarregar.
@@ -14361,10 +14362,10 @@ export default function App() {
   const [showConfigPanel, setShowConfigPanel] = useState(false);
   const [configPanelTab, setConfigPanelTab] = useState("config"); // config | usuarios
   const [notificacoes, setNotificacoes] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("ml_notificacoes") || "[]"); } catch { return []; }
+    try { var v = JSON.parse(localStorage.getItem("ml_notificacoes") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
   });
   const [ultimosPedidosIds, setUltimosPedidosIds] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("ml_ultimos_pedidos") || "[]"); } catch { return []; }
+    try { var v = JSON.parse(localStorage.getItem("ml_ultimos_pedidos") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
   });
   const [periodoFiltro, setPeriodoFiltro] = useState("mes"); // hoje | semana | mes | mesSel | ano | custom
   const [periodoCustomDe, setPeriodoCustomDe] = useState("");
@@ -14375,21 +14376,21 @@ export default function App() {
   });
   // ── Financeiro ────────────────────────────────────────────
   const [contasPagar, setContasPagar] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("contas_pagar") || "[]"); } catch { return []; }
+    try { var v = JSON.parse(localStorage.getItem("contas_pagar") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
   });
   const [contasBancarias, setContasBancarias] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("contas_bancarias") || "[]"); } catch { return []; }
+    try { var v = JSON.parse(localStorage.getItem("contas_bancarias") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
   });
   const [categoriasPagar, setCategoriasPagar] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("categorias_pagar") || JSON.stringify(["Fornecedor","Aluguel","Funcionário","Marketing","Frete","Impostos","Outros"])); } catch { return ["Fornecedor","Aluguel","Funcionário","Marketing","Frete","Impostos","Outros"]; }
+    try { var vcp = JSON.parse(localStorage.getItem("categorias_pagar") || JSON.stringify(["Fornecedor","Aluguel","Funcionário","Marketing","Frete","Impostos","Outros"])); return Array.isArray(vcp) ? vcp : ["Fornecedor","Aluguel","Funcionário","Marketing","Frete","Impostos","Outros"]; } catch { return ["Fornecedor","Aluguel","Funcionário","Marketing","Frete","Impostos","Outros"]; }
   });
   const [lancamentos, setLancamentos] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("lancamentos") || "[]"); } catch { return []; }
+    try { var v = JSON.parse(localStorage.getItem("lancamentos") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
   });
   const [finTab, setFinTab] = useState("resumo");
 
   const [produtos, setProdutos] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("produtos_cadastro") || "[]"); } catch { return []; }
+    try { var v = JSON.parse(localStorage.getItem("produtos_cadastro") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
   });
 
   // Sincroniza automaticamente o estoque mínimo definido no cadastro de Produtos
@@ -14572,12 +14573,12 @@ export default function App() {
     try { return new Set(JSON.parse(localStorage.getItem("vendas_estoque_baixadas") || "[]")); } catch { return new Set(); }
   });
   const [fornecedores, setFornecedores] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("fornecedores_cadastro") || "[]"); } catch { return []; }
+    try { var v = JSON.parse(localStorage.getItem("fornecedores_cadastro") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
   });
   const [nfeSaida, setNfeSaida] = useState({});          // orderId -> dados da NF
   const [loadingNfe, setLoadingNfe] = useState(false);
   const [notasFiscais, setNotasFiscais] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("notas_fiscais_entrada") || "[]"); } catch { return []; }
+    try { var v = JSON.parse(localStorage.getItem("notas_fiscais_entrada") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
   });
   // ══ SINCRONIZAÇÃO GERAL DO SISTEMA ENTRE TODOS OS USUÁRIOS ══════════════
   // Cobre TODO o sistema, não só NF Entrada e Precificação: produtos, fornecedores,
@@ -14619,6 +14620,17 @@ export default function App() {
     min_stock_anuncios: setMinStock,
     real_fees_config: setRealFees,
   }).current;
+  // Tipo esperado de cada chave — usado para blindar contra um valor no formato errado
+  // (ex: um objeto onde deveria vir uma lista) travando a tela com "x.filter is not a function".
+  // Se o que veio do servidor não bate com o formato esperado, a atualização é ignorada.
+  const SYNC_TIPO_ESPERADO = useRef({
+    notas_fiscais_entrada: "array", produtos_cadastro: "array", fornecedores_cadastro: "array",
+    contas_pagar: "array", contas_bancarias: "array", categorias_pagar: "array",
+    custos_fixos_config: "array", impostos_config: "array", lancamentos: "array",
+    costs_config: "object", fretes_config: "object", descontos_config: "object",
+    precos_venda_config: "object", precos_pendentes_ml: "object", irpj_csll_config: "object",
+    min_stock_anuncios: "object", real_fees_config: "object",
+  }).current;
   const lastSyncRef = useRef({}); // key -> string JSON já sincronizado (evita reenviar/reaplicar sem necessidade)
 
   useEffect(function(){
@@ -14637,6 +14649,12 @@ export default function App() {
       var promessas = SYNC_ALL_KEYS.map(function(key){
         return kvSyncPull(key).then(function(v){
           if (v == null) return;
+          // Blindagem: se a chave tem um tipo esperado (lista/objeto) e o valor que veio do
+          // servidor não bate, ignora — evita aplicar um dado corrompido/incompatível que
+          // quebraria qualquer tela que faça .filter()/.map()/.forEach() nele.
+          var tipoEsperado = SYNC_TIPO_ESPERADO[key];
+          if (tipoEsperado === "array" && !Array.isArray(v)) return;
+          if (tipoEsperado === "object" && (Array.isArray(v) || typeof v !== "object" || v === null)) return;
           var raw = JSON.stringify(v);
           if (lastSyncRef.current[key] === raw) return; // já é o que temos
           lastSyncRef.current[key] = raw;

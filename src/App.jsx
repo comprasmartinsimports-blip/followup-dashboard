@@ -13,7 +13,14 @@ async function kvSyncPull(key) {
     const res = await fetch("/api/ml/_sync?key=" + encodeURIComponent(key));
     if (!res.ok) return null;
     const d = await res.json();
-    return d && d.value !== undefined ? d.value : null;
+    var v = d && d.value !== undefined ? d.value : null;
+    // Proteção: dados salvos antes da correção do formato do KV ficaram "embrulhados"
+    // como {value: "..."} em vez do valor real — se detectar esse formato antigo, ignora
+    // (equivale a "nada sincronizado ainda") em vez de aplicar um dado corrompido na tela.
+    if (v && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === 1 && typeof v.value === "string") {
+      return null;
+    }
+    return v;
   } catch { return null; }
 }
 async function kvSyncPush(key, value) {

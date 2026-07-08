@@ -1,5 +1,7 @@
 // api/auth/callback.js
 // Recebe o code do ML e troca por access_token + refresh_token
+import { kvSet, SHARED_ML_TOKEN_KEY } from "../_kv.js";
+
 export default async function handler(req, res) {
   const { code } = req.query;
   const APP_ID = process.env.ML_APP_ID;
@@ -30,7 +32,7 @@ export default async function handler(req, res) {
       return res.redirect(`/?auth=error&msg=${encodeURIComponent(data.error_description || data.error)}`);
     }
 
-    // Salvar tokens em cookies httpOnly seguros
+    // Salvar tokens em cookies httpOnly seguros (para este navegador)
     const maxAge = data.expires_in || 21600; // 6 horas padrão
 
     res.setHeader("Set-Cookie", [
@@ -39,6 +41,16 @@ export default async function handler(req, res) {
       `ml_user_id=${data.user_id}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000`,
       `ml_expires_at=${Date.now() + maxAge * 1000}; Path=/; Max-Age=${maxAge}`,
     ]);
+
+    // Também salva a conexão de forma COMPARTILHADA (KV) — assim qualquer outro usuário do
+    // sistema, em qualquer navegador/computador, passa a usar essa mesma conexão com o ML
+    // automaticamente, sem precisar conectar de novo.
+    await kvSet(SHARED_ML_TOKEN_KEY, {
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token,
+      userId: data.user_id,
+      expiresAt: Date.now() + maxAge * 1000,
+    });
 
     // Redirecionar de volta ao dashboard
     return res.redirect("/?auth=success");

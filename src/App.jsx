@@ -318,6 +318,47 @@ async function fetchSellerShippingCost(itemId, userId, tk) {
   } catch { return 0; }
 }
 
+// ── Busca a taxa REAL do ML para um anúncio, via /sites/MLB/listing_prices ──
+// O valor real depende da categoria e do preço (produtos abaixo de ~R$79 pagam uma tarifa fixa
+// adicional), então uma tabela fixa de 12%/17% por tipo de anúncio (Clássico/Premium) não reflete
+// o que o ML realmente cobra. Este endpoint devolve o sale_fee_amount exato calculado pelo ML.
+async function fetchRealFee(listing, tk) {
+  try {
+    const price = listing._promo_price || listing.price;
+    const catId = listing.category_id;
+    const listingType = listing.listing_type_id;
+    if (!catId || !price || price <= 0) return null;
+    const res = await fetch(ML(`/sites/MLB/listing_prices?price=${price}&category_id=${catId}&listing_type_id=${listingType}`), {
+      headers: { Authorization: `Bearer ${tk}` }
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!Array.isArray(data) || data.length === 0) return null;
+    const match = data.find(d => d.listing_type_id === listingType) || data[0];
+    if (!match || typeof match.sale_fee_amount !== "number") return null;
+    return {
+      feeAmount: match.sale_fee_amount,
+      feeRate: price > 0 ? match.sale_fee_amount / price : 0,
+      fixedFee: match.sale_fee_details?.fixed_fee ?? 0,
+    };
+  } catch { return null; }
+}
+
+// Busca em lote (5 por vez) para não estourar rate-limit do ML
+async function fetchRealFeesForListings(listingsList, validTk, onBatch) {
+  const feeMap = {};
+  for (let i = 0; i < listingsList.length; i += 5) {
+    const batch = listingsList.slice(i, i + 5);
+    await Promise.all(batch.map(async l => {
+      const r = await fetchRealFee(l, validTk);
+      if (r) feeMap[l.id] = r;
+    }));
+    if (onBatch) onBatch(feeMap, Math.min(i + 5, listingsList.length), listingsList.length);
+    await new Promise(r => setTimeout(r, 100));
+  }
+  return feeMap;
+}
+
 // ── Busca custo de frete + status de envio para uma lista de pedidos (em lotes de 5) ──
 // Extraído para ser reutilizado tanto na carga completa (handleConnect) quanto na
 // atualização automática incremental (refreshOrdersIncremental), evitando duplicar a lógica.
@@ -13098,7 +13139,11 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                       R$ {taxaSobreDesc.toFixed(2).replace(".",",")}
                     </div>
                     <div style={{ fontSize:10, color:"#94a3b8" }}>
-                      {(feeRate*100).toFixed(0)}% s/ {descPct>0?"desc":"atual"}
+                      {(feeRate*100).toFixed(1)}% s/ {descPct>0?"desc":"atual"}
+                    </div>
+                    <div title={l.feeIsReal ? "Taxa real calculada pelo Mercado Livre para esta categoria e preço" : "Taxa estimada (12%/17%) — o sistema ainda não conseguiu confirmar a taxa real deste anúncio no ML"}
+                      style={{ fontSize:9, fontWeight:700, color:l.feeIsReal?"#15803d":"#d97706", marginTop:1 }}>
+                      {l.feeIsReal ? "✓ real ML" : "⚠ estimada"}
                     </div>
                   </td>
 
@@ -14160,6 +14205,17 @@ export default function App() {
   const [realOrders, setRealOrders] = useState([]);
   const [sellerShipping, setSellerShipping] = useState({});
   const [shipmentCosts, setShipmentCosts] = useState({});
+  // Taxa real do ML por anúncio (vinda de /sites/MLB/listing_prices, não de tabela fixa 12%/17%)
+  const [realFees, setRealFees] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("real_fees_config") || "{}"); } catch { return {}; }
+  });
+  function setRealFeesAndSave(updater) {
+    setRealFees(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      try { localStorage.setItem("real_fees_config", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
   const [shipmentStatuses, setShipmentStatuses] = useState({});
   const [promos, setPromos] = useState({});
   const [loading, setLoading] = useState(false);
@@ -14609,6 +14665,16 @@ export default function App() {
       const listings = await fetchAllListings(me.id, validTk);
       setRealListings(listings);
 
+      // Busca a taxa REAL de cada anúncio no ML (por categoria + preço), em vez de usar uma
+      // tabela fixa 12%/17% que não reflete a comissão real de cada categoria nem a tarifa
+      // fixa cobrada em produtos de baixo valor.
+      setLoadingMsg("Calculando taxas reais do ML...");
+      const feeMap = await fetchRealFeesForListings(listings, validTk, function(partial, done, total) {
+        setRealFeesAndSave(function(f){ return Object.assign({}, f, partial); });
+        setLoadingMsg(`Calculando taxas reais do ML... ${done}/${total}`);
+      });
+      setRealFeesAndSave(function(f){ return Object.assign({}, f, feeMap); });
+
       // Auto-importar anúncios para cadastro de produtos
       setLoadingMsg("Sincronizando produtos com ML...");
       const produtosAtuais = JSON.parse(localStorage.getItem("produtos_cadastro") || "[]");
@@ -14918,7 +14984,10 @@ export default function App() {
 
   const enriched = listings.map(l => {
     const cost = costs[l.id] ?? 0;
-    const feeRate = getRealFeeRate(l);
+    // Prioriza a taxa REAL vinda do ML (por categoria + preço). Só cai para a tabela estimada
+    // (12%/17% por tipo de anúncio) se ainda não tivermos a taxa real desse anúncio.
+    const feeRate = realFees[l.id]?.feeRate ?? getRealFeeRate(l);
+    const realFeeInfo = realFees[l.id] || null;
     const promoData = promosData[l.id];
     const { salePrice: salePriceApi, originalPrice: originalPriceApi, hasPromo: hasPromoApi } = getPrices(l);
     const salePrice = promoData ? promoData.salePrice : salePriceApi;
@@ -14929,7 +14998,7 @@ export default function App() {
     const { score, checks } = calcQualityScore(l);
     const sku = getSku(l);
     const youReceive = salePrice - margin.fee - freteSeller;
-    return { ...l, ...margin, cost, sku, salePrice, originalPrice, hasPromo, freteSeller, youReceive, totalProfit: margin.profit * (l.sold_quantity ?? 0), score, checks };
+    return { ...l, ...margin, cost, sku, salePrice, originalPrice, hasPromo, freteSeller, youReceive, totalProfit: margin.profit * (l.sold_quantity ?? 0), score, checks, feeIsReal: !!realFeeInfo };
   });
 
   const filteredListings = useMemo(() => {

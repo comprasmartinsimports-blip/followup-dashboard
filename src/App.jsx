@@ -13667,7 +13667,7 @@ function ChatInternoWidget({ currentUser }) {
   const bottomRef = useRef(null);
   const fileRef = useRef(null);
 
-  var usuarios = getUsuarios().filter(function(u){ return u.ativo; });
+  const [usuarios, setUsuarios] = useState(function(){ return getUsuarios().filter(function(u){ return u.ativo; }); });
   var naoLidas = mensagens.filter(function(m){ return !((m.lidoPor||[]).includes(currentUser?.id)) && m.autorId!==currentUser?.id; }).length;
   var tarefasMinhas = tarefas.filter(function(t){ return t.responsavelId===currentUser?.id && t.status!=="concluida"; }).length;
 
@@ -13675,7 +13675,9 @@ function ChatInternoWidget({ currentUser }) {
     if (open && bottomRef.current) bottomRef.current.scrollIntoView({ behavior:"smooth" });
   }, [mensagens, open, canalAtivo]);
 
-  // Busca imediatamente ao montar (sem esperar o primeiro tick do polling)
+  // Busca imediatamente ao montar (sem esperar o primeiro tick do polling) — inclui a lista
+  // de usuários, pra um usuário criado depois já aparecer nas conversas diretas sem precisar
+  // recarregar a página inteira.
   useEffect(function(){
     kvSyncPull("chat_interno_mensagens").then(function(fresh){
       if (fresh != null) { setMensagens(fresh); try { localStorage.setItem("chat_interno_mensagens", JSON.stringify(fresh)); } catch {} }
@@ -13683,6 +13685,19 @@ function ChatInternoWidget({ currentUser }) {
     kvSyncPull("chat_interno_tarefas").then(function(freshT){
       if (freshT != null) { setTarefas(freshT); try { localStorage.setItem("chat_interno_tarefas", JSON.stringify(freshT)); } catch {} }
     });
+    sincronizarUsuariosDoServidor().then(function(){
+      setUsuarios(getUsuarios().filter(function(u){ return u.ativo; }));
+    });
+  }, []);
+
+  // Atualiza a lista de usuários periodicamente também (não só ao abrir o widget)
+  useEffect(function(){
+    var userInterval = setInterval(function(){
+      sincronizarUsuariosDoServidor().then(function(){
+        setUsuarios(getUsuarios().filter(function(u){ return u.ativo; }));
+      });
+    }, 20000); // a cada 20s
+    return function(){ clearInterval(userInterval); };
   }, []);
 
   // Polling para chegar mensagens/tarefas de outros usuários (em qualquer computador) —

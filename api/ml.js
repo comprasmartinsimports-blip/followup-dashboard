@@ -18,13 +18,15 @@ async function kvGet(key) {
 async function kvSet(key, value) {
   if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) return false;
   try {
+    // A API REST do Upstash/Vercel KV usa o corpo da requisição como o próprio valor a
+    // gravar (não deve vir embrulhado em {value: ...}) — ver docs.upstash.com/redis/features/restapi
     await fetch(process.env.KV_REST_API_URL + "/set/" + key, {
       method: "POST",
       headers: {
         Authorization: "Bearer " + process.env.KV_REST_API_TOKEN,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ value: JSON.stringify(value) }),
+      body: JSON.stringify(value),
     });
     return true;
   } catch {}
@@ -85,7 +87,12 @@ async function lerUsuarios() {
         headers: { Authorization: "Bearer " + process.env.KV_REST_API_TOKEN }
       });
       const d = await r.json();
-      if (d && d.result) return JSON.parse(d.result);
+      if (d && d.result) {
+        const parsed = JSON.parse(d.result);
+        // Proteção: se por algum motivo o valor salvo não for uma lista (ex: dado antigo
+        // gravado com o formato incorreto), não usa — evita quebrar .map()/.forEach() em cascata.
+        if (Array.isArray(parsed)) return parsed;
+      }
     } catch {}
   }
   return _usersCache || ADMIN_PADRAO;
@@ -95,13 +102,15 @@ async function salvarUsuarios(usuarios) {
   _usersCache = usuarios;
   if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
     try {
+      // A API REST do Upstash/Vercel KV usa o corpo da requisição como o próprio valor a
+      // gravar (não deve vir embrulhado em {value: ...}) — ver docs.upstash.com/redis/features/restapi
       await fetch(process.env.KV_REST_API_URL + "/set/mlmargem_users", {
         method: "POST",
         headers: {
           Authorization: "Bearer " + process.env.KV_REST_API_TOKEN,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ value: JSON.stringify(usuarios) })
+        body: JSON.stringify(usuarios)
       });
     } catch {}
   }

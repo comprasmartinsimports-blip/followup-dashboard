@@ -12735,7 +12735,7 @@ function NovoProdutoPrecForm({ onSave, onClose }) {
   );
 }
 
-function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFretesAndSave, descontosConfig, setDescontosAndSave, precosVendaConfig, setPrecosVendaAndSave, rawOrders }) {
+function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFretesAndSave, descontosConfig, setDescontosAndSave, precosVendaConfig, setPrecosVendaAndSave, pendentesAtualizacao, setPendentesAndSave, rawOrders }) {
   const [busca, setBusca] = useState("");
   const [margemAlvo, setMargemAlvo] = useState(20);
   const [selectedId, setSelectedId] = useState(null);
@@ -12775,12 +12775,8 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
   }
 
   // ── Controle de "pendente de atualização no ML" ──
-  const [pendentesAtualizacao, setPendentesAtualizacao] = useState(function(){
-    try { return JSON.parse(localStorage.getItem("precos_pendentes_ml")||"{}"); } catch { return {}; }
-  });
   function salvarPendentes(next) {
-    setPendentesAtualizacao(next);
-    try { localStorage.setItem("precos_pendentes_ml", JSON.stringify(next)); } catch {}
+    setPendentesAndSave(next);
   }
   function marcarPendente(id, novoPreco) {
     var listing = (enriched||[]).find(function(l){ return l.id===id; });
@@ -14231,6 +14227,10 @@ export default function App() {
   const [precosVendaConfig, setPrecosVendaConfig] = useState(function() {
     try { return JSON.parse(localStorage.getItem("precos_venda_config") || "{}"); } catch { return {}; }
   });
+  // Anúncios com preço pendente de atualização manual no Mercado Livre
+  const [pendentesAtualizacao, setPendentesAtualizacao] = useState(function() {
+    try { return JSON.parse(localStorage.getItem("precos_pendentes_ml") || "{}"); } catch { return {}; }
+  });
   function setFretesAndSave(updater) {
     setFretesConfig(function(prev) {
       var next = typeof updater === "function" ? updater(prev) : updater;
@@ -14260,6 +14260,14 @@ export default function App() {
       var next = typeof updater === "function" ? updater(prev) : updater;
       try { localStorage.setItem("precos_venda_config", JSON.stringify(next)); } catch {}
       kvSyncPush("precos_venda_config", next);
+      return next;
+    });
+  }
+  function setPendentesAndSave(updater) {
+    setPendentesAtualizacao(function(prev) {
+      var next = typeof updater === "function" ? updater(prev) : updater;
+      try { localStorage.setItem("precos_pendentes_ml", JSON.stringify(next)); } catch {}
+      kvSyncPush("precos_pendentes_ml", next);
       return next;
     });
   }
@@ -14597,6 +14605,7 @@ export default function App() {
     fretes_config: setFretesConfig,
     descontos_config: setDescontosConfig,
     precos_venda_config: setPrecosVendaConfig,
+    precos_pendentes_ml: setPendentesAtualizacao,
     produtos_cadastro: setProdutos,
     fornecedores_cadastro: setFornecedores,
     contas_pagar: setContasPagar,
@@ -16307,6 +16316,8 @@ export default function App() {
             setDescontosAndSave={setDescontosAndSave}
             precosVendaConfig={precosVendaConfig}
             setPrecosVendaAndSave={setPrecosVendaAndSave}
+            pendentesAtualizacao={pendentesAtualizacao}
+            setPendentesAndSave={setPendentesAndSave}
             rawOrders={rawOrders}
           />
         )}

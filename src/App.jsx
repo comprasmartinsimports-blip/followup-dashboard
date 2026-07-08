@@ -13720,9 +13720,17 @@ function ChatInternoWidget({ currentUser }) {
 
   function enviarMensagem(anexoBase64, anexoNome, anexoTipo) {
     if (!texto.trim() && !anexoBase64) return;
+    // Canal canônico para DMs: usa os dois IDs ordenados, então dá a MESMA string pros dois
+    // lados da conversa (antes, cada lado salvava com um nome de canal diferente e a
+    // mensagem nunca aparecia pro outro usuário).
+    var canalParaSalvar = canalAtivo;
+    if (canalAtivo.indexOf("dm:") === 0) {
+      var otherIdEnvio = canalAtivo.split(":")[1];
+      canalParaSalvar = "dm:" + [String(currentUser.id), String(otherIdEnvio)].sort().join(":");
+    }
     var nova = {
       id: "msg_"+Date.now(),
-      canal: canalAtivo,
+      canal: canalParaSalvar,
       autorId: currentUser.id,
       autorNome: currentUser.nome,
       texto: texto.trim(),
@@ -13801,11 +13809,14 @@ function ChatInternoWidget({ currentUser }) {
 
   var msgsCanal = mensagens.filter(function(m){
     if (canalAtivo === "geral") return m.canal === "geral";
-    // DM: aparece se o canal bate OU é uma DM entre os dois envolvidos
-    var [, otherId] = canalAtivo.split(":");
-    var dmKey1 = "dm:"+currentUser.id+":"+otherId;
-    var dmKey2 = "dm:"+otherId+":"+currentUser.id;
-    return m.canal === canalAtivo || m.canal === dmKey1 || m.canal === dmKey2;
+    var otherId = canalAtivo.split(":")[1];
+    // Formato canônico (novo, simétrico): "dm:<menorId>:<maiorId>"
+    var canonico = "dm:" + [String(currentUser.id), String(otherId)].sort().join(":");
+    // Formatos antigos (assimétricos, de antes da correção): cada lado salvava usando
+    // só o ID do OUTRO participante — aceita os dois pra não perder histórico já salvo.
+    var formaAntigaEu = "dm:" + otherId;
+    var formaAntigaOutro = "dm:" + currentUser.id;
+    return m.canal === canonico || m.canal === formaAntigaEu || m.canal === formaAntigaOutro;
   });
 
   return (

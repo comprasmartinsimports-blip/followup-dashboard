@@ -6,13 +6,15 @@ const SHARED_ML_TOKEN_KEY = "mlmargem_shared_ml_token";
 async function kvSet(key, value) {
   if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) return false;
   try {
+    // A API REST do Upstash/Vercel KV usa o corpo da requisição como o próprio valor a
+    // gravar (não deve vir embrulhado em {value: ...}) — ver docs.upstash.com/redis/features/restapi
     await fetch(process.env.KV_REST_API_URL + "/set/" + key, {
       method: "POST",
       headers: {
         Authorization: "Bearer " + process.env.KV_REST_API_TOKEN,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ value: JSON.stringify(value) }),
+      body: JSON.stringify(value),
     });
     return true;
   } catch {}

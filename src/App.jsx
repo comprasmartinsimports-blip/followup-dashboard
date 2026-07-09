@@ -12866,9 +12866,12 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:6, maxHeight:160, overflowY:"auto" }}>
             {Object.entries(pendentesAtualizacao).map(function([id, p]){
+              var listingRef = (enriched||[]).find(function(l){ return l.id===id; });
+              var skuRef = listingRef?.sku || p.sku || "—";
               return (
                 <div key={id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"#fff", border:"1px solid #fde68a", borderRadius:8, padding:"7px 12px" }}>
                   <div style={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontSize:12, color:"#0f172a" }}>
+                    <span style={{ fontWeight:700, color:"#92400e", marginRight:6 }}>SKU {skuRef}</span>
                     {p.titulo}
                   </div>
                   <div style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
@@ -15118,6 +15121,29 @@ export default function App() {
   const refreshOrdersIncrementalRef = useRef(refreshOrdersIncremental);
   refreshOrdersIncrementalRef.current = refreshOrdersIncremental;
 
+  // Estado (não ref) para o botão "Atualizar" manual, pra dar retorno visível de verdade —
+  // antes, ele usava só uma ref, que não atualiza a tela, então clicar parecia não fazer nada.
+  const [refreshingManual, setRefreshingManual] = useState(false);
+  const [refreshManualMsg, setRefreshManualMsg] = useState(null);
+  async function clicarAtualizarManual() {
+    if (!token || !user?.id) {
+      alert("Conecte-se ao Mercado Livre primeiro (botão Reconectar).");
+      return;
+    }
+    if (refreshingManual || autoRefreshingRef.current) return; // já está atualizando
+    setRefreshingManual(true);
+    setRefreshManualMsg(null);
+    try {
+      await refreshOrdersIncrementalRef.current();
+      setRefreshManualMsg("✓ Atualizado agora");
+    } catch (e) {
+      setRefreshManualMsg("⚠ Falhou, tente de novo");
+    } finally {
+      setRefreshingManual(false);
+      setTimeout(function(){ setRefreshManualMsg(null); }, 4000);
+    }
+  }
+
   // Dispara a atualização automática a cada 3 minutos, sozinha, sem precisar de nenhum clique.
   useEffect(function(){
     if (!token) return;
@@ -15253,15 +15279,17 @@ export default function App() {
     if (filterListingExtra === "com_promo")  results = results.filter(l => l.hasPromo);
     if (filterListingExtra === "sem_promo")  results = results.filter(l => !l.hasPromo);
     if (filterListingExtra === "sem_atacado") {
-      // Anúncios sem preço de atacado preenchido
-      // ML armazena em wholesale_prices[] ou como tag "wholesale"
+      // Anúncios sem preço de atacado (ML chama de "Preço por Quantidade") preenchido.
+      // Segundo a documentação oficial do ML, publicações com esse preço configurado
+      // recebem a tag "standard_price_by_quantity" no item — é isso que identifica com certeza.
       results = results.filter(function(l) {
-        var hasWholesale =
-          (l.wholesale_prices && l.wholesale_prices.length > 0 && l.wholesale_prices.some(function(w){ return w.price > 0; })) ||
-          (l.sale_conditions && l.sale_conditions.available_conditions && l.sale_conditions.available_conditions.includes("1")) ||
-          (l.tags && l.tags.some(function(t){ return String(t).toLowerCase().includes("wholesale"); }));
+        var hasWholesale = l.tags && l.tags.includes("standard_price_by_quantity");
         return !hasWholesale;
       });
+    }
+    if (filterListingExtra === "sem_video") {
+      // Anúncios sem vídeo (campo video_id do item, vazio/nulo quando não há vídeo cadastrado)
+      results = results.filter(function(l) { return !l.video_id; });
     }
     if (filterListingExtra === "frete_alto") {
       var fretesConf = {};
@@ -15628,10 +15656,10 @@ export default function App() {
             );
           })()}
           {token && (
-            <button onClick={function(){ refreshOrdersIncrementalRef.current(); }} disabled={autoRefreshingRef.current}
+            <button onClick={clicarAtualizarManual} disabled={refreshingManual}
               title="Busca pedidos novos e atualiza os dados sem recarregar tudo"
-              style={{ background: "#f8fafc", border: "1px solid #e2e8f0", color: "#334155", fontWeight: 600, padding: "8px 14px", borderRadius: 8, cursor: "pointer", fontSize: 13, display:"flex", alignItems:"center", gap:5 }}>
-              🔄 Atualizar
+              style={{ background: refreshingManual?"#e2e8f0":"#f8fafc", border: "1px solid #e2e8f0", color: "#334155", fontWeight: 600, padding: "8px 14px", borderRadius: 8, cursor: refreshingManual?"wait":"pointer", fontSize: 13, display:"flex", alignItems:"center", gap:5 }}>
+              {refreshingManual ? "⏳ Atualizando..." : refreshManualMsg ? refreshManualMsg : "🔄 Atualizar"}
             </button>
           )}
           <button onClick={function(){ window.location.href = "/api/auth/login"; }}
@@ -15834,7 +15862,7 @@ export default function App() {
                     })}
                   </FiltroGrupo>
                   <FiltroGrupo titulo="Situação">
-                    {[{k:"all",l:"Todos"},{k:"sem_custo",l:"⚠️ Sem custo",cor:"#dc2626",bg:"#fef2f2"},{k:"sem_atacado",l:"🏷 Sem preço atacado",cor:"#7c3aed",bg:"#f5f3ff"},{k:"com_promo",l:"🔥 Com promoção",cor:"#7c3aed",bg:"#f5f3ff"},{k:"sem_promo",l:"○ Sem promoção",cor:"#64748b",bg:"#f8fafc"},{k:"frete_alto",l:"🚚 Frete acima do config.",cor:"#ea580c",bg:"#fff7ed"}].map(function(f){
+                    {[{k:"all",l:"Todos"},{k:"sem_custo",l:"⚠️ Sem custo",cor:"#dc2626",bg:"#fef2f2"},{k:"sem_atacado",l:"🏷 Sem preço atacado",cor:"#7c3aed",bg:"#f5f3ff"},{k:"sem_video",l:"🎬 Sem vídeo clip",cor:"#ea580c",bg:"#fff7ed"},{k:"com_promo",l:"🔥 Com promoção",cor:"#7c3aed",bg:"#f5f3ff"},{k:"sem_promo",l:"○ Sem promoção",cor:"#64748b",bg:"#f8fafc"},{k:"frete_alto",l:"🚚 Frete acima do config.",cor:"#ea580c",bg:"#fff7ed"}].map(function(f){
                       return <FiltroBotao key={f.k} label={f.l} active={filterListingExtra===f.k}
                         cor={f.cor||"#0f172a"} bg={f.bg||"#f1f5f9"}
                         onClick={function(){setFilterListingExtra(f.k);setPaginaAnuncios(1);}} />;

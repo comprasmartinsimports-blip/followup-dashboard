@@ -6,6 +6,9 @@
     { "source": "/api/auth/refresh", "destination": "/api/auth/refresh" },
     { "source": "/api/auth/logout", "destination": "/api/auth/logout" },
     { "source": "/api/auth/session", "destination": "/api/auth/session" },
+    { "source": "/api/auth/app-login", "destination": "/api/auth/app-login" },
+    { "source": "/api/auth/app-logout", "destination": "/api/auth/app-logout" },
+    { "source": "/api/ai-chat", "destination": "/api/ai-chat" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

@@ -125,9 +125,6 @@ function scoreBg(s) { return s >= 80 ? "#f0fdf4" : s >= 50 ? "#fffbeb" : "#fef2f
 function scoreLabel(s) { return s >= 80 ? "Ótimo" : s >= 50 ? "Regular" : "Fraco"; }
 
 async function analyzeWithAI(listing) {
-  const apiKey = import.meta.env.VITE_ANTHROPIC_KEY;
-  if (!apiKey) throw new Error("VITE_ANTHROPIC_KEY não configurada");
-
   const prompt = `Analise este anúncio do Mercado Livre Brasil e retorne APENAS um objeto JSON válido, sem texto extra, sem markdown.
 
 Estrutura obrigatória:
@@ -144,23 +141,18 @@ Dados:
 
 Retorne SOMENTE o JSON, começando com { e terminando com }.`;
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  // A chamada à Anthropic passa pelo proxy /api/ai-chat — a chave da API fica só no servidor
+  const response = await fetch("/api/ai-chat", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-      "x-api-key": apiKey,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "claude-sonnet-4-5",
       max_tokens: 1500,
       messages: [{ role: "user", content: prompt }],
     }),
   });
 
   const data = await response.json();
-  if (data.error) throw new Error(data.error.message);
+  if (data.error) throw new Error(data.error.message || data.error);
   const text = data.content?.map(b => b.text || "").join("") ?? "";
   const clean = text.replace(/```json|```/g, "").trim();
   const jsonStart = clean.indexOf("{");
@@ -757,11 +749,6 @@ function AIPanel({ listing, onClose }) {
   );
 }
 
-// ── Credenciais do dashboard (login de acesso) ──────────────
-// Defina aqui o usuário e senha para proteger o dashboard
-const DASHBOARD_USER = "admin";
-const DASHBOARD_PASS = "martins2026";
-
 // ── Client ID do app ML (para OAuth com refresh token) ──────
 const ML_CLIENT_ID = "6544342798807693";
 
@@ -1215,92 +1202,48 @@ const PERMISSOES_DISPONIVEIS = [
   { key: "admin",           label: "⚙️ Administração" },
 ];
 
-function hashSenha(senha) {
-  // Hash simples para armazenamento local
-  let hash = 0;
-  for (let i = 0; i < senha.length; i++) {
-    const char = senha.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return String(Math.abs(hash)) + senha.length;
-}
+// A validação de senha agora acontece SOMENTE no servidor (/api/auth/app-login).
+// O navegador não gera, não armazena e não compara hashes de senha — o localStorage
+// guarda apenas um cache dos usuários (sem senha) para exibição na aba Admin/Chat.
 
 function getUsuarios() {
   try {
     const data = localStorage.getItem(AUTH_KEY);
-    if (!data) {
-      // Cria admin padrão na primeira vez (antes da sincronização com servidor)
-      const adminPadrao = [{
-        id: "admin",
-        nome: "Administrador",
-        usuario: "admin",
-        senhaHash: hashSenha("admin123"),
-        ativo: true,
-        admin: true,
-        permissoes: PERMISSOES_DISPONIVEIS.map(p => p.key),
-        criadoEm: new Date().toLocaleDateString("sv-SE"),
-      }];
-      localStorage.setItem(AUTH_KEY, JSON.stringify(adminPadrao));
-      return adminPadrao;
-    }
+    if (!data) return [];
     var parsed = JSON.parse(data);
     return Array.isArray(parsed) ? parsed : [];
   } catch { return []; }
 }
 
 function saveUsuarios(usuarios) {
-  localStorage.setItem(AUTH_KEY, JSON.stringify(usuarios));
-  // Sincroniza com o servidor — envia SEMPRE com senhaHash para persistir no cache
+  // Senhas novas ficam em u.senha (texto) só até o envio — nunca vão para o localStorage
+  var senhas = {};
+  var semSenhas = usuarios.map(function(u){
+    var limpo = Object.assign({}, u);
+    if (limpo.senha) { senhas[limpo.id] = limpo.senha; delete limpo.senha; }
+    delete limpo.senhaHash;
+    return limpo;
+  });
+  localStorage.setItem(AUTH_KEY, JSON.stringify(semSenhas));
   try {
-    var senhaHashMap = {};
-    usuarios.forEach(function(u){ if(u.senhaHash) senhaHashMap[u.id]=u.senhaHash; });
     fetch("/api/ml/_users", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ usuarios: usuarios, senhaHashMap: senhaHashMap })
+      body: JSON.stringify({ usuarios: semSenhas, senhas: senhas })
     }).catch(function(){});
   } catch {}
+  return semSenhas;
 }
 
-// Sincroniza usuários do servidor para o localStorage (chamado na inicialização do app)
+// Busca usuários do servidor para o cache local (chamado após o login)
 async function sincronizarUsuariosDoServidor() {
   try {
-    var locais = getUsuarios();
-
-    // Primeiro envia os usuários locais para o servidor (com senhaHash)
-    // para que o servidor sempre tenha a versão mais recente
-    if (locais.length > 0) {
-      var senhaHashMap = {};
-      locais.forEach(function(u){ if(u.senhaHash) senhaHashMap[u.id] = u.senhaHash; });
-      fetch("/api/ml/_users", {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({ usuarios: locais, senhaHashMap: senhaHashMap })
-      }).catch(function(){});
-    }
-
-    // Depois busca do servidor para pegar usuários criados em outros dispositivos
     var res = await fetch("/api/ml/_users");
     if (!res.ok) return;
     var usuariosServidor = await res.json();
-    if (!usuariosServidor || !usuariosServidor.length) return;
-
-    // Mescla: mantém senhaHash local, adiciona usuários novos do servidor
-    var mapaLocal = {};
-    locais.forEach(function(u){ mapaLocal[u.id] = u; });
-    var mesclados = usuariosServidor.map(function(us){
-      var local = mapaLocal[us.id];
-      return Object.assign({}, us, {
-        senhaHash: (local && local.senhaHash) || hashSenha("123456")
-      });
-    });
-    // Preserva usuários locais não encontrados no servidor
-    locais.forEach(function(l){
-      if (!mesclados.find(function(m){ return m.id===l.id; })) mesclados.push(l);
-    });
-    localStorage.setItem(AUTH_KEY, JSON.stringify(mesclados));
-    console.log("[USUÁRIOS] Sincronizados:", mesclados.length);
+    if (!Array.isArray(usuariosServidor) || !usuariosServidor.length) return;
+    localStorage.setItem(AUTH_KEY, JSON.stringify(usuariosServidor));
+    console.log("[USUÁRIOS] Sincronizados:", usuariosServidor.length);
   } catch(e) {
     console.warn("[USUÁRIOS] Erro na sincronização:", e.message);
   }
@@ -1329,30 +1272,29 @@ function LoginScreen({ onLogin }) {
   const [erro, setErro] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Sincroniza usuários do servidor ao abrir tela de login
-  useEffect(function(){
-    sincronizarUsuariosDoServidor();
-  }, []);
-
-  function handleLogin() {
+  async function handleLogin() {
     if (!usuario || !senha) return;
     setLoading(true); setErro("");
-    // Tenta sincronizar do servidor antes de validar (garante usuários atualizados)
-    sincronizarUsuariosDoServidor().finally(function(){
-      const usuarios = getUsuarios();
-      const user = usuarios.find(u =>
-        u.usuario.toLowerCase() === usuario.toLowerCase() &&
-        u.senhaHash === hashSenha(senha) &&
-        u.ativo
-      );
-      if (user) {
-        setSession(user);
-        onLogin(user);
+    try {
+      // A senha é validada no servidor, que emite um cookie de sessão assinado (httpOnly)
+      const res = await fetch("/api/auth/app-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ usuario: usuario, senha: senha }),
+      });
+      const data = await res.json().catch(function(){ return {}; });
+      if (res.ok && data.user) {
+        setSession(data.user);
+        // Com o cookie emitido, atualiza o cache local de usuários
+        sincronizarUsuariosDoServidor();
+        onLogin(data.user);
       } else {
-        setErro("Usuário ou senha incorretos, ou usuário inativo.");
+        setErro(data.error || "Usuário ou senha incorretos, ou usuário inativo.");
       }
-      setLoading(false);
-    }, 400);
+    } catch (e) {
+      setErro("Não foi possível conectar ao servidor. Tente novamente.");
+    }
+    setLoading(false);
   }
 
   return (
@@ -1433,13 +1375,13 @@ function ModalUsuario({ usuario, onSave, onClose }) {
   function handleSave() {
     if (!form.nome || !form.usuario) return;
     const toSave = { ...form };
-    if (form.senha) {
-      toSave.senhaHash = hashSenha(form.senha);
-      delete toSave.senha;
-    } else if (!usuario) {
-      alert("Informe uma senha para o novo usuário");
-      return;
-    } else {
+    // A senha segue em texto (via HTTPS) para o servidor, que calcula o hash com
+    // scrypt — saveUsuarios remove o campo antes de gravar no localStorage.
+    if (!form.senha) {
+      if (!usuario) {
+        alert("Informe uma senha para o novo usuário");
+        return;
+      }
       delete toSave.senha;
     }
     if (!toSave.criadoEm) toSave.criadoEm = new Date().toLocaleDateString("sv-SE");
@@ -1610,28 +1552,30 @@ function AdminTab({ currentUser }) {
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
 
+  // Atualiza o cache local com a lista do servidor ao abrir a aba
+  useEffect(function(){
+    sincronizarUsuariosDoServidor().then(function(){ setUsuarios(getUsuarios()); });
+  }, []);
+
   function saveUser(user) {
     const lista = getUsuarios();
     const updated = lista.find(u=>u.id===user.id)
       ? lista.map(u=>u.id===user.id?user:u)
       : [...lista, user];
-    saveUsuarios(updated);
-    setUsuarios(updated);
+    setUsuarios(saveUsuarios(updated));
   }
 
   function deleteUser(id) {
     if (id === currentUser.id) { alert("Você não pode excluir seu próprio usuário!"); return; }
     if (!confirm("Excluir este usuário?")) return;
     const updated = getUsuarios().filter(u=>u.id!==id);
-    saveUsuarios(updated);
-    setUsuarios(updated);
+    setUsuarios(saveUsuarios(updated));
   }
 
   function toggleAtivo(id) {
     if (id === currentUser.id) { alert("Você não pode desativar seu próprio usuário!"); return; }
     const updated = getUsuarios().map(u=>u.id===id?{...u,ativo:!u.ativo}:u);
-    saveUsuarios(updated);
-    setUsuarios(updated);
+    setUsuarios(saveUsuarios(updated));
   }
 
   return (
@@ -7782,16 +7726,11 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
 
 async function chamarIA(prompt, maxTokens) {
   maxTokens = maxTokens || 1500;
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  // A chamada à Anthropic passa pelo proxy /api/ai-chat — a chave da API fica só no servidor
+  const response = await fetch("/api/ai-chat", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-      "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "claude-sonnet-4-5",
       max_tokens: maxTokens,
       messages: [{ role: "user", content: prompt }],
     }),
@@ -8015,12 +7954,9 @@ function PainelIAPagamentos({ contasPagar=[], contasBancarias=[], lancamentos=[]
   }, 0);
 
   function checkKey() {
-    try {
-      if (!import.meta.env.VITE_ANTHROPIC_KEY) { setErrorMsg("Configure VITE_ANTHROPIC_KEY nas variáveis de ambiente do Vercel"); setState("error"); return false; }
-      return true;
-    } catch(e) {
-      setErrorMsg("Chave da API não configurada"); setState("error"); return false;
-    }
+    // A chave da Anthropic agora fica só no servidor (/api/ai-chat) — se faltar,
+    // a própria chamada retorna o erro, que é exibido pelo catch de analisarPrioridade.
+    return true;
   }
 
   // Análise automática ao abrir o painel — usa saldo real das contas
@@ -8028,10 +7964,6 @@ function PainelIAPagamentos({ contasPagar=[], contasBancarias=[], lancamentos=[]
     try {
       if (autoAnalise) return; // já rodou
       if (contasPendentes.length === 0) return;
-      // Só roda automaticamente se tiver chave configurada
-      var temChave = false;
-      try { temChave = !!import.meta.env.VITE_ANTHROPIC_KEY; } catch(e) {}
-      if (!temChave) return;
       setAutoAnalise(true);
       var t = setTimeout(function() {
         try { analisarPrioridade(true); } catch(e) {}
@@ -14336,9 +14268,19 @@ export default function App() {
   // ── Auth ──────────────────────────────────────────────────
   const [currentUser, setCurrentUser] = useState(() => getSession());
 
-  // Sincroniza usuários do servidor ao iniciar (garante que todos os dispositivos veem os mesmos usuários)
+  // Valida o cookie de sessão no servidor ao iniciar — se expirou/foi revogado,
+  // volta para a tela de login em vez de operar com uma sessão local órfã.
   useEffect(function(){
-    sincronizarUsuariosDoServidor();
+    if (!getSession()) return;
+    fetch("/api/auth/app-login").then(function(r){ return r.json(); }).then(function(d){
+      if (d && d.authenticated) {
+        if (d.user) { setSession(d.user); setCurrentUser(d.user); }
+        sincronizarUsuariosDoServidor();
+      } else {
+        clearSession();
+        setCurrentUser(null);
+      }
+    }).catch(function(){});
   }, []);
   const [lastUpdate, setLastUpdate] = useState(() => localStorage.getItem("ml_last_update"));
   const [minutesTick, setMinutesTick] = useState(0);
@@ -15684,7 +15626,7 @@ export default function App() {
             style={{ background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", fontWeight:600, padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
             ⚙️ Config
           </button>
-          <button onClick={() => { clearSession(); clearSavedTokens(); setCurrentUser(null); setToken(null); setUser(null); }}
+          <button onClick={() => { fetch("/api/auth/app-logout", { method:"POST" }).catch(()=>{}); clearSession(); clearSavedTokens(); setCurrentUser(null); setToken(null); setUser(null); }}
             style={{ background:"#fef2f2", border:"1px solid #fecaca", color:"#dc2626", fontWeight:600, padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
             Sair
           </button>

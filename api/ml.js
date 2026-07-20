@@ -1,39 +1,20 @@
 // api/ml.js
-// Proxy para a API do Mercado Livre + rota interna /_users (sem exigir token ML)
+// Proxy para a API do Mercado Livre + rotas internas /_users e /_sync.
+// As rotas internas agora EXIGEM sessão do aplicativo (cookie assinado emitido
+// pelo /api/auth/app-login) — antes eram públicas, o que permitia a qualquer
+// pessoa ler/alterar usuários e dados do negócio.
+
+import {
+  kvGet,
+  kvSet,
+  lerUsuarios,
+  salvarUsuarios,
+  hashSenha,
+  verificarSessao,
+  semSenha,
+} from "./_lib/auth.js";
 
 const SHARED_ML_TOKEN_KEY = "mlmargem_shared_ml_token";
-
-async function kvGet(key) {
-  if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) return null;
-  try {
-    const r = await fetch(process.env.KV_REST_API_URL + "/get/" + key, {
-      headers: { Authorization: "Bearer " + process.env.KV_REST_API_TOKEN },
-    });
-    const d = await r.json();
-    if (d && d.result) return JSON.parse(d.result);
-  } catch {}
-  return null;
-}
-
-async function kvSet(key, value) {
-  if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) return false;
-  try {
-    // A API REST do Upstash/Vercel KV usa o corpo da requisição como o próprio valor a
-    // gravar (não deve vir embrulhado em {value: ...}) — ver docs.upstash.com/redis/features/restapi
-    await fetch(process.env.KV_REST_API_URL + "/set/" + key, {
-      method: "POST",
-      headers: {
-        Authorization: "Bearer " + process.env.KV_REST_API_TOKEN,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(value),
-    });
-    return true;
-  } catch {}
-  return false;
-}
-
-let _usersCache = null;
 
 // Chaves de dados de negócio que ficam sincronizadas entre TODOS os usuários (não só no
 // navegador de quem editou) — cada uma vira uma entrada no KV, prefixada para não colidir
@@ -69,75 +50,25 @@ const SYNC_KEYS_PERMITIDAS = [
   "chat_interno_tarefas",
 ];
 
-const ADMIN_PADRAO = [{
-  id: "admin",
-  nome: "Administrador",
-  usuario: "admin",
-  senhaHash: "1143424611",
-  ativo: true,
-  admin: true,
-  permissoes: ["overview","listings","orders","financeiro","produtos","admin","nfe","full"],
-  criadoEm: new Date().toISOString().slice(0,10),
-}];
-
-async function lerUsuarios() {
-  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
-    try {
-      const r = await fetch(process.env.KV_REST_API_URL + "/get/mlmargem_users", {
-        headers: { Authorization: "Bearer " + process.env.KV_REST_API_TOKEN }
-      });
-      const d = await r.json();
-      if (d && d.result) {
-        const parsed = JSON.parse(d.result);
-        // Proteção: se por algum motivo o valor salvo não for uma lista (ex: dado antigo
-        // gravado com o formato incorreto), não usa — evita quebrar .map()/.forEach() em cascata.
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch {}
-  }
-  return _usersCache || ADMIN_PADRAO;
-}
-
-async function salvarUsuarios(usuarios) {
-  _usersCache = usuarios;
-  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
-    try {
-      // A API REST do Upstash/Vercel KV usa o corpo da requisição como o próprio valor a
-      // gravar (não deve vir embrulhado em {value: ...}) — ver docs.upstash.com/redis/features/restapi
-      await fetch(process.env.KV_REST_API_URL + "/set/mlmargem_users", {
-        method: "POST",
-        headers: {
-          Authorization: "Bearer " + process.env.KV_REST_API_TOKEN,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(usuarios)
-      });
-    } catch {}
-  }
-}
-
 export default async function handler(req, res) {
   const path = req.url.replace(/^\/api\/ml/, "");
 
-  // ── Rota de usuários — NÃO exige token do ML ──
+  // ── Rota de usuários — exige sessão do app; escrita exige admin ──
   if (path === "/_users" || path.startsWith("/_users?")) {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-    if (req.method === "OPTIONS") return res.status(200).end();
+    const sessao = await verificarSessao(req);
+    if (!sessao) {
+      return res.status(401).json({ error: "Não autenticado. Faça login no sistema." });
+    }
 
     if (req.method === "GET") {
       const usuarios = await lerUsuarios();
-      // Retorna sem senhaHash
-      const seguros = usuarios.map(function(u) {
-        const s = Object.assign({}, u);
-        delete s.senhaHash;
-        return s;
-      });
-      return res.status(200).json(seguros);
+      return res.status(200).json(usuarios.map(semSenha));
     }
 
     if (req.method === "POST") {
+      if (!sessao.admin) {
+        return res.status(403).json({ error: "Apenas administradores podem alterar usuários." });
+      }
       const body = req.body;
       if (!body || !Array.isArray(body.usuarios)) {
         return res.status(400).json({ error: "Formato inválido" });
@@ -146,14 +77,17 @@ export default async function handler(req, res) {
       const mapaAtual = {};
       atual.forEach(function(u) { mapaAtual[u.id] = u; });
 
+      // "senhas" traz as senhas novas em texto (só sobre HTTPS) — o hash é
+      // calculado AQUI com scrypt; o navegador nunca gera nem armazena hashes.
+      const senhas = body.senhas || {};
       const novos = body.usuarios.map(function(u) {
-        const hashMap = body.senhaHashMap || {};
-        return Object.assign(
-          {},
-          mapaAtual[u.id] || {},
-          u,
-          { senhaHash: hashMap[u.id] || (mapaAtual[u.id] && mapaAtual[u.id].senhaHash) || "1143424611" }
-        );
+        const limpo = Object.assign({}, u);
+        delete limpo.senha;
+        delete limpo.senhaHash;
+        const existente = mapaAtual[u.id] || {};
+        return Object.assign({}, existente, limpo, {
+          senhaHash: senhas[u.id] ? hashSenha(senhas[u.id]) : existente.senhaHash || null,
+        });
       });
       await salvarUsuarios(novos);
       return res.status(200).json({ ok: true, total: novos.length });
@@ -162,14 +96,12 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // ── Rota de sincronização de dados de negócio — NÃO exige token do ML ──
-  // Compartilha NF Entrada, custos/frete/preços de venda/descontos da Precificação entre
-  // todos os usuários do sistema, independente do navegador/computador de cada um.
+  // ── Rota de sincronização de dados de negócio — exige sessão do app ──
   if (path === "/_sync" || path.startsWith("/_sync?")) {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-    if (req.method === "OPTIONS") return res.status(200).end();
+    const sessao = await verificarSessao(req);
+    if (!sessao) {
+      return res.status(401).json({ error: "Não autenticado. Faça login no sistema." });
+    }
 
     if (req.method === "GET") {
       const key = new URLSearchParams(path.split("?")[1] || "").get("key");

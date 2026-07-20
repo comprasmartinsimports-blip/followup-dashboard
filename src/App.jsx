@@ -98,12 +98,30 @@ function getPrices(listing) {
   return { salePrice: price, originalPrice: price, hasPromo: false };
 }
 
-function calcMargin(salePrice, cost, feeRate = 0.12, freteSeller = 0) {
-  const mlFee = salePrice * feeRate;
+// ── Tarifa fixa do ML por unidade para itens abaixo de R$79 (Brasil) ──
+// Usada como ESTIMATIVA apenas quando ainda não temos a tarifa real do anúncio
+// (via /sites/MLB/listing_prices) nem a tarifa cobrada no pedido (sale_fee).
+// Faixas vigentes em 2025/2026 — conferir a tabela oficial do ML se mudar:
+function estimarTarifaFixaML(salePrice) {
+  const p = parseFloat(salePrice) || 0;
+  if (p <= 0 || p >= 79) return 0;
+  if (p < 12.5) return p * 0.5;   // abaixo de R$12,50 o ML cobra metade do valor
+  if (p < 29)   return 6.25;
+  if (p < 50)   return 6.50;
+  return 6.75;
+}
+
+// opts (opcional): { feeFixa: tarifa fixa em R$ a somar à comissão percentual,
+//                    impostoPct: alíquota efetiva de impostos sobre a venda, em % }
+function calcMargin(salePrice, cost, feeRate = 0.12, freteSeller = 0, opts = {}) {
+  const feeFixa = parseFloat(opts.feeFixa) || 0;
+  const impostoPct = parseFloat(opts.impostoPct) || 0;
+  const mlFee = salePrice * feeRate + feeFixa;
+  const imposto = salePrice * (impostoPct / 100);
   const revenue = salePrice - mlFee - freteSeller;
-  const profit = revenue - cost;
+  const profit = revenue - imposto - cost;
   const margin = cost > 0 ? profit / salePrice : null;
-  return { fee: mlFee, revenue, profit, margin, feeRate };
+  return { fee: mlFee, feeFixa, imposto, revenue, profit, margin, feeRate };
 }
 
 function calcQualityScore(listing) {
@@ -125,9 +143,6 @@ function scoreBg(s) { return s >= 80 ? "#f0fdf4" : s >= 50 ? "#fffbeb" : "#fef2f
 function scoreLabel(s) { return s >= 80 ? "Ótimo" : s >= 50 ? "Regular" : "Fraco"; }
 
 async function analyzeWithAI(listing) {
-  const apiKey = import.meta.env.VITE_ANTHROPIC_KEY;
-  if (!apiKey) throw new Error("VITE_ANTHROPIC_KEY não configurada");
-
   const prompt = `Analise este anúncio do Mercado Livre Brasil e retorne APENAS um objeto JSON válido, sem texto extra, sem markdown.
 
 Estrutura obrigatória:
@@ -144,23 +159,18 @@ Dados:
 
 Retorne SOMENTE o JSON, começando com { e terminando com }.`;
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  // A chamada à Anthropic passa pelo proxy /api/ai-chat — a chave da API fica só no servidor
+  const response = await fetch("/api/ai-chat", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-      "x-api-key": apiKey,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "claude-sonnet-4-5",
       max_tokens: 1500,
       messages: [{ role: "user", content: prompt }],
     }),
   });
 
   const data = await response.json();
-  if (data.error) throw new Error(data.error.message);
+  if (data.error) throw new Error(data.error.message || data.error);
   const text = data.content?.map(b => b.text || "").join("") ?? "";
   const clean = text.replace(/```json|```/g, "").trim();
   const jsonStart = clean.indexOf("{");
@@ -757,11 +767,6 @@ function AIPanel({ listing, onClose }) {
   );
 }
 
-// ── Credenciais do dashboard (login de acesso) ──────────────
-// Defina aqui o usuário e senha para proteger o dashboard
-const DASHBOARD_USER = "admin";
-const DASHBOARD_PASS = "martins2026";
-
 // ── Client ID do app ML (para OAuth com refresh token) ──────
 const ML_CLIENT_ID = "6544342798807693";
 
@@ -1215,92 +1220,48 @@ const PERMISSOES_DISPONIVEIS = [
   { key: "admin",           label: "⚙️ Administração" },
 ];
 
-function hashSenha(senha) {
-  // Hash simples para armazenamento local
-  let hash = 0;
-  for (let i = 0; i < senha.length; i++) {
-    const char = senha.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return String(Math.abs(hash)) + senha.length;
-}
+// A validação de senha agora acontece SOMENTE no servidor (/api/auth/app-login).
+// O navegador não gera, não armazena e não compara hashes de senha — o localStorage
+// guarda apenas um cache dos usuários (sem senha) para exibição na aba Admin/Chat.
 
 function getUsuarios() {
   try {
     const data = localStorage.getItem(AUTH_KEY);
-    if (!data) {
-      // Cria admin padrão na primeira vez (antes da sincronização com servidor)
-      const adminPadrao = [{
-        id: "admin",
-        nome: "Administrador",
-        usuario: "admin",
-        senhaHash: hashSenha("admin123"),
-        ativo: true,
-        admin: true,
-        permissoes: PERMISSOES_DISPONIVEIS.map(p => p.key),
-        criadoEm: new Date().toLocaleDateString("sv-SE"),
-      }];
-      localStorage.setItem(AUTH_KEY, JSON.stringify(adminPadrao));
-      return adminPadrao;
-    }
+    if (!data) return [];
     var parsed = JSON.parse(data);
     return Array.isArray(parsed) ? parsed : [];
   } catch { return []; }
 }
 
 function saveUsuarios(usuarios) {
-  localStorage.setItem(AUTH_KEY, JSON.stringify(usuarios));
-  // Sincroniza com o servidor — envia SEMPRE com senhaHash para persistir no cache
+  // Senhas novas ficam em u.senha (texto) só até o envio — nunca vão para o localStorage
+  var senhas = {};
+  var semSenhas = usuarios.map(function(u){
+    var limpo = Object.assign({}, u);
+    if (limpo.senha) { senhas[limpo.id] = limpo.senha; delete limpo.senha; }
+    delete limpo.senhaHash;
+    return limpo;
+  });
+  localStorage.setItem(AUTH_KEY, JSON.stringify(semSenhas));
   try {
-    var senhaHashMap = {};
-    usuarios.forEach(function(u){ if(u.senhaHash) senhaHashMap[u.id]=u.senhaHash; });
     fetch("/api/ml/_users", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ usuarios: usuarios, senhaHashMap: senhaHashMap })
+      body: JSON.stringify({ usuarios: semSenhas, senhas: senhas })
     }).catch(function(){});
   } catch {}
+  return semSenhas;
 }
 
-// Sincroniza usuários do servidor para o localStorage (chamado na inicialização do app)
+// Busca usuários do servidor para o cache local (chamado após o login)
 async function sincronizarUsuariosDoServidor() {
   try {
-    var locais = getUsuarios();
-
-    // Primeiro envia os usuários locais para o servidor (com senhaHash)
-    // para que o servidor sempre tenha a versão mais recente
-    if (locais.length > 0) {
-      var senhaHashMap = {};
-      locais.forEach(function(u){ if(u.senhaHash) senhaHashMap[u.id] = u.senhaHash; });
-      fetch("/api/ml/_users", {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({ usuarios: locais, senhaHashMap: senhaHashMap })
-      }).catch(function(){});
-    }
-
-    // Depois busca do servidor para pegar usuários criados em outros dispositivos
     var res = await fetch("/api/ml/_users");
     if (!res.ok) return;
     var usuariosServidor = await res.json();
-    if (!usuariosServidor || !usuariosServidor.length) return;
-
-    // Mescla: mantém senhaHash local, adiciona usuários novos do servidor
-    var mapaLocal = {};
-    locais.forEach(function(u){ mapaLocal[u.id] = u; });
-    var mesclados = usuariosServidor.map(function(us){
-      var local = mapaLocal[us.id];
-      return Object.assign({}, us, {
-        senhaHash: (local && local.senhaHash) || hashSenha("123456")
-      });
-    });
-    // Preserva usuários locais não encontrados no servidor
-    locais.forEach(function(l){
-      if (!mesclados.find(function(m){ return m.id===l.id; })) mesclados.push(l);
-    });
-    localStorage.setItem(AUTH_KEY, JSON.stringify(mesclados));
-    console.log("[USUÁRIOS] Sincronizados:", mesclados.length);
+    if (!Array.isArray(usuariosServidor) || !usuariosServidor.length) return;
+    localStorage.setItem(AUTH_KEY, JSON.stringify(usuariosServidor));
+    console.log("[USUÁRIOS] Sincronizados:", usuariosServidor.length);
   } catch(e) {
     console.warn("[USUÁRIOS] Erro na sincronização:", e.message);
   }
@@ -1329,30 +1290,29 @@ function LoginScreen({ onLogin }) {
   const [erro, setErro] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Sincroniza usuários do servidor ao abrir tela de login
-  useEffect(function(){
-    sincronizarUsuariosDoServidor();
-  }, []);
-
-  function handleLogin() {
+  async function handleLogin() {
     if (!usuario || !senha) return;
     setLoading(true); setErro("");
-    // Tenta sincronizar do servidor antes de validar (garante usuários atualizados)
-    sincronizarUsuariosDoServidor().finally(function(){
-      const usuarios = getUsuarios();
-      const user = usuarios.find(u =>
-        u.usuario.toLowerCase() === usuario.toLowerCase() &&
-        u.senhaHash === hashSenha(senha) &&
-        u.ativo
-      );
-      if (user) {
-        setSession(user);
-        onLogin(user);
+    try {
+      // A senha é validada no servidor, que emite um cookie de sessão assinado (httpOnly)
+      const res = await fetch("/api/auth/app-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ usuario: usuario, senha: senha }),
+      });
+      const data = await res.json().catch(function(){ return {}; });
+      if (res.ok && data.user) {
+        setSession(data.user);
+        // Com o cookie emitido, atualiza o cache local de usuários
+        sincronizarUsuariosDoServidor();
+        onLogin(data.user);
       } else {
-        setErro("Usuário ou senha incorretos, ou usuário inativo.");
+        setErro(data.error || "Usuário ou senha incorretos, ou usuário inativo.");
       }
-      setLoading(false);
-    }, 400);
+    } catch (e) {
+      setErro("Não foi possível conectar ao servidor. Tente novamente.");
+    }
+    setLoading(false);
   }
 
   return (
@@ -1433,13 +1393,13 @@ function ModalUsuario({ usuario, onSave, onClose }) {
   function handleSave() {
     if (!form.nome || !form.usuario) return;
     const toSave = { ...form };
-    if (form.senha) {
-      toSave.senhaHash = hashSenha(form.senha);
-      delete toSave.senha;
-    } else if (!usuario) {
-      alert("Informe uma senha para o novo usuário");
-      return;
-    } else {
+    // A senha segue em texto (via HTTPS) para o servidor, que calcula o hash com
+    // scrypt — saveUsuarios remove o campo antes de gravar no localStorage.
+    if (!form.senha) {
+      if (!usuario) {
+        alert("Informe uma senha para o novo usuário");
+        return;
+      }
       delete toSave.senha;
     }
     if (!toSave.criadoEm) toSave.criadoEm = new Date().toLocaleDateString("sv-SE");
@@ -1610,28 +1570,30 @@ function AdminTab({ currentUser }) {
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
 
+  // Atualiza o cache local com a lista do servidor ao abrir a aba
+  useEffect(function(){
+    sincronizarUsuariosDoServidor().then(function(){ setUsuarios(getUsuarios()); });
+  }, []);
+
   function saveUser(user) {
     const lista = getUsuarios();
     const updated = lista.find(u=>u.id===user.id)
       ? lista.map(u=>u.id===user.id?user:u)
       : [...lista, user];
-    saveUsuarios(updated);
-    setUsuarios(updated);
+    setUsuarios(saveUsuarios(updated));
   }
 
   function deleteUser(id) {
     if (id === currentUser.id) { alert("Você não pode excluir seu próprio usuário!"); return; }
     if (!confirm("Excluir este usuário?")) return;
     const updated = getUsuarios().filter(u=>u.id!==id);
-    saveUsuarios(updated);
-    setUsuarios(updated);
+    setUsuarios(saveUsuarios(updated));
   }
 
   function toggleAtivo(id) {
     if (id === currentUser.id) { alert("Você não pode desativar seu próprio usuário!"); return; }
     const updated = getUsuarios().map(u=>u.id===id?{...u,ativo:!u.ativo}:u);
-    saveUsuarios(updated);
-    setUsuarios(updated);
+    setUsuarios(saveUsuarios(updated));
   }
 
   return (
@@ -4862,6 +4824,7 @@ function ModalProduto({ produto, fornecedores, listings, produtos, onSave, onClo
     id: Date.now(), titulo: "", sku: "", ean: "", codigoFornecedor: "",
     fornecedorId: "", precoCusto: "", precoVenda: "",
     estoqueAtual: "", estoqueMinimo: "", estoqueMaximo: "", localizacao: "",
+    leadTimeDias: "", loteMinimo: "",
     ncm: "", cest: "", origem: "0 - Nacional", cfop: "5102",
     aliqICMS: "", aliqIPI: "", aliqPIS: "0.65", aliqCOFINS: "3.00",
     categoria: "Outros", descricao: "", peso: "", comprimento: "", largura: "", altura: "",
@@ -5142,6 +5105,18 @@ function ModalProduto({ produto, fornecedores, listings, produtos, onSave, onClo
                       style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
                   </div>
                 ))}
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <div>
+                  <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Lead Time do Fornecedor (dias)</div>
+                  <input type="number" value={form.leadTimeDias||""} onChange={e => set("leadTimeDias", e.target.value)} placeholder="Ex: 20 (prazo entre pedir e receber)"
+                    style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Lote Mínimo de Compra (MOQ)</div>
+                  <input type="number" value={form.loteMinimo||""} onChange={e => set("loteMinimo", e.target.value)} placeholder="Ex: 50 unidades"
+                    style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                </div>
               </div>
               <div>
                 <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Localização no Estoque</div>
@@ -5910,7 +5885,7 @@ function ModalPedidoCompra({ pedido, produtos, fornecedores, onSave, onClose }) 
 // ════════════════════════════════════════════════════════════
 //  RELATÓRIOS DE ESTOQUE
 // ════════════════════════════════════════════════════════════
-function RelatoriosEstoqueTab({ produtos, fornecedores, movEstoque, listings }) {
+function RelatoriosEstoqueTab({ produtos, fornecedores, movEstoque, listings, rawOrders }) {
   const [relAtivo, setRelAtivo] = useState(null);
   const [filtroDe, setFiltroDe] = useState("");
   const [filtroAte, setFiltroAte] = useState("");
@@ -5926,6 +5901,7 @@ function RelatoriosEstoqueTab({ produtos, fornecedores, movEstoque, listings }) 
     { key:"sem_movimentacao",   titulo:"Produtos sem Movimentação",             desc:"Produtos que não tiveram movimentação no período" },
     { key:"maior_circulacao",   titulo:"Produtos com Maior Circulação",         desc:"Produtos mais movimentados no período" },
     { key:"visao_financeira",   titulo:"Visão Financeira do Estoque",           desc:"Valor total do estoque pelo preço de custo e venda" },
+    { key:"curva_abc",          titulo:"Curva ABC de Produtos",                 desc:"Classe A/B/C por participação no faturamento dos últimos 90 dias" },
   ];
 
   function gerarRelatorio(key) {
@@ -5993,8 +5969,39 @@ function RelatoriosEstoqueTab({ produtos, fornecedores, movEstoque, listings }) 
       });
       return { titulo:"Visão Financeira do Estoque", headers:headers5, rows:rows5 };
     }
+    if (relAtivo === "curva_abc") {
+      // Curva ABC clássica: ordena por faturamento (90 dias) e acumula participação.
+      // A = até 80% do faturamento, B = 80–95%, C = restante.
+      var d90=new Date(); d90.setDate(d90.getDate()-90);
+      var de90=d90.toLocaleDateString("sv-SE");
+      var fatPorMlb={};
+      (rawOrders||[]).filter(function(o){return o.status==="paid"&&o.date>=de90;}).forEach(function(o){
+        if(!o.listing_id)return;
+        fatPorMlb[o.listing_id]=(fatPorMlb[o.listing_id]||0)+(parseFloat(o.price)||0)*(o.qty||1);
+      });
+      var comFat = produtos.map(function(p){
+        var mlb=p.mlbVinculado||(p.mlbsVinculados||[])[0]||"";
+        var fat=fatPorMlb[mlb]||0;
+        // Fallback: sem pedidos carregados, estima pelo histórico do anúncio no ML
+        if(fat===0&&mlb){
+          var l=(listings||[]).find(function(x){return x.id===mlb;});
+          if(l) fat=(parseFloat(l.price)||0)*(l.sold_quantity||0);
+        }
+        return { p:p, fat:fat };
+      }).sort(function(a,b){return b.fat-a.fat;});
+      var fatTotal = comFat.reduce(function(s,x){return s+x.fat;},0);
+      var acum=0;
+      var headers6=["Classe","#","Produto","SKU","Faturamento 90d","% do Total","% Acumulado","Estoque","Custo Unit."];
+      var rows6 = comFat.map(function(x,i){
+        var pct = fatTotal>0 ? (x.fat/fatTotal)*100 : 0;
+        acum += pct;
+        var classe = x.fat<=0 ? "C" : (acum<=80 ? "A" : (acum<=95 ? "B" : "C"));
+        return [classe, i+1, x.p.titulo, x.p.sku||"—", x.fat>0?fmt2(x.fat):"—", pct.toFixed(1)+"%", Math.min(100,acum).toFixed(1)+"%", x.p.estoqueAtual||0, x.p.precoCusto?fmt2(x.p.precoCusto):"—"];
+      });
+      return { titulo:"Curva ABC de Produtos (faturamento 90 dias)", headers:headers6, rows:rows6 };
+    }
     return null;
-  }, [relAtivo, produtos, fornecedores, movsFiltradas, filtroProd]);
+  }, [relAtivo, produtos, fornecedores, movsFiltradas, filtroProd, rawOrders, listings]);
 
   return (
     <div>
@@ -6239,6 +6246,7 @@ function RelatoriosEstoqueTab({ produtos, fornecedores, movEstoque, listings }) 
 function SugestaoComprasTab({ produtos, fornecedores, rawOrders, exportarCSV, exportarXLS, exportarPDF, BotaoExportar, fmtDate }) {
   const [periodoVenda, setPeriodoVenda] = useState(30);
   const [coberturaEstoque, setCoberturaEstoque] = useState(30);
+  const [diasSeguranca, setDiasSeguranca] = useState(7);
   const [filterForn, setFilterForn] = useState("all");
   const [search, setSearch] = useState("");
   const [gerado, setGerado] = useState(false);
@@ -6248,14 +6256,23 @@ function SugestaoComprasTab({ produtos, fornecedores, rawOrders, exportarCSV, ex
   var deDate=new Date(); deDate.setDate(deDate.getDate()-parseInt(periodoVenda));
   var deStr=deDate.toLocaleDateString("sv-SE");
 
-  // Calcular vendas por produto no período
-  var vendasPorProd={};
-  (rawOrders||[]).filter(function(o){return o.status==="paid"&&o.date>=deStr;}).forEach(function(o){
+  // Vendas por produto no período escolhido + em 3 janelas fixas (30/60/90 dias).
+  // A velocidade usada nos cálculos é uma média PONDERADA que dá mais peso ao
+  // ritmo recente (50% últimos 30d, 30% últimos 60d, 20% últimos 90d) — capta
+  // aceleração/queda de demanda melhor que uma média simples do período.
+  function diasAtras(n){ var d=new Date(); d.setDate(d.getDate()-n); return d.toLocaleDateString("sv-SE"); }
+  var de30=diasAtras(30), de60=diasAtras(60), de90=diasAtras(90);
+  var vendasPorProd={}, vendas30={}, vendas60={}, vendas90={};
+  (rawOrders||[]).filter(function(o){return o.status==="paid"&&o.date>=de90;}).forEach(function(o){
     if(!o.listing_id)return;
-    vendasPorProd[o.listing_id]=(vendasPorProd[o.listing_id]||0)+(o.qty||1);
+    var q=o.qty||1;
+    if(o.date>=deStr) vendasPorProd[o.listing_id]=(vendasPorProd[o.listing_id]||0)+q;
+    if(o.date>=de30) vendas30[o.listing_id]=(vendas30[o.listing_id]||0)+q;
+    if(o.date>=de60) vendas60[o.listing_id]=(vendas60[o.listing_id]||0)+q;
+    vendas90[o.listing_id]=(vendas90[o.listing_id]||0)+q;
   });
 
-  // Montar sugestões
+  // Montar sugestões (preditivo: velocidade ponderada × lead time + estoque de segurança)
   var sugestoes=produtos.filter(function(p){
     if(filterForn!=="all"&&p.fornecedorId!==filterForn)return false;
     if(search){var q=search.toLowerCase();return (p.titulo||"").toLowerCase().includes(q)||(p.sku||"").toLowerCase().includes(q);}
@@ -6263,13 +6280,25 @@ function SugestaoComprasTab({ produtos, fornecedores, rawOrders, exportarCSV, ex
   }).map(function(p){
     var mlb=p.mlbVinculado||(p.mlbsVinculados||[])[0]||"";
     var vendas=vendasPorProd[mlb]||0;
-    var mediaDia=vendas/parseInt(periodoVenda);
+    var m30=(vendas30[mlb]||0)/30, m60=(vendas60[mlb]||0)/60, m90=(vendas90[mlb]||0)/90;
+    var mediaDia=(m30*0.5)+(m60*0.3)+(m90*0.2);
+    if(mediaDia<=0) mediaDia=vendas/Math.max(1,parseInt(periodoVenda));
     var estAtual=parseInt(p.estoqueAtual||0);
+    var leadTime=parseInt(p.leadTimeDias||0)||0;               // prazo do fornecedor (cadastro do produto)
+    var moq=parseInt(p.loteMinimo||0)||0;                       // lote mínimo de compra (cadastro do produto)
+    var estoqueSeg=Math.ceil(mediaDia*parseInt(diasSeguranca||0));
+    var pontoPedido=Math.ceil(mediaDia*leadTime)+estoqueSeg;    // quando o estoque chega aqui, é hora de pedir
     var diasEstoque=mediaDia>0?Math.floor(estAtual/mediaDia):999;
-    var sugestaoQtd=Math.max(0,Math.ceil(mediaDia*parseInt(coberturaEstoque))-estAtual);
+    var pedirAgora=mediaDia>0&&estAtual<=pontoPedido;
+    // Compra sugerida cobre o lead time + a cobertura desejada + segurança
+    var sugestaoQtd=Math.max(0,Math.ceil(mediaDia*(leadTime+parseInt(coberturaEstoque)))+estoqueSeg-estAtual);
+    if(sugestaoQtd>0&&moq>0) sugestaoQtd=Math.max(sugestaoQtd,moq);
     var valorEst=sugestaoQtd*parseFloat(p.precoCusto||0);
-    return {p,vendas,mediaDia,estAtual,diasEstoque,sugestaoQtd,valorEst};
-  }).filter(function(s){return s.sugestaoQtd>0||s.vendas>0;}).sort(function(a,b){return b.sugestaoQtd-a.sugestaoQtd;});
+    return {p,vendas,mediaDia,estAtual,diasEstoque,leadTime,moq,pontoPedido,pedirAgora,sugestaoQtd,valorEst};
+  }).filter(function(s){return s.sugestaoQtd>0||s.vendas>0;}).sort(function(a,b){
+    if(a.pedirAgora!==b.pedirAgora) return a.pedirAgora?-1:1;
+    return a.diasEstoque-b.diasEstoque;
+  });
 
   var totalSugestao=sugestoes.reduce(function(s,x){return s+x.sugestaoQtd;},0);
   var totalValor=sugestoes.reduce(function(s,x){return s+x.valorEst;},0);
@@ -6294,6 +6323,12 @@ function SugestaoComprasTab({ produtos, fornecedores, rawOrders, exportarCSV, ex
             <input type="number" min="7" max="365" value={coberturaEstoque} onChange={function(e){setCoberturaEstoque(e.target.value);setGerado(false);}}
               style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"9px 12px",borderRadius:8,fontSize:13,outline:"none" }} />
             <div style={{ fontSize:11,color:"#94a3b8",marginTop:4 }}>Quantidade para cobrir {coberturaEstoque} dias de vendas</div>
+          </div>
+          <div>
+            <div style={{ fontSize:11,color:"#94a3b8",marginBottom:5,fontWeight:600,textTransform:"uppercase" }}>Estoque de Segurança (dias)</div>
+            <input type="number" min="0" max="90" value={diasSeguranca} onChange={function(e){setDiasSeguranca(e.target.value);setGerado(false);}}
+              style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#0f172a",padding:"9px 12px",borderRadius:8,fontSize:13,outline:"none" }} />
+            <div style={{ fontSize:11,color:"#94a3b8",marginTop:4 }}>Folga extra além do lead time de cada fornecedor</div>
           </div>
           <div>
             <div style={{ fontSize:11,color:"#94a3b8",marginBottom:5,fontWeight:600,textTransform:"uppercase" }}>Filtrar Fornecedor</div>
@@ -6321,6 +6356,7 @@ function SugestaoComprasTab({ produtos, fornecedores, rawOrders, exportarCSV, ex
           {/* Cards resumo */}
           <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:7,marginBottom:8 }}>
             {[
+              {l:"⚠️ Pedir Agora",v:sugestoes.filter(function(s){return s.pedirAgora;}).length,c:"#dc2626"},
               {l:"Produtos p/ Comprar",v:sugestoes.filter(function(s){return s.sugestaoQtd>0;}).length,c:"#0f172a"},
               {l:"Total de Unidades",v:totalSugestao,c:"#0891b2"},
               {l:"Valor Estimado",v:fmt2(totalValor),c:"#dc2626"},
@@ -6362,16 +6398,21 @@ function SugestaoComprasTab({ produtos, fornecedores, rawOrders, exportarCSV, ex
               </div>
               <table style={{ borderCollapse:"collapse",width:"100%" }}>
                 <thead>
-                  <tr>{["SKU","Produto","Fornecedor","Peças Vendidas","Estoque Atual","Média/Dia","Dias p/ Esgotar","Sugestão de Compra","Valor Estimado"].map(function(h){
+                  <tr>{["Status","SKU","Produto","Fornecedor","Peças Vendidas","Estoque Atual","Média/Dia","Dias p/ Esgotar","Lead Time","Sugestão de Compra","Valor Estimado"].map(function(h){
                     return <th key={h} style={{ fontSize:10,color:"#94a3b8",textTransform:"uppercase",padding:"9px 12px",borderBottom:"1px solid #f1f5f9",textAlign:"left",fontWeight:600,background:"#fafafa",whiteSpace:"nowrap" }}>{h}</th>;
                   })}</tr>
                 </thead>
                 <tbody>
                   {sugestoes.map(function(s,i){
                     var forn=fornecedores.find(function(f){return f.id===s.p.fornecedorId;});
-                    var urgente=s.diasEstoque<7,atencao=s.diasEstoque<15;
+                    var urgente=s.pedirAgora||s.diasEstoque<7,atencao=s.diasEstoque<15;
                     return (
                       <tr key={s.p.id} style={{ background:urgente?"#fff9f9":i%2===0?"#f8fafc":"#fff" }}>
+                        <td style={{ padding:"5px 8px",textAlign:"center" }}>
+                          {s.pedirAgora
+                            ? <span title={"Estoque ("+s.estAtual+") chegou ao ponto de pedido ("+s.pontoPedido+"): o fornecedor demora "+s.leadTime+" dias"} style={{ fontSize:10,fontWeight:800,color:"#dc2626",background:"#fef2f2",border:"1px solid #fecaca",padding:"3px 8px",borderRadius:20,whiteSpace:"nowrap" }}>PEDIR AGORA</span>
+                            : <span style={{ fontSize:10,fontWeight:600,color:"#15803d",background:"#f0fdf4",padding:"3px 8px",borderRadius:20,whiteSpace:"nowrap" }}>OK</span>}
+                        </td>
                         <td style={{ padding:"5px 8px",fontSize:11,color:"#64748b",fontFamily:"monospace" }}>{s.p.sku||"—"}</td>
                         <td style={{ padding:"5px 8px",fontSize:12,color:"#0f172a",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{s.p.titulo}</td>
                         <td style={{ padding:"5px 8px",fontSize:12,color:"#64748b" }}>{forn?.nome||"—"}</td>
@@ -6383,7 +6424,11 @@ function SugestaoComprasTab({ produtos, fornecedores, rawOrders, exportarCSV, ex
                             {s.diasEstoque>=999?"∞":s.diasEstoque+" dias"}
                           </span>
                         </td>
-                        <td style={{ padding:"5px 8px",textAlign:"center",fontWeight:800,fontSize:14,color:s.sugestaoQtd>0?"#dc2626":"#94a3b8" }}>{s.sugestaoQtd>0?s.sugestaoQtd:"—"}</td>
+                        <td style={{ padding:"5px 8px",textAlign:"center",fontSize:12,color:s.leadTime>0?"#64748b":"#cbd5e1" }}>{s.leadTime>0?s.leadTime+"d":"—"}</td>
+                        <td style={{ padding:"5px 8px",textAlign:"center",fontWeight:800,fontSize:14,color:s.sugestaoQtd>0?"#dc2626":"#94a3b8" }}>
+                          {s.sugestaoQtd>0?s.sugestaoQtd:"—"}
+                          {s.sugestaoQtd>0&&s.moq>0&&s.sugestaoQtd===s.moq&&<span title="Quantidade elevada ao lote mínimo do fornecedor (MOQ)" style={{ fontSize:9,color:"#7c3aed",marginLeft:4,fontWeight:700 }}>MOQ</span>}
+                        </td>
                         <td style={{ padding:"5px 8px",fontSize:12,fontWeight:700,color:"#0f172a" }}>{s.valorEst>0?fmt2(s.valorEst):"—"}</td>
                       </tr>
                     );
@@ -6391,7 +6436,7 @@ function SugestaoComprasTab({ produtos, fornecedores, rawOrders, exportarCSV, ex
                 </tbody>
                 <tfoot>
                   <tr style={{ background:"#f1f5f9" }}>
-                    <td colSpan={7} style={{ padding:"10px 12px",fontWeight:700,fontSize:13 }}>TOTAL</td>
+                    <td colSpan={9} style={{ padding:"10px 12px",fontWeight:700,fontSize:13 }}>TOTAL</td>
                     <td style={{ padding:"10px 12px",textAlign:"center",fontWeight:800,fontSize:14,color:"#dc2626" }}>{totalSugestao}</td>
                     <td style={{ padding:"10px 12px",fontWeight:800,color:"#0f172a" }}>{fmt2(totalValor)}</td>
                   </tr>
@@ -7521,6 +7566,7 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
           fornecedores={fornecedores}
           movEstoque={movEstoque}
           listings={listings}
+          rawOrders={rawOrders}
         />
       )}
 
@@ -7782,16 +7828,11 @@ function ProdutosTab({ produtos, setProdutos, fornecedores, setFornecedores, lis
 
 async function chamarIA(prompt, maxTokens) {
   maxTokens = maxTokens || 1500;
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  // A chamada à Anthropic passa pelo proxy /api/ai-chat — a chave da API fica só no servidor
+  const response = await fetch("/api/ai-chat", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-      "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "claude-sonnet-4-5",
       max_tokens: maxTokens,
       messages: [{ role: "user", content: prompt }],
     }),
@@ -8015,12 +8056,9 @@ function PainelIAPagamentos({ contasPagar=[], contasBancarias=[], lancamentos=[]
   }, 0);
 
   function checkKey() {
-    try {
-      if (!import.meta.env.VITE_ANTHROPIC_KEY) { setErrorMsg("Configure VITE_ANTHROPIC_KEY nas variáveis de ambiente do Vercel"); setState("error"); return false; }
-      return true;
-    } catch(e) {
-      setErrorMsg("Chave da API não configurada"); setState("error"); return false;
-    }
+    // A chave da Anthropic agora fica só no servidor (/api/ai-chat) — se faltar,
+    // a própria chamada retorna o erro, que é exibido pelo catch de analisarPrioridade.
+    return true;
   }
 
   // Análise automática ao abrir o painel — usa saldo real das contas
@@ -8028,10 +8066,6 @@ function PainelIAPagamentos({ contasPagar=[], contasBancarias=[], lancamentos=[]
     try {
       if (autoAnalise) return; // já rodou
       if (contasPendentes.length === 0) return;
-      // Só roda automaticamente se tiver chave configurada
-      var temChave = false;
-      try { temChave = !!import.meta.env.VITE_ANTHROPIC_KEY; } catch(e) {}
-      if (!temChave) return;
       setAutoAnalise(true);
       var t = setTimeout(function() {
         try { analisarPrioridade(true); } catch(e) {}
@@ -14336,9 +14370,19 @@ export default function App() {
   // ── Auth ──────────────────────────────────────────────────
   const [currentUser, setCurrentUser] = useState(() => getSession());
 
-  // Sincroniza usuários do servidor ao iniciar (garante que todos os dispositivos veem os mesmos usuários)
+  // Valida o cookie de sessão no servidor ao iniciar — se expirou/foi revogado,
+  // volta para a tela de login em vez de operar com uma sessão local órfã.
   useEffect(function(){
-    sincronizarUsuariosDoServidor();
+    if (!getSession()) return;
+    fetch("/api/auth/app-login").then(function(r){ return r.json(); }).then(function(d){
+      if (d && d.authenticated) {
+        if (d.user) { setSession(d.user); setCurrentUser(d.user); }
+        sincronizarUsuariosDoServidor();
+      } else {
+        clearSession();
+        setCurrentUser(null);
+      }
+    }).catch(function(){});
   }, []);
   const [lastUpdate, setLastUpdate] = useState(() => localStorage.getItem("ml_last_update"));
   const [minutesTick, setMinutesTick] = useState(0);
@@ -15233,6 +15277,10 @@ export default function App() {
     };
   });
 
+  // Alíquota efetiva de impostos sobre a venda (soma dos itens percentuais configurados
+  // em Financeiro → Impostos) — entra na margem líquida de cada anúncio/pedido.
+  const impostoPctVenda = (impostos || []).filter(i => i.tipo === "%").reduce((s, i) => s + (parseFloat(i.valor) || 0), 0);
+
   const enriched = listings.map(l => {
     const cost = costs[l.id] ?? 0;
     // Prioriza a taxa REAL vinda do ML (por categoria + preço). Só cai para a tabela estimada
@@ -15245,7 +15293,11 @@ export default function App() {
     const originalPrice = promoData ? promoData.originalPrice : originalPriceApi;
     const hasPromo = promoData ? true : hasPromoApi;
     const freteSeller = shippingData[l.id] ?? 0;
-    const margin = calcMargin(salePrice, cost, feeRate, freteSeller);
+    // A taxa real (listing_prices) já embute a tarifa fixa; na estimada, soma a fixa por faixa
+    const margin = calcMargin(salePrice, cost, feeRate, freteSeller, {
+      feeFixa: realFeeInfo ? 0 : estimarTarifaFixaML(salePrice),
+      impostoPct: impostoPctVenda,
+    });
     const { score, checks } = calcQualityScore(l);
     const sku = getSku(l);
     const youReceive = salePrice - margin.fee - freteSeller;
@@ -15395,14 +15447,99 @@ export default function App() {
   const enrichedOrders = enrichedOrdersFiltered.map(o => {
     const listing = listings.find(l => l.id === o.listing_id);
     const cost = costs[listing?.id] ?? 0;
-    const feeRate = listing ? getRealFeeRate(listing) : 0.12;
     // Frete: usa shipmentCosts[order_id] calculado como base_cost - buyer_paid
     const freteSeller = shipmentCosts[String(o.id)]
       ?? shippingData[o.listing_id]
       ?? shippingData[listing?.id]
       ?? 0;
-    return { ...o, listing, ...calcMargin(o.price, cost, feeRate, freteSeller), cost, freteSeller };
+    // Melhor fonte de tarifa, nesta ordem: (1) sale_fee real cobrado neste pedido,
+    // (2) taxa real do anúncio via listing_prices, (3) tabela estimada + tarifa fixa.
+    const pay = paymentData[String(o.id)];
+    let base;
+    if (pay && pay.tarifaML > 0 && !pay.isCalculated && o.price > 0) {
+      const tarifaUnit = pay.tarifaML / (o.qty || 1);
+      base = calcMargin(o.price, cost, tarifaUnit / o.price, freteSeller, { impostoPct: impostoPctVenda });
+    } else {
+      const realFeeInfo = listing ? realFees[listing.id] : null;
+      const feeRate = realFeeInfo?.feeRate ?? (listing ? getRealFeeRate(listing) : 0.12);
+      base = calcMargin(o.price, cost, feeRate, freteSeller, {
+        feeFixa: realFeeInfo ? 0 : estimarTarifaFixaML(o.price),
+        impostoPct: impostoPctVenda,
+      });
+    }
+    return { ...o, listing, ...base, cost, freteSeller };
   })
+
+  // ── Alertas proativos no sino: margem negativa, contas vencendo e ruptura prevista ──
+  // Cada alerta tem id único por dia — a deduplicação por id impede repetição no sino.
+  useEffect(function() {
+    try {
+      if (!currentUser) return;
+      var hojeStr = new Date().toLocaleDateString("sv-SE");
+      var alertas = [];
+
+      // 1) Anúncios ativos com custo cadastrado vendendo no prejuízo
+      var negativos = enriched.filter(function(l){ return l.status==="active" && l.cost>0 && l.profit<0; });
+      if (negativos.length>0) {
+        var piores = negativos.slice().sort(function(a,b){return a.profit-b.profit;}).slice(0,3)
+          .map(function(l){return (l.title||"").slice(0,35);}).join(" · ");
+        alertas.push({
+          id: "margem_neg_"+hojeStr, tipo: "margem",
+          titulo: "🔻 "+negativos.length+" anúncio(s) com margem NEGATIVA",
+          msg: "Você perde dinheiro a cada venda: "+piores,
+          data: new Date().toLocaleString("pt-BR"), lido: false,
+        });
+      }
+
+      // 2) Contas a pagar vencidas ou vencendo em até 3 dias
+      var contasUrg = (contasPagar||[]).filter(function(c){
+        return c.status==="Pendente" && c.vencimento && getDaysUntil(c.vencimento)<=3;
+      });
+      if (contasUrg.length>0) {
+        var totalUrg = contasUrg.reduce(function(s,c){return s+(parseFloat(c.valor)||0);},0);
+        alertas.push({
+          id: "contas_venc_"+hojeStr, tipo: "contas",
+          titulo: "💸 "+contasUrg.length+" conta(s) vencida(s) ou vencendo em 3 dias",
+          msg: "Total: R$ "+totalUrg.toFixed(2).replace(".",",")+" — veja Financeiro → Contas a Pagar",
+          data: new Date().toLocaleString("pt-BR"), lido: false,
+        });
+      }
+
+      // 3) Ruptura prevista: o estoque acaba antes de o fornecedor conseguir repor
+      var dRup=new Date(); dRup.setDate(dRup.getDate()-30);
+      var deRup=dRup.toLocaleDateString("sv-SE");
+      var vRup={};
+      (rawOrders||[]).forEach(function(o){
+        if(o.status==="paid"&&o.date>=deRup&&o.listing_id) vRup[o.listing_id]=(vRup[o.listing_id]||0)+(o.qty||1);
+      });
+      var emRisco=(produtos||[]).filter(function(p){
+        var mlb=p.mlbVinculado||(p.mlbsVinculados||[])[0]||"";
+        var media=(vRup[mlb]||0)/30;
+        var lead=parseInt(p.leadTimeDias||0)||0;
+        if(media<=0||lead<=0) return false;
+        return (parseInt(p.estoqueAtual||0)/media) <= lead;
+      });
+      if (emRisco.length>0) {
+        alertas.push({
+          id: "ruptura_"+hojeStr, tipo: "estoque",
+          titulo: "📦 Ruptura prevista em "+emRisco.length+" produto(s)",
+          msg: "O estoque acaba antes do prazo de reposição do fornecedor — veja Produtos → Sugestão de Compras",
+          data: new Date().toLocaleString("pt-BR"), lido: false,
+        });
+      }
+
+      if (alertas.length>0) {
+        var existentes = JSON.parse(localStorage.getItem("ml_notificacoes")||"[]");
+        var idsExist = existentes.map(function(n){return n.id;});
+        var novas = alertas.filter(function(a){return !idsExist.includes(a.id);});
+        if (novas.length>0) {
+          var todas=[...novas, ...existentes].slice(0,50);
+          localStorage.setItem("ml_notificacoes", JSON.stringify(todas));
+          setNotificacoes(todas);
+        }
+      }
+    } catch(e) {}
+  }, [currentUser, listings.length, (contasPagar||[]).length, (produtos||[]).length, (rawOrders||[]).length]); // eslint-disable-line
 
   const enrichedOrdersComEnvio = useMemo(function() {
     if (filterEnvio === "todos") return enrichedOrders;
@@ -15684,7 +15821,7 @@ export default function App() {
             style={{ background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", fontWeight:600, padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
             ⚙️ Config
           </button>
-          <button onClick={() => { clearSession(); clearSavedTokens(); setCurrentUser(null); setToken(null); setUser(null); }}
+          <button onClick={() => { fetch("/api/auth/app-logout", { method:"POST" }).catch(()=>{}); clearSession(); clearSavedTokens(); setCurrentUser(null); setToken(null); setUser(null); }}
             style={{ background:"#fef2f2", border:"1px solid #fecaca", color:"#dc2626", fontWeight:600, padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
             Sair
           </button>

@@ -64,10 +64,10 @@ function getListingTypeLabel(type) {
   // ML Brasil: gold_premium e gold_pro = Premium (17%)
   // gold_special, gold_extra, demais = Clássico (12%)
   if (type === "gold_premium" || type === "gold_pro") return { label: "Premium · 17%", color: "#7c3aed" };
-  if (type === "gold_special" || type === "gold_extra") return { label: "Clássico · 12%", color: "#2563eb" };
-  if (type === "silver") return { label: "Gratuito", color: "#94a3b8" };
-  if (type === "free") return { label: "Gratuito", color: "#94a3b8" };
-  return { label: type ? "Clássico" : "—", color: "#2563eb" };
+  if (type === "gold_special" || type === "gold_extra") return { label: "Clássico · 12%", color: "#3B8CFF" };
+  if (type === "silver") return { label: "Gratuito", color: "#67759B" };
+  if (type === "free") return { label: "Gratuito", color: "#67759B" };
+  return { label: type ? "Clássico" : "—", color: "#3B8CFF" };
 }
 
 function getPrices(listing) {
@@ -151,8 +151,8 @@ function calcQualityScore(listing) {
   return { score: Math.round((total / max) * 100), checks };
 }
 
-function scoreColor(s) { return s >= 80 ? "#16a34a" : s >= 50 ? "#d97706" : "#dc2626"; }
-function scoreBg(s) { return s >= 80 ? "#f0fdf4" : s >= 50 ? "#fffbeb" : "#fef2f2"; }
+function scoreColor(s) { return s >= 80 ? "#00C853" : s >= 50 ? "#FFC107" : "#FF5252"; }
+function scoreBg(s) { return s >= 80 ? "rgba(0,200,83,.12)" : s >= 50 ? "rgba(255,193,7,.12)" : "rgba(255,82,82,.12)"; }
 function scoreLabel(s) { return s >= 80 ? "Ótimo" : s >= 50 ? "Regular" : "Fraco"; }
 
 async function analyzeWithAI(listing) {
@@ -640,16 +640,16 @@ function getOrderStatusInfo(status, tags, fulfilled, shipmentStatus) {
   const isRefunded = tags?.some(t => t.includes("refund"));
   const isDelivered = tags?.some(t => t === "delivered") || shipmentStatus === "delivered";
   const isDevolvido = isRefunded || (status === "cancelled" && isDelivered);
-  if (isDevolvido) return { label: "Devolvido", color: "#7c3aed", bg: "#f5f3ff" };
-  if (isMediation) return { label: "Em disputa", color: "#d97706", bg: "#fffbeb" };
-  if (status === "cancelled") return { label: "Cancelado", color: "#dc2626", bg: "#fef2f2" };
-  if (isDelivered) return { label: "Entregue", color: "#0369a1", bg: "#eff6ff" };
+  if (isDevolvido) return { label: "Devolvido", color: "#7c3aed", bg: "rgba(139,92,246,.14)" };
+  if (isMediation) return { label: "Em disputa", color: "#FFC107", bg: "rgba(255,193,7,.12)" };
+  if (status === "cancelled") return { label: "Cancelado", color: "#FF5252", bg: "rgba(255,82,82,.12)" };
+  if (isDelivered) return { label: "Entregue", color: "#4DB3FF", bg: "rgba(59,140,255,.14)" };
   // Enviado = apenas postado na transportadora
   // ready_to_ship = etiqueta gerada mas NÃO postado → Ag. Envio
   if (["shipped", "in_transit"].includes(shipmentStatus))
-    return { label: "Enviado", color: "#0891b2", bg: "#ecfeff" };
-  if (status === "paid") return { label: "Ag. Envio", color: "#d97706", bg: "#fffbeb" };
-  return { label: status ?? "—", color: "#64748b", bg: "#f8fafc" };
+    return { label: "Enviado", color: "#00F0FF", bg: "rgba(0,240,255,.10)" };
+  if (status === "paid") return { label: "Ag. Envio", color: "#FFC107", bg: "rgba(255,193,7,.12)" };
+  return { label: status ?? "—", color: "#A9B4C5", bg: "#A9B4C5" };
 }
 
 // ── Componente de Paginação ─────────────────────────────────────────────
@@ -676,14 +676,14 @@ function Paginacao({ total, porPagina, paginaAtual, onMudar }) {
   }
 
   var btnStyle = function(ativo) { return {
-    padding:"6px 11px", borderRadius:7, border: ativo ? "2px solid #0f172a" : "1px solid #e2e8f0",
-    background: ativo ? "#0f172a" : "#fff", color: ativo ? "#fff" : "#64748b",
+    padding:"6px 11px", borderRadius:7, border: ativo ? "2px solid #4DB3FF" : "1px solid rgba(255,255,255,.12)",
+    background: ativo ? "#1976FF" : "#182230", color: ativo ? "#fff" : "#A9B4C5",
     fontWeight: ativo ? 700 : 400, fontSize:13, cursor:"pointer", fontFamily:"inherit", minWidth:34
   }; };
 
   return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 0", borderTop:"1px solid #f1f5f9", marginTop:4, flexWrap:"wrap", gap:8 }}>
-      <span style={{ fontSize:12, color:"#94a3b8" }}>
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 0", borderTop:"1px solid rgba(255,255,255,.10)", marginTop:4, flexWrap:"wrap", gap:8 }}>
+      <span style={{ fontSize:12, color:"#67759B" }}>
         Mostrando {inicio}–{fim} de <strong>{total}</strong> registros
       </span>
       <div style={{ display:"flex", gap:4, alignItems:"center" }}>
@@ -692,7 +692,7 @@ function Paginacao({ total, porPagina, paginaAtual, onMudar }) {
         <button onClick={function(){ onMudar(paginaAtual-1); }} disabled={paginaAtual===1}
           style={Object.assign({},btnStyle(false),{opacity:paginaAtual===1?0.4:1})}>‹</button>
         {paginasVisiveis().map(function(p, i) {
-          if (p === "...") return <span key={"e"+i} style={{ color:"#94a3b8", padding:"0 4px" }}>…</span>;
+          if (p === "...") return <span key={"e"+i} style={{ color:"#67759B", padding:"0 4px" }}>…</span>;
           return <button key={p} onClick={function(){ onMudar(p); }} style={btnStyle(p===paginaAtual)}>{p}</button>;
         })}
         <button onClick={function(){ onMudar(paginaAtual+1); }} disabled={paginaAtual===totalPags}
@@ -705,12 +705,12 @@ function Paginacao({ total, porPagina, paginaAtual, onMudar }) {
 }
 
 function MarginBar({ value }) {
-  if (value === null) return <span style={{ fontSize: 12, color: "#94a3b8" }}>— insira custo</span>;
+  if (value === null) return <span style={{ fontSize: 12, color: "#67759B" }}>— insira custo</span>;
   const pct = Math.max(0, Math.min(1, value));
-  const color = pct >= 0.25 ? "#16a34a" : pct >= 0.15 ? "#d97706" : "#dc2626";
+  const color = pct >= 0.25 ? "#00C853" : pct >= 0.15 ? "#FFC107" : "#FF5252";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <div style={{ flex: 1, height: 4, background: "#e2e8f0", borderRadius: 99, overflow: "hidden", minWidth: 60 }}>
+      <div style={{ flex: 1, height: 4, background: "#223048", borderRadius: 99, overflow: "hidden", minWidth: 60 }}>
         <div style={{ width: `${pct * 100}%`, height: "100%", background: color, borderRadius: 99 }} />
       </div>
       <span style={{ fontSize: 12, fontWeight: 600, color, minWidth: 38, textAlign: "right" }}>{fmtPct(pct)}</span>
@@ -730,15 +730,15 @@ function AIPanel({ listing, onClose }) {
   }
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", backdropFilter: "blur(4px)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 300 }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 760, maxHeight: "88vh", overflowY: "auto", padding: "28px 32px 40px", boxShadow: "0 -4px 40px rgba(0,0,0,.12)" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "#182230", borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 760, maxHeight: "88vh", overflowY: "auto", padding: "28px 32px 40px", boxShadow: "0 -4px 40px rgba(0,0,0,.12)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 18, color: "#0f172a", marginBottom: 4 }}>Qualidade do Anúncio</div>
-            <div style={{ color: "#64748b", fontSize: 13, maxWidth: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{listing.title}</div>
+            <div style={{ fontWeight: 700, fontSize: 18, color: "#FFFFFF", marginBottom: 4 }}>Qualidade do Anúncio</div>
+            <div style={{ color: "#A9B4C5", fontSize: 13, maxWidth: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{listing.title}</div>
           </div>
-          <button onClick={onClose} style={{ background: "#f1f5f9", border: "none", color: "#64748b", width: 32, height: 32, borderRadius: 8, cursor: "pointer", fontSize: 16 }}>✕</button>
+          <button onClick={onClose} style={{ background: "#223048", border: "none", color: "#A9B4C5", width: 32, height: 32, borderRadius: 8, cursor: "pointer", fontSize: 16 }}>✕</button>
         </div>
-        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 12, padding: "16px 20px", marginBottom: 20 }}>
+        <div style={{ background: "#121A24", border: "1px solid rgba(255,255,255,.12)", borderRadius: 12, padding: "16px 20px", marginBottom: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 14 }}>
             <div style={{ width: 52, height: 52, borderRadius: 12, background: scoreBg(score), display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
               <span style={{ fontSize: 18, fontWeight: 800, color: scoreColor(score) }}>{score}</span>
@@ -746,33 +746,33 @@ function AIPanel({ listing, onClose }) {
             </div>
             <div>
               <div style={{ fontWeight: 700, fontSize: 16, color: scoreColor(score) }}>{scoreLabel(score)}</div>
-              <div style={{ color: "#94a3b8", fontSize: 12 }}>Score de qualidade do anúncio</div>
+              <div style={{ color: "#67759B", fontSize: 12 }}>Score de qualidade do anúncio</div>
             </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {checks.map(c => (
-              <div key={c.key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 7px", background: c.pass ? "#f0fdf4" : "#fef2f2", borderRadius: 8 }}>
-                <span style={{ color: c.pass ? "#16a34a" : "#dc2626", fontSize: 13, fontWeight: 700 }}>{c.pass ? "✓" : "✗"}</span>
-                <span style={{ fontSize: 12, color: c.pass ? "#15803d" : "#b91c1c" }}>{c.label}</span>
+              <div key={c.key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 7px", background: c.pass ? "rgba(0,200,83,.12)" : "rgba(255,82,82,.12)", borderRadius: 8 }}>
+                <span style={{ color: c.pass ? "#00C853" : "#FF5252", fontSize: 13, fontWeight: 700 }}>{c.pass ? "✓" : "✗"}</span>
+                <span style={{ fontSize: 12, color: c.pass ? "#00C853" : "#FF5252" }}>{c.label}</span>
               </div>
             ))}
           </div>
         </div>
-        {state === "idle" && <div style={{ textAlign: "center", padding: "28px 0" }}><div style={{ color: "#94a3b8", fontSize: 13, marginBottom: 16 }}>Analise com IA para receber sugestões personalizadas</div><button onClick={runAnalysis} style={{ background: "#0f172a", border: "none", color: "#fff", fontWeight: 700, padding: "11px 32px", borderRadius: 10, cursor: "pointer", fontSize: 14 }}>✦ Analisar com IA</button></div>}
-        {state === "loading" && <div style={{ textAlign: "center", padding: "32px 0", color: "#94a3b8" }}><div style={{ fontSize: 28, marginBottom: 12, animation: "spin 1.2s linear infinite", display: "inline-block" }}>⟳</div><style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style><div style={{ fontSize: 13 }}>Analisando...</div></div>}
-        {state === "error" && <div style={{ textAlign: "center", padding: "24px 0" }}><div style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>Erro: {errorMsg}</div><button onClick={runAnalysis} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", color: "#374151", padding: "8px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>Tentar novamente</button></div>}
+        {state === "idle" && <div style={{ textAlign: "center", padding: "28px 0" }}><div style={{ color: "#67759B", fontSize: 13, marginBottom: 16 }}>Analise com IA para receber sugestões personalizadas</div><button onClick={runAnalysis} style={{ background: "#1976FF", border: "none", color: "#fff", fontWeight: 700, padding: "11px 32px", borderRadius: 10, cursor: "pointer", fontSize: 14 }}>✦ Analisar com IA</button></div>}
+        {state === "loading" && <div style={{ textAlign: "center", padding: "32px 0", color: "#67759B" }}><div style={{ fontSize: 28, marginBottom: 12, animation: "spin 1.2s linear infinite", display: "inline-block" }}>⟳</div><style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style><div style={{ fontSize: 13 }}>Analisando...</div></div>}
+        {state === "error" && <div style={{ textAlign: "center", padding: "24px 0" }}><div style={{ color: "#FF5252", fontSize: 13, marginBottom: 12 }}>Erro: {errorMsg}</div><button onClick={runAnalysis} style={{ background: "#223048", border: "1px solid rgba(255,255,255,.12)", color: "#374151", padding: "8px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>Tentar novamente</button></div>}
         {state === "done" && result && (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10, padding: "14px 18px" }}>
-              <div style={{ fontSize: 11, color: "#92400e", marginBottom: 6, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Avaliação Geral</div>
+            <div style={{ background: "rgba(255,193,7,.12)", border: "1px solid rgba(255,193,7,.35)", borderRadius: 10, padding: "14px 18px" }}>
+              <div style={{ fontSize: 11, color: "#FFC107", marginBottom: 6, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Avaliação Geral</div>
               <div style={{ fontSize: 14, color: "#1c1917", lineHeight: 1.6 }}>{result.score_commentary}</div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {result.strengths?.length > 0 && <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#15803d", marginBottom: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>✓ Pontos Fortes</div>{result.strengths.map((s, i) => <div key={i} style={{ fontSize: 13, color: "#166534", marginBottom: 6, paddingLeft: 10, borderLeft: "2px solid #86efac" }}>{s}</div>)}</div>}
-              {result.keywords?.length > 0 && <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#475569", marginBottom: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Palavras-chave</div><div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{result.keywords.map((k, i) => <span key={i} style={{ background: "#e2e8f0", color: "#334155", fontSize: 12, padding: "3px 10px", borderRadius: 20 }}>{k}</span>)}</div></div>}
+              {result.strengths?.length > 0 && <div style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#00C853", marginBottom: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>✓ Pontos Fortes</div>{result.strengths.map((s, i) => <div key={i} style={{ fontSize: 13, color: "#00C853", marginBottom: 6, paddingLeft: 10, borderLeft: "2px solid rgba(0,200,83,.45)" }}>{s}</div>)}</div>}
+              {result.keywords?.length > 0 && <div style={{ background: "#121A24", border: "1px solid rgba(255,255,255,.12)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#A9B4C5", marginBottom: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Palavras-chave</div><div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{result.keywords.map((k, i) => <span key={i} style={{ background: "#223048", color: "#A9B4C5", fontSize: 12, padding: "3px 10px", borderRadius: 20 }}>{k}</span>)}</div></div>}
             </div>
-            {result.improvements?.length > 0 && <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#d97706", marginBottom: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>⚡ O que Melhorar</div>{result.improvements.map((imp, i) => <div key={i} style={{ display: "flex", gap: 12, marginBottom: 12, paddingBottom: 12, borderBottom: i < result.improvements.length - 1 ? "1px solid #f1f5f9" : "none" }}><div style={{ minWidth: 26, height: 26, borderRadius: 7, background: "#fffbeb", border: "1px solid #fde68a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#d97706", fontWeight: 700 }}>{i + 1}</div><div><div style={{ fontSize: 12, color: "#d97706", marginBottom: 3, fontWeight: 600 }}>{imp.field}</div><div style={{ fontSize: 13, color: "#475569", lineHeight: 1.5 }}>{imp.suggestion}</div></div></div>)}</div>}
-            {result.title_suggestion && <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#15803d", marginBottom: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>✦ Sugestão de Título</div><div style={{ fontSize: 14, color: "#0f172a", fontWeight: 600 }}>{result.title_suggestion}</div><div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>{result.title_suggestion.length} caracteres</div></div>}
+            {result.improvements?.length > 0 && <div style={{ background: "#182230", border: "1px solid rgba(255,255,255,.12)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#FFC107", marginBottom: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>⚡ O que Melhorar</div>{result.improvements.map((imp, i) => <div key={i} style={{ display: "flex", gap: 12, marginBottom: 12, paddingBottom: 12, borderBottom: i < result.improvements.length - 1 ? "1px solid rgba(255,255,255,.10)" : "none" }}><div style={{ minWidth: 26, height: 26, borderRadius: 7, background: "rgba(255,193,7,.12)", border: "1px solid rgba(255,193,7,.35)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#FFC107", fontWeight: 700 }}>{i + 1}</div><div><div style={{ fontSize: 12, color: "#FFC107", marginBottom: 3, fontWeight: 600 }}>{imp.field}</div><div style={{ fontSize: 13, color: "#A9B4C5", lineHeight: 1.5 }}>{imp.suggestion}</div></div></div>)}</div>}
+            {result.title_suggestion && <div style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#00C853", marginBottom: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>✦ Sugestão de Título</div><div style={{ fontSize: 14, color: "#FFFFFF", fontWeight: 600 }}>{result.title_suggestion}</div><div style={{ fontSize: 11, color: "#67759B", marginTop: 4 }}>{result.title_suggestion.length} caracteres</div></div>}
           </div>
         )}
       </div>
@@ -848,22 +848,22 @@ function MLConnectModal({ onConnect, onClose }) {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 24 }}>
-      <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 480, padding: "32px 36px", boxShadow: "0 20px 60px rgba(0,0,0,.15)" }}>
+      <div style={{ background: "#182230", borderRadius: 16, width: "100%", maxWidth: 480, padding: "32px 36px", boxShadow: "0 20px 60px rgba(0,0,0,.15)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <div style={{ fontWeight: 800, fontSize: 18, color: "#0f172a" }}>Conectar Mercado Livre</div>
-          <button onClick={onClose} style={{ background: "#f1f5f9", border: "none", color: "#64748b", width: 32, height: 32, borderRadius: 8, cursor: "pointer", fontSize: 16 }}>✕</button>
+          <div style={{ fontWeight: 800, fontSize: 18, color: "#FFFFFF" }}>Conectar Mercado Livre</div>
+          <button onClick={onClose} style={{ background: "#223048", border: "none", color: "#A9B4C5", width: 32, height: 32, borderRadius: 8, cursor: "pointer", fontSize: 16 }}>✕</button>
         </div>
-        <p style={{ color: "#64748b", fontSize: 13, lineHeight: 1.7, marginBottom: 20 }}>
+        <p style={{ color: "#A9B4C5", fontSize: 13, lineHeight: 1.7, marginBottom: 20 }}>
           Cole o token de acesso do Mercado Livre. O token fica salvo no navegador e você só precisa reconectar quando ele expirar (a cada 6 horas).
         </p>
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>Token de acesso</div>
+          <div style={{ fontSize: 11, color: "#67759B", marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>Token de acesso</div>
           <textarea value={tokenInput} onChange={e => setTokenInput(e.target.value)} placeholder="APP_USR-..." rows={3}
-            style={{ width: "100%", background: "#f8fafc", border: `1px solid ${errorMsg ? "#fca5a5" : "#e2e8f0"}`, color: "#0f172a", padding: "10px 14px", borderRadius: 10, fontFamily: "monospace", fontSize: 12, resize: "none", outline: "none" }} />
+            style={{ width: "100%", background: "#121A24", border: `1px solid ${errorMsg ? "#fca5a5" : "rgba(255,255,255,.12)"}`, color: "#FFFFFF", padding: "10px 14px", borderRadius: 10, fontFamily: "monospace", fontSize: 12, resize: "none", outline: "none" }} />
         </div>
-        {errorMsg && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", fontSize: 13, padding: "10px 14px", borderRadius: 8, marginBottom: 16 }}>⚠ {errorMsg}</div>}
+        {errorMsg && <div style={{ background: "rgba(255,82,82,.12)", border: "1px solid rgba(255,82,82,.35)", color: "#FF5252", fontSize: 13, padding: "10px 14px", borderRadius: 8, marginBottom: 16 }}>⚠ {errorMsg}</div>}
         <button onClick={handleConnect} disabled={loading || !tokenInput.trim()}
-          style={{ width: "100%", background: loading || !tokenInput.trim() ? "#f1f5f9" : "#0f172a", border: "none", color: loading || !tokenInput.trim() ? "#94a3b8" : "#fff", fontWeight: 700, padding: "12px", borderRadius: 10, cursor: loading || !tokenInput.trim() ? "not-allowed" : "pointer", fontSize: 14 }}>
+          style={{ width: "100%", background: loading || !tokenInput.trim() ? "#223048" : "#1976FF", border: "none", color: loading || !tokenInput.trim() ? "#67759B" : "#fff", fontWeight: 700, padding: "12px", borderRadius: 10, cursor: loading || !tokenInput.trim() ? "not-allowed" : "pointer", fontSize: 14 }}>
           {loading ? "Verificando..." : "Conectar"}
         </button>
       </div>
@@ -904,16 +904,16 @@ function SinoNotificacoes({ notificacoes, setNotificacoes, darkMode }) {
     }
   }
 
-  const bg = darkMode ? "#1e293b" : "#fff";
-  const border = darkMode ? "#334155" : "#e2e8f0";
+  const bg = darkMode ? "#121A24" : "#fff";
+  const border = darkMode ? "#A9B4C5" : "rgba(255,255,255,.12)";
 
   return (
     <div style={{ position: "relative" }}>
       <button onClick={() => { setAberto(a => !a); pedirPermissao(); }}
-        style={{ position: "relative", background: naoLidas > 0 ? "#fef3c7" : darkMode ? "#1e293b" : "#f1f5f9", border: `1px solid ${naoLidas > 0 ? "#fde68a" : border}`, color: naoLidas > 0 ? "#d97706" : darkMode ? "#94a3b8" : "#64748b", width: 38, height: 38, borderRadius: 10, cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        style={{ position: "relative", background: naoLidas > 0 ? "rgba(255,193,7,.18)" : darkMode ? "#121A24" : "#223048", border: `1px solid ${naoLidas > 0 ? "rgba(255,193,7,.35)" : border}`, color: naoLidas > 0 ? "#FFC107" : darkMode ? "#67759B" : "#A9B4C5", width: 38, height: 38, borderRadius: 10, cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>
         🔔
         {naoLidas > 0 && (
-          <div style={{ position: "absolute", top: -4, right: -4, background: "#dc2626", color: "#fff", width: 18, height: 18, borderRadius: "50%", fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
+          <div style={{ position: "absolute", top: -4, right: -4, background: "#FF5252", color: "#fff", width: 18, height: 18, borderRadius: "50%", fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
             {naoLidas > 9 ? "9+" : naoLidas}
           </div>
         )}
@@ -925,15 +925,15 @@ function SinoNotificacoes({ notificacoes, setNotificacoes, darkMode }) {
           <div style={{ position: "absolute", top: 46, right: 0, width: 380, background: bg, border: `1px solid ${border}`, borderRadius: 14, boxShadow: "0 8px 32px rgba(0,0,0,.15)", zIndex: 201, overflow: "hidden" }}>
             {/* Header */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", borderBottom: `1px solid ${border}` }}>
-              <div style={{ fontWeight: 700, fontSize: 14, color: darkMode ? "#e2e8f0" : "#0f172a" }}>
-                🔔 Notificações {naoLidas > 0 && <span style={{ fontSize: 11, background: "#dc2626", color: "#fff", padding: "1px 7px", borderRadius: 20, marginLeft: 6 }}>{naoLidas} novas</span>}
+              <div style={{ fontWeight: 700, fontSize: 14, color: darkMode ? "#A9B4C5" : "#FFFFFF" }}>
+                🔔 Notificações {naoLidas > 0 && <span style={{ fontSize: 11, background: "#FF5252", color: "#fff", padding: "1px 7px", borderRadius: 20, marginLeft: 6 }}>{naoLidas} novas</span>}
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 {naoLidas > 0 && (
-                  <button onClick={marcarTodasLidas} style={{ background: "none", border: "none", fontSize: 11, color: "#0891b2", cursor: "pointer", fontWeight: 600 }}>Marcar todas como lidas</button>
+                  <button onClick={marcarTodasLidas} style={{ background: "none", border: "none", fontSize: 11, color: "#00F0FF", cursor: "pointer", fontWeight: 600 }}>Marcar todas como lidas</button>
                 )}
                 {notificacoes.length > 0 && (
-                  <button onClick={limparTodas} style={{ background: "none", border: "none", fontSize: 11, color: "#94a3b8", cursor: "pointer" }}>Limpar</button>
+                  <button onClick={limparTodas} style={{ background: "none", border: "none", fontSize: 11, color: "#67759B", cursor: "pointer" }}>Limpar</button>
                 )}
               </div>
             </div>
@@ -941,25 +941,25 @@ function SinoNotificacoes({ notificacoes, setNotificacoes, darkMode }) {
             {/* Lista */}
             <div style={{ maxHeight: 420, overflowY: "auto" }}>
               {notificacoes.length === 0 ? (
-                <div style={{ padding: "32px 16px", textAlign: "center", color: "#94a3b8" }}>
+                <div style={{ padding: "32px 16px", textAlign: "center", color: "#67759B" }}>
                   <div style={{ fontSize: 32, marginBottom: 8 }}>🔔</div>
                   <div style={{ fontSize: 13 }}>Nenhuma notificação</div>
                   <div style={{ fontSize: 11, marginTop: 4 }}>Reconecte o ML para verificar novos pedidos</div>
                 </div>
               ) : notificacoes.map(n => (
                 <div key={n.id} onClick={() => marcarLida(n.id)}
-                  style={{ padding: "12px 16px", borderBottom: `1px solid ${border}`, cursor: "pointer", background: !n.lido ? (darkMode ? "#1e3a5f" : "#eff6ff") : "transparent", transition: "background .15s" }}>
+                  style={{ padding: "12px 16px", borderBottom: `1px solid ${border}`, cursor: "pointer", background: !n.lido ? (darkMode ? "#1e3a5f" : "rgba(59,140,255,.14)") : "transparent", transition: "background .15s" }}>
                   <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 10, background: n.tipo === "pedido" ? "#dcfce7" : "#fef3c7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: n.tipo === "pedido" ? "rgba(0,200,83,.18)" : "rgba(255,193,7,.18)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
                       {n.tipo === "pedido" ? "🛒" : "⚠️"}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                        <div style={{ fontWeight: 700, fontSize: 13, color: darkMode ? "#e2e8f0" : "#0f172a" }}>{n.titulo}</div>
-                        {!n.lido && <div style={{ width: 8, height: 8, background: "#0891b2", borderRadius: "50%", flexShrink: 0, marginTop: 4 }} />}
+                        <div style={{ fontWeight: 700, fontSize: 13, color: darkMode ? "#A9B4C5" : "#FFFFFF" }}>{n.titulo}</div>
+                        {!n.lido && <div style={{ width: 8, height: 8, background: "#00F0FF", borderRadius: "50%", flexShrink: 0, marginTop: 4 }} />}
                       </div>
-                      <div style={{ fontSize: 12, color: darkMode ? "#94a3b8" : "#475569", marginTop: 2, lineHeight: 1.4 }}>{n.msg}</div>
-                      <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>{fmtDate(n.data)}</div>
+                      <div style={{ fontSize: 12, color: darkMode ? "#67759B" : "#A9B4C5", marginTop: 2, lineHeight: 1.4 }}>{n.msg}</div>
+                      <div style={{ fontSize: 10, color: "#67759B", marginTop: 4 }}>{fmtDate(n.data)}</div>
                     </div>
                   </div>
                 </div>
@@ -968,14 +968,14 @@ function SinoNotificacoes({ notificacoes, setNotificacoes, darkMode }) {
 
             {/* Footer — permissão browser */}
             {typeof Notification !== "undefined" && Notification.permission === "default" && (
-              <div style={{ padding: "10px 16px", borderTop: `1px solid ${border}`, background: darkMode ? "#0f172a" : "#f8fafc" }}>
-                <button onClick={pedirPermissao} style={{ width: "100%", background: "#0f172a", border: "none", color: "#fff", fontWeight: 600, padding: "8px", borderRadius: 8, cursor: "pointer", fontSize: 12 }}>
+              <div style={{ padding: "10px 16px", borderTop: `1px solid ${border}`, background: darkMode ? "#1976FF" : "#121A24" }}>
+                <button onClick={pedirPermissao} style={{ width: "100%", background: "#1976FF", border: "none", color: "#fff", fontWeight: 600, padding: "8px", borderRadius: 8, cursor: "pointer", fontSize: 12 }}>
                   🔔 Ativar notificações do navegador
                 </button>
               </div>
             )}
             {typeof Notification !== "undefined" && Notification.permission === "granted" && (
-              <div style={{ padding: "8px 16px", borderTop: `1px solid ${border}`, fontSize: 11, color: "#15803d", textAlign: "center" }}>
+              <div style={{ padding: "8px 16px", borderTop: `1px solid ${border}`, fontSize: 11, color: "#00C853", textAlign: "center" }}>
                 ✓ Notificações do navegador ativadas
               </div>
             )}
@@ -1095,46 +1095,46 @@ function PainelBackup({ onClose }) {
 
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.65)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:700, padding:24 }}>
-      <div style={{ background:"#fff", borderRadius:20, width:"100%", maxWidth:580, maxHeight:"90vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 64px rgba(0,0,0,.2)" }}>
+      <div style={{ background:"#182230", borderRadius:20, width:"100%", maxWidth:580, maxHeight:"90vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 64px rgba(0,0,0,.2)" }}>
         {/* Header */}
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", borderBottom:"1px solid #f1f5f9" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", borderBottom:"1px solid rgba(255,255,255,.10)" }}>
           <div>
-            <div style={{ fontWeight:800, fontSize:18, color:"#0f172a" }}>💾 Backup e Restauração</div>
-            <div style={{ fontSize:12, color:"#94a3b8", marginTop:2 }}>Exporte seus dados para um arquivo seguro ou restaure de um backup anterior</div>
+            <div style={{ fontWeight:800, fontSize:18, color:"#FFFFFF" }}>💾 Backup e Restauração</div>
+            <div style={{ fontSize:12, color:"#67759B", marginTop:2 }}>Exporte seus dados para um arquivo seguro ou restaure de um backup anterior</div>
           </div>
-          <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
+          <button onClick={onClose} style={{ background:"#223048", border:"none", color:"#A9B4C5", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
         </div>
 
         <div style={{ flex:1, overflowY:"auto", padding:"12px 16px" }}>
 
           {/* Status */}
           {status && (
-            <div style={{ background:status.startsWith("✅")?"#f0fdf4":"#fef2f2", border:`1px solid ${status.startsWith("✅")?"#bbf7d0":"#fecaca"}`, borderRadius:10, padding:"10px 16px", marginBottom:8, fontSize:13, fontWeight:600, color:status.startsWith("✅")?"#15803d":"#dc2626" }}>
+            <div style={{ background:status.startsWith("✅")?"rgba(0,200,83,.12)":"rgba(255,82,82,.12)", border:`1px solid ${status.startsWith("✅")?"rgba(0,200,83,.35)":"rgba(255,82,82,.35)"}`, borderRadius:10, padding:"10px 16px", marginBottom:8, fontSize:13, fontWeight:600, color:status.startsWith("✅")?"#00C853":"#FF5252" }}>
               {status}
             </div>
           )}
 
           {/* Preview de importação */}
           {preview && (
-            <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:12, padding:"16px 18px", marginBottom:8 }}>
-              <div style={{ fontWeight:700, fontSize:14, color:"#92400e", marginBottom:8 }}>⚠️ Confirmar Restauração</div>
-              <div style={{ fontSize:12, color:"#78350f", marginBottom:12 }}>
+            <div style={{ background:"rgba(255,193,7,.12)", border:"1px solid rgba(255,193,7,.35)", borderRadius:12, padding:"16px 18px", marginBottom:8 }}>
+              <div style={{ fontWeight:700, fontSize:14, color:"#FFC107", marginBottom:8 }}>⚠️ Confirmar Restauração</div>
+              <div style={{ fontSize:12, color:"#FFC107", marginBottom:12 }}>
                 Backup de: <strong>{preview.dataBackup}</strong><br/>
                 <strong>Atenção:</strong> os dados atuais serão substituídos pelos dados do backup!
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:4, marginBottom:8 }}>
                 {preview.prev.map(p => (
-                  <div key={p.key} style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:"#0f172a" }}>
+                  <div key={p.key} style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:"#FFFFFF" }}>
                     <span>{p.label}</span>
-                    <span style={{ fontWeight:600, color:"#d97706" }}>{p.count} registro(s)</span>
+                    <span style={{ fontWeight:600, color:"#FFC107" }}>{p.count} registro(s)</span>
                   </div>
                 ))}
               </div>
               <div style={{ display:"flex", gap:8 }}>
                 <button onClick={() => setPreview(null)}
-                  style={{ flex:1, background:"#fff", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"10px", borderRadius:8, cursor:"pointer" }}>Cancelar</button>
+                  style={{ flex:1, background:"#182230", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", fontWeight:600, padding:"10px", borderRadius:8, cursor:"pointer" }}>Cancelar</button>
                 <button onClick={confirmarImport}
-                  style={{ flex:2, background:"#d97706", border:"none", color:"#fff", fontWeight:700, padding:"10px", borderRadius:8, cursor:"pointer" }}>
+                  style={{ flex:2, background:"#FFC107", border:"none", color:"#fff", fontWeight:700, padding:"10px", borderRadius:8, cursor:"pointer" }}>
                   ✓ Sim, restaurar dados
                 </button>
               </div>
@@ -1143,29 +1143,29 @@ function PainelBackup({ onClose }) {
 
           {/* Resumo dos dados atuais */}
           <div style={{ marginBottom:10 }}>
-            <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", marginBottom:12 }}>📊 Dados Armazenados Atualmente</div>
-            <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:12, overflow:"hidden" }}>
+            <div style={{ fontWeight:700, fontSize:14, color:"#FFFFFF", marginBottom:12 }}>📊 Dados Armazenados Atualmente</div>
+            <div style={{ background:"#121A24", border:"1px solid rgba(255,255,255,.12)", borderRadius:12, overflow:"hidden" }}>
               {resumo.map((r, i) => (
-                <div key={r.key} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 16px", borderBottom:i<resumo.length-1?"1px solid #f1f5f9":"none", background:i%2===0?"#f8fafc":"#fff" }}>
+                <div key={r.key} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 16px", borderBottom:i<resumo.length-1?"1px solid rgba(255,255,255,.10)":"none", background:i%2===0?"#121A24":"#182230" }}>
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <div style={{ width:8, height:8, borderRadius:"50%", background:r.empty?"#e2e8f0":"#15803d" }} />
-                    <span style={{ fontSize:13, color:"#0f172a" }}>{r.label}</span>
+                    <div style={{ width:8, height:8, borderRadius:"50%", background:r.empty?"#223048":"#00C853" }} />
+                    <span style={{ fontSize:13, color:"#FFFFFF" }}>{r.label}</span>
                   </div>
                   <div style={{ display:"flex", gap:16, alignItems:"center" }}>
                     {!r.empty ? (
                       <>
-                        <span style={{ fontSize:12, color:"#64748b" }}>{r.count} registro(s)</span>
-                        <span style={{ fontSize:11, color:"#94a3b8", background:"#f1f5f9", padding:"2px 8px", borderRadius:20 }}>{formatSize(r.size)}</span>
+                        <span style={{ fontSize:12, color:"#A9B4C5" }}>{r.count} registro(s)</span>
+                        <span style={{ fontSize:11, color:"#67759B", background:"#223048", padding:"2px 8px", borderRadius:20 }}>{formatSize(r.size)}</span>
                       </>
                     ) : (
-                      <span style={{ fontSize:12, color:"#94a3b8" }}>vazio</span>
+                      <span style={{ fontSize:12, color:"#67759B" }}>vazio</span>
                     )}
                   </div>
                 </div>
               ))}
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", background:"#f1f5f9", borderTop:"2px solid #e2e8f0" }}>
-                <span style={{ fontSize:13, fontWeight:700, color:"#0f172a" }}>Total</span>
-                <span style={{ fontSize:13, fontWeight:700, color:"#0f172a" }}>{formatSize(totalSize)}</span>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", background:"#223048", borderTop:"2px solid rgba(255,255,255,.12)" }}>
+                <span style={{ fontSize:13, fontWeight:700, color:"#FFFFFF" }}>Total</span>
+                <span style={{ fontSize:13, fontWeight:700, color:"#FFFFFF" }}>{formatSize(totalSize)}</span>
               </div>
             </div>
           </div>
@@ -1173,33 +1173,33 @@ function PainelBackup({ onClose }) {
           {/* Ações */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
             {/* Exportar */}
-            <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:12, padding:"18px 20px" }}>
+            <div style={{ background:"rgba(0,200,83,.12)", border:"1px solid rgba(0,200,83,.35)", borderRadius:12, padding:"18px 20px" }}>
               <div style={{ fontSize:28, marginBottom:8 }}>⬇️</div>
-              <div style={{ fontWeight:700, fontSize:14, color:"#15803d", marginBottom:4 }}>Exportar Backup</div>
-              <div style={{ fontSize:12, color:"#64748b", marginBottom:8, lineHeight:1.5 }}>
+              <div style={{ fontWeight:700, fontSize:14, color:"#00C853", marginBottom:4 }}>Exportar Backup</div>
+              <div style={{ fontSize:12, color:"#A9B4C5", marginBottom:8, lineHeight:1.5 }}>
                 Baixa um arquivo JSON com todos os seus dados. Guarde em local seguro.
               </div>
               <button onClick={exportarBackup}
-                style={{ width:"100%", background:"#15803d", border:"none", color:"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
+                style={{ width:"100%", background:"#00C853", border:"none", color:"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
                 ⬇️ Exportar Backup Agora
               </button>
             </div>
 
             {/* Importar */}
-            <div style={{ background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:12, padding:"18px 20px" }}>
+            <div style={{ background:"rgba(59,140,255,.14)", border:"1px solid rgba(77,179,255,.35)", borderRadius:12, padding:"18px 20px" }}>
               <div style={{ fontSize:28, marginBottom:8 }}>⬆️</div>
-              <div style={{ fontWeight:700, fontSize:14, color:"#1d4ed8", marginBottom:4 }}>Restaurar Backup</div>
-              <div style={{ fontSize:12, color:"#64748b", marginBottom:8, lineHeight:1.5 }}>
+              <div style={{ fontWeight:700, fontSize:14, color:"#3B8CFF", marginBottom:4 }}>Restaurar Backup</div>
+              <div style={{ fontSize:12, color:"#A9B4C5", marginBottom:8, lineHeight:1.5 }}>
                 Selecione um arquivo de backup (.json) para restaurar seus dados.
               </div>
-              <label style={{ display:"block", width:"100%", background:"#1d4ed8", border:"none", color:"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:"pointer", fontSize:13, textAlign:"center" }}>
+              <label style={{ display:"block", width:"100%", background:"#3B8CFF", border:"none", color:"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:"pointer", fontSize:13, textAlign:"center" }}>
                 {importing ? "Lendo arquivo..." : "⬆️ Selecionar Arquivo"}
                 <input type="file" accept=".json" style={{ display:"none" }} onChange={e => { if(e.target.files[0]) handleImportFile(e.target.files[0]); e.target.value=""; }} />
               </label>
             </div>
           </div>
 
-          <div style={{ marginTop:16, background:"#fef9c3", border:"1px solid #fde68a", borderRadius:10, padding:"12px 16px", fontSize:12, color:"#78350f" }}>
+          <div style={{ marginTop:16, background:"rgba(255,193,7,.18)", border:"1px solid rgba(255,193,7,.35)", borderRadius:10, padding:"12px 16px", fontSize:12, color:"#FFC107" }}>
             💡 <strong>Dica:</strong> Faça backup sempre que cadastrar muitas informações. Recomendamos exportar pelo menos uma vez por semana.
           </div>
         </div>
@@ -1319,55 +1319,55 @@ function LoginScreen({ onLogin }) {
   }
 
   return (
-    <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f172a 100%)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Inter','Segoe UI',sans-serif", padding:24 }}>
+    <div style={{ minHeight:"100vh", background:"#0A0F18", backgroundImage:"radial-gradient(1100px 500px at 75% -10%, rgba(25,118,255,.12), transparent 60%), radial-gradient(800px 420px at -10% 110%, rgba(0,240,255,.06), transparent 60%)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Inter','Segoe UI',sans-serif", padding:24 }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');*{box-sizing:border-box;margin:0;padding:0}`}</style>
       <div style={{ width:"100%", maxWidth:420 }}>
         {/* Logo */}
         <div style={{ textAlign:"center", marginBottom:32 }}>
-          <div style={{ width:64, height:64, borderRadius:18, background:"#ffe000", display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:32, fontWeight:800, color:"#0f172a", marginBottom:8, boxShadow:"0 8px 32px rgba(255,224,0,.3)" }}>M</div>
-          <div style={{ fontWeight:800, fontSize:24, color:"#fff", letterSpacing:-0.5 }}>ML Margem</div>
-          <div style={{ fontSize:13, color:"#64748b", marginTop:4 }}>Dashboard de Lucratividade</div>
+          <div style={{ width:64, height:64, borderRadius:18, background:"#FFC107", display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:32, fontWeight:800, color:"#FFFFFF", marginBottom:8, boxShadow:"0 8px 32px rgba(255,224,0,.3)" }}>M</div>
+          <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:24, color:"#fff", letterSpacing:-0.5 }}>ML Margem</div>
+          <div style={{ fontSize:13, color:"#A9B4C5", marginTop:4 }}>Dashboard de Lucratividade</div>
         </div>
 
         {/* Card */}
-        <div style={{ background:"#1e293b", borderRadius:20, padding:"32px 36px", boxShadow:"0 20px 60px rgba(0,0,0,.4)", border:"1px solid #334155" }}>
-          <div style={{ fontWeight:700, fontSize:18, color:"#f1f5f9", marginBottom:10 }}>Entrar no sistema</div>
+        <div style={{ background:"#121A24", borderRadius:20, padding:"32px 36px", boxShadow:"0 20px 60px rgba(0,0,0,.4)", border:"1px solid #A9B4C5" }}>
+          <div style={{ fontWeight:700, fontSize:18, color:"#A9B4C5", marginBottom:10 }}>Entrar no sistema</div>
 
           <div style={{ marginBottom:8 }}>
-            <div style={{ fontSize:11, color:"#64748b", marginBottom:8, fontWeight:600, letterSpacing:1, textTransform:"uppercase" }}>Usuário</div>
+            <div style={{ fontSize:11, color:"#A9B4C5", marginBottom:8, fontWeight:600, letterSpacing:1, textTransform:"uppercase" }}>Usuário</div>
             <input value={usuario} onChange={e => { setUsuario(e.target.value); setErro(""); }}
               onKeyDown={e => e.key==="Enter" && handleLogin()}
               placeholder="Digite seu usuário"
-              style={{ width:"100%", background:"#0f172a", border:`1px solid ${erro?"#dc2626":"#334155"}`, color:"#f1f5f9", padding:"12px 16px", borderRadius:10, fontSize:14, outline:"none", fontFamily:"inherit" }} />
+              style={{ width:"100%", background:"#1976FF", border:`1px solid ${erro?"#FF5252":"#A9B4C5"}`, color:"#A9B4C5", padding:"12px 16px", borderRadius:10, fontSize:14, outline:"none", fontFamily:"inherit" }} />
           </div>
 
           <div style={{ marginBottom:10 }}>
-            <div style={{ fontSize:11, color:"#64748b", marginBottom:8, fontWeight:600, letterSpacing:1, textTransform:"uppercase" }}>Senha</div>
+            <div style={{ fontSize:11, color:"#A9B4C5", marginBottom:8, fontWeight:600, letterSpacing:1, textTransform:"uppercase" }}>Senha</div>
             <div style={{ position:"relative" }}>
               <input type={showSenha?"text":"password"} value={senha}
                 onChange={e => { setSenha(e.target.value); setErro(""); }}
                 onKeyDown={e => e.key==="Enter" && handleLogin()}
                 placeholder="Digite sua senha"
-                style={{ width:"100%", background:"#0f172a", border:`1px solid ${erro?"#dc2626":"#334155"}`, color:"#f1f5f9", padding:"12px 48px 12px 16px", borderRadius:10, fontSize:14, outline:"none", fontFamily:"inherit" }} />
+                style={{ width:"100%", background:"#1976FF", border:`1px solid ${erro?"#FF5252":"#A9B4C5"}`, color:"#A9B4C5", padding:"12px 48px 12px 16px", borderRadius:10, fontSize:14, outline:"none", fontFamily:"inherit" }} />
               <button onClick={() => setShowSenha(s=>!s)}
-                style={{ position:"absolute", right:14, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color:"#64748b", fontSize:16 }}>
+                style={{ position:"absolute", right:14, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color:"#A9B4C5", fontSize:16 }}>
                 {showSenha?"🙈":"👁"}
               </button>
             </div>
           </div>
 
           {erro && (
-            <div style={{ background:"#450a0a", border:"1px solid #dc2626", color:"#fca5a5", fontSize:13, padding:"10px 14px", borderRadius:8, marginBottom:8 }}>
+            <div style={{ background:"#450a0a", border:"1px solid #FF5252", color:"#fca5a5", fontSize:13, padding:"10px 14px", borderRadius:8, marginBottom:8 }}>
               ⚠ {erro}
             </div>
           )}
 
           <button onClick={handleLogin} disabled={loading||!usuario||!senha}
-            style={{ width:"100%", background:loading||!usuario||!senha?"#334155":"#ffe000", border:"none", color:loading||!usuario||!senha?"#64748b":"#0f172a", fontWeight:800, padding:"14px", borderRadius:12, cursor:loading||!usuario||!senha?"not-allowed":"pointer", fontSize:15, transition:"all .15s" }}>
+            style={{ width:"100%", background:loading||!usuario||!senha?"#A9B4C5":"#FFC107", border:"none", color:loading||!usuario||!senha?"#A9B4C5":"#FFFFFF", fontWeight:800, padding:"14px", borderRadius:12, cursor:loading||!usuario||!senha?"not-allowed":"pointer", fontSize:15, transition:"all .15s" }}>
             {loading ? "Verificando..." : "Entrar"}
           </button>
 
-          <div style={{ textAlign:"center", marginTop:16, fontSize:12, color:"#475569" }}>
+          <div style={{ textAlign:"center", marginTop:16, fontSize:12, color:"#A9B4C5" }}>
             Acesso restrito — somente usuários autorizados
           </div>
         </div>
@@ -1412,58 +1412,58 @@ function ModalUsuario({ usuario, onSave, onClose }) {
 
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.7)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:24 }}>
-      <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:520, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.3)", maxHeight:"90vh", overflowY:"auto" }}>
+      <div style={{ background:"#182230", borderRadius:16, width:"100%", maxWidth:520, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.3)", maxHeight:"90vh", overflowY:"auto" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-          <div style={{ fontWeight:800, fontSize:17, color:"#0f172a" }}>{usuario ? "Editar Usuário" : "Novo Usuário"}</div>
-          <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
+          <div style={{ fontWeight:800, fontSize:17, color:"#FFFFFF" }}>{usuario ? "Editar Usuário" : "Novo Usuário"}</div>
+          <button onClick={onClose} style={{ background:"#223048", border:"none", color:"#A9B4C5", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
         </div>
 
         <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:10 }}>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
             <div>
-              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Nome completo *</div>
+              <div style={{ fontSize:11, color:"#67759B", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Nome completo *</div>
               <input value={form.nome} onChange={e=>set("nome",e.target.value)} placeholder="Ex: João Silva"
-                style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
             </div>
             <div>
-              <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Usuário (login) *</div>
+              <div style={{ fontSize:11, color:"#67759B", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Usuário (login) *</div>
               <input value={form.usuario} onChange={e=>set("usuario",e.target.value.toLowerCase().replace(/\s/g,""))} placeholder="Ex: joao"
-                style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none", fontFamily:"monospace" }} />
+                style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none", fontFamily:"monospace" }} />
             </div>
           </div>
 
           <div>
-            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Email (para notificações de tarefas)</div>
+            <div style={{ fontSize:11, color:"#67759B", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Email (para notificações de tarefas)</div>
             <input type="email" value={form.email||""} onChange={e=>set("email",e.target.value)} placeholder="usuario@empresa.com"
-              style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+              style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
           </div>
 
           <div>
-            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>
+            <div style={{ fontSize:11, color:"#67759B", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>
               {usuario ? "Nova senha (deixe vazio para manter)" : "Senha *"}
             </div>
             <div style={{ position:"relative" }}>
               <input type={showSenha?"text":"password"} value={form.senha||""} onChange={e=>set("senha",e.target.value)}
                 placeholder={usuario?"••••••••":"Mínimo 6 caracteres"}
-                style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 44px 9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"9px 44px 9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
               <button onClick={()=>setShowSenha(s=>!s)}
-                style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color:"#94a3b8", fontSize:14 }}>
+                style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color:"#67759B", fontSize:14 }}>
                 {showSenha?"🙈":"👁"}
               </button>
             </div>
           </div>
 
           {/* Permissões */}
-          <div style={{ background:"#f8fafc", borderRadius:12, padding:"14px 16px" }}>
+          <div style={{ background:"#121A24", borderRadius:12, padding:"14px 16px" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-              <div style={{ fontWeight:700, fontSize:13, color:"#0f172a" }}>Permissões de Acesso</div>
+              <div style={{ fontWeight:700, fontSize:13, color:"#FFFFFF" }}>Permissões de Acesso</div>
               <button onClick={function(){
                   var todasKeys = [];
                   PERMISSOES_DISPONIVEIS.forEach(function(p){ todasKeys.push(p.key); if(p.sub) p.sub.forEach(function(s){ todasKeys.push(s.key); }); });
                   var temTudo = todasKeys.every(function(k){ return (form.permissoes||[]).includes(k); });
                   set("permissoes", temTudo ? [] : todasKeys);
                 }}
-                style={{ fontSize:11, color:"#2563eb", background:"transparent", border:"none", cursor:"pointer", fontWeight:600 }}>
+                style={{ fontSize:11, color:"#3B8CFF", background:"transparent", border:"none", cursor:"pointer", fontWeight:600 }}>
                 {(function(){
                   var total = 0;
                   PERMISSOES_DISPONIVEIS.forEach(function(p){ total++; if(p.sub) total+=p.sub.length; });
@@ -1482,8 +1482,8 @@ function ModalUsuario({ usuario, onSave, onClose }) {
                   <div key={p.key}>
                     {/* Item pai */}
                     <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", padding:"5px 8px", borderRadius:8,
-                      background: isChecked || subChecked > 0 ? "#eff6ff" : "#fff",
-                      border: "1px solid " + (isChecked || subChecked > 0 ? "#2563eb" : "#e2e8f0"),
+                      background: isChecked || subChecked > 0 ? "rgba(59,140,255,.14)" : "#182230",
+                      border: "1px solid " + (isChecked || subChecked > 0 ? "#3B8CFF" : "rgba(255,255,255,.12)"),
                       transition:"all .15s" }}>
                       <input type="checkbox" checked={isChecked} ref={function(el){ try { if (el) el.indeterminate = isIndeterminate; } catch(e){} }}
                         onChange={function() {
@@ -1501,8 +1501,8 @@ function ModalUsuario({ usuario, onSave, onClose }) {
                           }
                         }}
                         style={{ width:14, height:14, cursor:"pointer" }} />
-                      <span style={{ fontSize:13, fontWeight:600, color: isChecked || subChecked > 0 ? "#1d4ed8" : "#334155", flex:1 }}>{p.label}</span>
-                      {p.sub && <span style={{ fontSize:10, color:"#94a3b8" }}>{subChecked}/{subTotal}</span>}
+                      <span style={{ fontSize:13, fontWeight:600, color: isChecked || subChecked > 0 ? "#3B8CFF" : "#A9B4C5", flex:1 }}>{p.label}</span>
+                      {p.sub && <span style={{ fontSize:10, color:"#67759B" }}>{subChecked}/{subTotal}</span>}
                     </label>
                     {/* Sub-permissões */}
                     {p.sub && (isChecked || subChecked > 0 || true) && (
@@ -1511,8 +1511,8 @@ function ModalUsuario({ usuario, onSave, onClose }) {
                           var sChecked = (form.permissoes||[]).includes(s.key);
                           return (
                             <label key={s.key} style={{ display:"flex", alignItems:"center", gap:6, cursor:"pointer", padding:"6px 10px", borderRadius:7,
-                              background: sChecked ? "#f0f9ff" : "#fafafa",
-                              border: "1px solid " + (sChecked ? "#bae6fd" : "#f1f5f9"),
+                              background: sChecked ? "rgba(77,179,255,.12)" : "#121A24",
+                              border: "1px solid " + (sChecked ? "#bae6fd" : "rgba(255,255,255,.10)"),
                               transition:"all .15s" }}>
                               <input type="checkbox" checked={sChecked}
                                 onChange={function() {
@@ -1530,7 +1530,7 @@ function ModalUsuario({ usuario, onSave, onClose }) {
                                   set("permissoes", newPerms);
                                 }}
                                 style={{ width:12, height:12, cursor:"pointer" }} />
-                              <span style={{ fontSize:12, color: sChecked ? "#0369a1" : "#64748b", fontWeight: sChecked ? 600 : 400 }}>{s.label}</span>
+                              <span style={{ fontSize:12, color: sChecked ? "#4DB3FF" : "#A9B4C5", fontWeight: sChecked ? 600 : 400 }}>{s.label}</span>
                             </label>
                           );
                         })}
@@ -1544,21 +1544,21 @@ function ModalUsuario({ usuario, onSave, onClose }) {
 
           {/* Status e Admin */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-            <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", padding:"10px 14px", borderRadius:8, background:"#f8fafc", border:"1px solid #e2e8f0" }}>
+            <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", padding:"10px 14px", borderRadius:8, background:"#121A24", border:"1px solid rgba(255,255,255,.12)" }}>
               <input type="checkbox" checked={form.ativo} onChange={e=>set("ativo",e.target.checked)} style={{ width:14, height:14 }} />
-              <span style={{ fontSize:13, color:"#334155", fontWeight:500 }}>Usuário ativo</span>
+              <span style={{ fontSize:13, color:"#A9B4C5", fontWeight:500 }}>Usuário ativo</span>
             </label>
-            <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", padding:"10px 14px", borderRadius:8, background:"#f8fafc", border:"1px solid #e2e8f0" }}>
+            <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", padding:"10px 14px", borderRadius:8, background:"#121A24", border:"1px solid rgba(255,255,255,.12)" }}>
               <input type="checkbox" checked={form.admin||false} onChange={e=>set("admin",e.target.checked)} style={{ width:14, height:14 }} />
-              <span style={{ fontSize:13, color:"#334155", fontWeight:500 }}>Administrador</span>
+              <span style={{ fontSize:13, color:"#A9B4C5", fontWeight:500 }}>Administrador</span>
             </label>
           </div>
         </div>
 
         <div style={{ display:"flex", gap:8 }}>
-          <button onClick={onClose} style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
+          <button onClick={onClose} style={{ flex:1, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
           <button onClick={handleSave} disabled={!form.nome||!form.usuario}
-            style={{ flex:2, background:!form.nome||!form.usuario?"#f1f5f9":"#0f172a", border:"none", color:!form.nome||!form.usuario?"#94a3b8":"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:!form.nome||!form.usuario?"not-allowed":"pointer" }}>
+            style={{ flex:2, background:!form.nome||!form.usuario?"#223048":"#1976FF", border:"none", color:!form.nome||!form.usuario?"#67759B":"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:!form.nome||!form.usuario?"not-allowed":"pointer" }}>
             Salvar Usuário
           </button>
         </div>
@@ -1603,54 +1603,54 @@ function AdminTab({ currentUser }) {
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
         <div>
-          <div style={{ fontWeight:800, fontSize:18, color:"#0f172a" }}>⚙️ Administração de Usuários</div>
-          <div style={{ fontSize:13, color:"#94a3b8", marginTop:2 }}>Gerencie quem pode acessar o dashboard e o que cada um pode ver</div>
+          <div style={{ fontWeight:800, fontSize:18, color:"#FFFFFF" }}>⚙️ Administração de Usuários</div>
+          <div style={{ fontSize:13, color:"#67759B", marginTop:2 }}>Gerencie quem pode acessar o dashboard e o que cada um pode ver</div>
         </div>
         <button onClick={()=>{ setEditingUser(null); setShowModal(true); }}
-          style={{ background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"10px 22px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
+          style={{ background:"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"10px 22px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
           + Novo Usuário
         </button>
       </div>
 
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))", gap:12 }}>
         {usuarios.map(u => (
-          <div key={u.id} style={{ background:"#fff", border:`2px solid ${u.id===currentUser.id?"#0f172a":u.ativo?"#e2e8f0":"#f1f5f9"}`, borderRadius:14, padding:"18px 20px", position:"relative", opacity:u.ativo?1:0.6 }}>
+          <div key={u.id} style={{ background:"#182230", border:`2px solid ${u.id===currentUser.id?"#4DB3FF":u.ativo?"rgba(255,255,255,.12)":"rgba(255,255,255,.10)"}`, borderRadius:14, padding:"18px 20px", position:"relative", opacity:u.ativo?1:0.6 }}>
             {u.id===currentUser.id && (
-              <div style={{ position:"absolute", top:12, left:12, background:"#0f172a", color:"#fff", fontSize:10, padding:"2px 8px", borderRadius:20, fontWeight:700 }}>VOCÊ</div>
+              <div style={{ position:"absolute", top:12, left:12, background:"#1976FF", color:"#fff", fontSize:10, padding:"2px 8px", borderRadius:20, fontWeight:700 }}>VOCÊ</div>
             )}
             <div style={{ display:"flex", justifyContent:"flex-end", gap:6, marginBottom:8 }}>
               <button onClick={()=>toggleAtivo(u.id)}
-                style={{ background:u.ativo?"#f0fdf4":"#f8fafc", border:`1px solid ${u.ativo?"#bbf7d0":"#e2e8f0"}`, color:u.ativo?"#15803d":"#94a3b8", padding:"3px 10px", borderRadius:6, cursor:"pointer", fontSize:11, fontWeight:600 }}>
+                style={{ background:u.ativo?"rgba(0,200,83,.12)":"#121A24", border:`1px solid ${u.ativo?"rgba(0,200,83,.35)":"rgba(255,255,255,.12)"}`, color:u.ativo?"#00C853":"#67759B", padding:"3px 10px", borderRadius:6, cursor:"pointer", fontSize:11, fontWeight:600 }}>
                 {u.ativo?"● Ativo":"○ Inativo"}
               </button>
               <button onClick={()=>{ setEditingUser(u); setShowModal(true); }}
-                style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:12 }}>✏️</button>
+                style={{ background:"#223048", border:"none", color:"#A9B4C5", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:12 }}>✏️</button>
               {u.id!==currentUser.id && (
                 <button onClick={()=>deleteUser(u.id)}
-                  style={{ background:"#fef2f2", border:"none", color:"#dc2626", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:12 }}>🗑</button>
+                  style={{ background:"rgba(255,82,82,.12)", border:"none", color:"#FF5252", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:12 }}>🗑</button>
               )}
             </div>
 
             <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:12 }}>
-              <div style={{ width:42, height:42, borderRadius:12, background:u.admin?"#0f172a":"#f1f5f9", display:"flex", alignItems:"center", justifyContent:"center", fontSize:15, fontWeight:800, color:u.admin?"#ffe000":"#64748b" }}>
+              <div style={{ width:42, height:42, borderRadius:12, background:u.admin?"#1976FF":"#223048", display:"flex", alignItems:"center", justifyContent:"center", fontSize:15, fontWeight:800, color:u.admin?"#FFC107":"#A9B4C5" }}>
                 {u.nome?.charAt(0).toUpperCase()}
               </div>
               <div>
-                <div style={{ fontWeight:700, fontSize:15, color:"#0f172a" }}>{u.nome}</div>
-                <div style={{ fontSize:12, color:"#94a3b8", fontFamily:"monospace" }}>@{u.usuario}</div>
+                <div style={{ fontWeight:700, fontSize:15, color:"#FFFFFF" }}>{u.nome}</div>
+                <div style={{ fontSize:12, color:"#67759B", fontFamily:"monospace" }}>@{u.usuario}</div>
                 {u.admin && <div style={{ fontSize:10, color:"#7c3aed", fontWeight:700 }}>ADMINISTRADOR</div>}
               </div>
             </div>
 
-            <div style={{ fontSize:11, color:"#94a3b8", marginBottom:6, fontWeight:600, textTransform:"uppercase" }}>Permissões</div>
+            <div style={{ fontSize:11, color:"#67759B", marginBottom:6, fontWeight:600, textTransform:"uppercase" }}>Permissões</div>
             <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
               {PERMISSOES_DISPONIVEIS.map(p => (
-                <span key={p.key} style={{ fontSize:11, padding:"2px 8px", borderRadius:20, background:u.permissoes?.includes(p.key)?"#eff6ff":"#f8fafc", color:u.permissoes?.includes(p.key)?"#2563eb":"#cbd5e1", border:`1px solid ${u.permissoes?.includes(p.key)?"#bfdbfe":"#f1f5f9"}`, fontWeight:u.permissoes?.includes(p.key)?600:400 }}>
+                <span key={p.key} style={{ fontSize:11, padding:"2px 8px", borderRadius:20, background:u.permissoes?.includes(p.key)?"rgba(59,140,255,.14)":"#121A24", color:u.permissoes?.includes(p.key)?"#3B8CFF":"#4A5878", border:`1px solid ${u.permissoes?.includes(p.key)?"rgba(77,179,255,.35)":"rgba(255,255,255,.10)"}`, fontWeight:u.permissoes?.includes(p.key)?600:400 }}>
                   {p.label}
                 </span>
               ))}
             </div>
-            <div style={{ fontSize:11, color:"#cbd5e1", marginTop:10 }}>Criado em {u.criadoEm||"—"}</div>
+            <div style={{ fontSize:11, color:"#4A5878", marginTop:10 }}>Criado em {u.criadoEm||"—"}</div>
           </div>
         ))}
       </div>
@@ -1720,11 +1720,11 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
 
   function ItemRow({ item, onRemove }) {
     return (
-      <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 0", borderBottom:"1px solid #f8fafc" }}>
-        <div style={{ flex:1, fontSize:13, color:"#0f172a", fontWeight:500 }}>{item.nome}</div>
-        <div style={{ fontSize:13, fontWeight:700, color:"#334155" }}>{item.tipo==="%" ? item.valor+"%" : "R$ "+parseFloat(item.valor).toFixed(2).replace(".",",")}</div>
-        <div style={{ fontSize:12, color:"#94a3b8" }}>= R$ {calcValor(item, faturamentoMes).toFixed(2).replace(".",",")}</div>
-        <button onClick={function(){ onRemove(item.id); }} style={{ background:"#fef2f2", border:"none", color:"#dc2626", width:24, height:24, borderRadius:6, cursor:"pointer", fontSize:11, flexShrink:0 }}>✕</button>
+      <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 0", borderBottom:"1px solid rgba(255,255,255,.08)" }}>
+        <div style={{ flex:1, fontSize:13, color:"#FFFFFF", fontWeight:500 }}>{item.nome}</div>
+        <div style={{ fontSize:13, fontWeight:700, color:"#A9B4C5" }}>{item.tipo==="%" ? item.valor+"%" : "R$ "+parseFloat(item.valor).toFixed(2).replace(".",",")}</div>
+        <div style={{ fontSize:12, color:"#67759B" }}>= R$ {calcValor(item, faturamentoMes).toFixed(2).replace(".",",")}</div>
+        <button onClick={function(){ onRemove(item.id); }} style={{ background:"rgba(255,82,82,.12)", border:"none", color:"#FF5252", width:24, height:24, borderRadius:6, cursor:"pointer", fontSize:11, flexShrink:0 }}>✕</button>
       </div>
     );
   }
@@ -1733,82 +1733,82 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
 
       {/* ── IMPOSTOS — Lucro Real ── */}
-      <div style={{ background:"#fff", border:"1px solid #fecaca", borderRadius:14, overflow:"hidden" }}>
-        <div style={{ background:"#fef2f2", padding:"10px 14px", borderBottom:"1px solid #fecaca", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+      <div style={{ background:"#182230", border:"1px solid rgba(255,82,82,.35)", borderRadius:14, overflow:"hidden" }}>
+        <div style={{ background:"rgba(255,82,82,.12)", padding:"10px 14px", borderBottom:"1px solid rgba(255,82,82,.35)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
-            <div style={{ fontWeight:700, fontSize:14, color:"#dc2626" }}>📋 Impostos — Regime Lucro Real</div>
-            <div style={{ fontSize:11, color:"#94a3b8", marginTop:1 }}>ICMS por estado, IRPJ e CSLL</div>
+            <div style={{ fontWeight:700, fontSize:14, color:"#FF5252" }}>📋 Impostos — Regime Lucro Real</div>
+            <div style={{ fontSize:11, color:"#67759B", marginTop:1 }}>ICMS por estado, IRPJ e CSLL</div>
           </div>
           <div style={{ textAlign:"right" }}>
-            <div style={{ fontSize:11, color:"#94a3b8" }}>IRPJ+CSLL s/ faturamento</div>
-            <div style={{ fontSize:17, fontWeight:800, color:"#dc2626" }}>R$ {totalImpFixo.toFixed(2).replace(".",",")}</div>
+            <div style={{ fontSize:11, color:"#67759B" }}>IRPJ+CSLL s/ faturamento</div>
+            <div style={{ fontSize:17, fontWeight:800, color:"#FF5252" }}>R$ {totalImpFixo.toFixed(2).replace(".",",")}</div>
           </div>
         </div>
 
         <div style={{ padding:"14px 18px" }}>
           {/* IRPJ e CSLL */}
-          <div style={{ fontSize:11, color:"#94a3b8", fontWeight:700, textTransform:"uppercase", marginBottom:8 }}>IRPJ e CSLL (sobre o Lucro Real apurado)</div>
+          <div style={{ fontSize:11, color:"#67759B", fontWeight:700, textTransform:"uppercase", marginBottom:8 }}>IRPJ e CSLL (sobre o Lucro Real apurado)</div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:14 }}>
             <div>
-              <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4 }}>IRPJ base (%)</div>
+              <div style={{ fontSize:10, color:"#67759B", marginBottom:4 }}>IRPJ base (%)</div>
               <div style={{ display:"flex", alignItems:"center", gap:4 }}>
                 <input type="number" step="0.01" value={irpjPct}
                   onChange={function(e){ salvarIrpjCsll(e.target.value, irpjAdicionalPct, csllPct); }}
-                  style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"7px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
-                <span style={{ fontSize:12, color:"#94a3b8" }}>%</span>
+                  style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"7px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
+                <span style={{ fontSize:12, color:"#67759B" }}>%</span>
               </div>
             </div>
             <div>
-              <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4 }}>IRPJ adicional (%)</div>
+              <div style={{ fontSize:10, color:"#67759B", marginBottom:4 }}>IRPJ adicional (%)</div>
               <div style={{ display:"flex", alignItems:"center", gap:4 }}>
                 <input type="number" step="0.01" value={irpjAdicionalPct}
                   onChange={function(e){ salvarIrpjCsll(irpjPct, e.target.value, csllPct); }}
-                  style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"7px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
-                <span style={{ fontSize:12, color:"#94a3b8" }}>%</span>
+                  style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"7px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
+                <span style={{ fontSize:12, color:"#67759B" }}>%</span>
               </div>
-              <div style={{ fontSize:9, color:"#cbd5e1", marginTop:2 }}>Sobre lucro &gt; R$ 20mil/mês</div>
+              <div style={{ fontSize:9, color:"#4A5878", marginTop:2 }}>Sobre lucro &gt; R$ 20mil/mês</div>
             </div>
             <div>
-              <div style={{ fontSize:10, color:"#94a3b8", marginBottom:4 }}>CSLL (%)</div>
+              <div style={{ fontSize:10, color:"#67759B", marginBottom:4 }}>CSLL (%)</div>
               <div style={{ display:"flex", alignItems:"center", gap:4 }}>
                 <input type="number" step="0.01" value={csllPct}
                   onChange={function(e){ salvarIrpjCsll(irpjPct, irpjAdicionalPct, e.target.value); }}
-                  style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"7px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
-                <span style={{ fontSize:12, color:"#94a3b8" }}>%</span>
+                  style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"7px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
+                <span style={{ fontSize:12, color:"#67759B" }}>%</span>
               </div>
             </div>
           </div>
 
           {/* ICMS por estado */}
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-            <div style={{ fontSize:11, color:"#94a3b8", fontWeight:700, textTransform:"uppercase" }}>
+            <div style={{ fontSize:11, color:"#67759B", fontWeight:700, textTransform:"uppercase" }}>
               ICMS por Estado (alíquota interna de venda)
             </div>
             <div style={{ display:"flex", gap:6 }}>
               <button onClick={resetIcmsPadrao}
-                style={{ fontSize:10, color:"#0891b2", background:"#ecfeff", border:"1px solid #a5f3fc", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontWeight:600 }}>
+                style={{ fontSize:10, color:"#00F0FF", background:"rgba(0,240,255,.10)", border:"1px solid rgba(0,240,255,.35)", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontWeight:600 }}>
                 ↺ Usar alíquotas padrão
               </button>
               <button onClick={function(){ setShowIcmsTable(function(v){return !v;}); }}
-                style={{ fontSize:10, color:"#64748b", background:"#f8fafc", border:"1px solid #e2e8f0", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontWeight:600 }}>
+                style={{ fontSize:10, color:"#A9B4C5", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontWeight:600 }}>
                 {showIcmsTable ? "▲ Ocultar tabela" : "▼ Ver/editar todos os 27 estados"}
               </button>
             </div>
           </div>
 
           {!showIcmsTable ? (
-            <div style={{ display:"flex", alignItems:"center", gap:14, background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 14px" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:14, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", borderRadius:10, padding:"10px 14px" }}>
               <div>
-                <div style={{ fontSize:10, color:"#94a3b8" }}>Estados configurados</div>
-                <div style={{ fontSize:16, fontWeight:800, color:"#0f172a" }}>{ufsConfigurados.length}/27</div>
+                <div style={{ fontSize:10, color:"#67759B" }}>Estados configurados</div>
+                <div style={{ fontSize:16, fontWeight:800, color:"#FFFFFF" }}>{ufsConfigurados.length}/27</div>
               </div>
-              <div style={{ width:1, height:28, background:"#e2e8f0" }} />
+              <div style={{ width:1, height:28, background:"#223048" }} />
               <div>
-                <div style={{ fontSize:10, color:"#94a3b8" }}>Alíquota média configurada</div>
-                <div style={{ fontSize:16, fontWeight:800, color:"#dc2626" }}>{icmsMedioRef.toFixed(2)}%</div>
+                <div style={{ fontSize:10, color:"#67759B" }}>Alíquota média configurada</div>
+                <div style={{ fontSize:16, fontWeight:800, color:"#FF5252" }}>{icmsMedioRef.toFixed(2)}%</div>
               </div>
               {ufsConfigurados.length===0 && (
-                <div style={{ fontSize:11, color:"#d97706", marginLeft:"auto" }}>⚠️ Clique em "Usar alíquotas padrão" para começar</div>
+                <div style={{ fontSize:11, color:"#FFC107", marginLeft:"auto" }}>⚠️ Clique em "Usar alíquotas padrão" para começar</div>
               )}
             </div>
           ) : (
@@ -1817,13 +1817,13 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
                 var uf = e[0], nome = e[1], padrao = e[2];
                 var valorAtual = icmsConfig[uf] !== undefined ? icmsConfig[uf] : "";
                 return (
-                  <div key={uf} style={{ display:"flex", alignItems:"center", gap:6, background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:8, padding:"6px 10px" }}>
-                    <span style={{ fontSize:11, fontWeight:700, color:"#0f172a", width:26, flexShrink:0 }}>{uf}</span>
-                    <span style={{ fontSize:10, color:"#94a3b8", flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{nome}</span>
+                  <div key={uf} style={{ display:"flex", alignItems:"center", gap:6, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, padding:"6px 10px" }}>
+                    <span style={{ fontSize:11, fontWeight:700, color:"#FFFFFF", width:26, flexShrink:0 }}>{uf}</span>
+                    <span style={{ fontSize:10, color:"#67759B", flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{nome}</span>
                     <input type="number" step="0.1" placeholder={String(padrao)} value={valorAtual}
                       onChange={function(ev){ setIcmsEstado(uf, ev.target.value); }}
-                      style={{ width:50, background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"3px 5px", borderRadius:6, fontSize:11, outline:"none", textAlign:"center" }} />
-                    <span style={{ fontSize:10, color:"#94a3b8" }}>%</span>
+                      style={{ width:50, background:"#182230", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"3px 5px", borderRadius:6, fontSize:11, outline:"none", textAlign:"center" }} />
+                    <span style={{ fontSize:10, color:"#67759B" }}>%</span>
                   </div>
                 );
               })}
@@ -1833,23 +1833,23 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
       </div>
 
       {/* ── CUSTOS FIXOS DETALHADOS ── */}
-      <div style={{ background:"#fff", border:"1px solid #fde68a", borderRadius:14, overflow:"hidden" }}>
-        <div style={{ background:"#fffbeb", padding:"10px 14px", borderBottom:"1px solid #fde68a", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+      <div style={{ background:"#182230", border:"1px solid rgba(255,193,7,.35)", borderRadius:14, overflow:"hidden" }}>
+        <div style={{ background:"rgba(255,193,7,.12)", padding:"10px 14px", borderBottom:"1px solid rgba(255,193,7,.35)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
-            <div style={{ fontWeight:700, fontSize:14, color:"#d97706" }}>🏢 Custos Fixos Detalhados</div>
-            <div style={{ fontSize:11, color:"#94a3b8", marginTop:1 }}>Aluguel, salários, assinaturas, sistemas...</div>
+            <div style={{ fontWeight:700, fontSize:14, color:"#FFC107" }}>🏢 Custos Fixos Detalhados</div>
+            <div style={{ fontSize:11, color:"#67759B", marginTop:1 }}>Aluguel, salários, assinaturas, sistemas...</div>
           </div>
           <div style={{ textAlign:"right" }}>
-            <div style={{ fontSize:11, color:"#94a3b8" }}>Total mensal</div>
-            <div style={{ fontSize:17, fontWeight:800, color:"#d97706" }}>R$ {totalFix.toFixed(2).replace(".",",")}</div>
+            <div style={{ fontSize:11, color:"#67759B" }}>Total mensal</div>
+            <div style={{ fontSize:17, fontWeight:800, color:"#FFC107" }}>R$ {totalFix.toFixed(2).replace(".",",")}</div>
           </div>
         </div>
         <div style={{ padding:"12px 18px" }}>
           {custosFixos.length === 0
-            ? <div style={{ fontSize:12, color:"#94a3b8", padding:"8px 0", textAlign:"center" }}>Nenhum custo fixo cadastrado — adicione abaixo com o valor real (R$) de cada item</div>
+            ? <div style={{ fontSize:12, color:"#67759B", padding:"8px 0", textAlign:"center" }}>Nenhum custo fixo cadastrado — adicione abaixo com o valor real (R$) de cada item</div>
             : (
               <div>
-                <div style={{ display:"flex", gap:8, padding:"4px 0 8px", borderBottom:"1px solid #f1f5f9", fontSize:10, color:"#94a3b8", fontWeight:700, textTransform:"uppercase" }}>
+                <div style={{ display:"flex", gap:8, padding:"4px 0 8px", borderBottom:"1px solid rgba(255,255,255,.10)", fontSize:10, color:"#67759B", fontWeight:700, textTransform:"uppercase" }}>
                   <div style={{ flex:1 }}>Custo</div>
                   <div>Valor</div>
                   <div>= R$ mensal</div>
@@ -1862,19 +1862,19 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
           <div style={{ display:"flex", gap:6, marginTop:12, alignItems:"center" }}>
             <input value={novoCusto.nome} onChange={function(e){setNovoCusto(function(s){return Object.assign({},s,{nome:e.target.value});});}}
               placeholder="Ex: Aluguel, Funcionário, Sistema..."
-              style={{ flex:2, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"7px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
-            <div style={{ display:"flex", border:"1px solid #e2e8f0", borderRadius:8, overflow:"hidden", flexShrink:0 }}>
+              style={{ flex:2, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"7px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
+            <div style={{ display:"flex", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, overflow:"hidden", flexShrink:0 }}>
               {["R$","%"].map(function(t){
                 return <button key={t} onClick={function(){setNovoCusto(function(s){return Object.assign({},s,{tipo:t});});}}
                   style={{ padding:"7px 10px", border:"none", cursor:"pointer", fontSize:12, fontWeight:700,
-                    background: novoCusto.tipo===t?"#0f172a":"#fff", color: novoCusto.tipo===t?"#fff":"#64748b" }}>{t}</button>;
+                    background: novoCusto.tipo===t?"#1976FF":"#182230", color: novoCusto.tipo===t?"#fff":"#A9B4C5" }}>{t}</button>;
               })}
             </div>
             <input type="number" step="0.01" value={novoCusto.valor} onChange={function(e){setNovoCusto(function(s){return Object.assign({},s,{valor:e.target.value});});}}
               placeholder={novoCusto.tipo==="R$" ? "0,00" : "0"}
-              style={{ width:90, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"7px 10px", borderRadius:8, fontSize:12, outline:"none", flexShrink:0 }} />
+              style={{ width:90, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"7px 10px", borderRadius:8, fontSize:12, outline:"none", flexShrink:0 }} />
             <button onClick={addCusto} disabled={!novoCusto.nome||!novoCusto.valor}
-              style={{ background: (novoCusto.nome&&novoCusto.valor)?"#0f172a":"#f1f5f9", border:"none", color:(novoCusto.nome&&novoCusto.valor)?"#fff":"#94a3b8",
+              style={{ background: (novoCusto.nome&&novoCusto.valor)?"#1976FF":"#223048", border:"none", color:(novoCusto.nome&&novoCusto.valor)?"#fff":"#67759B",
                 fontWeight:700, padding:"7px 16px", borderRadius:8, cursor:(novoCusto.nome&&novoCusto.valor)?"pointer":"not-allowed", fontSize:12, flexShrink:0 }}>+ Adicionar</button>
           </div>
         </div>
@@ -1891,7 +1891,7 @@ function LayoutFiltros({ filtros, busca, acoes, children }) {
     <div style={{ display:"flex", gap:0, minHeight:"calc(100vh - 180px)" }}>
       {/* Painel lateral — mais estreito e delicado */}
       {filtros && (
-        <div style={{ width:168, flexShrink:0, background:"#fafafa", borderRight:"1px solid #f0f0f0", padding:"8px 8px", display:"flex", flexDirection:"column", gap:10 }}>
+        <div style={{ width:168, flexShrink:0, background:"#121A24", borderRight:"1px solid rgba(255,255,255,.08)", padding:"8px 8px", display:"flex", flexDirection:"column", gap:10 }}>
           {filtros}
         </div>
       )}
@@ -1927,9 +1927,9 @@ function FiltroGrupo({ titulo, children }) {
         onClick={function(){ setOpen(function(v){return !v;}); }}
         style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center",
           padding:"5px 9px", borderRadius:7,
-          border:"1px solid "+(activeLabel?"#cbd5e1":"#e9ecef"),
-          background: activeLabel ? "#f1f5f9" : "#fff",
-          color: activeLabel ? "#0f172a" : "#94a3b8",
+          border:"1px solid "+(activeLabel?"#4A5878":"rgba(255,255,255,.12)"),
+          background: activeLabel ? "#223048" : "#182230",
+          color: activeLabel ? "#FFFFFF" : "#67759B",
           fontWeight: activeLabel ? 600 : 400, fontSize:11, cursor:"pointer", textAlign:"left",
           transition:"border-color .15s" }}>
         <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>
@@ -1939,7 +1939,7 @@ function FiltroGrupo({ titulo, children }) {
       </button>
       {open && (
         <div style={{ position:"absolute", top:"100%", left:0, right:0, marginTop:2,
-          background:"#fff", border:"1px solid #e9ecef", borderRadius:7,
+          background:"#182230", border:"1px solid rgba(255,255,255,.12)", borderRadius:7,
           boxShadow:"0 6px 20px rgba(0,0,0,.07)", overflow:"hidden", zIndex:100 }}>
           {childArr.map(function(child, i) {
             if (!child) return null;
@@ -1962,16 +1962,16 @@ function FiltroBotao({ label, active, cor, bg, onClick, count }) {
   return (
     <button onClick={onClick}
       style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
-        padding:"6px 10px", border:"none", borderBottom:"1px solid #f5f5f5",
-        background: active ? (bg||"#f1f5f9") : "#fff",
-        color: active ? (cor||"#0f172a") : "#64748b",
+        padding:"6px 10px", border:"none", borderBottom:"1px solid rgba(255,255,255,.08)",
+        background: active ? (bg||"#223048") : "#182230",
+        color: active ? (cor||"#FFFFFF") : "#A9B4C5",
         fontWeight: active ? 600 : 400, fontSize:11, cursor:"pointer",
         textAlign:"left", width:"100%", transition:"background .1s" }}>
       <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{label}</span>
       {count !== undefined && (
         <span style={{ fontSize:9, fontWeight:600, flexShrink:0, marginLeft:4,
-          color: active?(cor||"#0f172a"):"#94a3b8",
-          background: active?"transparent":"#f1f5f9",
+          color: active?(cor||"#FFFFFF"):"#67759B",
+          background: active?"transparent":"#223048",
           padding:"1px 5px", borderRadius:8 }}>
           {count}
         </span>
@@ -2026,10 +2026,10 @@ function detectTipoEnvio(o, shipmentStatuses) {
 function BadgeTipoEnvio({ tipo }) {
   if (!tipo) return null;
   var cfg = {
-    "FULL": { bg:"#dbeafe", color:"#1d4ed8", label:"FULL" },
-    "Flex": { bg:"#ede9fe", color:"#7c3aed", label:"Flex" },
-    "ME2":  { bg:"#cffafe", color:"#0e7490", label:"ME2" },
-    "ME1":  { bg:"#dcfce7", color:"#166534", label:"ME1" },
+    "FULL": { bg:"rgba(77,179,255,.22)", color:"#3B8CFF", label:"FULL" },
+    "Flex": { bg:"rgba(139,92,246,.18)", color:"#7c3aed", label:"Flex" },
+    "ME2":  { bg:"rgba(0,240,255,.25)", color:"#00F0FF", label:"ME2" },
+    "ME1":  { bg:"rgba(0,200,83,.18)", color:"#00C853", label:"ME1" },
   }[tipo];
   if (!cfg) return null;
   return (
@@ -2051,55 +2051,55 @@ function NovoProdutoPrecForm({ onSave, onClose }) {
   var frete=parseFloat(f.frete||0);
   var lucro=bruto-custo-frete-taxa;
   var margem=bruto>0?(lucro/bruto)*100:0;
-  var mCor=margem>=20?"#15803d":margem>=0?"#d97706":"#dc2626";
+  var mCor=margem>=20?"#00C853":margem>=0?"#FFC107":"#FF5252";
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
         <div>
-          <div style={{ fontSize:10, color:"#94a3b8", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Nome do Produto *</div>
+          <div style={{ fontSize:10, color:"#67759B", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Nome do Produto *</div>
           <input value={f.nome} onChange={function(e){set("nome",e.target.value);}} placeholder="Ex: Lanterna Traseira Uno"
-            style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
+            style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
         </div>
         <div>
-          <div style={{ fontSize:10, color:"#94a3b8", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>SKU *</div>
+          <div style={{ fontSize:10, color:"#67759B", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>SKU *</div>
           <input value={f.sku} onChange={function(e){set("sku",e.target.value);}} placeholder="Ex: 1234"
-            style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none", fontFamily:"monospace" }} />
+            style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none", fontFamily:"monospace" }} />
         </div>
         <div>
-          <div style={{ fontSize:10, color:"#94a3b8", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Custo (R$)</div>
+          <div style={{ fontSize:10, color:"#67759B", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Custo (R$)</div>
           <input type="number" step="0.01" value={f.custo} onChange={function(e){set("custo",e.target.value);}} placeholder="0,00"
-            style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
+            style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
         </div>
         <div>
-          <div style={{ fontSize:10, color:"#94a3b8", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Preço de Venda (R$)</div>
+          <div style={{ fontSize:10, color:"#67759B", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Preço de Venda (R$)</div>
           <input type="number" step="0.01" value={f.precoVenda} onChange={function(e){set("precoVenda",e.target.value);}} placeholder="0,00"
-            style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
+            style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
         </div>
         <div>
-          <div style={{ fontSize:10, color:"#94a3b8", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Frete (R$)</div>
+          <div style={{ fontSize:10, color:"#67759B", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Frete (R$)</div>
           <input type="number" step="0.01" value={f.frete} onChange={function(e){set("frete",e.target.value);}} placeholder="0,00"
-            style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
+            style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
         </div>
         <div>
-          <div style={{ fontSize:10, color:"#94a3b8", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Taxa ML (%)</div>
+          <div style={{ fontSize:10, color:"#67759B", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Taxa ML (%)</div>
           <select value={f.taxaMl} onChange={function(e){set("taxaMl",e.target.value);}}
-            style={{ width:"100%", background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", padding:"8px 10px", borderRadius:8, fontSize:12 }}>
+            style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", padding:"8px 10px", borderRadius:8, fontSize:12 }}>
             <option value="12">12% — Clássico</option>
             <option value="17">17% — Premium</option>
           </select>
         </div>
       </div>
       {bruto > 0 && custo > 0 && (
-        <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:8, padding:"10px 14px", display:"flex", gap:16 }}>
-          <div><div style={{ fontSize:10, color:"#94a3b8" }}>Lucro</div><div style={{ fontWeight:700, color:lucro>=0?"#0891b2":"#dc2626" }}>R$ {lucro.toFixed(2).replace(".",",")}</div></div>
-          <div><div style={{ fontSize:10, color:"#94a3b8" }}>Margem</div><div style={{ fontWeight:700, color:mCor }}>{margem.toFixed(1)}%</div></div>
-          <div><div style={{ fontSize:10, color:"#94a3b8" }}>Taxa ML</div><div style={{ fontWeight:700, color:"#dc2626" }}>R$ {taxa.toFixed(2).replace(".",",")}</div></div>
+        <div style={{ background:"#121A24", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, padding:"10px 14px", display:"flex", gap:16 }}>
+          <div><div style={{ fontSize:10, color:"#67759B" }}>Lucro</div><div style={{ fontWeight:700, color:lucro>=0?"#00F0FF":"#FF5252" }}>R$ {lucro.toFixed(2).replace(".",",")}</div></div>
+          <div><div style={{ fontSize:10, color:"#67759B" }}>Margem</div><div style={{ fontWeight:700, color:mCor }}>{margem.toFixed(1)}%</div></div>
+          <div><div style={{ fontSize:10, color:"#67759B" }}>Taxa ML</div><div style={{ fontWeight:700, color:"#FF5252" }}>R$ {taxa.toFixed(2).replace(".",",")}</div></div>
         </div>
       )}
       <div style={{ display:"flex", gap:8, marginTop:4 }}>
-        <button onClick={onClose} style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"9px", borderRadius:9, cursor:"pointer" }}>Cancelar</button>
+        <button onClick={onClose} style={{ flex:1, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", fontWeight:600, padding:"9px", borderRadius:9, cursor:"pointer" }}>Cancelar</button>
         <button onClick={function(){ if(f.nome&&f.sku) onSave(f); }} disabled={!f.nome||!f.sku}
-          style={{ flex:2, background:f.nome&&f.sku?"#7c3aed":"#f1f5f9", border:"none", color:f.nome&&f.sku?"#fff":"#94a3b8", fontWeight:700, padding:"9px", borderRadius:9, cursor:f.nome&&f.sku?"pointer":"not-allowed" }}>
+          style={{ flex:2, background:f.nome&&f.sku?"#7c3aed":"#223048", border:"none", color:f.nome&&f.sku?"#fff":"#67759B", fontWeight:700, padding:"9px", borderRadius:9, cursor:f.nome&&f.sku?"pointer":"not-allowed" }}>
           Salvar e Acompanhar
         </button>
       </div>
@@ -2214,24 +2214,24 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
 
   return (
     <div style={{ padding:"0 20px" }}>
-      <div style={{ padding:"12px 0 8px", borderBottom:"1px solid #e2e8f0", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+      <div style={{ padding:"12px 0 8px", borderBottom:"1px solid rgba(255,255,255,.12)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         <div>
-          <div style={{ fontWeight:800, fontSize:20, color:"#0f172a", marginBottom:4 }}>💲 Precificação</div>
-          <div style={{ fontSize:13, color:"#64748b" }}>Calcule o preço ideal para cada anúncio com base na margem desejada</div>
+          <div style={{ fontWeight:800, fontSize:20, color:"#FFFFFF", marginBottom:4 }}>💲 Precificação</div>
+          <div style={{ fontSize:13, color:"#A9B4C5" }}>Calcule o preço ideal para cada anúncio com base na margem desejada</div>
         </div>
-        <div style={{ display:"flex", alignItems:"center", gap:7, background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 16px" }}>
-          <span style={{ fontSize:13, color:"#64748b", fontWeight:600 }}>Margem alvo:</span>
+        <div style={{ display:"flex", alignItems:"center", gap:7, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", borderRadius:10, padding:"10px 16px" }}>
+          <span style={{ fontSize:13, color:"#A9B4C5", fontWeight:600 }}>Margem alvo:</span>
           <input type="number" min="1" max="99" value={margemAlvo} onChange={function(e){setMargemAlvo(parseFloat(e.target.value)||20);}}
-            style={{ width:60, background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"6px 10px", borderRadius:8, fontSize:15, fontWeight:700, outline:"none", textAlign:"center" }} />
-          <span style={{ fontSize:15, fontWeight:700, color:"#0f172a" }}>%</span>
+            style={{ width:60, background:"#182230", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"6px 10px", borderRadius:8, fontSize:15, fontWeight:700, outline:"none", textAlign:"center" }} />
+          <span style={{ fontSize:15, fontWeight:700, color:"#FFFFFF" }}>%</span>
         </div>
       </div>
 
       {/* Banner de avisos — preços pendentes de atualização no ML */}
       {Object.keys(pendentesAtualizacao).length > 0 && (
-        <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:10, padding:"12px 16px", margin:"12px 0" }}>
+        <div style={{ background:"rgba(255,193,7,.12)", border:"1px solid rgba(255,193,7,.35)", borderRadius:10, padding:"12px 16px", margin:"12px 0" }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-            <div style={{ fontSize:13, fontWeight:700, color:"#92400e" }}>
+            <div style={{ fontSize:13, fontWeight:700, color:"#FFC107" }}>
               ⚠️ {Object.keys(pendentesAtualizacao).length} anúncio(s) com preço pendente de atualização no Mercado Livre
             </div>
           </div>
@@ -2240,20 +2240,20 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
               var listingRef = (enriched||[]).find(function(l){ return l.id===id; });
               var skuRef = listingRef?.sku || p.sku || "—";
               return (
-                <div key={id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"#fff", border:"1px solid #fde68a", borderRadius:8, padding:"7px 12px" }}>
-                  <div style={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontSize:12, color:"#0f172a" }}>
-                    <span style={{ fontWeight:700, color:"#92400e", marginRight:6 }}>SKU {skuRef}</span>
+                <div key={id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"#182230", border:"1px solid rgba(255,193,7,.35)", borderRadius:8, padding:"7px 12px" }}>
+                  <div style={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontSize:12, color:"#FFFFFF" }}>
+                    <span style={{ fontWeight:700, color:"#FFC107", marginRight:6 }}>SKU {skuRef}</span>
                     {p.titulo}
                   </div>
                   <div style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
-                    <span style={{ fontSize:11, color:"#94a3b8", textDecoration:"line-through" }}>R$ {p.precoAntigo.toFixed(2).replace(".",",")}</span>
+                    <span style={{ fontSize:11, color:"#67759B", textDecoration:"line-through" }}>R$ {p.precoAntigo.toFixed(2).replace(".",",")}</span>
                     <span style={{ fontSize:12, fontWeight:700, color:"#7c3aed" }}>→ R$ {p.precoNovo.toFixed(2).replace(".",",")}</span>
                     <a href={"https://www.mercadolivre.com.br/seller-admin/listing/edit?itemId="+id} target="_blank" rel="noreferrer"
-                      style={{ fontSize:11, color:"#0891b2", textDecoration:"none", fontWeight:600, whiteSpace:"nowrap" }}>
+                      style={{ fontSize:11, color:"#00F0FF", textDecoration:"none", fontWeight:600, whiteSpace:"nowrap" }}>
                       Editar no ML ↗
                     </a>
                     <button onClick={function(){ confirmarAtualizado(id); }}
-                      style={{ background:"#15803d", border:"none", color:"#fff", fontWeight:700, padding:"4px 10px", borderRadius:6, cursor:"pointer", fontSize:11, whiteSpace:"nowrap" }}>
+                      style={{ background:"#00C853", border:"none", color:"#fff", fontWeight:700, padding:"4px 10px", borderRadius:6, cursor:"pointer", fontSize:11, whiteSpace:"nowrap" }}>
                       ✓ Já atualizei
                     </button>
                   </div>
@@ -2271,14 +2271,14 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
           + Precificar Novo Produto
         </button>
         <div style={{ position:"relative", flex:1 }}>
-          <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:14 }}>🔍</span>
+          <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:"#67759B", fontSize:14 }}>🔍</span>
           <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar por título, MLB ou SKU..."
-            style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"10px 14px 10px 36px", borderRadius:10, fontSize:13, outline:"none" }} />
+            style={{ width:"100%", background:"#182230", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"10px 14px 10px 36px", borderRadius:10, fontSize:13, outline:"none" }} />
           {busca && (
-            <button onClick={function(){setBusca("");}} style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:"#94a3b8", cursor:"pointer", fontSize:18, lineHeight:1 }}>×</button>
+            <button onClick={function(){setBusca("");}} style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:"#67759B", cursor:"pointer", fontSize:18, lineHeight:1 }}>×</button>
           )}
         </div>
-        <div style={{ display:"flex", alignItems:"center", gap:8, background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"0 14px", fontSize:12, color:"#64748b", whiteSpace:"nowrap" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", borderRadius:10, padding:"0 14px", fontSize:12, color:"#A9B4C5", whiteSpace:"nowrap" }}>
           {listsFiltrados.length} anúncio(s)
         </div>
       </div>
@@ -2286,7 +2286,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
       {/* Modal novo produto para precificação */}
       {showNovoProdutoPrec && (
         <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.5)", zIndex:600, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
-          <div style={{ background:"#fff", borderRadius:14, width:480, padding:20 }}>
+          <div style={{ background:"#182230", borderRadius:14, width:480, padding:20 }}>
             <div style={{ fontWeight:700, fontSize:15, marginBottom:14 }}>+ Precificar Novo Produto</div>
             <NovoProdutoPrecForm
               onSave={function(p){
@@ -2310,22 +2310,22 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
             var frete = parseFloat(p.frete||0);
             var lucro = bruto - custo - frete - taxa;
             var margem = bruto>0?(lucro/bruto)*100:0;
-            var mCor = margem>=margemAlvo?"#15803d":margem>=0?"#d97706":"#dc2626";
+            var mCor = margem>=margemAlvo?"#00C853":margem>=0?"#FFC107":"#FF5252";
             return (
-              <div key={p.id} style={{ display:"flex", gap:10, alignItems:"center", background:"#faf5ff", border:"1px solid #ddd6fe", borderRadius:10, padding:"10px 14px", marginBottom:6 }}>
+              <div key={p.id} style={{ display:"flex", gap:10, alignItems:"center", background:"rgba(139,92,246,.12)", border:"1px solid rgba(139,92,246,.35)", borderRadius:10, padding:"10px 14px", marginBottom:6 }}>
                 <div style={{ flex:1 }}>
-                  <div style={{ fontSize:13, fontWeight:700, color:"#0f172a" }}>{p.nome}</div>
+                  <div style={{ fontSize:13, fontWeight:700, color:"#FFFFFF" }}>{p.nome}</div>
                   <div style={{ fontSize:11, color:"#7c3aed" }}>SKU: {p.sku} · Aguardando anúncio no ML</div>
                 </div>
-                <div style={{ fontSize:12, color:"#64748b" }}>Custo: R$ {custo.toFixed(2).replace(".",",")}</div>
-                <div style={{ fontSize:12, fontWeight:700, color:"#0f172a" }}>Venda: R$ {bruto.toFixed(2).replace(".",",")}</div>
+                <div style={{ fontSize:12, color:"#A9B4C5" }}>Custo: R$ {custo.toFixed(2).replace(".",",")}</div>
+                <div style={{ fontSize:12, fontWeight:700, color:"#FFFFFF" }}>Venda: R$ {bruto.toFixed(2).replace(".",",")}</div>
                 <span style={{ fontSize:12, fontWeight:700, color:mCor, background:mCor+"18", padding:"2px 8px", borderRadius:6 }}>
                   {margem.toFixed(1)}%
                 </span>
                 <button onClick={function(){
                   if(!window.confirm("Remover este produto?")) return;
                   saveProdutosExtras(produtosExtras.filter(function(x){return x.id!==p.id;}));
-                }} style={{ background:"#fef2f2", border:"none", color:"#dc2626", width:24, height:24, borderRadius:6, cursor:"pointer", fontSize:11 }}>✕</button>
+                }} style={{ background:"rgba(255,82,82,.12)", border:"none", color:"#FF5252", width:24, height:24, borderRadius:6, cursor:"pointer", fontSize:11 }}>✕</button>
               </div>
             );
           })}
@@ -2333,10 +2333,10 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
       )}
 
       {/* Tabela */}
-      <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"auto" }}>
+      <div style={{ background:"#182230", border:"1px solid rgba(255,255,255,.12)", borderRadius:12, overflow:"auto" }}>
         <table style={{ borderCollapse:"collapse", width:"100%", minWidth:900 }}>
           <thead>
-            <tr style={{ background:"#f8fafc" }}>
+            <tr style={{ background:"#121A24" }}>
               {[
                 "SKU","MLB","Tipo","Anúncio",
                 "Custo","Preço Atual","Frete Real","Frete Config.",
@@ -2345,7 +2345,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                 "Lucro Simulado","Margem Simulada","Ação"
               ].map(function(h){
                 var isSimul = ["💡 Vender por → Anunciar por","Lucro Simulado","Margem Simulada","Taxa ML (s/ desconto)"].includes(h);
-                return <th key={h} style={{ fontSize:10, color: isSimul?"#7c3aed":"#64748b", fontWeight:600, textTransform:"uppercase", padding:"8px 10px", borderBottom:"1px solid #e2e8f0", textAlign:"left", whiteSpace:"nowrap", background: isSimul?"#faf5ff":"transparent" }}>{h}</th>;
+                return <th key={h} style={{ fontSize:10, color: isSimul?"#7c3aed":"#A9B4C5", fontWeight:600, textTransform:"uppercase", padding:"8px 10px", borderBottom:"1px solid rgba(255,255,255,.12)", textAlign:"left", whiteSpace:"nowrap", background: isSimul?"rgba(139,92,246,.12)":"transparent" }}>{h}</th>;
               })}
             </tr>
           </thead>
@@ -2376,39 +2376,39 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
               // Lucro e margem com desconto e frete
               var lucroFinal = precoComDesc - custo - frete - taxaSobreDesc;
               var margemFinal = precoComDesc > 0 ? (lucroFinal/precoComDesc)*100 : 0;
-              var mCor = margemFinal >= margemAlvo ? "#15803d" : margemFinal >= margemAlvo*0.6 ? "#d97706" : "#dc2626";
+              var mCor = margemFinal >= margemAlvo ? "#00C853" : margemFinal >= margemAlvo*0.6 ? "#FFC107" : "#FF5252";
               var isEditing = selectedId === l.id;
               var t = l.listing_type_id||"";
               var isPremium = t==="gold_premium"||t==="gold_pro";
 
               return (
-                <tr key={l.id} style={{ borderBottom:"1px solid #f1f5f9", background:i%2===0?"#fff":"#fafafa" }}>
+                <tr key={l.id} style={{ borderBottom:"1px solid rgba(255,255,255,.10)", background:i%2===0?"#182230":"#121A24" }}>
 
                   {/* SKU */}
                   <td style={{ padding:"6px 8px" }}>
-                    <span style={{ fontSize:11, fontFamily:"monospace", fontWeight:700, color:"#334155", background:"#f1f5f9", padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
+                    <span style={{ fontSize:11, fontFamily:"monospace", fontWeight:700, color:"#A9B4C5", background:"#223048", padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
                       {l.seller_sku||l.sku||"—"}
                     </span>
                   </td>
 
                   {/* MLB */}
-                  <td style={{ padding:"6px 8px", fontSize:11, color:"#0891b2", fontFamily:"monospace" }}>
+                  <td style={{ padding:"6px 8px", fontSize:11, color:"#00F0FF", fontFamily:"monospace" }}>
                     {l.id}
                   </td>
 
                   {/* Tipo */}
                   <td style={{ padding:"6px 8px" }}>
                     <span style={{ fontSize:10, fontWeight:700, padding:"2px 6px", borderRadius:5, whiteSpace:"nowrap",
-                      background: isPremium?"#f5f3ff":"#eff6ff",
-                      color: isPremium?"#7c3aed":"#1d4ed8",
-                      border:"1px solid "+(isPremium?"#ddd6fe":"#bfdbfe") }}>
+                      background: isPremium?"rgba(139,92,246,.14)":"rgba(59,140,255,.14)",
+                      color: isPremium?"#7c3aed":"#3B8CFF",
+                      border:"1px solid "+(isPremium?"rgba(139,92,246,.35)":"rgba(77,179,255,.35)") }}>
                       {isPremium?"⭐ Premium":"📋 Clássico"}
                     </span>
                   </td>
 
                   {/* Anúncio */}
                   <td style={{ padding:"6px 8px", maxWidth:220, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                    <div style={{ fontSize:12, fontWeight:600, color:"#0f172a" }}>{l.title}</div>
+                    <div style={{ fontSize:12, fontWeight:600, color:"#FFFFFF" }}>{l.title}</div>
                   </td>
 
                   {/* Custo (editável) */}
@@ -2417,23 +2417,23 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                       <input type="number" step="0.01" defaultValue={custo}
                         onBlur={function(e){ var v=parseFloat(e.target.value)||0; setCustosLocais(function(c){return {...c,[l.id]:v};}); setCostsAndSave(function(c){return {...c,[l.id]:v};}); setSelectedId(null); }}
                         autoFocus
-                        style={{ width:72, background:"#fff", border:"1px solid #0891b2", color:"#0f172a", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
+                        style={{ width:72, background:"#182230", border:"1px solid #00F0FF", color:"#FFFFFF", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
                     ) : (
                       <span onClick={function(){setSelectedId(l.id);}} title="Clique para editar custo"
-                        style={{ cursor:"pointer", fontSize:12, fontWeight:600, color:custo>0?"#334155":"#dc2626",
-                          background:custo>0?"transparent":"#fef2f2", padding:custo>0?"0":"2px 6px", borderRadius:4 }}>
+                        style={{ cursor:"pointer", fontSize:12, fontWeight:600, color:custo>0?"#A9B4C5":"#FF5252",
+                          background:custo>0?"transparent":"rgba(255,82,82,.12)", padding:custo>0?"0":"2px 6px", borderRadius:4 }}>
                         {custo>0?"R$ "+custo.toFixed(2).replace(".",","): "✎ Sem custo"}
                       </span>
                     )}
                   </td>
 
                   {/* Preço Atual */}
-                  <td style={{ padding:"6px 8px", fontSize:12, fontWeight:700, color:"#0f172a", whiteSpace:"nowrap" }}>
+                  <td style={{ padding:"6px 8px", fontSize:12, fontWeight:700, color:"#FFFFFF", whiteSpace:"nowrap" }}>
                     R$ {bruto.toFixed(2).replace(".",",")}
                   </td>
 
                   {/* Frete Real */}
-                  <td style={{ padding:"6px 8px", fontSize:12, color:"#d97706", whiteSpace:"nowrap" }}>
+                  <td style={{ padding:"6px 8px", fontSize:12, color:"#FFC107", whiteSpace:"nowrap" }}>
                     R$ {freteReal.toFixed(2).replace(".",",")}
                   </td>
 
@@ -2443,12 +2443,12 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                       <input type="number" step="0.01" min="0" defaultValue={freteConfig||""} placeholder="0,00"
                         onBlur={function(e){ var v=parseFloat(e.target.value)||0; setFretesAndSave(function(f){return Object.assign({},f,{[l.id]:v});}); setEditingFreteId(null); }}
                         autoFocus
-                        style={{ width:72, background:"#fff", border:"1px solid #0891b2", color:"#0f172a", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
+                        style={{ width:72, background:"#182230", border:"1px solid #00F0FF", color:"#FFFFFF", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
                     ) : (
                       <span onClick={function(){setEditingFreteId(l.id);}} title="Frete esperado"
                         style={{ cursor:"pointer", fontSize:12, fontWeight:600,
-                          color:freteConfig>0?"#d97706":"#94a3b8",
-                          background:freteConfig>0?"transparent":"#f8fafc",
+                          color:freteConfig>0?"#FFC107":"#67759B",
+                          background:freteConfig>0?"transparent":"#121A24",
                           padding:freteConfig>0?"0":"2px 6px", borderRadius:4 }}>
                         {freteConfig>0?"R$ "+freteConfig.toFixed(2).replace(".",","):"✎ definir"}
                       </span>
@@ -2456,19 +2456,19 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                   </td>
 
                   {/* 💡 Preço de Venda Desejado → Preço a Anunciar (editável) */}
-                  <td style={{ padding:"6px 8px", background:"#faf5ff" }}>
+                  <td style={{ padding:"6px 8px", background:"rgba(139,92,246,.12)" }}>
                     {editingPrecoId === l.id ? (
                       <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
-                        <span style={{ fontSize:9, color:"#94a3b8" }}>Vender por (c/ desconto):</span>
+                        <span style={{ fontSize:9, color:"#67759B" }}>Vender por (c/ desconto):</span>
                         <div style={{ display:"flex", alignItems:"center", gap:3 }}>
-                          <span style={{ fontSize:10, color:"#94a3b8" }}>R$</span>
+                          <span style={{ fontSize:10, color:"#67759B" }}>R$</span>
                           <input type="number" step="0.01" min="0"
                             defaultValue={precoVendaDesejado||""}
                             placeholder={bruto.toFixed(2)}
                             autoFocus
                             onBlur={function(e){ var v=parseFloat(e.target.value)||0; setPrecoVenda(l.id,v); setEditingPrecoId(null); }}
                             onKeyDown={function(e){ if(e.key==="Enter"||e.key==="Escape") e.target.blur(); }}
-                            style={{ width:78, background:"#fff", border:"1px solid #7c3aed", color:"#0f172a", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none", textAlign:"right" }} />
+                            style={{ width:78, background:"#182230", border:"1px solid #7c3aed", color:"#FFFFFF", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none", textAlign:"right" }} />
                         </div>
                       </div>
                     ) : (
@@ -2478,18 +2478,18 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                             <span style={{ fontSize:13, fontWeight:800, color:"#7c3aed" }}>
                               📢 R$ {precoParaAnunciar.toFixed(2).replace(".",",")}
                             </span>
-                            <div style={{ fontSize:10, color:"#64748b" }}>
+                            <div style={{ fontSize:10, color:"#A9B4C5" }}>
                               vender por R$ {precoVendaDesejado.toFixed(2).replace(".",",")}
-                              {descPct > 0 && <span style={{ color:"#94a3b8" }}> (-{descPct}%)</span>}
+                              {descPct > 0 && <span style={{ color:"#67759B" }}> (-{descPct}%)</span>}
                             </div>
                             {pendentesAtualizacao[l.id] && (
-                              <div style={{ fontSize:9, fontWeight:700, color:"#d97706", background:"#fffbeb", border:"1px solid #fde68a", padding:"1px 5px", borderRadius:4, marginTop:2, display:"inline-block" }}>
+                              <div style={{ fontSize:9, fontWeight:700, color:"#FFC107", background:"rgba(255,193,7,.12)", border:"1px solid rgba(255,193,7,.35)", padding:"1px 5px", borderRadius:4, marginTop:2, display:"inline-block" }}>
                                 ⏳ pendente ML
                               </div>
                             )}
                           </div>
                         ) : (
-                          <span style={{ fontSize:11, color:"#94a3b8", background:"#f5f3ff", border:"1px dashed #ddd6fe", padding:"2px 7px", borderRadius:5 }}>
+                          <span style={{ fontSize:11, color:"#67759B", background:"rgba(139,92,246,.14)", border:"1px dashed rgba(139,92,246,.35)", padding:"2px 7px", borderRadius:5 }}>
                             ✎ simular
                           </span>
                         )}
@@ -2498,7 +2498,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                   </td>
 
                   {/* 🏷 % Desconto Promoção */}
-                  <td style={{ padding:"6px 8px", background:"#faf5ff" }}>
+                  <td style={{ padding:"6px 8px", background:"rgba(139,92,246,.12)" }}>
                     {editingDescId === l.id ? (
                       <div style={{ display:"flex", alignItems:"center", gap:3 }}>
                         <input type="number" min="0" max="80" step="1"
@@ -2507,14 +2507,14 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                           autoFocus
                           onBlur={function(e){ var v=Math.min(80,Math.max(0,parseFloat(e.target.value)||0)); setDesconto(l.id,v); setEditingDescId(null); }}
                           onKeyDown={function(e){ if(e.key==="Enter"||e.key==="Escape") e.target.blur(); }}
-                          style={{ width:46, background:"#fff", border:"1px solid #7c3aed", color:"#0f172a", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none", textAlign:"center" }} />
-                        <span style={{ fontSize:11, color:"#94a3b8" }}>%</span>
+                          style={{ width:46, background:"#182230", border:"1px solid #7c3aed", color:"#FFFFFF", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none", textAlign:"center" }} />
+                        <span style={{ fontSize:11, color:"#67759B" }}>%</span>
                       </div>
                     ) : (
                       <div onClick={function(){ setEditingDescId(l.id); }} title="% de desconto na promoção" style={{ cursor:"pointer" }}>
                         {descPct > 0 ? (
                           <div>
-                            <span style={{ fontSize:12, fontWeight:700, color:"#7c3aed", background:"#f5f3ff", padding:"2px 7px", borderRadius:5 }}>
+                            <span style={{ fontSize:12, fontWeight:700, color:"#7c3aed", background:"rgba(139,92,246,.14)", padding:"2px 7px", borderRadius:5 }}>
                               {descPct}%
                             </span>
                             <div style={{ fontSize:10, color:"#7c3aed", marginTop:1 }}>
@@ -2522,7 +2522,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                             </div>
                           </div>
                         ) : (
-                          <span style={{ fontSize:11, color:"#94a3b8", background:"#f8fafc", border:"1px dashed #e2e8f0", padding:"2px 7px", borderRadius:5 }}>
+                          <span style={{ fontSize:11, color:"#67759B", background:"#121A24", border:"1px dashed rgba(255,255,255,.12)", padding:"2px 7px", borderRadius:5 }}>
                             ✎ definir
                           </span>
                         )}
@@ -2531,48 +2531,48 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                   </td>
 
                   {/* Taxa ML sobre preço c/ desconto */}
-                  <td style={{ padding:"6px 8px", background:"#faf5ff" }}>
-                    <div style={{ fontSize:12, fontWeight:700, color:"#dc2626" }}>
+                  <td style={{ padding:"6px 8px", background:"rgba(139,92,246,.12)" }}>
+                    <div style={{ fontSize:12, fontWeight:700, color:"#FF5252" }}>
                       R$ {taxaSobreDesc.toFixed(2).replace(".",",")}
                     </div>
-                    <div style={{ fontSize:10, color:"#94a3b8" }}>
+                    <div style={{ fontSize:10, color:"#67759B" }}>
                       {(feeRate*100).toFixed(1)}% s/ {descPct>0?"desc":"atual"}
                     </div>
                     <div title={l.feeIsReal ? "Taxa real calculada pelo Mercado Livre para esta categoria e preço" : "Taxa estimada (12%/17%) — o sistema ainda não conseguiu confirmar a taxa real deste anúncio no ML"}
-                      style={{ fontSize:9, fontWeight:700, color:l.feeIsReal?"#15803d":"#d97706", marginTop:1 }}>
+                      style={{ fontSize:9, fontWeight:700, color:l.feeIsReal?"#00C853":"#FFC107", marginTop:1 }}>
                       {l.feeIsReal ? "✓ real ML" : "⚠ estimada"}
                     </div>
                   </td>
 
                   {/* Lucro Simulado (com desconto se houver) */}
-                  <td style={{ padding:"6px 8px", background:"#faf5ff" }}>
+                  <td style={{ padding:"6px 8px", background:"rgba(139,92,246,.12)" }}>
                     {custo > 0 ? (
                       <div>
-                        <span style={{ fontSize:13, fontWeight:700, color:lucroFinal>=0?"#0891b2":"#dc2626" }}>
+                        <span style={{ fontSize:13, fontWeight:700, color:lucroFinal>=0?"#00F0FF":"#FF5252" }}>
                           R$ {lucroFinal.toFixed(2).replace(".",",")}
                         </span>
                         {descPct > 0 && (
-                          <div style={{ fontSize:10, color:"#94a3b8", marginTop:1 }}>c/ {descPct}% desc</div>
+                          <div style={{ fontSize:10, color:"#67759B", marginTop:1 }}>c/ {descPct}% desc</div>
                         )}
                       </div>
-                    ) : <span style={{color:"#94a3b8",fontSize:11}}>—</span>}
+                    ) : <span style={{color:"#67759B",fontSize:11}}>—</span>}
                   </td>
 
                   {/* Margem Simulada */}
-                  <td style={{ padding:"6px 8px", background:"#faf5ff" }}>
+                  <td style={{ padding:"6px 8px", background:"rgba(139,92,246,.12)" }}>
                     {custo > 0 ? (
                       <span style={{ fontSize:13, fontWeight:700, color:mCor, background:mCor+"18", padding:"3px 8px", borderRadius:6, display:"inline-block" }}>
                         {margemFinal.toFixed(1)}%
                         {margemFinal >= margemAlvo ? " ✓" : " ↓"}
                       </span>
-                    ) : <span style={{color:"#94a3b8",fontSize:11}}>—</span>}
+                    ) : <span style={{color:"#67759B",fontSize:11}}>—</span>}
                   </td>
 
                   {/* Ação */}
                   <td style={{ padding:"6px 8px" }}>
                     <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
                       <a href={"https://www.mercadolivre.com.br/seller-admin/listing/edit?itemId="+l.id} target="_blank" rel="noreferrer"
-                        style={{ fontSize:11, color:"#0891b2", textDecoration:"none", fontWeight:600 }}>
+                        style={{ fontSize:11, color:"#00F0FF", textDecoration:"none", fontWeight:600 }}>
                         Editar ML ↗
                       </a>
                       <a href={"https://vendedores.mercadolivre.com.br/ferramentas/promocoes"} target="_blank" rel="noreferrer"
@@ -2587,7 +2587,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
           </tbody>
         </table>
         {listsFiltrados.length === 0 && (
-          <div style={{ textAlign:"center", padding:"40px", color:"#94a3b8" }}>
+          <div style={{ textAlign:"center", padding:"40px", color:"#67759B" }}>
             <div style={{ fontSize:32, marginBottom:8 }}>🔍</div>
             <div>Nenhum anúncio encontrado</div>
           </div>
@@ -2726,10 +2726,10 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
   });
 
   var chipCls = {
-    acima:       { label: "▲ Acima do mercado",  cor: "#dc2626", bg: "#fef2f2", border: "#fecaca" },
-    abaixo:      { label: "▼ Abaixo do mercado", cor: "#2563eb", bg: "#eff6ff", border: "#bfdbfe" },
-    competitivo: { label: "✓ Competitivo",       cor: "#15803d", bg: "#f0fdf4", border: "#bbf7d0" },
-    sem_dados:   { label: "— Sem referência",    cor: "#94a3b8", bg: "#f8fafc", border: "#e2e8f0" },
+    acima:       { label: "▲ Acima do mercado",  cor: "#FF5252", bg: "rgba(255,82,82,.12)", border: "rgba(255,82,82,.35)" },
+    abaixo:      { label: "▼ Abaixo do mercado", cor: "#3B8CFF", bg: "rgba(59,140,255,.14)", border: "rgba(77,179,255,.35)" },
+    competitivo: { label: "✓ Competitivo",       cor: "#00C853", bg: "rgba(0,200,83,.12)", border: "rgba(0,200,83,.35)" },
+    sem_dados:   { label: "— Sem referência",    cor: "#67759B", bg: "#223048", border: "rgba(255,255,255,.12)" },
   };
 
   return (
@@ -2737,21 +2737,21 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
       {/* Cabeçalho + ação */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12, marginBottom:16 }}>
         <div>
-          <div style={{ fontWeight:800, fontSize:18, color:"#0f172a" }}>🔎 Concorrência</div>
-          <div style={{ fontSize:12, color:"#94a3b8" }}>Compara o preço de cada anúncio ativo com a sugestão oficial do Mercado Livre e os concorrentes da categoria</div>
+          <div style={{ fontWeight:800, fontSize:18, color:"#FFFFFF" }}>🔎 Concorrência</div>
+          <div style={{ fontSize:12, color:"#67759B" }}>Compara o preço de cada anúncio ativo com a sugestão oficial do Mercado Livre e os concorrentes da categoria</div>
         </div>
         <div style={{ display:"flex", gap:8, alignItems:"center" }}>
           {analisando && (
             <>
-              <span style={{ fontSize:12, color:"#94a3b8" }}>⏳ {progresso.feito}/{progresso.total}</span>
+              <span style={{ fontSize:12, color:"#67759B" }}>⏳ {progresso.feito}/{progresso.total}</span>
               <button onClick={function(){ cancelRef.current = true; }}
-                style={{ background:"#fef2f2", border:"1px solid #fecaca", color:"#dc2626", fontWeight:600, padding:"8px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+                style={{ background:"rgba(255,82,82,.12)", border:"1px solid rgba(255,82,82,.35)", color:"#FF5252", fontWeight:600, padding:"8px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
                 Parar
               </button>
             </>
           )}
           <button onClick={analisarTodos} disabled={analisando || !ativos.length}
-            style={{ background: analisando?"#e2e8f0":"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px 18px", borderRadius:8, cursor:analisando?"wait":"pointer", fontSize:13 }}>
+            style={{ background: analisando?"#223048":"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"9px 18px", borderRadius:8, cursor:analisando?"wait":"pointer", fontSize:13 }}>
             {analisando ? "Analisando..." : `🔍 Analisar todos (${ativos.length})`}
           </button>
         </div>
@@ -2760,14 +2760,14 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
       {/* Cards resumo */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(150px, 1fr))", gap:12, marginBottom:16 }}>
         {[
-          { label:"Analisados",        valor: resumo.analisados,  cor:"#0f172a" },
-          { label:"Acima do mercado",  valor: resumo.acima,       cor:"#dc2626" },
-          { label:"Competitivos",      valor: resumo.competitivo, cor:"#15803d" },
-          { label:"Abaixo do mercado", valor: resumo.abaixo,      cor:"#2563eb" },
+          { label:"Analisados",        valor: resumo.analisados,  cor:"#FFFFFF" },
+          { label:"Acima do mercado",  valor: resumo.acima,       cor:"#FF5252" },
+          { label:"Competitivos",      valor: resumo.competitivo, cor:"#00C853" },
+          { label:"Abaixo do mercado", valor: resumo.abaixo,      cor:"#3B8CFF" },
         ].map(function(c){
           return (
-            <div key={c.label} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"14px 16px" }}>
-              <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, textTransform:"uppercase", letterSpacing:.5 }}>{c.label}</div>
+            <div key={c.label} style={{ background:"#182230", border:"1px solid rgba(255,255,255,.12)", borderRadius:12, padding:"14px 16px" }}>
+              <div style={{ fontSize:11, color:"#67759B", fontWeight:600, textTransform:"uppercase", letterSpacing:.5 }}>{c.label}</div>
               <div style={{ fontSize:24, fontWeight:800, color:c.cor, marginTop:4 }}>{c.valor}</div>
             </div>
           );
@@ -2786,29 +2786,29 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
           var ativo = filtro === f.key;
           return (
             <button key={f.key} onClick={function(){ setFiltro(f.key); }}
-              style={{ background:ativo?"#0f172a":"#fff", color:ativo?"#fff":"#64748b", border:"1px solid "+(ativo?"#0f172a":"#e2e8f0"), borderRadius:20, padding:"5px 14px", fontSize:12, fontWeight:600, cursor:"pointer" }}>
+              style={{ background:ativo?"#1976FF":"#182230", color:ativo?"#fff":"#A9B4C5", border:"1px solid "+(ativo?"#4DB3FF":"rgba(255,255,255,.12)"), borderRadius:20, padding:"5px 14px", fontSize:12, fontWeight:600, cursor:"pointer" }}>
               {f.label}
             </button>
           );
         })}
         <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Buscar por título, MLB ou SKU..."
-          style={{ marginLeft:"auto", border:"1px solid #e2e8f0", borderRadius:8, padding:"7px 12px", fontSize:13, minWidth:240, fontFamily:"inherit" }} />
+          style={{ marginLeft:"auto", background:"#121A24", color:"#FFFFFF", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, padding:"7px 12px", fontSize:13, minWidth:240, fontFamily:"inherit" }} />
       </div>
 
       {/* Tabela */}
-      <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"hidden" }}>
+      <div style={{ background:"#182230", border:"1px solid rgba(255,255,255,.12)", borderRadius:12, overflow:"hidden" }}>
         <div style={{ overflowX:"auto" }}>
           <table style={{ borderCollapse:"collapse", width:"100%", minWidth:900 }}>
             <thead>
-              <tr style={{ background:"#f8fafc", borderBottom:"1px solid #e2e8f0" }}>
+              <tr style={{ background:"#121A24", borderBottom:"1px solid rgba(255,255,255,.12)" }}>
                 {["Anúncio","Seu preço","Preço sugerido ML","Menor do mercado","Diferença","Concorrentes","Status",""].map(function(h){
-                  return <th key={h} style={{ textAlign:"left", padding:"10px 14px", fontSize:11, color:"#94a3b8", fontWeight:700, textTransform:"uppercase", letterSpacing:.5, whiteSpace:"nowrap" }}>{h}</th>;
+                  return <th key={h} style={{ textAlign:"left", padding:"10px 14px", fontSize:11, color:"#67759B", fontWeight:700, textTransform:"uppercase", letterSpacing:.5, whiteSpace:"nowrap" }}>{h}</th>;
                 })}
               </tr>
             </thead>
             <tbody>
               {!visiveis.length && (
-                <tr><td colSpan={8} style={{ padding:"40px 20px", textAlign:"center", color:"#94a3b8", fontSize:13 }}>
+                <tr><td colSpan={8} style={{ padding:"40px 20px", textAlign:"center", color:"#67759B", fontSize:13 }}>
                   {ativos.length ? "Nenhum anúncio neste filtro. Clique em “Analisar todos” para buscar os dados do mercado." : "Nenhum anúncio ativo encontrado."}
                 </td></tr>
               )}
@@ -2819,51 +2819,51 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
                 var aberto = expandido === l.id;
                 return (
                   <React.Fragment key={l.id}>
-                    <tr style={{ borderBottom:"1px solid #f1f5f9" }}>
+                    <tr style={{ borderBottom:"1px solid rgba(255,255,255,.10)" }}>
                       <td style={{ padding:"10px 14px", maxWidth:340 }}>
                         <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-                          {l.thumbnail && <img src={l.thumbnail.replace("http://","https://")} alt="" style={{ width:38, height:38, borderRadius:8, objectFit:"cover", border:"1px solid #e2e8f0", flexShrink:0 }} />}
+                          {l.thumbnail && <img src={l.thumbnail.replace("http://","https://")} alt="" style={{ width:38, height:38, borderRadius:8, objectFit:"cover", border:"1px solid rgba(255,255,255,.12)", flexShrink:0 }} />}
                           <div style={{ minWidth:0 }}>
-                            <a href={l.permalink} target="_blank" rel="noreferrer" style={{ fontSize:13, fontWeight:600, color:"#0f172a", textDecoration:"none", display:"block", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{l.title}</a>
-                            <div style={{ fontSize:11, color:"#94a3b8" }}>{l.id}{l.sku ? " · SKU " + l.sku : ""}</div>
+                            <a href={l.permalink} target="_blank" rel="noreferrer" style={{ fontSize:13, fontWeight:600, color:"#FFFFFF", textDecoration:"none", display:"block", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{l.title}</a>
+                            <div style={{ fontSize:11, color:"#67759B" }}>{l.id}{l.sku ? " · SKU " + l.sku : ""}</div>
                           </div>
                         </div>
                       </td>
                       <td style={{ padding:"10px 14px", fontWeight:700, fontSize:13, whiteSpace:"nowrap" }}>{fmt(l.salePrice)}</td>
-                      <td style={{ padding:"10px 14px", fontSize:13, whiteSpace:"nowrap", color:"#334155" }}>{s && !s.erro && s.sugerido != null ? fmt(s.sugerido) : "—"}</td>
-                      <td style={{ padding:"10px 14px", fontSize:13, whiteSpace:"nowrap", color:"#334155" }}>{s && !s.erro && s.menorMercado != null ? fmt(s.menorMercado) : "—"}</td>
-                      <td style={{ padding:"10px 14px", fontSize:13, fontWeight:700, whiteSpace:"nowrap", color: diff == null ? "#94a3b8" : diff > 0.02 ? "#dc2626" : diff < -0.02 ? "#2563eb" : "#15803d" }}>
+                      <td style={{ padding:"10px 14px", fontSize:13, whiteSpace:"nowrap", color:"#A9B4C5" }}>{s && !s.erro && s.sugerido != null ? fmt(s.sugerido) : "—"}</td>
+                      <td style={{ padding:"10px 14px", fontSize:13, whiteSpace:"nowrap", color:"#A9B4C5" }}>{s && !s.erro && s.menorMercado != null ? fmt(s.menorMercado) : "—"}</td>
+                      <td style={{ padding:"10px 14px", fontSize:13, fontWeight:700, whiteSpace:"nowrap", color: diff == null ? "#67759B" : diff > 0.02 ? "#FF5252" : diff < -0.02 ? "#3B8CFF" : "#00C853" }}>
                         {diff == null ? "—" : (diff > 0 ? "+" : "") + (diff * 100).toFixed(1) + "%"}
                       </td>
                       <td style={{ padding:"10px 14px", fontSize:13, whiteSpace:"nowrap" }}>
                         {s && !s.erro && s.totalConcorrentes ? (
                           <button onClick={function(){ setExpandido(aberto ? null : l.id); }}
-                            style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:8, padding:"4px 10px", fontSize:12, cursor:"pointer", color:"#334155", fontWeight:600 }}>
+                            style={{ background:"#121A24", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, padding:"4px 10px", fontSize:12, cursor:"pointer", color:"#A9B4C5", fontWeight:600 }}>
                             {s.totalConcorrentes} {aberto ? "▲" : "▼"}
                           </button>
-                        ) : <span style={{ color:"#94a3b8" }}>—</span>}
+                        ) : <span style={{ color:"#67759B" }}>—</span>}
                       </td>
                       <td style={{ padding:"10px 14px", whiteSpace:"nowrap" }}>
                         <span style={{ fontSize:11, fontWeight:700, color:chip.cor, background:chip.bg, border:"1px solid "+chip.border, padding:"3px 10px", borderRadius:20 }}>{chip.label}</span>
                       </td>
                       <td style={{ padding:"10px 14px", whiteSpace:"nowrap" }}>
                         <button onClick={function(){ analisarUm(l.id); }} title="Atualizar dados deste anúncio"
-                          style={{ background:"transparent", border:"1px solid #e2e8f0", borderRadius:8, padding:"4px 10px", fontSize:12, cursor:"pointer", color:"#64748b" }}>
+                          style={{ background:"transparent", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, padding:"4px 10px", fontSize:12, cursor:"pointer", color:"#A9B4C5" }}>
                           🔄
                         </button>
                       </td>
                     </tr>
                     {aberto && s && s.concorrentes && s.concorrentes.length > 0 && (
-                      <tr style={{ borderBottom:"1px solid #f1f5f9", background:"#f8fafc" }}>
+                      <tr style={{ borderBottom:"1px solid rgba(255,255,255,.10)", background:"#121A24" }}>
                         <td colSpan={8} style={{ padding:"10px 24px" }}>
-                          <div style={{ fontSize:11, color:"#94a3b8", fontWeight:700, textTransform:"uppercase", letterSpacing:.5, marginBottom:6 }}>Concorrentes na categoria</div>
+                          <div style={{ fontSize:11, color:"#67759B", fontWeight:700, textTransform:"uppercase", letterSpacing:.5, marginBottom:6 }}>Concorrentes na categoria</div>
                           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(240px, 1fr))", gap:8 }}>
                             {s.concorrentes.map(function(c, i){
                               return (
-                                <div key={i} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:8, padding:"8px 12px", fontSize:12 }}>
-                                  <div style={{ color:"#334155", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.titulo}</div>
-                                  <div style={{ color:"#94a3b8", marginTop:2 }}>
-                                    {c.preco != null ? <strong style={{ color:"#0f172a" }}>{fmt(c.preco)}</strong> : "—"}
+                                <div key={i} style={{ background:"#182230", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, padding:"8px 12px", fontSize:12 }}>
+                                  <div style={{ color:"#A9B4C5", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.titulo}</div>
+                                  <div style={{ color:"#67759B", marginTop:2 }}>
+                                    {c.preco != null ? <strong style={{ color:"#FFFFFF" }}>{fmt(c.preco)}</strong> : "—"}
                                     {c.vendidos != null ? " · " + c.vendidos + " vendidos" : ""}
                                   </div>
                                 </div>
@@ -3086,12 +3086,12 @@ function ChatInternoWidget({ currentUser }) {
       {/* Botão flutuante */}
       <button onClick={function(){ setOpen(true); marcarComoLidas(); }}
         style={{ position:"fixed", bottom:20, right:20, width:56, height:56, borderRadius:"50%",
-          background:"#0f172a", border:"none", color:"#ffe000", fontSize:24, cursor:"pointer",
+          background:"#1976FF", border:"none", color:"#FFC107", fontSize:24, cursor:"pointer",
           boxShadow:"0 6px 20px rgba(0,0,0,.25)", zIndex:500, display: open?"none":"flex",
           alignItems:"center", justifyContent:"center" }}>
         💬
         {(naoLidas>0||tarefasMinhas>0) && (
-          <span style={{ position:"absolute", top:-4, right:-4, background:"#dc2626", color:"#fff",
+          <span style={{ position:"absolute", top:-4, right:-4, background:"#FF5252", color:"#fff",
             fontSize:11, fontWeight:700, borderRadius:10, minWidth:20, height:20, display:"flex",
             alignItems:"center", justifyContent:"center", padding:"0 5px" }}>
             {naoLidas+tarefasMinhas}
@@ -3101,23 +3101,23 @@ function ChatInternoWidget({ currentUser }) {
 
       {/* Painel do chat */}
       {open && (
-        <div style={{ position:"fixed", bottom:20, right:20, width:420, height:560, background:"#fff",
+        <div style={{ position:"fixed", bottom:20, right:20, width:420, height:560, background:"#182230",
           borderRadius:16, boxShadow:"0 12px 40px rgba(0,0,0,.25)", zIndex:500, display:"flex",
-          flexDirection:"column", overflow:"hidden", border:"1px solid #e2e8f0" }}>
+          flexDirection:"column", overflow:"hidden", border:"1px solid rgba(255,255,255,.12)" }}>
 
           {/* Header */}
-          <div style={{ background:"#0f172a", padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div style={{ background:"#1976FF", padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <div style={{ color:"#fff", fontWeight:700, fontSize:14 }}>💬 Chat da Equipe</div>
-            <button onClick={function(){setOpen(false);}} style={{ background:"transparent", border:"none", color:"#94a3b8", fontSize:18, cursor:"pointer" }}>✕</button>
+            <button onClick={function(){setOpen(false);}} style={{ background:"transparent", border:"none", color:"#67759B", fontSize:18, cursor:"pointer" }}>✕</button>
           </div>
 
           {/* Sub-abas */}
-          <div style={{ display:"flex", borderBottom:"1px solid #e2e8f0" }}>
+          <div style={{ display:"flex", borderBottom:"1px solid rgba(255,255,255,.12)" }}>
             {[{k:"conversa",l:"💬 Conversa"},{k:"tarefas",l:"✓ Tarefas"+(tarefasMinhas>0?" ("+tarefasMinhas+")":"")}].map(function(t){
               var a = aba===t.k;
               return <button key={t.k} onClick={function(){setAba(t.k);}}
-                style={{ flex:1, padding:"9px", border:"none", borderBottom:a?"2px solid #0f172a":"2px solid transparent",
-                  background:"transparent", color:a?"#0f172a":"#94a3b8", fontWeight:a?700:400, fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>
+                style={{ flex:1, padding:"9px", border:"none", borderBottom:a?"2px solid #4DB3FF":"2px solid transparent",
+                  background:"transparent", color:a?"#FFFFFF":"#67759B", fontWeight:a?700:400, fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>
                 {t.l}
               </button>;
             })}
@@ -3126,12 +3126,12 @@ function ChatInternoWidget({ currentUser }) {
           {aba === "conversa" ? (
             <>
               {/* Canais */}
-              <div style={{ display:"flex", gap:4, padding:"8px 10px", borderBottom:"1px solid #f1f5f9", overflowX:"auto" }}>
+              <div style={{ display:"flex", gap:4, padding:"8px 10px", borderBottom:"1px solid rgba(255,255,255,.10)", overflowX:"auto" }}>
                 {canais.map(function(c){
                   var a = canalAtivo===c.k;
                   return <button key={c.k} onClick={function(){setCanalAtivo(c.k);}}
-                    style={{ padding:"5px 10px", borderRadius:14, border:"1px solid "+(a?"#0f172a":"#e2e8f0"),
-                      background:a?"#0f172a":"#fff", color:a?"#fff":"#64748b", fontSize:11, fontWeight:a?700:400, cursor:"pointer", whiteSpace:"nowrap" }}>
+                    style={{ padding:"5px 10px", borderRadius:14, border:"1px solid "+(a?"#4DB3FF":"rgba(255,255,255,.12)"),
+                      background:a?"#1976FF":"#182230", color:a?"#fff":"#A9B4C5", fontSize:11, fontWeight:a?700:400, cursor:"pointer", whiteSpace:"nowrap" }}>
                     {c.icon} {c.l}
                   </button>;
                 })}
@@ -3140,7 +3140,7 @@ function ChatInternoWidget({ currentUser }) {
               {/* Mensagens */}
               <div style={{ flex:1, overflowY:"auto", padding:"10px 14px", display:"flex", flexDirection:"column", gap:8 }}>
                 {msgsCanal.length===0 && (
-                  <div style={{ textAlign:"center", color:"#94a3b8", fontSize:12, padding:30 }}>
+                  <div style={{ textAlign:"center", color:"#67759B", fontSize:12, padding:30 }}>
                     Nenhuma mensagem ainda. Comece a conversa!
                   </div>
                 )}
@@ -3148,21 +3148,21 @@ function ChatInternoWidget({ currentUser }) {
                   var isMe = m.autorId === currentUser.id;
                   return (
                     <div key={m.id} style={{ display:"flex", flexDirection:"column", alignItems:isMe?"flex-end":"flex-start" }}>
-                      {!isMe && <div style={{ fontSize:10, color:"#94a3b8", marginBottom:2, marginLeft:4 }}>{m.autorNome}</div>}
-                      <div style={{ maxWidth:"80%", background:isMe?"#0f172a":"#f1f5f9", color:isMe?"#fff":"#0f172a",
+                      {!isMe && <div style={{ fontSize:10, color:"#67759B", marginBottom:2, marginLeft:4 }}>{m.autorNome}</div>}
+                      <div style={{ maxWidth:"80%", background:isMe?"#1976FF":"#223048", color:isMe?"#fff":"#FFFFFF",
                         padding:"8px 12px", borderRadius:isMe?"12px 12px 4px 12px":"12px 12px 12px 4px", fontSize:13 }}>
                         {m.anexo && (
                           m.anexo.tipo?.startsWith("image/") ? (
                             <img src={m.anexo.data} alt={m.anexo.nome} style={{ maxWidth:200, borderRadius:8, marginBottom:m.texto?6:0, display:"block" }} />
                           ) : (
-                            <a href={m.anexo.data} download={m.anexo.nome} style={{ display:"flex", alignItems:"center", gap:6, color:isMe?"#bfdbfe":"#1d4ed8", textDecoration:"none", marginBottom:m.texto?6:0 }}>
+                            <a href={m.anexo.data} download={m.anexo.nome} style={{ display:"flex", alignItems:"center", gap:6, color:isMe?"rgba(77,179,255,.35)":"#3B8CFF", textDecoration:"none", marginBottom:m.texto?6:0 }}>
                               📎 {m.anexo.nome}
                             </a>
                           )
                         )}
                         {m.texto && <div style={{ whiteSpace:"pre-wrap" }}>{m.texto}</div>}
                       </div>
-                      <div style={{ fontSize:9, color:"#cbd5e1", marginTop:2 }}>
+                      <div style={{ fontSize:9, color:"#4A5878", marginTop:2 }}>
                         {new Date(m.data).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}
                       </div>
                     </div>
@@ -3172,16 +3172,16 @@ function ChatInternoWidget({ currentUser }) {
               </div>
 
               {/* Input */}
-              <div style={{ display:"flex", gap:6, padding:"10px 12px", borderTop:"1px solid #e2e8f0" }}>
+              <div style={{ display:"flex", gap:6, padding:"10px 12px", borderTop:"1px solid rgba(255,255,255,.12)" }}>
                 <input type="file" ref={fileRef} style={{display:"none"}} onChange={handleFileChange} accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
                 <button onClick={function(){fileRef.current?.click();}}
-                  style={{ background:"#f1f5f9", border:"none", color:"#64748b", width:36, height:36, borderRadius:9, cursor:"pointer", fontSize:16, flexShrink:0 }}>
+                  style={{ background:"#223048", border:"none", color:"#A9B4C5", width:36, height:36, borderRadius:9, cursor:"pointer", fontSize:16, flexShrink:0 }}>
                   📎
                 </button>
                 <input value={texto} onChange={function(e){setTexto(e.target.value);}} onKeyDown={handleKey} placeholder="Digite uma mensagem..."
-                  style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"8px 12px", borderRadius:9, fontSize:13, outline:"none" }} />
+                  style={{ flex:1, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"8px 12px", borderRadius:9, fontSize:13, outline:"none" }} />
                 <button onClick={function(){enviarMensagem();}} disabled={!texto.trim()}
-                  style={{ background:texto.trim()?"#0f172a":"#f1f5f9", border:"none", color:texto.trim()?"#fff":"#94a3b8", width:36, height:36, borderRadius:9, cursor:texto.trim()?"pointer":"not-allowed", fontSize:16, flexShrink:0 }}>
+                  style={{ background:texto.trim()?"#1976FF":"#223048", border:"none", color:texto.trim()?"#fff":"#67759B", width:36, height:36, borderRadius:9, cursor:texto.trim()?"pointer":"not-allowed", fontSize:16, flexShrink:0 }}>
                   ➤
                 </button>
               </div>
@@ -3191,29 +3191,29 @@ function ChatInternoWidget({ currentUser }) {
               {/* Tarefas */}
               <div style={{ flex:1, overflowY:"auto", padding:"12px 14px" }}>
                 <button onClick={function(){setShowNovaTarefa(true);}}
-                  style={{ width:"100%", background:"#0f172a", border:"none", color:"#fff", fontWeight:700, padding:"9px", borderRadius:9, cursor:"pointer", fontSize:12, marginBottom:12 }}>
+                  style={{ width:"100%", background:"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"9px", borderRadius:9, cursor:"pointer", fontSize:12, marginBottom:12 }}>
                   + Nova Tarefa
                 </button>
-                {tarefas.length===0 && <div style={{ textAlign:"center", color:"#94a3b8", fontSize:12, padding:20 }}>Nenhuma tarefa criada</div>}
+                {tarefas.length===0 && <div style={{ textAlign:"center", color:"#67759B", fontSize:12, padding:20 }}>Nenhuma tarefa criada</div>}
                 {tarefas.slice().reverse().map(function(t){
-                  var corPrior = t.prioridade==="alta"?"#dc2626":t.prioridade==="media"?"#d97706":"#15803d";
+                  var corPrior = t.prioridade==="alta"?"#FF5252":t.prioridade==="media"?"#FFC107":"#00C853";
                   var concluida = t.status==="concluida";
                   return (
-                    <div key={t.id} style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:10, padding:"10px 12px", marginBottom:8, opacity:concluida?0.6:1 }}>
+                    <div key={t.id} style={{ background:"#121A24", border:"1px solid rgba(255,255,255,.12)", borderRadius:10, padding:"10px 12px", marginBottom:8, opacity:concluida?0.6:1 }}>
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:6 }}>
-                        <div style={{ fontSize:13, fontWeight:700, color:"#0f172a", textDecoration:concluida?"line-through":"none" }}>{t.titulo}</div>
+                        <div style={{ fontSize:13, fontWeight:700, color:"#FFFFFF", textDecoration:concluida?"line-through":"none" }}>{t.titulo}</div>
                         <span style={{ fontSize:9, fontWeight:700, color:corPrior, background:corPrior+"18", padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
                           {t.prioridade}
                         </span>
                       </div>
-                      {t.descricao && <div style={{ fontSize:11, color:"#64748b", marginTop:3 }}>{t.descricao}</div>}
+                      {t.descricao && <div style={{ fontSize:11, color:"#A9B4C5", marginTop:3 }}>{t.descricao}</div>}
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:6 }}>
-                        <div style={{ fontSize:10, color:"#94a3b8" }}>
+                        <div style={{ fontSize:10, color:"#67759B" }}>
                           👤 {t.responsavelNome} {t.prazo && "· 📅 "+new Date(t.prazo).toLocaleDateString("pt-BR")}
                         </div>
                         {!concluida && t.responsavelId===currentUser.id && (
                           <button onClick={function(){mudarStatusTarefa(t.id,"concluida");}}
-                            style={{ background:"#15803d", border:"none", color:"#fff", padding:"3px 9px", borderRadius:6, cursor:"pointer", fontSize:10, fontWeight:600 }}>
+                            style={{ background:"#00C853", border:"none", color:"#fff", padding:"3px 9px", borderRadius:6, cursor:"pointer", fontSize:10, fontWeight:600 }}>
                             ✓ Concluir
                           </button>
                         )}
@@ -3244,22 +3244,22 @@ function ModalNovaTarefa({ usuarios, onSave, onClose }) {
 
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:700, padding:16 }}>
-      <div style={{ background:"#fff", borderRadius:14, width:"100%", maxWidth:420, padding:20 }}>
-        <div style={{ fontWeight:700, fontSize:15, color:"#0f172a", marginBottom:14 }}>+ Nova Tarefa</div>
+      <div style={{ background:"#182230", borderRadius:14, width:"100%", maxWidth:420, padding:20 }}>
+        <div style={{ fontWeight:700, fontSize:15, color:"#FFFFFF", marginBottom:14 }}>+ Nova Tarefa</div>
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           <input value={titulo} onChange={function(e){setTitulo(e.target.value);}} placeholder="Título da tarefa"
-            style={{ background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+            style={{ background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
           <textarea value={descricao} onChange={function(e){setDescricao(e.target.value);}} placeholder="Descrição (opcional)" rows={3}
-            style={{ background:"#f8fafc", border:"1px solid #e2e8f0", color:"#0f172a", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none", resize:"none", fontFamily:"inherit" }} />
+            style={{ background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none", resize:"none", fontFamily:"inherit" }} />
           <select value={responsavelId} onChange={function(e){setResponsavelId(e.target.value);}}
-            style={{ background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", padding:"9px 12px", borderRadius:8, fontSize:13 }}>
+            style={{ background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", padding:"9px 12px", borderRadius:8, fontSize:13 }}>
             {usuarios.map(function(u){ return <option key={u.id} value={u.id}>{u.nome}</option>; })}
           </select>
           <div style={{ display:"flex", gap:8 }}>
             <input type="date" value={prazo} onChange={function(e){setPrazo(e.target.value);}}
-              style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", padding:"9px 12px", borderRadius:8, fontSize:13 }} />
+              style={{ flex:1, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", padding:"9px 12px", borderRadius:8, fontSize:13 }} />
             <select value={prioridade} onChange={function(e){setPrioridade(e.target.value);}}
-              style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", padding:"9px 12px", borderRadius:8, fontSize:13 }}>
+              style={{ flex:1, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", padding:"9px 12px", borderRadius:8, fontSize:13 }}>
               <option value="baixa">Baixa</option>
               <option value="media">Média</option>
               <option value="alta">Alta</option>
@@ -3267,10 +3267,10 @@ function ModalNovaTarefa({ usuarios, onSave, onClose }) {
           </div>
         </div>
         <div style={{ display:"flex", gap:8, marginTop:16 }}>
-          <button onClick={onClose} style={{ flex:1, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", fontWeight:600, padding:"10px", borderRadius:9, cursor:"pointer" }}>Cancelar</button>
+          <button onClick={onClose} style={{ flex:1, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", fontWeight:600, padding:"10px", borderRadius:9, cursor:"pointer" }}>Cancelar</button>
           <button onClick={function(){ if(titulo.trim()) onSave({titulo,descricao,responsavelId,prazo,prioridade}); }}
             disabled={!titulo.trim()}
-            style={{ flex:2, background:titulo.trim()?"#0f172a":"#f1f5f9", border:"none", color:titulo.trim()?"#fff":"#94a3b8", fontWeight:700, padding:"10px", borderRadius:9, cursor:titulo.trim()?"pointer":"not-allowed" }}>
+            style={{ flex:2, background:titulo.trim()?"#1976FF":"#223048", border:"none", color:titulo.trim()?"#fff":"#67759B", fontWeight:700, padding:"10px", borderRadius:9, cursor:titulo.trim()?"pointer":"not-allowed" }}>
             Criar Tarefa
           </button>
         </div>
@@ -3326,26 +3326,26 @@ function PainelConfiguracoesGlobal(props) {
 
   return (
     React.createElement("div", {style:{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",backdropFilter:"blur(4px)",zIndex:800,display:"flex",alignItems:"flex-start",justifyContent:"flex-end",padding:"56px 8px 8px"}},
-      React.createElement("div", {style:{background:"#fff",borderRadius:14,width:700,maxHeight:"calc(100vh - 68px)",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,.22)",overflow:"hidden"}},
-        React.createElement("div", {style:{background:"#0f172a",padding:"13px 18px",display:"flex",justifyContent:"space-between",alignItems:"center"}},
+      React.createElement("div", {style:{background:"#182230",borderRadius:14,width:700,maxHeight:"calc(100vh - 68px)",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,.22)",overflow:"hidden"}},
+        React.createElement("div", {style:{background:"#1976FF",padding:"13px 18px",display:"flex",justifyContent:"space-between",alignItems:"center"}},
           React.createElement("div", {style:{color:"#fff",fontWeight:700,fontSize:15}}, "Configuracoes do Sistema"),
-          React.createElement("button", {onClick:onClose, style:{background:"transparent",border:"none",color:"#94a3b8",fontSize:20,cursor:"pointer",lineHeight:1}}, "x")
+          React.createElement("button", {onClick:onClose, style:{background:"transparent",border:"none",color:"#67759B",fontSize:20,cursor:"pointer",lineHeight:1}}, "x")
         ),
-        React.createElement("div", {style:{display:"flex",borderBottom:"2px solid #f1f5f9"}},
+        React.createElement("div", {style:{display:"flex",borderBottom:"2px solid rgba(255,255,255,.10)"}},
           ABAS.map(function(t){
             var a=aba===t.k;
-            return React.createElement("button",{key:t.k,onClick:function(){setAba(t.k);},style:{flex:1,padding:"10px",border:"none",borderBottom:a?"2px solid #0f172a":"2px solid transparent",background:"transparent",color:a?"#0f172a":"#94a3b8",fontWeight:a?700:400,fontSize:12,cursor:"pointer",fontFamily:"inherit",marginBottom:-2}}, t.l);
+            return React.createElement("button",{key:t.k,onClick:function(){setAba(t.k);},style:{flex:1,padding:"10px",border:"none",borderBottom:a?"2px solid #4DB3FF":"2px solid transparent",background:"transparent",color:a?"#FFFFFF":"#67759B",fontWeight:a?700:400,fontSize:12,cursor:"pointer",fontFamily:"inherit",marginBottom:-2}}, t.l);
           })
         ),
         React.createElement("div", {style:{flex:1,overflowY:"auto",padding:"16px 18px"}},
           aba==="config" ? React.createElement(ImpostosCompacto, {impostos:impostos,setImpostos:setImpostos,custosFixos:custosFixos,setCustosFixos:setCustosFixos,faturamentoMes:faturamentoMes,irpjCsllConfig:irpjCsllConfig,setIrpjCsllConfig:setIrpjCsllConfig}) :
           aba==="aparencia" ? React.createElement("div", {style:{display:"flex",gap:10}},
             [{v:false,l:"Claro"},{v:true,l:"Escuro"}].map(function(t){
-              return React.createElement("button",{key:String(t.v),onClick:function(){setDarkMode(t.v);localStorage.setItem("darkMode",t.v?"1":"0");},style:{flex:1,padding:14,borderRadius:10,border:"2px solid "+(darkMode===t.v?"#0f172a":"#e2e8f0"),background:darkMode===t.v?"#0f172a":"#fff",color:darkMode===t.v?"#fff":"#334155",fontWeight:700,fontSize:14,cursor:"pointer"}}, t.v?"Escuro":"Claro");
+              return React.createElement("button",{key:String(t.v),onClick:function(){setDarkMode(t.v);localStorage.setItem("darkMode",t.v?"1":"0");},style:{flex:1,padding:14,borderRadius:10,border:"2px solid "+(darkMode===t.v?"#4DB3FF":"rgba(255,255,255,.12)"),background:darkMode===t.v?"#1976FF":"#182230",color:darkMode===t.v?"#fff":"#A9B4C5",fontWeight:700,fontSize:14,cursor:"pointer"}}, t.v?"Escuro":"Claro");
             })
           ) :
           aba==="backup" ? React.createElement("div", {style:{display:"flex",flexDirection:"column",gap:14}},
-            React.createElement("div", {style:{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:12,padding:16}},
+            React.createElement("div", {style:{background:"#121A24",border:"1px solid rgba(255,255,255,.12)",borderRadius:12,padding:16}},
               React.createElement("div", {style:{fontWeight:700,fontSize:14,marginBottom:12}}, "Exportar Backup"),
               React.createElement("button", {
                 onClick:function(){
@@ -3355,12 +3355,12 @@ function PainelConfiguracoesGlobal(props) {
                   var blob=new Blob([JSON.stringify(bk,null,2)],{type:"application/json"});
                   var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="mlmargem_backup_"+new Date().toLocaleDateString("sv-SE")+".json";a.click();
                 },
-                style:{background:"#0f172a",border:"none",color:"#fff",fontWeight:700,padding:"10px 20px",borderRadius:9,cursor:"pointer",fontSize:13}
+                style:{background:"#1976FF",border:"none",color:"#fff",fontWeight:700,padding:"10px 20px",borderRadius:9,cursor:"pointer",fontSize:13}
               }, "Exportar Backup")
             ),
-            React.createElement("div", {style:{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:12,padding:16}},
+            React.createElement("div", {style:{background:"#121A24",border:"1px solid rgba(255,255,255,.12)",borderRadius:12,padding:16}},
               React.createElement("div", {style:{fontWeight:700,fontSize:14,marginBottom:4}}, "Restaurar Backup"),
-              React.createElement("label", {style:{background:"#fff",border:"2px dashed #e2e8f0",borderRadius:9,padding:14,display:"block",textAlign:"center",cursor:"pointer",fontSize:13,color:"#64748b"}},
+              React.createElement("label", {style:{background:"#182230",border:"2px dashed rgba(255,255,255,.12)",borderRadius:9,padding:14,display:"block",textAlign:"center",cursor:"pointer",fontSize:13,color:"#A9B4C5"}},
                 "Clique para selecionar arquivo de backup (.json)",
                 React.createElement("input", {type:"file",accept:".json",style:{display:"none"},onChange:function(e){
                   var file=e.target.files[0];if(!file)return;
@@ -3375,20 +3375,20 @@ function PainelConfiguracoesGlobal(props) {
           React.createElement("div", null,
             usuarios.map(function(u){
               var isMe=u.id===currentUser.id;
-              return React.createElement("div",{key:u.id,style:{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:10}},
-                React.createElement("div",{style:{width:36,height:36,borderRadius:9,background:"#0f172a",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:"#ffe000",flexShrink:0}}, u.nome&&u.nome.charAt(0).toUpperCase()),
+              return React.createElement("div",{key:u.id,style:{background:"#121A24",border:"1px solid rgba(255,255,255,.12)",borderRadius:10,padding:"10px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:10}},
+                React.createElement("div",{style:{width:36,height:36,borderRadius:9,background:"#1976FF",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:"#FFC107",flexShrink:0}}, u.nome&&u.nome.charAt(0).toUpperCase()),
                 React.createElement("div",{style:{flex:1,minWidth:0}},
-                  React.createElement("div",{style:{fontWeight:700,fontSize:13,color:"#0f172a"}}, u.nome, isMe&&React.createElement("span",{style:{fontSize:10,color:"#0891b2",background:"#eff6ff",padding:"1px 5px",borderRadius:4,marginLeft:6}},"voce")),
-                  React.createElement("div",{style:{fontSize:11,color:"#64748b"}}, "@"+u.usuario+" - "+(u.admin?"Admin":"Usuario")+" - ",React.createElement("span",{style:{color:u.ativo?"#15803d":"#dc2626",fontWeight:600}},u.ativo?"Ativo":"Inativo")),
-                  u.email&&React.createElement("div",{style:{fontSize:10,color:"#94a3b8",marginTop:1}}, u.email)
+                  React.createElement("div",{style:{fontWeight:700,fontSize:13,color:"#FFFFFF"}}, u.nome, isMe&&React.createElement("span",{style:{fontSize:10,color:"#00F0FF",background:"rgba(59,140,255,.14)",padding:"1px 5px",borderRadius:4,marginLeft:6}},"voce")),
+                  React.createElement("div",{style:{fontSize:11,color:"#A9B4C5"}}, "@"+u.usuario+" - "+(u.admin?"Admin":"Usuario")+" - ",React.createElement("span",{style:{color:u.ativo?"#00C853":"#FF5252",fontWeight:600}},u.ativo?"Ativo":"Inativo")),
+                  u.email&&React.createElement("div",{style:{fontSize:10,color:"#67759B",marginTop:1}}, u.email)
                 ),
                 React.createElement("div",{style:{display:"flex",gap:6}},
-                  React.createElement("button",{onClick:function(){setEditingUser(u);setShowModalUser(true);},style:{background:"#eff6ff",border:"1px solid #bfdbfe",color:"#1d4ed8",padding:"4px 10px",borderRadius:7,cursor:"pointer",fontSize:11,fontWeight:600}},"Editar"),
-                  !isMe&&React.createElement("button",{onClick:function(){deleteUser(u.id);},style:{background:"#fef2f2",border:"1px solid #fecaca",color:"#dc2626",padding:"4px 8px",borderRadius:7,cursor:"pointer",fontSize:11}},"X")
+                  React.createElement("button",{onClick:function(){setEditingUser(u);setShowModalUser(true);},style:{background:"rgba(59,140,255,.14)",border:"1px solid rgba(77,179,255,.35)",color:"#3B8CFF",padding:"4px 10px",borderRadius:7,cursor:"pointer",fontSize:11,fontWeight:600}},"Editar"),
+                  !isMe&&React.createElement("button",{onClick:function(){deleteUser(u.id);},style:{background:"rgba(255,82,82,.12)",border:"1px solid rgba(255,82,82,.35)",color:"#FF5252",padding:"4px 8px",borderRadius:7,cursor:"pointer",fontSize:11}},"X")
                 )
               );
             }),
-            React.createElement("button",{onClick:function(){setEditingUser(null);setShowModalUser(true);},style:{width:"100%",background:"#0f172a",border:"none",color:"#fff",fontWeight:700,padding:10,borderRadius:9,cursor:"pointer",fontSize:13,marginTop:8}},
+            React.createElement("button",{onClick:function(){setEditingUser(null);setShowModalUser(true);},style:{width:"100%",background:"#1976FF",border:"none",color:"#fff",fontWeight:700,padding:10,borderRadius:9,cursor:"pointer",fontSize:13,marginTop:8}},
               "+ Novo Usuario"
             )
           )
@@ -4642,16 +4642,16 @@ export default function App() {
     if (hasFreeShipping) {
       return {
         topLabel: "Grátis ao comprador",
-        topColor: "#15803d",
-        topBg: "#f0fdf4",
+        topColor: "#00C853",
+        topBg: "rgba(0,200,83,.12)",
         bottomLabel: cost > 0 ? `Seu custo: ${fmt(cost)}` : "Seu custo: calculando...",
         bottomColor: "#7c3aed",
       };
     }
     return {
       topLabel: "Comprador paga",
-      topColor: "#2563eb",
-      topBg: "#eff6ff",
+      topColor: "#3B8CFF",
+      topBg: "rgba(59,140,255,.14)",
       bottomLabel: cost > 0 ? `Seu custo: ${fmt(cost)}` : "Seu custo: calculando...",
       bottomColor: "#7c3aed",
     };
@@ -4672,56 +4672,57 @@ export default function App() {
   if (!currentUser) return <LoginScreen onLogin={(user) => { setCurrentUser(user); }} />;
 
   return (
-    <div className={darkMode?"dark":""} style={{ minHeight:"100vh", background:darkMode?"#0c1120":"#f1f5f9", color:darkMode?"#e2e8f0":"#0f172a", fontFamily:"'DM Sans',system-ui,sans-serif", transition:"background .2s,color .2s" }}>
+    <div className={darkMode?"dark":""} style={{ minHeight:"100vh", background:"transparent", color:"#FFFFFF", fontFamily:"'Inter',system-ui,sans-serif", transition:"background .2s,color .2s" }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&display=swap');
         *{box-sizing:border-box;margin:0;padding:0}
-        body,#root{font-family:'DM Sans',system-ui,sans-serif}
+        body,#root{font-family:'Inter',system-ui,sans-serif}
+        input:not([type=checkbox]):not([type=radio]),textarea,select{background:#121A24;color:#FFFFFF;border:1px solid rgba(255,255,255,.12)}
+        input::placeholder,textarea::placeholder{color:#67759B}
         ::-webkit-scrollbar{width:4px;height:4px}
         ::-webkit-scrollbar-track{background:transparent}
-        ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:99px}
-        ::-webkit-scrollbar-thumb:hover{background:#94a3b8}
-        input:focus,textarea:focus,select:focus{outline:2px solid #0f172a;outline-offset:1px}
+        ::-webkit-scrollbar-thumb{background:#4A5878;border-radius:99px}
+        ::-webkit-scrollbar-thumb:hover{background:#67759B}
+        input:focus,textarea:focus,select:focus{outline:2px solid #4DB3FF;outline-offset:1px}
 
         /* ── TABELAS ── */
         table{border-collapse:collapse;width:100%}
-        th{font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.8px;padding:10px 14px;border-bottom:1px solid #f1f5f9;text-align:left;font-weight:600;background:#fafafa;white-space:nowrap}
-        td{padding:10px 14px;font-size:13px;border-bottom:1px solid #f1f5f9;vertical-align:middle;color:#334155}
+        th{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#67759B;text-transform:uppercase;letter-spacing:0.12em;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.10);text-align:left;font-weight:700;background:#121A24;white-space:nowrap}
+        td{padding:10px 14px;font-size:13px;border-bottom:1px solid rgba(255,255,255,.10);vertical-align:middle;color:#A9B4C5}
         tr:last-child td{border-bottom:none}
-        tbody tr:hover td{background:#f8fafc;transition:background .1s}
-        .dark th{background:#1e293b!important;border-bottom-color:#334155!important;color:#64748b!important}
-        .dark td{border-bottom-color:#1e293b!important;color:#cbd5e1!important}
-        .dark tbody tr:hover td{background:#1e293b!important}
+        tbody tr:hover td{background:#121A24;transition:background .1s}
+        .dark th{background:#121A24!important;border-bottom-color:#A9B4C5!important;color:#A9B4C5!important}
+        .dark td{border-bottom-color:#121A24!important;color:#4A5878!important}
+        .dark tbody tr:hover td{background:#121A24!important}
 
         /* ── FILTRO PERIOD ── */
-        .filter-btn{background:#fff;border:1px solid #e2e8f0;color:#64748b;padding:5px 14px;cursor:pointer;font-family:inherit;font-size:12px;border-radius:20px;transition:all .15s;font-weight:500}
-        .filter-btn.active{background:#0f172a;border-color:#0f172a;color:#fff;font-weight:600}
-        .filter-btn:hover:not(.active){background:#f8fafc;border-color:#cbd5e1}
-        .dark .filter-btn{background:#1e293b;border-color:#334155;color:#94a3b8}
-        .dark .filter-btn.active{background:#e2e8f0;color:#0f172a}
+        .filter-btn{background:#182230;border:1px solid rgba(255,255,255,.12);color:#A9B4C5;padding:5px 14px;cursor:pointer;font-family:inherit;font-size:12px;border-radius:20px;transition:all .15s;font-weight:500}
+        .filter-btn.active{background:#1976FF;border-color:#4DB3FF;color:#fff;font-weight:600}
+        .filter-btn:hover:not(.active){background:#121A24;border-color:#4A5878}
+        .dark .filter-btn{background:#121A24;border-color:#A9B4C5;color:#67759B}
+        .dark .filter-btn.active{background:#223048;color:#FFFFFF}
 
         /* ── SUB-ABAS (Financeiro, etc) ── */
-        .tab-btn{background:transparent;border:none;border-bottom:2px solid transparent;color:#94a3b8;padding:14px 18px;cursor:pointer;font-family:inherit;font-size:13px;transition:all .15s;font-weight:500;border-radius:0}
-        .tab-btn.active{color:#0f172a;border-bottom-color:#0f172a;font-weight:600}
-        .tab-btn:hover:not(.active){color:#64748b;background:#f8fafc}
-        .dark .tab-btn{color:#64748b}
-        .dark .tab-btn.active{color:#e2e8f0;border-bottom-color:#e2e8f0}
+        .tab-btn{background:transparent;border:none;border-bottom:2px solid transparent;color:#67759B;padding:14px 18px;cursor:pointer;font-family:inherit;font-size:13px;transition:all .15s;font-weight:500;border-radius:0}
+        .tab-btn.active{color:#FFFFFF;border-bottom-color:#FFFFFF;font-weight:600}
+        .tab-btn:hover:not(.active){color:#A9B4C5;background:#121A24}
+        .dark .tab-btn{color:#A9B4C5}
+        .dark .tab-btn.active{color:#A9B4C5;border-bottom-color:#A9B4C5}
 
         /* ── INPUTS ── */
-        .search-input{width:100%;background:#fff;border:1px solid #e2e8f0;color:#0f172a;padding:8px 14px 8px 38px;border-radius:8px;font-family:inherit;font-size:13px;outline:none;transition:border .15s}
-        .search-input:focus{border-color:#0f172a;box-shadow:0 0 0 3px rgba(15,23,42,.06)}
-        .dark input{background:#1e293b!important;border-color:#334155!important;color:#e2e8f0!important}
-        .dark select{background:#1e293b;border-color:#334155;color:#e2e8f0}
+        .search-input{width:100%;background:#182230;border:1px solid rgba(255,255,255,.12);color:#FFFFFF;padding:8px 14px 8px 38px;border-radius:8px;font-family:inherit;font-size:13px;outline:none;transition:border .15s}
+        .search-input:focus{border-color:#4DB3FF;box-shadow:0 0 0 3px rgba(15,23,42,.06)}
+        .dark input{background:#121A24!important;border-color:#A9B4C5!important;color:#A9B4C5!important}
+        .dark select{background:#121A24;border-color:#A9B4C5;color:#A9B4C5}
 
         /* ── MISC ── */
-        .copy-btn{background:transparent;border:none;color:#cbd5e1;cursor:pointer;padding:2px 5px;border-radius:4px;font-size:11px;transition:all .15s}
-        .copy-btn:hover{background:#f1f5f9;color:#475569}
-        .title-link{color:#2563eb;text-decoration:none;font-weight:500;transition:color .15s}
-        .title-link:hover{color:#1d4ed8;text-decoration:underline}
-        select{background:#fff;border:1px solid #e2e8f0;color:#334155;padding:7px 12px;border-radius:8px;font-family:inherit;font-size:13px;cursor:pointer;font-weight:400}
+        .copy-btn{background:transparent;border:none;color:#4A5878;cursor:pointer;padding:2px 5px;border-radius:4px;font-size:11px;transition:all .15s}
+        .copy-btn:hover{background:#223048;color:#A9B4C5}
+        .title-link{color:#3B8CFF;text-decoration:none;font-weight:500;transition:color .15s}
+        .title-link:hover{color:#3B8CFF;text-decoration:underline}
+        select{background:#182230;border:1px solid rgba(255,255,255,.12);color:#A9B4C5;padding:7px 12px;border-radius:8px;font-family:inherit;font-size:13px;cursor:pointer;font-weight:400}
 
         /* ── CARDS ── */
-        .sl-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 1px 3px rgba(15,23,42,.04)}
+        .sl-card{background:#182230;border:1px solid rgba(255,255,255,.12);border-radius:12px;box-shadow:0 1px 3px rgba(15,23,42,.04)}
 
         /* ── ANIMAÇÕES ── */
         @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
@@ -4729,15 +4730,15 @@ export default function App() {
         @keyframes slPulse{0%,100%{opacity:1}50%{opacity:.4}}
       `}</style>
 
-      <header style={{ background:darkMode?"#111827":"#fff", borderBottom:`1px solid ${darkMode?"#1f2937":"#e2e8f0"}`, padding:"0 32px", display:"flex", alignItems:"center", position:"sticky", top:0, zIndex:100, boxShadow:"0 1px 2px rgba(15,23,42,.06)", minHeight:62 }}>
+      <header style={{ background:darkMode?"#121A24":"#182230", borderBottom:`1px solid ${darkMode?"#182230":"rgba(255,255,255,.12)"}`, padding:"0 32px", display:"flex", alignItems:"center", position:"sticky", top:0, zIndex:100, boxShadow:"0 1px 2px rgba(15,23,42,.06)", minHeight:62 }}>
         {/* Logo + divisor + Abas */}
         <div style={{ display:"flex", alignItems:"stretch", flex:1, minWidth:0, overflow:"hidden", height:50 }}>
           {/* Logo */}
-          <div style={{ display:"flex", alignItems:"center", gap:7, paddingRight:28, marginRight:4, borderRight:`1px solid ${darkMode?"#1f2937":"#f1f5f9"}`, flexShrink:0 }}>
-            <div style={{ width:34, height:34, borderRadius:9, background:"#0f172a", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, fontSize:15, color:"#fbbf24", letterSpacing:-0.5 }}>M</div>
+          <div style={{ display:"flex", alignItems:"center", gap:7, paddingRight:28, marginRight:4, borderRight:`1px solid ${darkMode?"#182230":"rgba(255,255,255,.10)"}`, flexShrink:0 }}>
+            <div style={{ width:34, height:34, borderRadius:"50%", background:"rgba(77,179,255,.12)", border:"1px solid rgba(77,179,255,.45)", boxShadow:"0 0 14px rgba(77,179,255,.35)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:15, color:"#4DB3FF", letterSpacing:-0.5 }}>M</div>
             <div>
-              <div style={{ fontWeight:700, fontSize:14, color:darkMode?"#f1f5f9":"#0f172a", letterSpacing:-0.4, lineHeight:1.2 }}>ML Margem</div>
-              <div style={{ fontSize:9, color:"#94a3b8", letterSpacing:1.2, textTransform:"uppercase", lineHeight:1 }}>Marketplaces</div>
+              <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:14, color:"#FFFFFF", letterSpacing:-0.4, lineHeight:1.2 }}>ML Margem</div>
+              <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:8, color:"#67759B", letterSpacing:2.2, textTransform:"uppercase", lineHeight:1, marginTop:2 }}>Marketplaces</div>
             </div>
           </div>
           {/* Abas de navegação no header */}
@@ -4757,16 +4758,16 @@ export default function App() {
                     onMouseLeave={function(e){ e.currentTarget.querySelector(".open-tab-btn").style.opacity="0"; }}>
                     <button onClick={function(){ setTab(t.key); }}
                       style={{ display:"flex", alignItems:"center", gap:6, padding:"0 16px", height:50, background:"transparent", border:"none",
-                        borderBottom: isActive ? "2px solid #0f172a" : "2px solid transparent",
-                        color: isActive ? (darkMode?"#f1f5f9":"#0f172a") : "#94a3b8",
+                        borderBottom: isActive ? "2px solid #4DB3FF" : "2px solid transparent",
+                        color: isActive ? (darkMode?"#A9B4C5":"#FFFFFF") : "#67759B",
                         fontWeight: isActive ? 600 : 400, fontSize:13, cursor:"pointer",
                         fontFamily:"inherit", whiteSpace:"nowrap", transition:"color .15s,border-color .15s",
                         borderTop: "2px solid transparent" }}>
                       {t.label}
                       {t.badge !== null && (
                         <span style={{ fontSize:10, fontWeight:600, padding:"1px 6px", borderRadius:10,
-                          background: isActive ? "#0f172a" : "#f1f5f9",
-                          color: isActive ? "#fff" : "#94a3b8", lineHeight:1.6 }}>
+                          background: isActive ? "#1976FF" : "#223048",
+                          color: isActive ? "#fff" : "#67759B", lineHeight:1.6 }}>
                           {t.badge}
                         </span>
                       )}
@@ -4779,11 +4780,11 @@ export default function App() {
                         window.open(window.location.pathname + "?tab=" + t.key, "_blank");
                       }}
                       style={{ opacity:0, position:"absolute", top:8, right:2, width:18, height:18,
-                        borderRadius:4, border:"1px solid #e2e8f0", background:"#fff",
-                        color:"#94a3b8", cursor:"pointer", fontSize:9, display:"flex", alignItems:"center",
+                        borderRadius:4, border:"1px solid rgba(255,255,255,.12)", background:"#182230",
+                        color:"#67759B", cursor:"pointer", fontSize:9, display:"flex", alignItems:"center",
                         justifyContent:"center", transition:"opacity .15s", zIndex:10 }}
-                      onMouseEnter={function(e){ e.currentTarget.style.background="#eff6ff"; e.currentTarget.style.color="#2563eb"; e.currentTarget.style.borderColor="#bfdbfe"; }}
-                      onMouseLeave={function(e){ e.currentTarget.style.background="#fff"; e.currentTarget.style.color="#94a3b8"; e.currentTarget.style.borderColor="#e2e8f0"; }}>
+                      onMouseEnter={function(e){ e.currentTarget.style.background="rgba(59,140,255,.14)"; e.currentTarget.style.color="#3B8CFF"; e.currentTarget.style.borderColor="rgba(77,179,255,.35)"; }}
+                      onMouseLeave={function(e){ e.currentTarget.style.background="#182230"; e.currentTarget.style.color="#67759B"; e.currentTarget.style.borderColor="rgba(255,255,255,.12)"; }}>
                       ↗
                     </button>
                   </div>
@@ -4792,22 +4793,22 @@ export default function App() {
             })()}
           </div>
         </div>
-        <div style={{ display:"flex", alignItems:"center", gap:7, flexShrink:0, paddingLeft:16, borderLeft:`1px solid ${darkMode?"#1f2937":"#f1f5f9"}` }}>
-          {usingMock && !token && <span style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", color: "#94a3b8", fontSize: 11, padding: "3px 10px", borderRadius: 20, fontWeight: 500 }}>Demonstração</span>}
-          {token && <span style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#15803d", fontSize: 11, padding: "3px 12px", borderRadius: 20, fontWeight: 600 }}>● {user?.nickname}</span>}
-          {loading && <span style={{ color: "#94a3b8", fontSize: 12 }}>⏳ {loadingMsg}</span>}
-          {loadError && <span style={{ color: "#dc2626", fontSize: 12 }}>⚠ {loadError}</span>}
+        <div style={{ display:"flex", alignItems:"center", gap:7, flexShrink:0, paddingLeft:16, borderLeft:`1px solid ${darkMode?"#182230":"rgba(255,255,255,.10)"}` }}>
+          {usingMock && !token && <span style={{ background: "#223048", border: "1px solid rgba(255,255,255,.12)", color: "#67759B", fontSize: 11, padding: "3px 10px", borderRadius: 20, fontWeight: 500 }}>Demonstração</span>}
+          {token && <span style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", color: "#00C853", fontSize: 11, padding: "3px 12px", borderRadius: 20, fontWeight: 600 }}>● {user?.nickname}</span>}
+          {loading && <span style={{ color: "#67759B", fontSize: 12 }}>⏳ {loadingMsg}</span>}
+          {loadError && <span style={{ color: "#FF5252", fontSize: 12 }}>⚠ {loadError}</span>}
           {token && lastUpdate && (() => {
             const mins = Math.round((Date.now() - parseInt(lastUpdate)) / 60000);
             const horas = Math.floor(mins / 60);
             const isStale = mins >= 300; // avisa após 5h (token expira em 6h)
             return (
               <div style={{ fontSize:11, textAlign:"right", lineHeight:1.4 }}>
-                <div style={{ color: isStale ? "#dc2626" : "#94a3b8" }}>
+                <div style={{ color: isStale ? "#FF5252" : "#67759B" }}>
                   {isStale ? "⚠️ " : "✓ "}
                   {horas > 0 ? `${horas}h ${mins%60}min` : `${mins}min`} atrás
                 </div>
-                <div style={{ color:"#cbd5e1", fontSize:10 }}>
+                <div style={{ color:"#4A5878", fontSize:10 }}>
                   {isStale ? "Token próximo de expirar" : "dados atualizados"}
                 </div>
               </div>
@@ -4816,12 +4817,12 @@ export default function App() {
           {token && (
             <button onClick={clicarAtualizarManual} disabled={refreshingManual}
               title="Busca pedidos novos e atualiza os dados sem recarregar tudo"
-              style={{ background: refreshingManual?"#e2e8f0":"#f8fafc", border: "1px solid #e2e8f0", color: "#334155", fontWeight: 600, padding: "8px 14px", borderRadius: 8, cursor: refreshingManual?"wait":"pointer", fontSize: 13, display:"flex", alignItems:"center", gap:5 }}>
+              style={{ background: refreshingManual?"#223048":"#121A24", border: "1px solid rgba(255,255,255,.12)", color: "#A9B4C5", fontWeight: 600, padding: "8px 14px", borderRadius: 8, cursor: refreshingManual?"wait":"pointer", fontSize: 13, display:"flex", alignItems:"center", gap:5 }}>
               {refreshingManual ? "⏳ Atualizando..." : refreshManualMsg ? refreshManualMsg : "🔄 Atualizar"}
             </button>
           )}
           <button onClick={function(){ window.location.href = "/api/auth/login"; }}
-            style={{ background: "#0f172a", border: "none", color: "#fff", fontWeight: 700, padding: "8px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>
+            style={{ background: "#1976FF", border: "none", color: "#fff", fontWeight: 700, padding: "8px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>
             {token ? "Reconectar" : "Conectar ML"}
           </button>
           <SinoNotificacoes
@@ -4829,21 +4830,21 @@ export default function App() {
             setNotificacoes={setNotificacoes}
             darkMode={darkMode}
           />
-          <div style={{ display:"flex", alignItems:"center", gap:6, background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:8, padding:"5px 10px" }}>
-            <div style={{ width:26, height:26, borderRadius:8, background:"#0f172a", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:800, color:"#ffe000" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:6, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, padding:"5px 10px" }}>
+            <div style={{ width:26, height:26, borderRadius:8, background:"#1976FF", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:800, color:"#FFC107" }}>
               {currentUser?.nome?.charAt(0).toUpperCase()}
             </div>
             <div style={{ fontSize:12, lineHeight:1.3 }}>
-              <div style={{ fontWeight:600, color:"#0f172a" }}>{currentUser?.nome}</div>
-              <div style={{ color:"#94a3b8", fontSize:10 }}>{currentUser?.admin?"Admin":"Usuário"}</div>
+              <div style={{ fontWeight:600, color:"#FFFFFF" }}>{currentUser?.nome}</div>
+              <div style={{ color:"#67759B", fontSize:10 }}>{currentUser?.admin?"Admin":"Usuário"}</div>
             </div>
           </div>
           <button onClick={function(){ setShowConfigPanel(true); setConfigPanelTab("config"); }}
-            style={{ background:"#f8fafc", border:"1px solid #e2e8f0", color:"#334155", fontWeight:600, padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+            style={{ background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", fontWeight:600, padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
             ⚙️ Config
           </button>
           <button onClick={() => { fetch("/api/auth/app-logout", { method:"POST" }).catch(()=>{}); clearSession(); clearSavedTokens(); setCurrentUser(null); setToken(null); setUser(null); }}
-            style={{ background:"#fef2f2", border:"1px solid #fecaca", color:"#dc2626", fontWeight:600, padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+            style={{ background:"rgba(255,82,82,.12)", border:"1px solid rgba(255,82,82,.35)", color:"#FF5252", fontWeight:600, padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
             Sair
           </button>
         </div>
@@ -4856,7 +4857,7 @@ export default function App() {
         {tab === "listings" && currentUser?.permissoes?.includes("listings") && (
           <>
             {/* Sub-abas de Anúncios */}
-            <div style={{ display:"flex", gap:2, borderBottom:"2px solid #f1f5f9", marginBottom:10 }}>
+            <div style={{ display:"flex", gap:2, borderBottom:"2px solid rgba(255,255,255,.10)", marginBottom:10 }}>
               {[
                 { key:"ml",    label:"🟡 Anúncios Mercado Livre", badge: enriched.length },
                 { key:"outros",label:"➕ Outros Marketplaces",    badge: null },
@@ -4866,12 +4867,12 @@ export default function App() {
                   <button key={t.key}
                     onClick={function(){ setAbaAnuncio(t.key); }}
                     style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 20px", border:"none",
-                      borderBottom: active?"2px solid #0f172a":"2px solid transparent", marginBottom:-2,
-                      background:"transparent", color:active?"#0f172a":"#94a3b8",
+                      borderBottom: active?"2px solid #4DB3FF":"2px solid transparent", marginBottom:-2,
+                      background:"transparent", color:active?"#FFFFFF":"#67759B",
                       fontWeight:active?700:400, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>
                     {t.label}
                     {t.badge != null && (
-                      <span style={{ background:active?"#0f172a":"#e2e8f0", color:active?"#fff":"#64748b",
+                      <span style={{ background:active?"#1976FF":"#223048", color:active?"#fff":"#A9B4C5",
                         fontSize:11, fontWeight:700, padding:"1px 7px", borderRadius:20 }}>{t.badge}</span>
                     )}
                   </button>
@@ -4880,9 +4881,9 @@ export default function App() {
             </div>
             {/* Conteúdo — só ML por enquanto */}
             {(abaAnuncio) === "outros" ? (
-              <div style={{ textAlign:"center", padding:"60px 20px", color:"#94a3b8" }}>
+              <div style={{ textAlign:"center", padding:"60px 20px", color:"#67759B" }}>
                 <div style={{ fontSize:48, marginBottom:12 }}>🔌</div>
-                <div style={{ fontWeight:700, fontSize:16, color:"#0f172a", marginBottom:8 }}>Em breve: outros marketplaces</div>
+                <div style={{ fontWeight:700, fontSize:16, color:"#FFFFFF", marginBottom:8 }}>Em breve: outros marketplaces</div>
                 <div style={{ fontSize:13 }}>Integração com Shopee, Shein, Amazon e outros em desenvolvimento</div>
               </div>
             ) : (
@@ -4892,15 +4893,15 @@ export default function App() {
                   <FiltroGrupo titulo="Status">
                     {[{key:"all",label:"Todos"},{key:"active",label:"● Ativos"},{key:"paused",label:"○ Pausados"}].map(function(f){
                       return <FiltroBotao key={f.key} label={f.label} active={statusFilter===f.key}
-                        cor={f.key==="active"?"#15803d":f.key==="paused"?"#94a3b8":"#0f172a"}
-                        bg={f.key==="active"?"#f0fdf4":f.key==="paused"?"#f8fafc":"#f1f5f9"}
+                        cor={f.key==="active"?"#00C853":f.key==="paused"?"#67759B":"#FFFFFF"}
+                        bg={f.key==="active"?"rgba(0,200,83,.12)":f.key==="paused"?"#223048":"#223048"}
                         onClick={function(){setStatusFilter(f.key);}} />;
                     })}
                   </FiltroGrupo>
                   <FiltroGrupo titulo="Situação">
-                    {[{k:"all",l:"Todos"},{k:"sem_custo",l:"⚠️ Sem custo",cor:"#dc2626",bg:"#fef2f2"},{k:"sem_atacado",l:"🏷 Sem preço atacado",cor:"#7c3aed",bg:"#f5f3ff"},{k:"sem_video",l:"🎬 Sem vídeo clip",cor:"#ea580c",bg:"#fff7ed"},{k:"com_promo",l:"🔥 Com promoção",cor:"#7c3aed",bg:"#f5f3ff"},{k:"sem_promo",l:"○ Sem promoção",cor:"#64748b",bg:"#f8fafc"},{k:"frete_alto",l:"🚚 Frete acima do config.",cor:"#ea580c",bg:"#fff7ed"}].map(function(f){
+                    {[{k:"all",l:"Todos"},{k:"sem_custo",l:"⚠️ Sem custo",cor:"#FF5252",bg:"rgba(255,82,82,.12)"},{k:"sem_atacado",l:"🏷 Sem preço atacado",cor:"#7c3aed",bg:"rgba(139,92,246,.14)"},{k:"sem_video",l:"🎬 Sem vídeo clip",cor:"#FFC107",bg:"rgba(255,193,7,.10)"},{k:"com_promo",l:"🔥 Com promoção",cor:"#7c3aed",bg:"rgba(139,92,246,.14)"},{k:"sem_promo",l:"○ Sem promoção",cor:"#A9B4C5",bg:"#223048"},{k:"frete_alto",l:"🚚 Frete acima do config.",cor:"#FFC107",bg:"rgba(255,193,7,.10)"}].map(function(f){
                       return <FiltroBotao key={f.k} label={f.l} active={filterListingExtra===f.k}
-                        cor={f.cor||"#0f172a"} bg={f.bg||"#f1f5f9"}
+                        cor={f.cor||"#FFFFFF"} bg={f.bg||"#223048"}
                         onClick={function(){setFilterListingExtra(f.k);setPaginaAnuncios(1);}} />;
                     })}
                   </FiltroGrupo>
@@ -4912,16 +4913,16 @@ export default function App() {
                       {k:"sales_desc", l:"🔥 Mais vendidos"},
                       {k:"sales_asc",  l:"📉 Menos vendidos"},
                     ].map(function(o){
-                      return <FiltroBotao key={o.k} label={o.l} active={sortBy===o.k} cor="#0f172a" bg="#f1f5f9" onClick={function(){setSortBy(o.k);}} />;
+                      return <FiltroBotao key={o.k} label={o.l} active={sortBy===o.k} cor="#FFFFFF" bg="#223048" onClick={function(){setSortBy(o.k);}} />;
                     })}
                   </FiltroGrupo>
-                  <div style={{ fontSize:11, color:"#94a3b8", marginTop:"auto" }}>{sorted.length} anúncio(s)</div>
+                  <div style={{ fontSize:11, color:"#67759B", marginTop:"auto" }}>{sorted.length} anúncio(s)</div>
                 </>
               }
               busca={
                 <div style={{ display:"flex", gap:6 }}>
                   <div style={{ position:"relative", flex:1 }}>
-                    <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
+                    <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#67759B", fontSize:13 }}>🔍</span>
                     <input className="search-input" value={searchListings} onChange={function(e){setSearchListings(e.target.value);}}
                       placeholder={searchType==="title"?"Buscar por título...":searchType==="sku"?"Buscar por SKU exato...":searchType==="mlb"?"Buscar por MLB...":"Buscar por título, MLB ou SKU..."} style={{ paddingLeft:34 }} />
                   </div>
@@ -4934,7 +4935,7 @@ export default function App() {
                 </div>
               }>
 
-            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "auto", boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
+            <div style={{ background: "#182230", border: "1px solid rgba(255,255,255,.12)", borderRadius: 12, overflow: "auto", boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
               <table>
                 <thead>
                   <tr>
@@ -4958,7 +4959,7 @@ export default function App() {
                 </thead>
                 <tbody>
                   {sorted.length === 0 ? (
-                    <tr><td colSpan={15} style={{ textAlign: "center", color: "#94a3b8", padding: 40 }}>Nenhum anúncio encontrado</td></tr>
+                    <tr><td colSpan={15} style={{ textAlign: "center", color: "#67759B", padding: 40 }}>Nenhum anúncio encontrado</td></tr>
                   ) : sorted.slice((paginaAnuncios-1)*POR_PAG_ANUNCIOS, paginaAnuncios*POR_PAG_ANUNCIOS).map(l => {
                     const frete = getFreteDisplay(l);
                     const typeInfo = getListingTypeLabel(l.listing_type_id);
@@ -4967,9 +4968,9 @@ export default function App() {
                         <td style={{ width: 56, padding: "8px 8px 8px 14px" }}>
                           <a href={l.permalink ?? `https://www.mercadolivre.com.br/p/${l.id}`} target="_blank" rel="noreferrer">
                             {l.pictures?.[0]?.url ? (
-                              <img src={l.pictures[0].url} alt="" style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 8, border: "1px solid #e2e8f0", display: "block" }} />
+                              <img src={l.pictures[0].url} alt="" style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 8, border: "1px solid rgba(255,255,255,.12)", display: "block" }} />
                             ) : (
-                              <div style={{ width: 44, height: 44, borderRadius: 8, background: "#f1f5f9", border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>📦</div>
+                              <div style={{ width: 44, height: 44, borderRadius: 8, background: "#223048", border: "1px solid rgba(255,255,255,.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>📦</div>
                             )}
                           </a>
                         </td>
@@ -4980,43 +4981,43 @@ export default function App() {
                           </a>
                           <div style={{ display: "flex", gap: 4, marginTop: 5, flexWrap: "wrap" }}>
                             {l.checks.filter(c => !c.pass).slice(0, 2).map(c => (
-                              <span key={c.key} style={{ fontSize: 10, color: "#b91c1c", background: "#fef2f2", border: "1px solid #fecaca", padding: "1px 6px", borderRadius: 4, fontWeight: 500 }}>✗ {c.label}</span>
+                              <span key={c.key} style={{ fontSize: 10, color: "#FF5252", background: "rgba(255,82,82,.12)", border: "1px solid rgba(255,82,82,.35)", padding: "1px 6px", borderRadius: 4, fontWeight: 500 }}>✗ {c.label}</span>
                             ))}
-                            <span style={{ fontSize: 10, padding: "1px 7px", borderRadius: 4, fontWeight: 500, background: l.status === "active" ? "#f0fdf4" : "#f8fafc", color: l.status === "active" ? "#15803d" : "#94a3b8", border: `1px solid ${l.status === "active" ? "#bbf7d0" : "#e2e8f0"}` }}>
+                            <span style={{ fontSize: 10, padding: "1px 7px", borderRadius: 4, fontWeight: 500, background: l.status === "active" ? "rgba(0,200,83,.12)" : "#121A24", color: l.status === "active" ? "#00C853" : "#67759B", border: `1px solid ${l.status === "active" ? "rgba(0,200,83,.35)" : "rgba(255,255,255,.12)"}` }}>
                               {l.status === "active" ? "● ativo" : "○ pausado"}
                             </span>
                           </div>
                         </td>
                         <td>
                           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                            <span style={{ fontSize: 11, color: "#334155", fontFamily: "monospace", fontWeight: 600 }}>{l.id}</span>
+                            <span style={{ fontSize: 11, color: "#A9B4C5", fontFamily: "monospace", fontWeight: 600 }}>{l.id}</span>
                             <button className="copy-btn" onClick={() => navigator.clipboard.writeText(l.id)}>⎘</button>
                           </div>
                           {l.sku ? (
                             <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3 }}>
-                              <span style={{ fontSize: 10, color: "#94a3b8" }}>SKU:</span>
-                              <span style={{ fontSize: 11, color: "#64748b", fontFamily: "monospace", fontWeight: 600 }}>{l.sku}</span>
+                              <span style={{ fontSize: 10, color: "#67759B" }}>SKU:</span>
+                              <span style={{ fontSize: 11, color: "#A9B4C5", fontFamily: "monospace", fontWeight: 600 }}>{l.sku}</span>
                               <button className="copy-btn" onClick={() => navigator.clipboard.writeText(l.sku)}>⎘</button>
                             </div>
-                          ) : <div style={{ fontSize: 10, color: "#cbd5e1", marginTop: 3 }}>SKU: —</div>}
+                          ) : <div style={{ fontSize: 10, color: "#4A5878", marginTop: 3 }}>SKU: —</div>}
                         </td>
                         <td>
                           {(() => {
                             const qty = l.available_quantity ?? 0;
                             const min = minStock[l.id] ?? 0;
                             const abaixo = min > 0 && qty < min;
-                            const color = abaixo ? "#dc2626" : qty === 0 ? "#dc2626" : qty <= 5 ? "#d97706" : "#15803d";
-                            const bg = abaixo ? "#fef2f2" : qty === 0 ? "#fef2f2" : qty <= 5 ? "#fffbeb" : "#f0fdf4";
+                            const color = abaixo ? "#FF5252" : qty === 0 ? "#FF5252" : qty <= 5 ? "#FFC107" : "#00C853";
+                            const bg = abaixo ? "rgba(255,82,82,.12)" : qty === 0 ? "rgba(255,82,82,.12)" : qty <= 5 ? "rgba(255,193,7,.12)" : "rgba(0,200,83,.12)";
                             return (
                               <div>
                                 <span style={{ fontWeight: 700, fontSize: 13, color, background: bg, padding: "3px 10px", borderRadius: 6, display: "inline-block", marginBottom: 4 }}>
                                   {qty} un. {abaixo ? "⚠" : ""}
                                 </span>
                                 <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                  <span style={{ fontSize: 10, color: "#94a3b8" }}>Mín:</span>
+                                  <span style={{ fontSize: 10, color: "#67759B" }}>Mín:</span>
                                   <input type="number" value={minStock[l.id] ?? ""} onChange={e => setMinStockAndSave(m => ({ ...m, [l.id]: Number(e.target.value), ["_src_"+l.id]: "manual" }))} placeholder="0"
                                     title="Editar aqui marca como manual; para voltar a sincronizar com o cadastro do produto, defina o Estoque Mínimo em Produtos novamente"
-                                    style={{ background: "#f8fafc", border: "1px solid #e2e8f0", color: "#0f172a", padding: "2px 6px", borderRadius: 4, width: 52, fontSize: 11, textAlign: "right" }} />
+                                    style={{ background: "#121A24", border: "1px solid rgba(255,255,255,.12)", color: "#FFFFFF", padding: "2px 6px", borderRadius: 4, width: 52, fontSize: 11, textAlign: "right" }} />
                                 </div>
                               </div>
                             );
@@ -5031,24 +5032,24 @@ export default function App() {
                         <td><span style={{ fontSize: 11, color: typeInfo.color, fontWeight: 600 }}>{typeInfo.label}</span></td>
                         <td>
                           {l.hasPromo ? (
-                            <span style={{ fontSize: 13, color: "#94a3b8", textDecoration: "line-through" }}>{fmt(l.originalPrice)}</span>
+                            <span style={{ fontSize: 13, color: "#67759B", textDecoration: "line-through" }}>{fmt(l.originalPrice)}</span>
                           ) : (
-                            <span style={{ fontWeight: 700, color: "#0f172a", fontSize: 13 }}>{fmt(l.originalPrice)}</span>
+                            <span style={{ fontWeight: 700, color: "#FFFFFF", fontSize: 13 }}>{fmt(l.originalPrice)}</span>
                           )}
                         </td>
                         <td>
                           {l.hasPromo ? (
                             <div>
-                              <span style={{ fontWeight: 700, color: "#dc2626", fontSize: 13 }}>{fmt(l.salePrice)}</span>
-                              <span style={{ fontSize: 10, color: "#dc2626", background: "#fef2f2", padding: "1px 6px", borderRadius: 4, fontWeight: 600, marginLeft: 4 }}>Promo</span>
+                              <span style={{ fontWeight: 700, color: "#FF5252", fontSize: 13 }}>{fmt(l.salePrice)}</span>
+                              <span style={{ fontSize: 10, color: "#FF5252", background: "rgba(255,82,82,.12)", padding: "1px 6px", borderRadius: 4, fontWeight: 600, marginLeft: 4 }}>Promo</span>
                             </div>
                           ) : (
-                            <span style={{ fontWeight: 700, color: "#0f172a" }}>{fmt(l.salePrice)}</span>
+                            <span style={{ fontWeight: 700, color: "#FFFFFF" }}>{fmt(l.salePrice)}</span>
                           )}
                         </td>
                         <td>
-                          <span style={{ color: "#d97706", fontWeight: 700 }}>{fmt(l.fee)}</span>
-                          <div style={{ fontSize: 10, color: "#94a3b8" }}>{fmtPct(l.feeRate)}</div>
+                          <span style={{ color: "#FFC107", fontWeight: 700 }}>{fmt(l.fee)}</span>
+                          <div style={{ fontSize: 10, color: "#67759B" }}>{fmtPct(l.feeRate)}</div>
                         </td>
                         <td>
                           <div style={{ fontSize: 11, color: frete.topColor, background: frete.topBg, padding: "2px 7px", borderRadius: 5, fontWeight: 600, display: "inline-block", marginBottom: 3 }}>{frete.topLabel}</div>
@@ -5060,7 +5061,7 @@ export default function App() {
                               var fr = l.freteSeller||0;
                               if (fc>0 && fr>fc) return (
                                 <div style={{ marginTop:2 }}>
-                                  <span style={{ fontSize:9, fontWeight:700, background:"#fff7ed", color:"#ea580c", border:"1px solid #fed7aa", padding:"1px 5px", borderRadius:3, whiteSpace:"nowrap" }}>
+                                  <span style={{ fontSize:9, fontWeight:700, background:"rgba(255,193,7,.10)", color:"#FFC107", border:"1px solid rgba(255,193,7,.35)", padding:"1px 5px", borderRadius:3, whiteSpace:"nowrap" }}>
                                     🚚 frete +R${(fr-fc).toFixed(2).replace(".",",")}
                                   </span>
                                 </div>
@@ -5070,21 +5071,21 @@ export default function App() {
                           })()}
                         </td>
                         <td>
-                          <span style={{ fontWeight: 700, color: "#15803d", fontSize: 13 }}>{fmt(l.youReceive)}</span>
-                          <div style={{ fontSize: 10, color: "#94a3b8" }}>após tarifa e frete</div>
+                          <span style={{ fontWeight: 700, color: "#00C853", fontSize: 13 }}>{fmt(l.youReceive)}</span>
+                          <div style={{ fontSize: 10, color: "#67759B" }}>após tarifa e frete</div>
                         </td>
                         <td>
                           <input type="number" value={l.cost || ""} onChange={e => setCostsAndSave(c => ({ ...c, [l.id]: Number(e.target.value) }))} placeholder="0,00"
-                            style={{ background: "#f8fafc", border: "1px solid #e2e8f0", color: "#0f172a", padding: "5px 8px", borderRadius: 6, width: 80, fontSize: 12, textAlign: "right" }} />
+                            style={{ background: "#121A24", border: "1px solid rgba(255,255,255,.12)", color: "#FFFFFF", padding: "5px 8px", borderRadius: 6, width: 80, fontSize: 12, textAlign: "right" }} />
                         </td>
-                        <td style={{ color: l.profit >= 0 ? "#15803d" : "#dc2626", fontWeight: 700 }}>{fmt(l.profit)}</td>
+                        <td style={{ color: l.profit >= 0 ? "#00C853" : "#FF5252", fontWeight: 700 }}>{fmt(l.profit)}</td>
                         <td style={{ minWidth: 130 }}><MarginBar value={l.margin} /></td>
                         <td>
-                          <span style={{ color: l.totalProfit >= 0 ? "#15803d" : "#dc2626", fontWeight: 700 }}>{l.cost > 0 ? fmt(l.totalProfit) : "—"}</span>
-                          <div style={{ fontSize: 10, color: "#94a3b8" }}>{l.sold_quantity} vendidos</div>
+                          <span style={{ color: l.totalProfit >= 0 ? "#00C853" : "#FF5252", fontWeight: 700 }}>{l.cost > 0 ? fmt(l.totalProfit) : "—"}</span>
+                          <div style={{ fontSize: 10, color: "#67759B" }}>{l.sold_quantity} vendidos</div>
                         </td>
                         <td>
-                          <button onClick={() => setSelectedListing(l)} style={{ background: "#0f172a", border: "none", color: "#fff", fontSize: 11, padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>✦ Analisar</button>
+                          <button onClick={() => setSelectedListing(l)} style={{ background: "#1976FF", border: "none", color: "#fff", fontSize: 11, padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>✦ Analisar</button>
                         </td>
                       </tr>
                     );
@@ -5106,7 +5107,7 @@ export default function App() {
         {tab === "orders" && currentUser?.permissoes?.includes("orders") && (
           <>
             {/* Sub-abas de Pedidos */}
-            <div style={{ display:"flex", gap:2, borderBottom:"2px solid #f1f5f9", marginBottom:10 }}>
+            <div style={{ display:"flex", gap:2, borderBottom:"2px solid rgba(255,255,255,.10)", marginBottom:10 }}>
               {[
                 { key:"ml",    label:"🟡 Pedidos Mercado Livre", badge: enrichedOrders.length },
                 { key:"outros",label:"➕ Outros Marketplaces",   badge: null },
@@ -5116,12 +5117,12 @@ export default function App() {
                   <button key={t.key}
                     onClick={function(){ setAbaPedido(t.key); }}
                     style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 20px", border:"none",
-                      borderBottom: active?"2px solid #0f172a":"2px solid transparent", marginBottom:-2,
-                      background:"transparent", color:active?"#0f172a":"#94a3b8",
+                      borderBottom: active?"2px solid #4DB3FF":"2px solid transparent", marginBottom:-2,
+                      background:"transparent", color:active?"#FFFFFF":"#67759B",
                       fontWeight:active?700:400, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>
                     {t.label}
                     {t.badge != null && (
-                      <span style={{ background:active?"#0f172a":"#e2e8f0", color:active?"#fff":"#64748b",
+                      <span style={{ background:active?"#1976FF":"#223048", color:active?"#fff":"#A9B4C5",
                         fontSize:11, fontWeight:700, padding:"1px 7px", borderRadius:20 }}>{t.badge}</span>
                     )}
                   </button>
@@ -5129,9 +5130,9 @@ export default function App() {
               })}
             </div>
             {(abaPedido) === "outros" ? (
-              <div style={{ textAlign:"center", padding:"60px 20px", color:"#94a3b8" }}>
+              <div style={{ textAlign:"center", padding:"60px 20px", color:"#67759B" }}>
                 <div style={{ fontSize:48, marginBottom:12 }}>🔌</div>
-                <div style={{ fontWeight:700, fontSize:16, color:"#0f172a", marginBottom:8 }}>Em breve: outros marketplaces</div>
+                <div style={{ fontWeight:700, fontSize:16, color:"#FFFFFF", marginBottom:8 }}>Em breve: outros marketplaces</div>
                 <div style={{ fontSize:13 }}>Integração com Shopee, Shein, Amazon e outros em desenvolvimento</div>
               </div>
             ) : (
@@ -5140,52 +5141,52 @@ export default function App() {
                 <>
                   <FiltroGrupo titulo="Período">
                     {[{key:"today",l:"Hoje"},{key:"week",l:"7 dias"},{key:"thismonth",l:"Este mês"},{key:"month",l:"30 dias"},{key:"3months",l:"3 meses"},{key:"all",l:"Todos"}].map(function(f){
-                      return <FiltroBotao key={f.key} label={f.l} active={orderFilter===f.key} cor="#0f172a" bg="#f1f5f9" onClick={function(){setOrderFilter(f.key);}} />;
+                      return <FiltroBotao key={f.key} label={f.l} active={orderFilter===f.key} cor="#FFFFFF" bg="#223048" onClick={function(){setOrderFilter(f.key);}} />;
                     })}
                   </FiltroGrupo>
                   <FiltroGrupo titulo="Status">
                     {[{key:"all",l:"Todos"},{key:"waiting",l:"⏳ Ag. envio"},{key:"shipped",l:"🚚 Enviados"},{key:"done",l:"✓ Concluídos"},{key:"cancelled",l:"✗ Cancelados"},{key:"refunded",l:"↩ Devolvidos"},{key:"mediation",l:"⚠ Disputa"}].map(function(f){
-                      return <FiltroBotao key={f.key} label={f.l} active={orderStatusFilter===f.key} cor="#0f172a" bg="#f1f5f9" onClick={function(){setOrderStatusFilter(f.key);}} />;
+                      return <FiltroBotao key={f.key} label={f.l} active={orderStatusFilter===f.key} cor="#FFFFFF" bg="#223048" onClick={function(){setOrderStatusFilter(f.key);}} />;
                     })}
                   </FiltroGrupo>
                   <FiltroGrupo titulo="Tipo de Envio">
-                    {[{key:"todos",l:"Todos"},{key:"FULL",l:"FULL",c:"#1d4ed8",bg:"#eff6ff"},{key:"Flex",l:"Flex",c:"#7c3aed",bg:"#f5f3ff"},{key:"ME2",l:"ME2",c:"#0891b2",bg:"#ecfeff"},{key:"ME1",l:"ME1",c:"#0369a1",bg:"#e0f2fe"}].map(function(e){
-                      return <FiltroBotao key={e.key} label={e.l} active={filterEnvio===e.key} cor={e.c||"#0f172a"} bg={e.bg||"#f1f5f9"} onClick={function(){setFilterEnvio(e.key);setPaginaPedidos(1);}} />;
+                    {[{key:"todos",l:"Todos"},{key:"FULL",l:"FULL",c:"#3B8CFF",bg:"rgba(59,140,255,.14)"},{key:"Flex",l:"Flex",c:"#7c3aed",bg:"rgba(139,92,246,.14)"},{key:"ME2",l:"ME2",c:"#00F0FF",bg:"rgba(0,240,255,.10)"},{key:"ME1",l:"ME1",c:"#4DB3FF",bg:"rgba(77,179,255,.2)"}].map(function(e){
+                      return <FiltroBotao key={e.key} label={e.l} active={filterEnvio===e.key} cor={e.c||"#FFFFFF"} bg={e.bg||"#223048"} onClick={function(){setFilterEnvio(e.key);setPaginaPedidos(1);}} />;
                     })}
                   </FiltroGrupo>
                   <FiltroGrupo titulo="Outros Filtros">
                     <input value={filterSku} onChange={function(e){setFilterSku(e.target.value);}} placeholder="SKU do produto..."
-                      style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#0f172a", padding:"6px 8px", borderRadius:7, fontSize:11, outline:"none" }} />
+                      style={{ width:"100%", background:"#182230", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"6px 8px", borderRadius:7, fontSize:11, outline:"none" }} />
                     <select value={filterUF} onChange={function(e){setFilterUF(e.target.value);}}
-                      style={{ width:"100%", background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"6px 8px", borderRadius:7, fontSize:11 }}>
+                      style={{ width:"100%", background:"#182230", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", padding:"6px 8px", borderRadius:7, fontSize:11 }}>
                       <option value="">Estado (UF)</option>
                       {["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"].map(function(uf){return <option key={uf} value={uf}>{uf}</option>;})}
                     </select>
                     <div style={{ display:"flex", gap:4, alignItems:"center" }}>
                       <input type="date" value={dateFrom} onChange={function(e){setDateFrom(e.target.value);}}
-                        style={{ flex:1, background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 6px", borderRadius:7, fontSize:11 }} />
+                        style={{ flex:1, background:"#182230", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", padding:"5px 6px", borderRadius:7, fontSize:11 }} />
                     </div>
                     <div style={{ display:"flex", gap:4, alignItems:"center" }}>
-                      <span style={{ fontSize:10, color:"#94a3b8" }}>até</span>
+                      <span style={{ fontSize:10, color:"#67759B" }}>até</span>
                       <input type="date" value={dateTo} onChange={function(e){setDateTo(e.target.value);}}
-                        style={{ flex:1, background:"#fff", border:"1px solid #e2e8f0", color:"#334155", padding:"5px 6px", borderRadius:7, fontSize:11 }} />
+                        style={{ flex:1, background:"#182230", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", padding:"5px 6px", borderRadius:7, fontSize:11 }} />
                     </div>
                     {(filterSku||filterUF||dateFrom||dateTo) && (
                       <button onClick={function(){setFilterSku("");setFilterUF("");setDateFrom("");setDateTo("");}}
-                        style={{ background:"#fef2f2", border:"1px solid #fecaca", color:"#dc2626", padding:"5px 8px", borderRadius:7, cursor:"pointer", fontSize:11, width:"100%" }}>✕ Limpar filtros</button>
+                        style={{ background:"rgba(255,82,82,.12)", border:"1px solid rgba(255,82,82,.35)", color:"#FF5252", padding:"5px 8px", borderRadius:7, cursor:"pointer", fontSize:11, width:"100%" }}>✕ Limpar filtros</button>
                     )}
                   </FiltroGrupo>
-                  <div style={{ fontSize:11, color:"#94a3b8", marginTop:"auto" }}>{enrichedOrders.length} pedido(s)<br/>{fmt(enrichedOrders.reduce(function(s,o){return s+o.price*o.qty;},0))}</div>
+                  <div style={{ fontSize:11, color:"#67759B", marginTop:"auto" }}>{enrichedOrders.length} pedido(s)<br/>{fmt(enrichedOrders.reduce(function(s,o){return s+o.price*o.qty;},0))}</div>
                 </>
               }
               busca={
                 <div style={{ position:"relative" }}>
-                  <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#94a3b8", fontSize:13 }}>🔍</span>
+                  <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#67759B", fontSize:13 }}>🔍</span>
                   <input className="search-input" value={searchOrders} onChange={function(e){setSearchOrders(e.target.value);}}
                     placeholder="Buscar por nº pedido, cliente, CPF, e-mail..." style={{ width:"100%", paddingLeft:36 }} />
                 </div>
               }>
-              <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "auto", boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
+              <div style={{ background: "#182230", border: "1px solid rgba(255,255,255,.12)", borderRadius: 12, overflow: "auto", boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
               <table style={{ borderCollapse:"collapse", width:"100%", tableLayout:"fixed" }}>
                 <colgroup>
                   <col style={{ width:130 }} />
@@ -5206,48 +5207,48 @@ export default function App() {
                   <tr>
                     {["Pedido","Status","Envio","Cliente","Produto","Data","Preço","Qtd","Tarifa ML","Frete","Você recebe","Lucro","Margem"].map(function(h,i){
                       var align = [6,7,8,9,10,11].includes(i) ? "right" : i===7 ? "center" : "left";
-                      return <th key={h} style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 12px", borderBottom:"1px solid #f1f5f9", textAlign:align, fontWeight:600, background:"#fafafa", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{h}</th>;
+                      return <th key={h} style={{ fontSize:11, color:"#67759B", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 12px", borderBottom:"1px solid rgba(255,255,255,.10)", textAlign:align, fontWeight:600, background:"#121A24", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{h}</th>;
                     })}
                   </tr>
                 </thead>
                 <tbody>
                   {enrichedOrdersComEnvio.length === 0 ? (
-                    <tr><td colSpan={13} style={{ textAlign:"center", color:"#94a3b8", padding:40 }}>Nenhum pedido encontrado</td></tr>
+                    <tr><td colSpan={13} style={{ textAlign:"center", color:"#67759B", padding:40 }}>Nenhum pedido encontrado</td></tr>
                   ) : enrichedOrdersComEnvio.slice((paginaPedidos-1)*POR_PAG_PEDIDOS, paginaPedidos*POR_PAG_PEDIDOS).map(function(o) {
                     var youReceive = o.price - o.fee - o.freteSeller;
                     var sInfo = getOrderStatusInfo(o.status, o.tags, o.fulfilled, o.shipment_status);
                     var envLabel = detectTipoEnvio(o, shipmentStatuses) || "";
                     return (
-                      <tr key={o.id} style={{ borderBottom:"1px solid #f8fafc" }}>
-                        <td style={{ padding:"6px 9px", fontSize:11, color:"#64748b", fontFamily:"monospace", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>#{o.id}</td>
+                      <tr key={o.id} style={{ borderBottom:"1px solid rgba(255,255,255,.08)" }}>
+                        <td style={{ padding:"6px 9px", fontSize:11, color:"#A9B4C5", fontFamily:"monospace", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>#{o.id}</td>
                         <td style={{ padding:"10px 12px" }}>
                           <span style={{ fontSize:11, fontWeight:600, color:sInfo.color, background:sInfo.bg, padding:"3px 8px", borderRadius:6, whiteSpace:"nowrap" }}>{sInfo.label}</span>
                         </td>
                         <td style={{ padding:"10px 12px" }}>
-                          {envLabel ? <BadgeTipoEnvio tipo={envLabel} /> : <span style={{ color:"#94a3b8", fontSize:11 }}>—</span>}
+                          {envLabel ? <BadgeTipoEnvio tipo={envLabel} /> : <span style={{ color:"#67759B", fontSize:11 }}>—</span>}
                         </td>
                         <td style={{ padding:"10px 12px", overflow:"hidden" }}>
                           {o.buyerName ? (
                             <div style={{ position:"relative" }}>
                               <button onClick={function(){ setShowClienteDetalhe(showClienteDetalhe===o.id ? null : o.id); }}
-                                style={{ background:"none", border:"none", color:"#0891b2", cursor:"pointer", fontSize:11, fontWeight:600, padding:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"100%", display:"block" }}>
+                                style={{ background:"none", border:"none", color:"#00F0FF", cursor:"pointer", fontSize:11, fontWeight:600, padding:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"100%", display:"block" }}>
                                 {o.buyerName}
                               </button>
                               {showClienteDetalhe === o.id && (
-                                <div style={{ position:"fixed", zIndex:900, background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"16px 18px", boxShadow:"0 8px 32px rgba(0,0,0,.15)", minWidth:260, marginTop:4 }}>
-                                  <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", marginBottom:10, display:"flex", justifyContent:"space-between" }}>
+                                <div style={{ position:"fixed", zIndex:900, background:"#182230", border:"1px solid rgba(255,255,255,.12)", borderRadius:12, padding:"16px 18px", boxShadow:"0 8px 32px rgba(0,0,0,.15)", minWidth:260, marginTop:4 }}>
+                                  <div style={{ fontWeight:700, fontSize:14, color:"#FFFFFF", marginBottom:10, display:"flex", justifyContent:"space-between" }}>
                                     👤 {o.buyerName}
-                                    <button onClick={function(){ setShowClienteDetalhe(null); }} style={{ background:"none", border:"none", cursor:"pointer", color:"#94a3b8", fontSize:14 }}>✕</button>
+                                    <button onClick={function(){ setShowClienteDetalhe(null); }} style={{ background:"none", border:"none", cursor:"pointer", color:"#67759B", fontSize:14 }}>✕</button>
                                   </div>
-                                  {o.buyerDoc && <div style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>{o.buyerDocType||"Doc"}: {o.buyerDoc}</div>}
-                                  {o.buyerEmail && <div style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>✉️ {o.buyerEmail}</div>}
-                                  {o.buyerPhone && <div style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>📞 {o.buyerPhone}</div>}
-                                  {o.buyerCity && <div style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>📍 {o.buyerCity}{o.buyerUF ? " - "+o.buyerUF : ""}{o.buyerZip ? " ("+o.buyerZip+")" : ""}</div>}
-                                  {o.sku && <div style={{ fontSize:12, color:"#64748b" }}>SKU: {o.sku}</div>}
+                                  {o.buyerDoc && <div style={{ fontSize:12, color:"#A9B4C5", marginBottom:4 }}>{o.buyerDocType||"Doc"}: {o.buyerDoc}</div>}
+                                  {o.buyerEmail && <div style={{ fontSize:12, color:"#A9B4C5", marginBottom:4 }}>✉️ {o.buyerEmail}</div>}
+                                  {o.buyerPhone && <div style={{ fontSize:12, color:"#A9B4C5", marginBottom:4 }}>📞 {o.buyerPhone}</div>}
+                                  {o.buyerCity && <div style={{ fontSize:12, color:"#A9B4C5", marginBottom:4 }}>📍 {o.buyerCity}{o.buyerUF ? " - "+o.buyerUF : ""}{o.buyerZip ? " ("+o.buyerZip+")" : ""}</div>}
+                                  {o.sku && <div style={{ fontSize:12, color:"#A9B4C5" }}>SKU: {o.sku}</div>}
                                 </div>
                               )}
                             </div>
-                          ) : <span style={{ color:"#94a3b8", fontSize:11 }}>—</span>}
+                          ) : <span style={{ color:"#67759B", fontSize:11 }}>—</span>}
                         </td>
                         <td style={{ padding:"10px 12px", overflow:"hidden" }}>
                           <div style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
@@ -5266,20 +5267,20 @@ export default function App() {
                               } else if (o.permalink) {
                                 link = o.permalink;
                               }
-                              if (!title) return <span style={{ color:"#94a3b8", fontSize:12 }}>—</span>;
+                              if (!title) return <span style={{ color:"#67759B", fontSize:12 }}>—</span>;
                               return link
                                 ? <a href={link} target="_blank" rel="noreferrer" className="title-link" style={{ fontSize:12 }}>{title}</a>
                                 : <span style={{ fontSize:12 }}>{title}</span>;
                             })()}
                           </div>
                         </td>
-                        <td style={{ padding:"7px 10px", fontSize:11, color:"#64748b", whiteSpace:"nowrap" }}>{fmtDate(o.date)}</td>
-                        <td style={{ padding:"7px 10px", fontSize:12, fontWeight:700, color:"#0f172a", textAlign:"right", whiteSpace:"nowrap" }}>{fmt(o.price)}</td>
-                        <td style={{ padding:"7px 10px", fontSize:11, color:"#64748b", textAlign:"center" }}>×{o.qty}</td>
-                        <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#d97706", fontWeight:600, fontSize:12 }}>{fmt(o.fee)}</span></td>
+                        <td style={{ padding:"7px 10px", fontSize:11, color:"#A9B4C5", whiteSpace:"nowrap" }}>{fmtDate(o.date)}</td>
+                        <td style={{ padding:"7px 10px", fontSize:12, fontWeight:700, color:"#FFFFFF", textAlign:"right", whiteSpace:"nowrap" }}>{fmt(o.price)}</td>
+                        <td style={{ padding:"7px 10px", fontSize:11, color:"#A9B4C5", textAlign:"center" }}>×{o.qty}</td>
+                        <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#FFC107", fontWeight:600, fontSize:12 }}>{fmt(o.fee)}</span></td>
                         <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#7c3aed", fontWeight:600, fontSize:12 }}>{o.freteSeller > 0 ? fmt(o.freteSeller) : "—"}</span></td>
-                        <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#15803d", fontWeight:700, fontSize:12 }}>{fmt(youReceive)}</span></td>
-                        <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap", fontSize:12, color:o.profit>=0?"#15803d":"#dc2626", fontWeight:700 }}>{o.cost > 0 ? fmt(o.profit) : "—"}</td>
+                        <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#00C853", fontWeight:700, fontSize:12 }}>{fmt(youReceive)}</span></td>
+                        <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap", fontSize:12, color:o.profit>=0?"#00C853":"#FF5252", fontWeight:700 }}>{o.cost > 0 ? fmt(o.profit) : "—"}</td>
                         <td style={{ padding:"10px 12px" }}><MarginBar value={o.margin} /></td>
                       </tr>
                     );

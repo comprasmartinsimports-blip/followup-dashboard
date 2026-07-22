@@ -1,6 +1,8 @@
-# Follow-up Dashboard — ML Margem
+# Follow-up — Integração com Marketplaces
 
-Dashboard de lucratividade para vendedores do Mercado Livre.
+Sistema focado em integração com marketplaces (Mercado Livre): visualizar **anúncios** com sugestões de melhoria, acompanhar **pedidos**, **precificação** por anúncio e comparação com a **concorrência** (API oficial de sugestão de preço do ML).
+
+> Dashboards, financeiro, notas fiscais e cadastro de produtos **não fazem mais parte deste sistema** — essas funções vivem em outro local. Os dados antigos desses módulos continuam salvos no KV e podem ser exportados pela aba Backup.
 
 ## Segurança / Variáveis de ambiente (Vercel → Settings → Environment Variables)
 

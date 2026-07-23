@@ -825,55 +825,81 @@ function loadSavedTokens() {
 function clearSavedTokens() {
   ["ml_access_token","ml_refresh_token","ml_token_expiry","ml_user_id","ml_nickname"]
     .forEach(k => localStorage.removeItem(k));
-  try { localStorage.removeItem(ML_SNAPSHOT_KEY); } catch {}
+  idbDel(ML_SNAPSHOT_KEY);
 }
 
 // ── Snapshot dos dados do ML (anúncios, pedidos, enriquecimentos) ──────────
-// Guarda a última carga completa no localStorage para que ABRIR UMA NOVA ABA
-// reaproveite os dados na hora, sem refazer a reconexão pesada com o Mercado Livre.
-// Vale por um tempo curto (TTL); passou disso, a aba recarrega do ML normalmente.
+// Guarda a última carga completa para que ABRIR UMA NOVA ABA reaproveite os dados
+// na hora, sem refazer a reconexão pesada com o Mercado Livre.
+// Fica no IndexedDB (não no localStorage) porque a carga passa de 3 MB com centenas
+// de anúncios — o localStorage estoura em ~5 MB e o cache simplesmente não salvava.
+// Vale por um TTL; passou disso, a aba recarrega do ML normalmente.
 const ML_SNAPSHOT_KEY = "ml_snapshot_v1";
-const ML_SNAPSHOT_TTL = 30 * 60 * 1000; // 30 min
+const ML_SNAPSHOT_TTL = 60 * 60 * 1000; // 1h
 
-function salvarMLSnapshot(dados) {
-  try {
-    // Enxuga os anúncios: mantém o comprimento de fotos e a 1ª URL (usadas na UI),
-    // descartando o resto das fotos e campos pesados que não são lidos nas telas.
-    var listingsLeve = (dados.listings || []).map(function(l) {
-      var copia = Object.assign({}, l);
-      if (Array.isArray(l.pictures)) {
-        copia.pictures = l.pictures.map(function(p, i){ return i === 0 ? { url: p.url } : {}; });
-      }
-      delete copia.descriptions;
-      return copia;
+// ── Mini-wrapper de IndexedDB (armazena valores grandes que não cabem no localStorage) ──
+function idbOpen() {
+  return new Promise(function(resolve, reject){
+    try {
+      var req = indexedDB.open("mlmargem_cache", 1);
+      req.onupgradeneeded = function(){ try { req.result.createObjectStore("kv"); } catch(e){} };
+      req.onsuccess = function(){ resolve(req.result); };
+      req.onerror = function(){ reject(req.error); };
+    } catch (e) { reject(e); }
+  });
+}
+function idbPut(key, val) {
+  return idbOpen().then(function(db){
+    return new Promise(function(resolve, reject){
+      var tx = db.transaction("kv", "readwrite");
+      tx.objectStore("kv").put(val, key);
+      tx.oncomplete = function(){ resolve(); };
+      tx.onerror = function(){ reject(tx.error); };
     });
-    var payload = {
-      ts: Date.now(),
-      user: dados.user || null,
-      listings: listingsLeve,
-      orders: dados.orders || [],
-      sellerShipping: dados.sellerShipping || {},
-      shipmentCosts: dados.shipmentCosts || {},
-      shipmentStatuses: dados.shipmentStatuses || {},
-      paymentData: dados.paymentData || {},
-      promos: dados.promos || {},
-    };
-    localStorage.setItem(ML_SNAPSHOT_KEY, JSON.stringify(payload));
-  } catch (e) {
-    // Sem espaço no localStorage (muitos anúncios) → apenas não cacheia; a aba recarrega do ML.
-    try { localStorage.removeItem(ML_SNAPSHOT_KEY); } catch {}
-  }
+  });
+}
+function idbGet(key) {
+  return idbOpen().then(function(db){
+    return new Promise(function(resolve, reject){
+      var tx = db.transaction("kv", "readonly");
+      var r = tx.objectStore("kv").get(key);
+      r.onsuccess = function(){ resolve(r.result); };
+      r.onerror = function(){ reject(r.error); };
+    });
+  });
+}
+function idbDel(key) {
+  return idbOpen().then(function(db){
+    return new Promise(function(resolve){
+      try { var tx = db.transaction("kv", "readwrite"); tx.objectStore("kv").delete(key); tx.oncomplete = function(){ resolve(); }; }
+      catch(e){ resolve(); }
+    });
+  }).catch(function(){});
 }
 
+// Salva o snapshot completo (sem enxugar — o IndexedDB comporta) — best-effort.
+function salvarMLSnapshot(dados) {
+  var payload = {
+    ts: Date.now(),
+    user: dados.user || null,
+    listings: dados.listings || [],
+    orders: dados.orders || [],
+    sellerShipping: dados.sellerShipping || {},
+    shipmentCosts: dados.shipmentCosts || {},
+    shipmentStatuses: dados.shipmentStatuses || {},
+    paymentData: dados.paymentData || {},
+    promos: dados.promos || {},
+  };
+  return idbPut(ML_SNAPSHOT_KEY, payload).catch(function(){});
+}
+
+// Lê o snapshot (assíncrono). Retorna null se não existir ou estiver vencido.
 function lerMLSnapshot() {
-  try {
-    var raw = localStorage.getItem(ML_SNAPSHOT_KEY);
-    if (!raw) return null;
-    var s = JSON.parse(raw);
+  return idbGet(ML_SNAPSHOT_KEY).then(function(s){
     if (!s || !s.ts || (Date.now() - s.ts) > ML_SNAPSHOT_TTL) return null;
     if (!Array.isArray(s.listings) || !s.listings.length) return null;
     return s;
-  } catch { return null; }
+  }).catch(function(){ return null; });
 }
 
 // Renova o access token via refresh token (chamado automaticamente)
@@ -2194,8 +2220,20 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
   function saveProdutosExtras(next) {
     setProdutosExtras(next);
     try { localStorage.setItem("precificacao_extras", JSON.stringify(next)); } catch {}
-    // Quando um produto extra tiver SKU que agora existe em enriched, vincula automaticamente
+    // Envia na hora para o servidor (KV) — sem esperar o ciclo de 15s — para que os
+    // outros usuários vejam o produto precificado imediatamente.
+    kvSyncPush("precificacao_extras", next);
   }
+  // Produto precificado por OUTRO usuário chegou pela sincronização → mostra na hora aqui também.
+  useEffect(function(){
+    function aoSincronizar(e){
+      if (!e.detail || e.detail.key !== "precificacao_extras") return;
+      var v = e.detail.value;
+      if (Array.isArray(v)) setProdutosExtras(v);
+    }
+    window.addEventListener("mlmargem-sync", aoSincronizar);
+    return function(){ window.removeEventListener("mlmargem-sync", aoSincronizar); };
+  }, []);
   // Auto-vincular produtos extras a anúncios quando o SKU for encontrado nos enriched listings
   useEffect(function(){
     if (!enriched || !produtosExtras.length) return;
@@ -2671,15 +2709,15 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
 
 
 // ════════════════════════════════════════════════════════════
-//  ABA CONCORRÊNCIA — Seu preço vs. os mais vendidos da sua categoria
+//  ABA CONCORRÊNCIA — O que os líderes da sua categoria têm e o seu anúncio não
 // ────────────────────────────────────────────────────────────
-//  O ML não expõe "sugestão de preço"/price-to-win para anúncios que não são
-//  de catálogo (retorna 404), e a busca pública foi bloqueada (403). O dado de
-//  concorrência que a API entrega de forma confiável é o ranking de MAIS VENDIDOS
-//  por categoria (/highlights). Aqui comparamos o preço de cada anúncio ativo com
-//  a faixa de preço dos líderes de venda da mesma categoria.
+//  O ML bloqueia ler o anúncio COMPLETO de um concorrente (403). O que a API
+//  entrega é: o ranking de MAIS VENDIDOS por categoria (/highlights) e, de cada
+//  líder, sinais de qualidade (clipe de vídeo, fotos em alta, Premium, loja
+//  oficial, atacado, garantia, promoção). Comparamos esses sinais + as boas
+//  práticas do ML com o SEU anúncio (dados completos) e listamos o que melhorar.
 // ════════════════════════════════════════════════════════════
-const CONCORRENCIA_CACHE_KEY = "concorrencia_categorias_v2";
+const CONCORRENCIA_CACHE_KEY = "concorrencia_melhorias_v3";
 
 function ConcorrenciaTab({ enriched, token, sellerId }) {
   const [cats, setCats] = useState(function(){
@@ -2687,21 +2725,20 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
       var raw = localStorage.getItem(CONCORRENCIA_CACHE_KEY);
       if (!raw) return {};
       var p = JSON.parse(raw);
-      if (Date.now() - (p.em || 0) > 12*60*60*1000) return {}; // cache 12h
+      if (Date.now() - (p.em || 0) > 24*60*60*1000) return {}; // cache 24h
       return p.dados || {};
     } catch { return {}; }
   });
   const [analisando, setAnalisando] = useState(false);
   const [progresso, setProgresso] = useState({ feito: 0, total: 0 });
   const [busca, setBusca] = useState("");
-  const [filtro, setFiltro] = useState("all");
+  const [filtro, setFiltro] = useState("com");
   const [expandido, setExpandido] = useState(null);
   const cancelRef = useRef(false);
 
   const ativos = useMemo(function(){
     return enriched.filter(function(l){ return l.status === "active"; });
   }, [enriched]);
-
   const categoriasUnicas = useMemo(function(){
     var s = {};
     ativos.forEach(function(l){ if (l.category_id) s[l.category_id] = true; });
@@ -2713,37 +2750,57 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
   }
   function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
   function hdr(){ return { headers: { Authorization: "Bearer " + token } }; }
+  function temTag(l, t){ return (l.tags || []).indexOf(t) >= 0; }
+  function temGarantia(w){ return !!(w && !/sem garantia|nao possui|não possui/i.test(w)); }
 
-  // Resolve um item do ranking (ITEM=MLB direto; USER_PRODUCT=MLBU via /products/{id}/items)
+  // Lê o "stub" de um líder do ranking (dados que o ML deixa ver de concorrentes).
   async function resolverLider(entry) {
     try {
-      var ehItem = entry.type === "ITEM" || (entry.id.indexOf("MLBU") !== 0 && entry.id.indexOf("MLB") === 0);
-      if (ehItem) {
-        var it = await fetch(ML("/items/" + entry.id), hdr()).then(function(r){ return r.json(); });
-        if (!it || typeof it.price !== "number") return null;
-        return { titulo: it.title || "Anúncio", preco: it.price, vendidos: it.sold_quantity ?? null, sellerId: it.seller_id, meu: String(it.seller_id) === String(sellerId) };
-      } else {
-        var r = await fetch(ML("/products/" + entry.id + "/items"), hdr()).then(function(x){ return x.json(); });
-        var first = (r && r.results || [])[0];
-        if (!first || typeof first.price !== "number") return null;
-        return { titulo: (r.name || "Produto líder"), preco: first.price, vendidos: null, sellerId: first.seller_id, meu: String(first.seller_id) === String(sellerId) };
-      }
+      if (entry.type === "ITEM") return null; // item de concorrente = 403; só USER_PRODUCT é legível
+      var r = await fetch(ML("/products/" + entry.id + "/items"), hdr()).then(function(x){ return x.json(); });
+      var st = (r && r.results || [])[0];
+      if (!st) return null;
+      var tags = st.tags || [];
+      return {
+        posicao: entry.position,
+        sellerId: st.seller_id,
+        preco: typeof st.price === "number" ? st.price : null,
+        promo: typeof st.original_price === "number" && typeof st.price === "number" && st.original_price > st.price,
+        premium: st.listing_type_id === "gold_pro" || st.listing_type_id === "gold_premium",
+        oficial: !!st.official_store_id,
+        clip: tags.indexOf("has_published_clips") >= 0,
+        fotoHQ: tags.indexOf("good_quality_picture") >= 0,
+        atacado: tags.indexOf("standard_price_by_quantity") >= 0,
+        garantia: temGarantia(st.warranty),
+      };
     } catch { return null; }
   }
 
   async function analisarCategoria(cat) {
     var hl = await fetch(ML("/highlights/MLB/category/" + cat), hdr()).then(function(r){ return r.json(); }).catch(function(){ return null; });
     var content = (hl && hl.content) || [];
-    var top = content.slice(0, 8);
+    var top = content.slice(0, 10);
     var lideres = [];
     for (var i = 0; i < top.length; i++) {
-      var p = await resolverLider(top[i]);
-      if (p && p.preco > 0) { p.posicao = top[i].position; lideres.push(p); }
+      var s = await resolverLider(top[i]);
+      if (s && String(s.sellerId) !== String(sellerId)) lideres.push(s);
       await sleep(120);
     }
-    var precos = lideres.map(function(x){ return x.preco; }).sort(function(a,b){ return a-b; });
-    var mediana = precos.length ? precos[Math.floor((precos.length-1)/2)] : null;
-    return { em: Date.now(), lideres: lideres, min: precos[0] ?? null, max: precos[precos.length-1] ?? null, mediana: mediana };
+    var n = lideres.length;
+    var cont = function(f){ return lideres.filter(f).length; };
+    var precos = lideres.map(function(x){ return x.preco; }).filter(function(p){ return p > 0; }).sort(function(a,b){ return a-b; });
+    return {
+      em: Date.now(), n: n,
+      comClip: cont(function(x){ return x.clip; }),
+      comFotoHQ: cont(function(x){ return x.fotoHQ; }),
+      premium: cont(function(x){ return x.premium; }),
+      oficial: cont(function(x){ return x.oficial; }),
+      atacado: cont(function(x){ return x.atacado; }),
+      garantia: cont(function(x){ return x.garantia; }),
+      promo: cont(function(x){ return x.promo; }),
+      precoMin: precos[0] ?? null, precoMax: precos[precos.length-1] ?? null,
+      precoMediana: precos.length ? precos[Math.floor((precos.length-1)/2)] : null,
+    };
   }
 
   async function analisarTodos() {
@@ -2763,51 +2820,57 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
     setAnalisando(false);
   }
 
-  function classificar(l) {
+  // Lista de melhorias para um anúncio, comparando com os líderes + boas práticas do ML.
+  function melhorias(l) {
     var c = cats[l.category_id];
-    if (!c || c.mediana == null) return "sem_dados";
-    if (l.salePrice > c.mediana * 1.05) return "acima";
-    if (l.salePrice < c.mediana * 0.95) return "abaixo";
-    return "competitivo";
-  }
-  function minhaPosicao(l) {
-    var c = cats[l.category_id];
-    if (!c || !c.lideres) return null;
-    var m = c.lideres.find(function(x){ return x.meu; });
-    return m ? m.posicao : null;
+    if (!c) return null; // categoria ainda não analisada
+    var pts = [];
+    var metade = c.n / 2;
+    // ── O que os líderes têm e o seu não ──
+    if (c.n >= 1 && c.comClip >= 1 && !temTag(l, "has_published_clips"))
+      pts.push({ ico:"🎬", t:"Adicione um clipe de vídeo", d: c.comClip + " de " + c.n + " líderes têm clipe", tipo:"lider" });
+    if (c.n >= 1 && c.comFotoHQ >= 1 && !temTag(l, "good_quality_picture"))
+      pts.push({ ico:"📸", t:"Melhore a qualidade das fotos", d: c.comFotoHQ + " de " + c.n + " líderes têm fotos em alta resolução", tipo:"lider" });
+    var ehPrem = l.listing_type_id === "gold_pro" || l.listing_type_id === "gold_premium";
+    if (c.n >= 1 && c.premium >= metade && c.premium >= 1 && !ehPrem)
+      pts.push({ ico:"⭐", t:"Considere o anúncio Premium", d: c.premium + " de " + c.n + " líderes são Premium (mais exposição)", tipo:"lider" });
+    if (c.n >= 1 && c.atacado >= metade && c.atacado >= 1 && !temTag(l, "standard_price_by_quantity"))
+      pts.push({ ico:"🏷️", t:"Adicione preço de atacado", d: c.atacado + " de " + c.n + " líderes têm preço por quantidade", tipo:"lider" });
+    if (c.n >= 1 && c.garantia >= metade && c.garantia >= 1 && !temGarantia(l.warranty))
+      pts.push({ ico:"🛡️", t:"Informe a garantia", d: c.garantia + " de " + c.n + " líderes informam garantia", tipo:"lider" });
+    // ── Boas práticas do próprio anúncio (dados que temos completos) ──
+    var nFotos = (l.pictures || []).length;
+    if (nFotos < 6) pts.push({ ico:"🖼️", t:"Adicione mais fotos", d:"você tem " + nFotos + " — o ideal são 6 ou mais", tipo:"pratica" });
+    var nAttrs = (l.attributes || []).filter(function(a){ return a.value_name; }).length;
+    if (nAttrs < 8) pts.push({ ico:"📋", t:"Preencha mais a ficha técnica", d:"só " + nAttrs + " atributos preenchidos", tipo:"pratica" });
+    if (!(l.shipping && l.shipping.free_shipping)) pts.push({ ico:"🚚", t:"Avalie oferecer frete grátis", d:"melhora conversão e posição", tipo:"pratica" });
+    if ((l.title || "").length < 60) pts.push({ ico:"📝", t:"Aproveite todo o título", d:(l.title||"").length + " caracteres — use até 60 com palavras-chave", tipo:"pratica" });
+    if (!(l.descriptions && l.descriptions.length)) pts.push({ ico:"📄", t:"Adicione uma descrição detalhada", d:"anúncios com descrição convertem mais", tipo:"pratica" });
+    return pts;
   }
 
-  var linhas = ativos.map(function(l){ return { l: l, c: cats[l.category_id], cls: classificar(l) }; });
+  var linhas = ativos.map(function(l){ return { l: l, pts: melhorias(l) }; });
   var resumo = {
-    analisados: linhas.filter(function(x){ return x.c && x.c.mediana != null; }).length,
-    acima: linhas.filter(function(x){ return x.cls === "acima"; }).length,
-    abaixo: linhas.filter(function(x){ return x.cls === "abaixo"; }).length,
-    competitivo: linhas.filter(function(x){ return x.cls === "competitivo"; }).length,
+    analisados: linhas.filter(function(x){ return x.pts != null; }).length,
+    totalMelhorias: linhas.reduce(function(s,x){ return s + (x.pts ? x.pts.length : 0); }, 0),
+    otimizados: linhas.filter(function(x){ return x.pts != null && x.pts.length === 0; }).length,
   };
 
   var q = busca.toLowerCase().trim();
   var visiveis = linhas.filter(function(x){
-    if (filtro !== "all" && x.cls !== filtro) return false;
+    if (filtro === "com" && !(x.pts && x.pts.length > 0)) return false;
+    if (filtro === "ok" && !(x.pts != null && x.pts.length === 0)) return false;
+    if (filtro === "nao" && x.pts != null) return false;
     if (q && (x.l.title||"").toLowerCase().indexOf(q) < 0 && (x.l.id||"").toLowerCase().indexOf(q) < 0 && (x.l.sku||"").toLowerCase().indexOf(q) < 0) return false;
     return true;
-  }).sort(function(a,b){
-    var ordem = { acima:0, abaixo:1, competitivo:2, sem_dados:3 };
-    return ordem[a.cls] - ordem[b.cls];
-  });
-
-  var chipCls = {
-    acima:       { label: "▲ Acima dos líderes",  cor: "#FF5252", bg: "rgba(255,82,82,.12)",  border: "rgba(255,82,82,.35)" },
-    abaixo:      { label: "▼ Abaixo dos líderes", cor: "#3B8CFF", bg: "rgba(59,140,255,.14)",  border: "rgba(77,179,255,.35)" },
-    competitivo: { label: "✓ Competitivo",        cor: "#00C853", bg: "rgba(0,200,83,.12)",    border: "rgba(0,200,83,.35)" },
-    sem_dados:   { label: "— Sem dados",          cor: "#67759B", bg: "#223048",               border: "rgba(255,255,255,.12)" },
-  };
+  }).sort(function(a,b){ return (b.pts ? b.pts.length : -1) - (a.pts ? a.pts.length : -1); });
 
   return (
     <div style={{ padding: "0 12px" }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12, marginBottom:16 }}>
         <div>
-          <div style={{ fontWeight:800, fontSize:18, color:"#FFFFFF" }}>🔎 Concorrência</div>
-          <div style={{ fontSize:12, color:"#67759B", maxWidth:640 }}>Compara o preço de cada anúncio ativo com a faixa de preço dos <strong>mais vendidos da mesma categoria</strong> no Mercado Livre. (O ML não fornece sugestão de preço para anúncios fora de catálogo.)</div>
+          <div style={{ fontWeight:800, fontSize:18, color:"#FFFFFF" }}>🔎 Concorrência — melhorias do anúncio</div>
+          <div style={{ fontSize:12, color:"#67759B", maxWidth:680 }}>Compara cada anúncio ativo com os <strong>mais vendidos da mesma categoria</strong> e mostra o que os líderes têm e o seu não (clipe, fotos em alta, Premium, atacado, garantia), além das boas práticas do ML.</div>
         </div>
         <div style={{ display:"flex", gap:8, alignItems:"center" }}>
           {analisando && (
@@ -2824,12 +2887,11 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
         </div>
       </div>
 
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(150px, 1fr))", gap:12, marginBottom:16 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))", gap:12, marginBottom:16 }}>
         {[
-          { label:"Analisados",       valor: resumo.analisados,  cor:"#FFFFFF" },
-          { label:"Acima dos líderes",valor: resumo.acima,       cor:"#FF5252" },
-          { label:"Competitivos",     valor: resumo.competitivo, cor:"#00C853" },
-          { label:"Abaixo dos líderes",valor: resumo.abaixo,     cor:"#3B8CFF" },
+          { label:"Anúncios analisados",     valor: resumo.analisados,     cor:"#FFFFFF" },
+          { label:"Melhorias sugeridas",     valor: resumo.totalMelhorias, cor:"#FFC107" },
+          { label:"Anúncios otimizados",     valor: resumo.otimizados,     cor:"#00C853" },
         ].map(function(c){
           return (
             <div key={c.label} style={{ background:"#182230", border:"1px solid rgba(255,255,255,.08)", borderRadius:12, padding:"14px 16px" }}>
@@ -2842,11 +2904,10 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
 
       <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap", marginBottom:12 }}>
         {[
-          { key:"all",         label:"Todos" },
-          { key:"acima",       label:"▲ Acima" },
-          { key:"competitivo", label:"✓ Competitivos" },
-          { key:"abaixo",      label:"▼ Abaixo" },
-          { key:"sem_dados",   label:"Sem dados" },
+          { key:"com", label:"Com melhorias" },
+          { key:"ok",  label:"✓ Otimizados" },
+          { key:"nao", label:"Não analisados" },
+          { key:"all", label:"Todos" },
         ].map(function(f){
           var ativo = filtro === f.key;
           return (
@@ -2860,89 +2921,54 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
           style={{ marginLeft:"auto", background:"#121A24", color:"#FFFFFF", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, padding:"7px 12px", fontSize:13, minWidth:240, fontFamily:"inherit" }} />
       </div>
 
-      <div style={{ background:"#182230", border:"1px solid rgba(255,255,255,.08)", borderRadius:12, overflow:"hidden" }}>
-        <div style={{ overflowX:"auto" }}>
-          <table style={{ borderCollapse:"collapse", width:"100%", minWidth:900 }}>
-            <thead>
-              <tr style={{ background:"#121A24", borderBottom:"1px solid rgba(255,255,255,.08)" }}>
-                {["Anúncio","Seu preço","Mediana dos líderes","Faixa dos líderes","Diferença","Seu ranking","Status",""].map(function(h){
-                  return <th key={h} style={{ textAlign:"left", padding:"10px 14px", fontFamily:"'JetBrains Mono',monospace", fontSize:9, color:"#67759B", fontWeight:700, textTransform:"uppercase", letterSpacing:".12em", whiteSpace:"nowrap" }}>{h}</th>;
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {!visiveis.length && (
-                <tr><td colSpan={8} style={{ padding:"40px 20px", textAlign:"center", color:"#67759B", fontSize:13 }}>
-                  {ativos.length ? "Clique em “Analisar” para buscar os mais vendidos de cada categoria." : "Nenhum anúncio ativo encontrado."}
-                </td></tr>
-              )}
-              {visiveis.map(function(x){
-                var l = x.l, c = x.c;
-                var chip = chipCls[x.cls];
-                var diff = (c && c.mediana != null) ? (l.salePrice - c.mediana) / c.mediana : null;
-                var pos = minhaPosicao(l);
-                var aberto = expandido === l.id;
-                return (
-                  <React.Fragment key={l.id}>
-                    <tr style={{ borderBottom:"1px solid rgba(255,255,255,.06)" }}>
-                      <td style={{ padding:"10px 14px", maxWidth:340 }}>
-                        <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-                          {l.thumbnail && <img src={l.thumbnail.replace("http://","https://")} alt="" style={{ width:38, height:38, borderRadius:8, objectFit:"cover", border:"1px solid rgba(255,255,255,.12)", flexShrink:0 }} />}
-                          <div style={{ minWidth:0 }}>
-                            <a href={l.permalink} target="_blank" rel="noreferrer" style={{ fontSize:13, fontWeight:600, color:"#FFFFFF", textDecoration:"none", display:"block", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{l.title}</a>
-                            <div style={{ fontSize:11, color:"#67759B" }}>{l.id}{l.sku ? " · SKU " + l.sku : ""}</div>
+      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+        {!visiveis.length && (
+          <div style={{ background:"#182230", border:"1px solid rgba(255,255,255,.08)", borderRadius:12, padding:"40px 20px", textAlign:"center", color:"#67759B", fontSize:13 }}>
+            {ativos.length ? "Clique em “Analisar” para comparar seus anúncios com os líderes de cada categoria." : "Nenhum anúncio ativo encontrado."}
+          </div>
+        )}
+        {visiveis.map(function(x){
+          var l = x.l, pts = x.pts;
+          var aberto = expandido === l.id;
+          var qtd = pts ? pts.length : null;
+          var corQtd = qtd === null ? "#67759B" : qtd === 0 ? "#00C853" : qtd >= 4 ? "#FF5252" : "#FFC107";
+          return (
+            <div key={l.id} style={{ background:"#182230", border:"1px solid rgba(255,255,255,.08)", borderRadius:12, overflow:"hidden" }}>
+              <div onClick={function(){ if (qtd) setExpandido(aberto ? null : l.id); }}
+                style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", cursor: qtd ? "pointer" : "default" }}>
+                {l.thumbnail && <img src={l.thumbnail.replace("http://","https://")} alt="" style={{ width:44, height:44, borderRadius:8, objectFit:"cover", border:"1px solid rgba(255,255,255,.12)", flexShrink:0 }} />}
+                <div style={{ minWidth:0, flex:1 }}>
+                  <a href={l.permalink} target="_blank" rel="noreferrer" onClick={function(e){ e.stopPropagation(); }} style={{ fontSize:13, fontWeight:600, color:"#FFFFFF", textDecoration:"none", display:"block", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{l.title}</a>
+                  <div style={{ fontSize:11, color:"#67759B" }}>{l.id}{l.sku ? " · SKU " + l.sku : ""}</div>
+                </div>
+                <div style={{ textAlign:"right", flexShrink:0 }}>
+                  {qtd === null
+                    ? <span style={{ fontSize:12, color:"#67759B" }}>não analisado</span>
+                    : qtd === 0
+                      ? <span style={{ fontSize:12, fontWeight:700, color:"#00C853" }}>✓ otimizado</span>
+                      : <span style={{ fontSize:13, fontWeight:800, color:corQtd }}>{qtd} melhoria{qtd>1?"s":""} {aberto ? "▲" : "▼"}</span>}
+                </div>
+              </div>
+              {aberto && qtd > 0 && (
+                <div style={{ borderTop:"1px solid rgba(255,255,255,.08)", padding:"10px 16px", display:"flex", flexDirection:"column", gap:6 }}>
+                  {pts.map(function(p, i){
+                    return (
+                      <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start", padding:"7px 10px", background:"#121A24", borderRadius:8, border:"1px solid "+(p.tipo==="lider"?"rgba(255,193,7,.25)":"rgba(255,255,255,.06)") }}>
+                        <span style={{ fontSize:15, lineHeight:1.2 }}>{p.ico}</span>
+                        <div style={{ minWidth:0 }}>
+                          <div style={{ fontSize:13, fontWeight:600, color:"#FFFFFF" }}>{p.t}
+                            {p.tipo==="lider" && <span style={{ marginLeft:8, fontSize:9, fontFamily:"'JetBrains Mono',monospace", color:"#FFC107", border:"1px solid rgba(255,193,7,.35)", borderRadius:6, padding:"1px 5px", textTransform:"uppercase", letterSpacing:".08em" }}>concorrente</span>}
                           </div>
+                          <div style={{ fontSize:12, color:"#67759B", marginTop:1 }}>{p.d}</div>
                         </div>
-                      </td>
-                      <td style={{ padding:"10px 14px", fontWeight:700, fontSize:13, whiteSpace:"nowrap", color:"#FFFFFF" }}>{fmt(l.salePrice)}</td>
-                      <td style={{ padding:"10px 14px", fontSize:13, whiteSpace:"nowrap", color:"#A9B4C5" }}>{c && c.mediana != null ? fmt(c.mediana) : "—"}</td>
-                      <td style={{ padding:"10px 14px", fontSize:12, whiteSpace:"nowrap", color:"#A9B4C5" }}>{c && c.min != null ? fmt(c.min) + " – " + fmt(c.max) : "—"}</td>
-                      <td style={{ padding:"10px 14px", fontSize:13, fontWeight:700, whiteSpace:"nowrap", color: diff == null ? "#67759B" : diff > 0.05 ? "#FF5252" : diff < -0.05 ? "#3B8CFF" : "#00C853" }}>
-                        {diff == null ? "—" : (diff > 0 ? "+" : "") + (diff * 100).toFixed(1) + "%"}
-                      </td>
-                      <td style={{ padding:"10px 14px", fontSize:12, whiteSpace:"nowrap", color: pos ? "#FFC107" : "#67759B", fontWeight: pos ? 700 : 400 }}>
-                        {pos ? ("#" + pos + " mais vendido") : "fora do top 8"}
-                      </td>
-                      <td style={{ padding:"10px 14px", whiteSpace:"nowrap" }}>
-                        <span style={{ fontSize:11, fontWeight:700, color:chip.cor, background:chip.bg, border:"1px solid "+chip.border, padding:"3px 10px", borderRadius:20 }}>{chip.label}</span>
-                      </td>
-                      <td style={{ padding:"10px 14px", whiteSpace:"nowrap" }}>
-                        {c && c.lideres && c.lideres.length > 0 && (
-                          <button onClick={function(){ setExpandido(aberto ? null : l.id); }}
-                            style={{ background:"#121A24", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, padding:"4px 10px", fontSize:12, cursor:"pointer", color:"#A9B4C5", fontWeight:600 }}>
-                            líderes {aberto ? "▲" : "▼"}
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                    {aberto && c && c.lideres && c.lideres.length > 0 && (
-                      <tr style={{ borderBottom:"1px solid rgba(255,255,255,.06)", background:"#121A24" }}>
-                        <td colSpan={8} style={{ padding:"10px 24px" }}>
-                          <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:9, color:"#67759B", fontWeight:700, textTransform:"uppercase", letterSpacing:".12em", marginBottom:6 }}>Mais vendidos da categoria</div>
-                          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(240px, 1fr))", gap:8 }}>
-                            {c.lideres.map(function(m, i){
-                              return (
-                                <div key={i} style={{ background:"#182230", border:"1px solid "+(m.meu?"rgba(255,193,7,.5)":"rgba(255,255,255,.08)"), borderRadius:8, padding:"8px 12px", fontSize:12 }}>
-                                  <div style={{ color:"#A9B4C5", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                                    #{m.posicao} {m.meu ? "🟡 (seu anúncio)" : (m.titulo || "Concorrente")}
-                                  </div>
-                                  <div style={{ color:"#67759B", marginTop:2 }}>
-                                    <strong style={{ color:"#FFFFFF" }}>{fmt(m.preco)}</strong>
-                                    {m.vendidos != null ? " · " + m.vendidos + " vendidos" : ""}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -3504,25 +3530,22 @@ export default function App() {
             if (session.authenticated) {
               if (session.expiresAt) setTokenExpiry(session.expiresAt);
               // Nova aba / reabertura: se já temos uma carga recente em cache, mostra na hora
-              // sem refazer a reconexão pesada com o ML. Uma atualização leve roda em segundo
-              // plano; "Atualizar" força a recarga completa quando o usuário quiser.
-              var snap = lerMLSnapshot();
-              if (snap) {
-                hidratarDoSnapshot(snap, session.accessToken);
-                return;
-              }
-              // Renovar se quase expirando
-              if (session.almostExpired) {
-                fetch("/api/auth/refresh", { method: "POST" })
-                  .then(function(r){ return r.json(); })
-                  .then(function(d){
-                    var tk = d.access_token || session.accessToken;
-                    if (d.expires_in) setTokenExpiry(Date.now() + d.expires_in * 1000);
-                    handleConnect(tk, session.userId);
-                  }).catch(function(){ handleConnect(session.accessToken, session.userId); });
-              } else {
-                handleConnect(session.accessToken, session.userId);
-              }
+              // sem refazer a reconexão pesada com o ML. "Atualizar" força a recarga completa.
+              lerMLSnapshot().then(function(snap){
+                if (snap) { hidratarDoSnapshot(snap, session.accessToken); return; }
+                // Sem cache válido → carga completa (renovando o token se estiver perto de expirar)
+                if (session.almostExpired) {
+                  fetch("/api/auth/refresh", { method: "POST" })
+                    .then(function(r){ return r.json(); })
+                    .then(function(d){
+                      var tk = d.access_token || session.accessToken;
+                      if (d.expires_in) setTokenExpiry(Date.now() + d.expires_in * 1000);
+                      handleConnect(tk, session.userId);
+                    }).catch(function(){ handleConnect(session.accessToken, session.userId); });
+                } else {
+                  handleConnect(session.accessToken, session.userId);
+                }
+              });
             }
           }).catch(function(){});
       }
@@ -3995,6 +4018,9 @@ export default function App() {
           try { localStorage.setItem(key, raw); } catch(e) {}
           var setter = SYNC_ROOT_SETTERS[key];
           if (setter) setter(v);
+          // Avisa componentes que leem essa chave direto do localStorage (ex: produtos extras
+          // da Precificação) para que a mudança de outro usuário apareça na hora, sem reload.
+          try { window.dispatchEvent(new CustomEvent("mlmargem-sync", { detail: { key: key, value: v } })); } catch(e) {}
         });
       });
       return Promise.all(promessas);

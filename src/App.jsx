@@ -156,18 +156,34 @@ function scoreBg(s) { return s >= 80 ? "rgba(0,200,83,.12)" : s >= 50 ? "rgba(25
 function scoreLabel(s) { return s >= 80 ? "Ótimo" : s >= 50 ? "Regular" : "Fraco"; }
 
 async function analyzeWithAI(listing) {
-  const prompt = `Analise este anúncio do Mercado Livre Brasil e retorne APENAS um objeto JSON válido, sem texto extra, sem markdown.
+  const prompt = `Você é especialista em anúncios do Mercado Livre Brasil. Analise o anúncio abaixo e, para CADA melhoria, entregue o CONTEÚDO JÁ PRONTO para o vendedor copiar e colar — não apenas dizer o que fazer.
 
-Estrutura obrigatória:
-{"score_commentary":"frase curta sobre qualidade geral","strengths":["ponto1","ponto2"],"improvements":[{"field":"campo","suggestion":"sugestão curta"},{"field":"campo","suggestion":"sugestão curta"},{"field":"campo","suggestion":"sugestão curta"}],"title_suggestion":"novo título em até 60 chars","keywords":["palavra1","palavra2","palavra3","palavra4","palavra5"]}
+Retorne APENAS um objeto JSON válido, sem texto extra, sem markdown, com esta estrutura:
+{
+ "score_commentary":"frase curta sobre a qualidade geral",
+ "strengths":["ponto forte 1","ponto forte 2"],
+ "improvements":[
+   {"field":"Nome do campo (ex: Descrição, Título, Atributos, Fotos)","why":"por que melhorar, em 1 frase","ready":"CONTEÚDO PRONTO para colar — o texto/valor final já escrito. Se for algo não textual (ex: adicionar fotos), deixe \\"\\" e explique no why."}
+ ],
+ "title_suggestion":"novo título otimizado com até 60 caracteres, com as principais palavras-chave",
+ "description_suggestion":"descrição COMPLETA e pronta para colar (use quebras de linha \\n), com: o que é o produto, compatibilidade/aplicação, material e características, medidas se fizer sentido, itens inclusos, instalação e garantia. Português comercial e persuasivo.",
+ "keywords":["palavra1","palavra2","palavra3","palavra4","palavra5"]
+}
 
-Dados:
-- Título: ${listing.title}
+Regras:
+- Gere de 3 a 5 melhorias, sempre com "ready" preenchido quando for texto (Descrição, Título, Atributos).
+- Para "Atributos", em "ready" liste no formato "Marca: X\\nModelo: Y\\nCor: Z" com valores plausíveis para este produto.
+- Baseie tudo nos dados reais do anúncio abaixo.
+
+Dados do anúncio:
+- Título atual: ${listing.title}
 - Preço: R$${listing.salePrice}
+- Categoria: ${listing.category_id || "-"}
+- Condição: ${listing.condition || "-"}
 - Fotos: ${listing.pictures?.length ?? 0}
 - Frete grátis: ${listing.shipping?.free_shipping ? "Sim" : "Não"}
-- Descrição: ${(listing.description?.plain_text ?? "").slice(0, 200) || "vazia"}
-- Atributos: ${listing.attributes?.slice(0, 5).map(a => a.name + ": " + a.value_name).join(", ") || "nenhum"}
+- Descrição atual: ${(listing.description?.plain_text ?? "").slice(0, 400) || "vazia"}
+- Atributos atuais: ${listing.attributes?.filter(a => a.value_name).slice(0, 12).map(a => a.name + ": " + a.value_name).join(", ") || "nenhum"}
 - Vendidos: ${listing.sold_quantity ?? 0}
 
 Retorne SOMENTE o JSON, começando com { e terminando com }.`;
@@ -177,7 +193,7 @@ Retorne SOMENTE o JSON, começando com { e terminando com }.`;
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      max_tokens: 1500,
+      max_tokens: 2500,
       messages: [{ role: "user", content: prompt }],
     }),
   });
@@ -737,6 +753,26 @@ function MarginBar({ value }) {
   );
 }
 
+// Caixa de conteúdo pronto para copiar (descrição, título, atributos gerados pela IA)
+function CaixaCopiar({ texto, cor }) {
+  const [copiado, setCopiado] = useState(false);
+  const cf = cor || "#00C853";
+  function copiar() {
+    try {
+      navigator.clipboard.writeText(texto).then(function(){ setCopiado(true); setTimeout(function(){ setCopiado(false); }, 1800); });
+    } catch(e) {}
+  }
+  return (
+    <div style={{ position:"relative", marginTop:8 }}>
+      <div style={{ background:"#0A0F18", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, padding:"10px 12px", fontSize:13, color:"#E6EDF7", lineHeight:1.55, whiteSpace:"pre-wrap", maxHeight:220, overflowY:"auto" }}>{texto}</div>
+      <button onClick={copiar}
+        style={{ position:"absolute", top:6, right:6, background: copiado?cf:"#223048", border:"1px solid "+(copiado?cf:"rgba(255,255,255,.14)"), color: copiado?"#0A0F18":"#A9B4C5", fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:6, cursor:"pointer" }}>
+        {copiado ? "✓ Copiado" : "Copiar"}
+      </button>
+    </div>
+  );
+}
+
 function AIPanel({ listing, onClose }) {
   const [state, setState] = useState("idle");
   const [result, setResult] = useState(null);
@@ -779,19 +815,20 @@ function AIPanel({ listing, onClose }) {
         </div>
         {state === "idle" && <div style={{ textAlign: "center", padding: "28px 0" }}><div style={{ color: "#67759B", fontSize: 13, marginBottom: 16 }}>Analise com IA para receber sugestões personalizadas</div><button onClick={runAnalysis} style={{ background: "#1976FF", border: "none", color: "#fff", fontWeight: 700, padding: "11px 32px", borderRadius: 10, cursor: "pointer", fontSize: 14 }}>✦ Analisar com IA</button></div>}
         {state === "loading" && <div style={{ textAlign: "center", padding: "32px 0", color: "#67759B" }}><div style={{ fontSize: 28, marginBottom: 12, animation: "spin 1.2s linear infinite", display: "inline-block" }}>⟳</div><style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style><div style={{ fontSize: 13 }}>Analisando...</div></div>}
-        {state === "error" && <div style={{ textAlign: "center", padding: "24px 0" }}><div style={{ color: "#FF5252", fontSize: 13, marginBottom: 12 }}>Erro: {errorMsg}</div><button onClick={runAnalysis} style={{ background: "#223048", border: "1px solid rgba(255,255,255,.12)", color: "#374151", padding: "8px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>Tentar novamente</button></div>}
+        {state === "error" && <div style={{ textAlign: "center", padding: "24px 0" }}><div style={{ color: "#FF5252", fontSize: 13, marginBottom: 12 }}>Erro: {errorMsg}</div><button onClick={runAnalysis} style={{ background: "#223048", border: "1px solid rgba(255,255,255,.12)", color: "#A9B4C5", padding: "8px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>Tentar novamente</button></div>}
         {state === "done" && result && (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ background: "rgba(255,193,7,.12)", border: "1px solid rgba(255,193,7,.35)", borderRadius: 10, padding: "14px 18px" }}>
               <div style={{ fontSize: 11, color: "#FFC107", marginBottom: 6, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Avaliação Geral</div>
-              <div style={{ fontSize: 14, color: "#1c1917", lineHeight: 1.6 }}>{result.score_commentary}</div>
+              <div style={{ fontSize: 14, color: "#FFFFFF", lineHeight: 1.6 }}>{result.score_commentary}</div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               {result.strengths?.length > 0 && <div style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#00C853", marginBottom: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>✓ Pontos Fortes</div>{result.strengths.map((s, i) => <div key={i} style={{ fontSize: 13, color: "#00C853", marginBottom: 6, paddingLeft: 10, borderLeft: "2px solid rgba(0,200,83,.45)" }}>{s}</div>)}</div>}
               {result.keywords?.length > 0 && <div style={{ background: "#121A24", border: "1px solid rgba(255,255,255,.12)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#A9B4C5", marginBottom: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Palavras-chave</div><div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{result.keywords.map((k, i) => <span key={i} style={{ background: "#223048", color: "#A9B4C5", fontSize: 12, padding: "3px 10px", borderRadius: 20 }}>{k}</span>)}</div></div>}
             </div>
-            {result.improvements?.length > 0 && <div style={{ background: "#182230", border: "1px solid rgba(255,255,255,.12)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#FFC107", marginBottom: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>⚡ O que Melhorar</div>{result.improvements.map((imp, i) => <div key={i} style={{ display: "flex", gap: 12, marginBottom: 12, paddingBottom: 12, borderBottom: i < result.improvements.length - 1 ? "1px solid rgba(255,255,255,.10)" : "none" }}><div style={{ minWidth: 26, height: 26, borderRadius: 7, background: "rgba(255,193,7,.12)", border: "1px solid rgba(255,193,7,.35)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#FFC107", fontWeight: 700 }}>{i + 1}</div><div><div style={{ fontSize: 12, color: "#FFC107", marginBottom: 3, fontWeight: 600 }}>{imp.field}</div><div style={{ fontSize: 13, color: "#A9B4C5", lineHeight: 1.5 }}>{imp.suggestion}</div></div></div>)}</div>}
-            {result.title_suggestion && <div style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#00C853", marginBottom: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>✦ Sugestão de Título</div><div style={{ fontSize: 14, color: "#FFFFFF", fontWeight: 600 }}>{result.title_suggestion}</div><div style={{ fontSize: 11, color: "#67759B", marginTop: 4 }}>{result.title_suggestion.length} caracteres</div></div>}
+            {result.improvements?.length > 0 && <div style={{ background: "#182230", border: "1px solid rgba(255,255,255,.12)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#FFC107", marginBottom: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>⚡ O que Melhorar — com sugestão pronta</div>{result.improvements.map((imp, i) => <div key={i} style={{ display: "flex", gap: 12, marginBottom: 14, paddingBottom: 14, borderBottom: i < result.improvements.length - 1 ? "1px solid rgba(255,255,255,.10)" : "none" }}><div style={{ minWidth: 26, height: 26, borderRadius: 7, background: "rgba(255,193,7,.12)", border: "1px solid rgba(255,193,7,.35)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#FFC107", fontWeight: 700 }}>{i + 1}</div><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12, color: "#FFC107", marginBottom: 3, fontWeight: 600 }}>{imp.field}</div><div style={{ fontSize: 13, color: "#A9B4C5", lineHeight: 1.5 }}>{imp.why || imp.suggestion}</div>{imp.ready && String(imp.ready).trim() && <CaixaCopiar texto={imp.ready} cor="#FFC107" />}</div></div>)}</div>}
+            {result.description_suggestion && String(result.description_suggestion).trim() && <div style={{ background: "rgba(0,240,255,.08)", border: "1px solid rgba(0,240,255,.25)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#00F0FF", marginBottom: 4, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>📄 Descrição pronta para colar</div><div style={{ fontSize: 12, color: "#67759B" }}>Copie e cole na descrição do seu anúncio</div><CaixaCopiar texto={result.description_suggestion} cor="#00F0FF" /></div>}
+            {result.title_suggestion && <div style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#00C853", marginBottom: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>✦ Título pronto para colar</div><div style={{ fontSize: 14, color: "#FFFFFF", fontWeight: 600 }}>{result.title_suggestion}</div><div style={{ fontSize: 11, color: "#67759B", marginTop: 4 }}>{result.title_suggestion.length} caracteres</div><CaixaCopiar texto={result.title_suggestion} cor="#00C853" /></div>}
           </div>
         )}
       </div>
@@ -1432,7 +1469,7 @@ function LoginScreen({ onLogin }) {
             <input value={usuario} onChange={e => { setUsuario(e.target.value); setErro(""); }}
               onKeyDown={e => e.key==="Enter" && handleLogin()}
               placeholder="Digite seu usuário"
-              style={{ width:"100%", background:"#1976FF", border:`1px solid ${erro?"#FF5252":"#A9B4C5"}`, color:"#A9B4C5", padding:"12px 16px", borderRadius:10, fontSize:14, outline:"none", fontFamily:"inherit" }} />
+              style={{ width:"100%", background:"#0A0F18", border:`1px solid ${erro?"#FF5252":"rgba(255,255,255,.14)"}`, color:"#FFFFFF", padding:"12px 16px", borderRadius:10, fontSize:14, outline:"none", fontFamily:"inherit" }} />
           </div>
 
           <div style={{ marginBottom:10 }}>
@@ -1442,7 +1479,7 @@ function LoginScreen({ onLogin }) {
                 onChange={e => { setSenha(e.target.value); setErro(""); }}
                 onKeyDown={e => e.key==="Enter" && handleLogin()}
                 placeholder="Digite sua senha"
-                style={{ width:"100%", background:"#1976FF", border:`1px solid ${erro?"#FF5252":"#A9B4C5"}`, color:"#A9B4C5", padding:"12px 48px 12px 16px", borderRadius:10, fontSize:14, outline:"none", fontFamily:"inherit" }} />
+                style={{ width:"100%", background:"#0A0F18", border:`1px solid ${erro?"#FF5252":"rgba(255,255,255,.14)"}`, color:"#FFFFFF", padding:"12px 48px 12px 16px", borderRadius:10, fontSize:14, outline:"none", fontFamily:"inherit" }} />
               <button onClick={() => setShowSenha(s=>!s)}
                 style={{ position:"absolute", right:14, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color:"#A9B4C5", fontSize:16 }}>
                 {showSenha?"🙈":"👁"}
@@ -1457,7 +1494,7 @@ function LoginScreen({ onLogin }) {
           )}
 
           <button onClick={handleLogin} disabled={loading||!usuario||!senha}
-            style={{ width:"100%", background:loading||!usuario||!senha?"#A9B4C5":"#FFC107", border:"none", color:loading||!usuario||!senha?"#A9B4C5":"#FFFFFF", fontWeight:800, padding:"14px", borderRadius:12, cursor:loading||!usuario||!senha?"not-allowed":"pointer", fontSize:15, transition:"all .15s" }}>
+            style={{ width:"100%", background:loading||!usuario||!senha?"#223048":"#0A0F18", border:`1px solid ${loading||!usuario||!senha?"rgba(255,255,255,.08)":"rgba(255,255,255,.18)"}`, color:loading||!usuario||!senha?"#67759B":"#FFFFFF", fontWeight:800, padding:"14px", borderRadius:12, cursor:loading||!usuario||!senha?"not-allowed":"pointer", fontSize:15, transition:"all .15s" }}>
             {loading ? "Verificando..." : "Entrar"}
           </button>
 

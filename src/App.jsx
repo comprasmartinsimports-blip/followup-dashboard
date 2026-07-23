@@ -202,20 +202,33 @@ async function fetchAllListings(userId, tk) {
     if (ids.length < pageSize) break;
     offset += pageSize;
   }
-  const details = [];
-  for (let i = 0; i < allIds.length; i += 20) {
-    const batch = allIds.slice(i, i + 20);
-    const batchDetails = await Promise.all(
-      batch.map(async function(id) {
-        var item = await fetch(ML("/items/" + id), { headers: { Authorization: "Bearer " + tk } }).then(function(r){ return r.json(); });
-        // Buscar preço com desconto via promotions
-
-        return item;
-      })
-    );
-    details.push(...batchDetails);
+  // Busca o detalhe de um item com retry: o ML aplica rate limit e, em rajadas, devolve 429.
+  // Sem retry, esses anúncios eram silenciosamente descartados (some do total e some dos filtros).
+  async function fetchItemComRetry(id, tentativas) {
+    for (var t = 0; t <= tentativas; t++) {
+      try {
+        var r = await fetch(ML("/items/" + id), { headers: { Authorization: "Bearer " + tk } });
+        if (r.status === 429 || r.status === 503) {
+          await new Promise(res => setTimeout(res, 400 * (t + 1)));
+          continue;
+        }
+        var item = await r.json();
+        if (item && item.id) return item;
+      } catch (e) {}
+      await new Promise(res => setTimeout(res, 300 * (t + 1)));
+    }
+    return null;
   }
-  return details.filter(d => d.id);
+  const details = [];
+  // Lotes menores (10) com uma pausa curta entre eles: mantém o ritmo abaixo do limite do ML
+  // e garante que TODOS os anúncios sejam carregados (essencial para os filtros por situação).
+  for (let i = 0; i < allIds.length; i += 10) {
+    const batch = allIds.slice(i, i + 10);
+    const batchDetails = await Promise.all(batch.map(id => fetchItemComRetry(id, 2)));
+    details.push(...batchDetails);
+    if (i + 10 < allIds.length) await new Promise(res => setTimeout(res, 120));
+  }
+  return details.filter(d => d && d.id);
 }
 
 // Importa/sincroniza anúncios ML para o cadastro de produtos
@@ -806,6 +819,55 @@ function loadSavedTokens() {
 function clearSavedTokens() {
   ["ml_access_token","ml_refresh_token","ml_token_expiry","ml_user_id","ml_nickname"]
     .forEach(k => localStorage.removeItem(k));
+  try { localStorage.removeItem(ML_SNAPSHOT_KEY); } catch {}
+}
+
+// ── Snapshot dos dados do ML (anúncios, pedidos, enriquecimentos) ──────────
+// Guarda a última carga completa no localStorage para que ABRIR UMA NOVA ABA
+// reaproveite os dados na hora, sem refazer a reconexão pesada com o Mercado Livre.
+// Vale por um tempo curto (TTL); passou disso, a aba recarrega do ML normalmente.
+const ML_SNAPSHOT_KEY = "ml_snapshot_v1";
+const ML_SNAPSHOT_TTL = 30 * 60 * 1000; // 30 min
+
+function salvarMLSnapshot(dados) {
+  try {
+    // Enxuga os anúncios: mantém o comprimento de fotos e a 1ª URL (usadas na UI),
+    // descartando o resto das fotos e campos pesados que não são lidos nas telas.
+    var listingsLeve = (dados.listings || []).map(function(l) {
+      var copia = Object.assign({}, l);
+      if (Array.isArray(l.pictures)) {
+        copia.pictures = l.pictures.map(function(p, i){ return i === 0 ? { url: p.url } : {}; });
+      }
+      delete copia.descriptions;
+      return copia;
+    });
+    var payload = {
+      ts: Date.now(),
+      user: dados.user || null,
+      listings: listingsLeve,
+      orders: dados.orders || [],
+      sellerShipping: dados.sellerShipping || {},
+      shipmentCosts: dados.shipmentCosts || {},
+      shipmentStatuses: dados.shipmentStatuses || {},
+      paymentData: dados.paymentData || {},
+      promos: dados.promos || {},
+    };
+    localStorage.setItem(ML_SNAPSHOT_KEY, JSON.stringify(payload));
+  } catch (e) {
+    // Sem espaço no localStorage (muitos anúncios) → apenas não cacheia; a aba recarrega do ML.
+    try { localStorage.removeItem(ML_SNAPSHOT_KEY); } catch {}
+  }
+}
+
+function lerMLSnapshot() {
+  try {
+    var raw = localStorage.getItem(ML_SNAPSHOT_KEY);
+    if (!raw) return null;
+    var s = JSON.parse(raw);
+    if (!s || !s.ts || (Date.now() - s.ts) > ML_SNAPSHOT_TTL) return null;
+    if (!Array.isArray(s.listings) || !s.listings.length) return null;
+    return s;
+  } catch { return null; }
 }
 
 // Renova o access token via refresh token (chamado automaticamente)
@@ -3440,6 +3502,14 @@ export default function App() {
           .then(function(session) {
             if (session.authenticated) {
               if (session.expiresAt) setTokenExpiry(session.expiresAt);
+              // Nova aba / reabertura: se já temos uma carga recente em cache, mostra na hora
+              // sem refazer a reconexão pesada com o ML. Uma atualização leve roda em segundo
+              // plano; "Atualizar" força a recarga completa quando o usuário quiser.
+              var snap = lerMLSnapshot();
+              if (snap) {
+                hidratarDoSnapshot(snap, session.accessToken);
+                return;
+              }
               // Renovar se quase expirando
               if (session.almostExpired) {
                 fetch("/api/auth/refresh", { method: "POST" })
@@ -3983,6 +4053,24 @@ export default function App() {
     return token;
   }
 
+  // Reaproveita a última carga completa (snapshot em cache) ao abrir uma nova aba: preenche os
+  // dados na hora, sem o carregamento pesado do ML. Depois dispara uma atualização leve em
+  // segundo plano para pegar pedidos novos, sem travar a tela.
+  function hidratarDoSnapshot(snap, accessToken) {
+    if (accessToken) setToken(accessToken);
+    if (snap.user) setUser(snap.user);
+    setRealListings(snap.listings || []);
+    setRealOrders(snap.orders || []);
+    setSellerShipping(snap.sellerShipping || {});
+    setShipmentCosts(snap.shipmentCosts || {});
+    setShipmentStatuses(snap.shipmentStatuses || {});
+    setPaymentData(snap.paymentData || {});
+    setPromos(snap.promos || {});
+    var lu = localStorage.getItem("ml_last_update");
+    if (lu) setLastUpdate(lu);
+    setLoading(false); setLoadingMsg("");
+  }
+
   async function handleConnect(tk, userId) {
     const validTk = tk;
     setToken(validTk); setShowMLModal(false);
@@ -4086,6 +4174,13 @@ export default function App() {
       }
       setPromos(promoMap);
 
+      // Snapshot completo → novas abas reaproveitam sem refazer a carga do ML.
+      salvarMLSnapshot({
+        user: { nickname: me.nickname ?? "Minha Conta ML", id: me.id },
+        listings: listings, orders: orders,
+        sellerShipping: shippingMap, shipmentCosts: orderShippingMap,
+        shipmentStatuses: shipmentStatusMap, paymentData: paymentMap, promos: promoMap,
+      });
     } catch (e) { setLoadError(e.message); }
     setLoading(false); setLoadingMsg("");
     const now = Date.now().toString();
@@ -4404,10 +4499,6 @@ export default function App() {
         var hasWholesale = l.tags && l.tags.includes("standard_price_by_quantity");
         return !hasWholesale;
       });
-    }
-    if (filterListingExtra === "sem_video") {
-      // Anúncios sem vídeo (campo video_id do item, vazio/nulo quando não há vídeo cadastrado)
-      results = results.filter(function(l) { return !l.video_id; });
     }
     if (filterListingExtra === "frete_alto") {
       var fretesConf = {};
@@ -4899,7 +4990,7 @@ export default function App() {
                     })}
                   </FiltroGrupo>
                   <FiltroGrupo titulo="Situação">
-                    {[{k:"all",l:"Todos"},{k:"sem_custo",l:"⚠️ Sem custo",cor:"#FF5252",bg:"rgba(255,82,82,.12)"},{k:"sem_atacado",l:"🏷 Sem preço atacado",cor:"#7c3aed",bg:"rgba(139,92,246,.14)"},{k:"sem_video",l:"🎬 Sem vídeo clip",cor:"#FFC107",bg:"rgba(255,193,7,.10)"},{k:"com_promo",l:"🔥 Com promoção",cor:"#7c3aed",bg:"rgba(139,92,246,.14)"},{k:"sem_promo",l:"○ Sem promoção",cor:"#A9B4C5",bg:"#223048"},{k:"frete_alto",l:"🚚 Frete acima do config.",cor:"#FFC107",bg:"rgba(255,193,7,.10)"}].map(function(f){
+                    {[{k:"all",l:"Todos"},{k:"sem_custo",l:"⚠️ Sem custo",cor:"#FF5252",bg:"rgba(255,82,82,.12)"},{k:"sem_atacado",l:"🏷 Sem preço atacado",cor:"#7c3aed",bg:"rgba(139,92,246,.14)"},{k:"com_promo",l:"🔥 Com promoção",cor:"#7c3aed",bg:"rgba(139,92,246,.14)"},{k:"sem_promo",l:"○ Sem promoção",cor:"#A9B4C5",bg:"#223048"},{k:"frete_alto",l:"🚚 Frete acima do config.",cor:"#FFC107",bg:"rgba(255,193,7,.10)"}].map(function(f){
                       return <FiltroBotao key={f.k} label={f.l} active={filterListingExtra===f.k}
                         cor={f.cor||"#FFFFFF"} bg={f.bg||"#223048"}
                         onClick={function(){setFilterListingExtra(f.k);setPaginaAnuncios(1);}} />;

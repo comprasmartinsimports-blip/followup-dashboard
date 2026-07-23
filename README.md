@@ -1,6 +1,8 @@
-# Follow-up — Integração com Marketplaces
+# Flow Marketplaces
 
-Sistema focado em integração com marketplaces (Mercado Livre): visualizar **anúncios** com sugestões de melhoria, acompanhar **pedidos**, **precificação** por anúncio e comparação com a **concorrência** (API oficial de sugestão de preço do ML).
+**Link do sistema:** https://flowmarketplaces.vercel.app
+
+Sistema focado em integração com marketplaces (Mercado Livre): visualizar **anúncios** com sugestões de melhoria, acompanhar **pedidos**, **precificação** por anúncio e comparação com a **concorrência** (mais vendidos da categoria).
 
 > Dashboards, financeiro, notas fiscais e cadastro de produtos **não fazem mais parte deste sistema** — essas funções vivem em outro local. Os dados antigos desses módulos continuam salvos no KV e podem ser exportados pela aba Backup.
 
@@ -41,9 +43,10 @@ vercel --prod
 
 ## Após o deploy
 
-1. Copie a URL gerada (ex: `https://followup-dashboard.vercel.app`)
-2. Cole essa URL como **Redirect URI** no seu App do Mercado Livre
-3. Acesse o dashboard pela URL e clique em "Conectar ML"
+1. A URL do sistema é `https://flowmarketplaces.vercel.app`
+2. Configure a variável `ML_REDIRECT_URI` no Vercel e o **Redirect URI** no App do Mercado Livre com o mesmo endereço de retorno:
+   `https://flowmarketplaces.vercel.app/api/auth/callback`
+3. Acesse o sistema pela URL e clique em "Conectar ML"
 
 ## Funcionalidades
 

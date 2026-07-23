@@ -1121,7 +1121,7 @@ function PainelBackup({ onClose }) {
   function exportarBackup() {
     const backup = {
       versao: "1.0",
-      sistema: "ML Margem Dashboard",
+      sistema: "Flow Marketplaces",
       dataBackup: new Date().toLocaleString("pt-BR"),
       dados: {},
     };
@@ -1136,7 +1136,7 @@ function PainelBackup({ onClose }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `ml_margem_backup_${new Date().toLocaleDateString("sv-SE")}.json`;
+    a.download = `flow_marketplaces_backup_${new Date().toLocaleDateString("sv-SE")}.json`;
     a.click();
     URL.revokeObjectURL(url);
     setStatus("✅ Backup exportado com sucesso!");
@@ -1150,7 +1150,7 @@ function PainelBackup({ onClose }) {
     reader.onload = (e) => {
       try {
         const backup = JSON.parse(e.target.result);
-        if (!backup.dados || !backup.versao) throw new Error("Arquivo inválido — não é um backup do ML Margem.");
+        if (!backup.dados || !backup.versao) throw new Error("Arquivo inválido — não é um backup do Flow Marketplaces.");
         // Mostra preview antes de confirmar
         const prev = Object.entries(backup.dados).map(([key, val]) => {
           const info = BACKUP_KEYS.find(b => b.key === key);
@@ -1418,9 +1418,9 @@ function LoginScreen({ onLogin }) {
       <div style={{ width:"100%", maxWidth:420 }}>
         {/* Logo */}
         <div style={{ textAlign:"center", marginBottom:32 }}>
-          <div style={{ width:64, height:64, borderRadius:18, background:"#FFC107", display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:32, fontWeight:800, color:"#FFFFFF", marginBottom:8, boxShadow:"0 8px 32px rgba(255,224,0,.3)" }}>M</div>
-          <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:24, color:"#fff", letterSpacing:-0.5 }}>ML Margem</div>
-          <div style={{ fontSize:13, color:"#A9B4C5", marginTop:4 }}>Dashboard de Lucratividade</div>
+          <div style={{ width:64, height:64, borderRadius:"50%", background:"rgba(77,179,255,.12)", border:"1px solid rgba(77,179,255,.45)", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"'Space Grotesk',sans-serif", fontSize:30, fontWeight:700, color:"#4DB3FF", marginBottom:12, boxShadow:"0 0 32px rgba(77,179,255,.4)" }}>F</div>
+          <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:24, color:"#fff", letterSpacing:-0.5 }}>Flow Marketplaces</div>
+          <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:11, color:"#67759B", marginTop:6, letterSpacing:".24em", textTransform:"uppercase" }}>Gestão de Anúncios</div>
         </div>
 
         {/* Card */}
@@ -3130,11 +3130,11 @@ function ChatInternoWidget({ currentUser }) {
     var responsavel = usuarios.find(function(u){ return u.id===form.responsavelId; });
     if (responsavel && responsavel.email) {
       var prazoTxt = form.prazo ? " - Prazo: "+new Date(form.prazo).toLocaleDateString("pt-BR") : "";
-      var assunto = encodeURIComponent("[ML Margem] Nova tarefa: "+form.titulo);
+      var assunto = encodeURIComponent("[Flow Marketplaces] Nova tarefa: "+form.titulo);
       var linhas = [
         "Ola "+responsavel.nome+",",
         "",
-        "Voce recebeu uma nova tarefa no ML Margem:",
+        "Voce recebeu uma nova tarefa no Flow Marketplaces:",
         "",
         "Tarefa: "+form.titulo,
         form.descricao ? "Descricao: "+form.descricao : "",
@@ -4853,9 +4853,9 @@ export default function App() {
         <div style={{ display:"flex", alignItems:"stretch", flex:1, minWidth:0, overflow:"hidden", height:50 }}>
           {/* Logo */}
           <div style={{ display:"flex", alignItems:"center", gap:7, paddingRight:28, marginRight:4, borderRight:`1px solid ${darkMode?"#182230":"rgba(255,255,255,.10)"}`, flexShrink:0 }}>
-            <div style={{ width:34, height:34, borderRadius:"50%", background:"rgba(77,179,255,.12)", border:"1px solid rgba(77,179,255,.45)", boxShadow:"0 0 14px rgba(77,179,255,.35)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:15, color:"#4DB3FF", letterSpacing:-0.5 }}>M</div>
+            <div style={{ width:34, height:34, borderRadius:"50%", background:"rgba(77,179,255,.12)", border:"1px solid rgba(77,179,255,.45)", boxShadow:"0 0 14px rgba(77,179,255,.35)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:15, color:"#4DB3FF", letterSpacing:-0.5 }}>F</div>
             <div>
-              <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:14, color:"#FFFFFF", letterSpacing:-0.4, lineHeight:1.2 }}>ML Margem</div>
+              <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:14, color:"#FFFFFF", letterSpacing:-0.4, lineHeight:1.2 }}>Flow</div>
               <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:8, color:"#67759B", letterSpacing:2.2, textTransform:"uppercase", lineHeight:1, marginTop:2 }}>Marketplaces</div>
             </div>
           </div>

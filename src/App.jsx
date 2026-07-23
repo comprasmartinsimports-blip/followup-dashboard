@@ -394,25 +394,31 @@ async function fetchSellerShippingCost(itemId, userId, tk) {
 // adicional), então uma tabela fixa de 12%/17% por tipo de anúncio (Clássico/Premium) não reflete
 // o que o ML realmente cobra. Este endpoint devolve o sale_fee_amount exato calculado pelo ML.
 async function fetchRealFee(listing, tk) {
-  try {
-    const price = listing._promo_price || listing.price;
-    const catId = listing.category_id;
-    const listingType = listing.listing_type_id;
-    if (!catId || !price || price <= 0) return null;
-    const res = await fetch(ML(`/sites/MLB/listing_prices?price=${price}&category_id=${catId}&listing_type_id=${listingType}`), {
-      headers: { Authorization: `Bearer ${tk}` }
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!Array.isArray(data) || data.length === 0) return null;
-    const match = data.find(d => d.listing_type_id === listingType) || data[0];
-    if (!match || typeof match.sale_fee_amount !== "number") return null;
-    return {
-      feeAmount: match.sale_fee_amount,
-      feeRate: price > 0 ? match.sale_fee_amount / price : 0,
-      fixedFee: match.sale_fee_details?.fixed_fee ?? 0,
-    };
-  } catch { return null; }
+  const price = listing._promo_price || listing.price;
+  const catId = listing.category_id;
+  const listingType = listing.listing_type_id;
+  if (!catId || !price || price <= 0) return null;
+  const url = ML(`/sites/MLB/listing_prices?price=${price}&category_id=${catId}&listing_type_id=${listingType}`);
+  // Retry em 429/503: sem isso, a taxa real de vários anúncios não carregava (caía na tabela).
+  for (let t = 0; t <= 2; t++) {
+    try {
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${tk}` } });
+      if (res.status === 429 || res.status === 503) { await new Promise(r => setTimeout(r, 400 * (t + 1))); continue; }
+      if (!res.ok) return null;
+      const data = await res.json();
+      // Com listing_type_id na query, o ML devolve um OBJETO (não um array). Aceitar os dois.
+      const match = Array.isArray(data)
+        ? (data.find(d => d.listing_type_id === listingType) || data[0])
+        : data;
+      if (!match || typeof match.sale_fee_amount !== "number") return null;
+      return {
+        feeAmount: match.sale_fee_amount,
+        feeRate: price > 0 ? match.sale_fee_amount / price : 0,
+        fixedFee: match.sale_fee_details?.fixed_fee ?? 0,
+      };
+    } catch { await new Promise(r => setTimeout(r, 300 * (t + 1))); }
+  }
+  return null;
 }
 
 // Busca em lote (5 por vez) para não estourar rate-limit do ML
@@ -2665,19 +2671,24 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
 
 
 // ════════════════════════════════════════════════════════════
-//  ABA CONCORRÊNCIA — Seu preço vs. mercado (API de sugestão de preço do ML)
+//  ABA CONCORRÊNCIA — Seu preço vs. os mais vendidos da sua categoria
+// ────────────────────────────────────────────────────────────
+//  O ML não expõe "sugestão de preço"/price-to-win para anúncios que não são
+//  de catálogo (retorna 404), e a busca pública foi bloqueada (403). O dado de
+//  concorrência que a API entrega de forma confiável é o ranking de MAIS VENDIDOS
+//  por categoria (/highlights). Aqui comparamos o preço de cada anúncio ativo com
+//  a faixa de preço dos líderes de venda da mesma categoria.
 // ════════════════════════════════════════════════════════════
-const CONCORRENCIA_CACHE_KEY = "concorrencia_sugestoes_cache";
+const CONCORRENCIA_CACHE_KEY = "concorrencia_categorias_v2";
 
 function ConcorrenciaTab({ enriched, token, sellerId }) {
-  const [sugestoes, setSugestoes] = useState(function(){
+  const [cats, setCats] = useState(function(){
     try {
       var raw = localStorage.getItem(CONCORRENCIA_CACHE_KEY);
       if (!raw) return {};
-      var parsed = JSON.parse(raw);
-      // cache vale por 24h
-      if (Date.now() - (parsed.em || 0) > 24*60*60*1000) return {};
-      return parsed.dados || {};
+      var p = JSON.parse(raw);
+      if (Date.now() - (p.em || 0) > 12*60*60*1000) return {}; // cache 12h
+      return p.dados || {};
     } catch { return {}; }
   });
   const [analisando, setAnalisando] = useState(false);
@@ -2691,84 +2702,84 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
     return enriched.filter(function(l){ return l.status === "active"; });
   }, [enriched]);
 
+  const categoriasUnicas = useMemo(function(){
+    var s = {};
+    ativos.forEach(function(l){ if (l.category_id) s[l.category_id] = true; });
+    return Object.keys(s);
+  }, [ativos]);
+
   function salvarCache(dados) {
     try { localStorage.setItem(CONCORRENCIA_CACHE_KEY, JSON.stringify({ em: Date.now(), dados: dados })); } catch {}
   }
+  function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+  function hdr(){ return { headers: { Authorization: "Bearer " + token } }; }
 
-  async function buscarSugestao(id) {
+  // Resolve um item do ranking (ITEM=MLB direto; USER_PRODUCT=MLBU via /products/{id}/items)
+  async function resolverLider(entry) {
     try {
-      const res = await fetch(ML(`/suggestions/items/${id}/details`), { headers: { Authorization: `Bearer ${token}` } });
-      const d = await res.json().catch(function(){ return {}; });
-      if (!res.ok) return { erro: true, em: Date.now() };
-      var graph = (d.metadata && Array.isArray(d.metadata.graph)) ? d.metadata.graph : [];
-      var precosConcorrentes = graph
-        .map(function(g){ return g && g.price && g.price.amount; })
-        .filter(function(p){ return typeof p === "number" && p > 0; });
-      return {
-        em: Date.now(),
-        status: d.status || null,
-        sugerido: d.suggested_price?.amount ?? null,
-        menorMercado: d.lowest_price?.amount ?? (precosConcorrentes.length ? Math.min.apply(null, precosConcorrentes) : null),
-        concorrentes: graph.slice(0, 8).map(function(g){
-          return {
-            titulo: g.info?.title || "Concorrente",
-            preco: g.price?.amount ?? null,
-            vendidos: g.info?.sold_quantity ?? null,
-          };
-        }),
-        totalConcorrentes: graph.length,
-      };
-    } catch {
-      return { erro: true, em: Date.now() };
-    }
+      var ehItem = entry.type === "ITEM" || (entry.id.indexOf("MLBU") !== 0 && entry.id.indexOf("MLB") === 0);
+      if (ehItem) {
+        var it = await fetch(ML("/items/" + entry.id), hdr()).then(function(r){ return r.json(); });
+        if (!it || typeof it.price !== "number") return null;
+        return { titulo: it.title || "Anúncio", preco: it.price, vendidos: it.sold_quantity ?? null, sellerId: it.seller_id, meu: String(it.seller_id) === String(sellerId) };
+      } else {
+        var r = await fetch(ML("/products/" + entry.id + "/items"), hdr()).then(function(x){ return x.json(); });
+        var first = (r && r.results || [])[0];
+        if (!first || typeof first.price !== "number") return null;
+        return { titulo: (r.name || "Produto líder"), preco: first.price, vendidos: null, sellerId: first.seller_id, meu: String(first.seller_id) === String(sellerId) };
+      }
+    } catch { return null; }
   }
 
-  async function analisarUm(id) {
-    var r = await buscarSugestao(id);
-    setSugestoes(function(prev){
-      var upd = Object.assign({}, prev); upd[id] = r; salvarCache(upd); return upd;
-    });
+  async function analisarCategoria(cat) {
+    var hl = await fetch(ML("/highlights/MLB/category/" + cat), hdr()).then(function(r){ return r.json(); }).catch(function(){ return null; });
+    var content = (hl && hl.content) || [];
+    var top = content.slice(0, 8);
+    var lideres = [];
+    for (var i = 0; i < top.length; i++) {
+      var p = await resolverLider(top[i]);
+      if (p && p.preco > 0) { p.posicao = top[i].position; lideres.push(p); }
+      await sleep(120);
+    }
+    var precos = lideres.map(function(x){ return x.preco; }).sort(function(a,b){ return a-b; });
+    var mediana = precos.length ? precos[Math.floor((precos.length-1)/2)] : null;
+    return { em: Date.now(), lideres: lideres, min: precos[0] ?? null, max: precos[precos.length-1] ?? null, mediana: mediana };
   }
 
   async function analisarTodos() {
     if (!token) { alert("Conecte ao Mercado Livre primeiro."); return; }
     cancelRef.current = false;
     setAnalisando(true);
-    var fila = ativos.map(function(l){ return l.id; });
+    var fila = categoriasUnicas;
     setProgresso({ feito: 0, total: fila.length });
-    var acc = Object.assign({}, sugestoes);
-    var feito = 0;
-    // lotes de 4 para não estourar o rate limit do ML
-    for (var i = 0; i < fila.length; i += 4) {
+    var acc = Object.assign({}, cats);
+    for (var i = 0; i < fila.length; i++) {
       if (cancelRef.current) break;
-      var lote = fila.slice(i, i + 4);
-      var resultados = await Promise.all(lote.map(function(id){ return buscarSugestao(id); }));
-      lote.forEach(function(id, j){ acc[id] = resultados[j]; });
-      feito += lote.length;
-      var snapshot = Object.assign({}, acc);
-      setSugestoes(snapshot);
-      setProgresso({ feito: Math.min(feito, fila.length), total: fila.length });
+      try { acc[fila[i]] = await analisarCategoria(fila[i]); } catch (e) {}
+      setCats(Object.assign({}, acc));
+      setProgresso({ feito: i + 1, total: fila.length });
+      salvarCache(acc);
     }
-    salvarCache(acc);
     setAnalisando(false);
   }
 
   function classificar(l) {
-    var s = sugestoes[l.id];
-    if (!s || s.erro) return "sem_dados";
-    var ref = s.sugerido ?? s.menorMercado;
-    if (ref == null) return "sem_dados";
-    if (l.salePrice > ref * 1.02) return "acima";
-    if (l.salePrice < ref * 0.98) return "abaixo";
+    var c = cats[l.category_id];
+    if (!c || c.mediana == null) return "sem_dados";
+    if (l.salePrice > c.mediana * 1.05) return "acima";
+    if (l.salePrice < c.mediana * 0.95) return "abaixo";
     return "competitivo";
   }
+  function minhaPosicao(l) {
+    var c = cats[l.category_id];
+    if (!c || !c.lideres) return null;
+    var m = c.lideres.find(function(x){ return x.meu; });
+    return m ? m.posicao : null;
+  }
 
-  var linhas = ativos.map(function(l){
-    return { l: l, s: sugestoes[l.id], cls: classificar(l) };
-  });
-
+  var linhas = ativos.map(function(l){ return { l: l, c: cats[l.category_id], cls: classificar(l) }; });
   var resumo = {
-    analisados: linhas.filter(function(x){ return x.s && !x.s.erro; }).length,
+    analisados: linhas.filter(function(x){ return x.c && x.c.mediana != null; }).length,
     acima: linhas.filter(function(x){ return x.cls === "acima"; }).length,
     abaixo: linhas.filter(function(x){ return x.cls === "abaixo"; }).length,
     competitivo: linhas.filter(function(x){ return x.cls === "competitivo"; }).length,
@@ -2777,73 +2788,65 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
   var q = busca.toLowerCase().trim();
   var visiveis = linhas.filter(function(x){
     if (filtro !== "all" && x.cls !== filtro) return false;
-    if (q && !(x.l.title || "").toLowerCase().includes(q) && !(x.l.id || "").toLowerCase().includes(q) && !(x.l.sku || "").toLowerCase().includes(q)) return false;
+    if (q && (x.l.title||"").toLowerCase().indexOf(q) < 0 && (x.l.id||"").toLowerCase().indexOf(q) < 0 && (x.l.sku||"").toLowerCase().indexOf(q) < 0) return false;
     return true;
-  }).sort(function(a, b){
-    var ordem = { acima: 0, abaixo: 1, competitivo: 2, sem_dados: 3 };
-    if (ordem[a.cls] !== ordem[b.cls]) return ordem[a.cls] - ordem[b.cls];
-    var da = a.s?.sugerido != null ? (a.l.salePrice - a.s.sugerido) / a.s.sugerido : 0;
-    var db = b.s?.sugerido != null ? (b.l.salePrice - b.s.sugerido) / b.s.sugerido : 0;
-    return db - da;
+  }).sort(function(a,b){
+    var ordem = { acima:0, abaixo:1, competitivo:2, sem_dados:3 };
+    return ordem[a.cls] - ordem[b.cls];
   });
 
   var chipCls = {
-    acima:       { label: "▲ Acima do mercado",  cor: "#FF5252", bg: "rgba(255,82,82,.12)", border: "rgba(255,82,82,.35)" },
-    abaixo:      { label: "▼ Abaixo do mercado", cor: "#3B8CFF", bg: "rgba(59,140,255,.14)", border: "rgba(77,179,255,.35)" },
-    competitivo: { label: "✓ Competitivo",       cor: "#00C853", bg: "rgba(0,200,83,.12)", border: "rgba(0,200,83,.35)" },
-    sem_dados:   { label: "— Sem referência",    cor: "#67759B", bg: "#223048", border: "rgba(255,255,255,.12)" },
+    acima:       { label: "▲ Acima dos líderes",  cor: "#FF5252", bg: "rgba(255,82,82,.12)",  border: "rgba(255,82,82,.35)" },
+    abaixo:      { label: "▼ Abaixo dos líderes", cor: "#3B8CFF", bg: "rgba(59,140,255,.14)",  border: "rgba(77,179,255,.35)" },
+    competitivo: { label: "✓ Competitivo",        cor: "#00C853", bg: "rgba(0,200,83,.12)",    border: "rgba(0,200,83,.35)" },
+    sem_dados:   { label: "— Sem dados",          cor: "#67759B", bg: "#223048",               border: "rgba(255,255,255,.12)" },
   };
 
   return (
     <div style={{ padding: "0 12px" }}>
-      {/* Cabeçalho + ação */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12, marginBottom:16 }}>
         <div>
           <div style={{ fontWeight:800, fontSize:18, color:"#FFFFFF" }}>🔎 Concorrência</div>
-          <div style={{ fontSize:12, color:"#67759B" }}>Compara o preço de cada anúncio ativo com a sugestão oficial do Mercado Livre e os concorrentes da categoria</div>
+          <div style={{ fontSize:12, color:"#67759B", maxWidth:640 }}>Compara o preço de cada anúncio ativo com a faixa de preço dos <strong>mais vendidos da mesma categoria</strong> no Mercado Livre. (O ML não fornece sugestão de preço para anúncios fora de catálogo.)</div>
         </div>
         <div style={{ display:"flex", gap:8, alignItems:"center" }}>
           {analisando && (
             <>
-              <span style={{ fontSize:12, color:"#67759B" }}>⏳ {progresso.feito}/{progresso.total}</span>
+              <span style={{ fontSize:12, color:"#67759B" }}>⏳ {progresso.feito}/{progresso.total} categorias</span>
               <button onClick={function(){ cancelRef.current = true; }}
-                style={{ background:"rgba(255,82,82,.12)", border:"1px solid rgba(255,82,82,.35)", color:"#FF5252", fontWeight:600, padding:"8px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
-                Parar
-              </button>
+                style={{ background:"rgba(255,82,82,.12)", border:"1px solid rgba(255,82,82,.35)", color:"#FF5252", fontWeight:600, padding:"8px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>Parar</button>
             </>
           )}
-          <button onClick={analisarTodos} disabled={analisando || !ativos.length}
+          <button onClick={analisarTodos} disabled={analisando || !categoriasUnicas.length}
             style={{ background: analisando?"#223048":"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"9px 18px", borderRadius:8, cursor:analisando?"wait":"pointer", fontSize:13 }}>
-            {analisando ? "Analisando..." : `🔍 Analisar todos (${ativos.length})`}
+            {analisando ? "Analisando..." : "🔍 Analisar (" + categoriasUnicas.length + " categorias)"}
           </button>
         </div>
       </div>
 
-      {/* Cards resumo */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(150px, 1fr))", gap:12, marginBottom:16 }}>
         {[
-          { label:"Analisados",        valor: resumo.analisados,  cor:"#FFFFFF" },
-          { label:"Acima do mercado",  valor: resumo.acima,       cor:"#FF5252" },
-          { label:"Competitivos",      valor: resumo.competitivo, cor:"#00C853" },
-          { label:"Abaixo do mercado", valor: resumo.abaixo,      cor:"#3B8CFF" },
+          { label:"Analisados",       valor: resumo.analisados,  cor:"#FFFFFF" },
+          { label:"Acima dos líderes",valor: resumo.acima,       cor:"#FF5252" },
+          { label:"Competitivos",     valor: resumo.competitivo, cor:"#00C853" },
+          { label:"Abaixo dos líderes",valor: resumo.abaixo,     cor:"#3B8CFF" },
         ].map(function(c){
           return (
-            <div key={c.label} style={{ background:"#182230", border:"1px solid rgba(255,255,255,.12)", borderRadius:12, padding:"14px 16px" }}>
-              <div style={{ fontSize:11, color:"#67759B", fontWeight:600, textTransform:"uppercase", letterSpacing:.5 }}>{c.label}</div>
+            <div key={c.label} style={{ background:"#182230", border:"1px solid rgba(255,255,255,.08)", borderRadius:12, padding:"14px 16px" }}>
+              <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:10, color:"#67759B", fontWeight:700, textTransform:"uppercase", letterSpacing:".12em" }}>{c.label}</div>
               <div style={{ fontSize:24, fontWeight:800, color:c.cor, marginTop:4 }}>{c.valor}</div>
             </div>
           );
         })}
       </div>
 
-      {/* Filtros */}
       <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap", marginBottom:12 }}>
         {[
           { key:"all",         label:"Todos" },
           { key:"acima",       label:"▲ Acima" },
           { key:"competitivo", label:"✓ Competitivos" },
           { key:"abaixo",      label:"▼ Abaixo" },
-          { key:"sem_dados",   label:"Sem referência" },
+          { key:"sem_dados",   label:"Sem dados" },
         ].map(function(f){
           var ativo = filtro === f.key;
           return (
@@ -2857,31 +2860,31 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
           style={{ marginLeft:"auto", background:"#121A24", color:"#FFFFFF", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, padding:"7px 12px", fontSize:13, minWidth:240, fontFamily:"inherit" }} />
       </div>
 
-      {/* Tabela */}
-      <div style={{ background:"#182230", border:"1px solid rgba(255,255,255,.12)", borderRadius:12, overflow:"hidden" }}>
+      <div style={{ background:"#182230", border:"1px solid rgba(255,255,255,.08)", borderRadius:12, overflow:"hidden" }}>
         <div style={{ overflowX:"auto" }}>
           <table style={{ borderCollapse:"collapse", width:"100%", minWidth:900 }}>
             <thead>
-              <tr style={{ background:"#121A24", borderBottom:"1px solid rgba(255,255,255,.12)" }}>
-                {["Anúncio","Seu preço","Preço sugerido ML","Menor do mercado","Diferença","Concorrentes","Status",""].map(function(h){
-                  return <th key={h} style={{ textAlign:"left", padding:"10px 14px", fontSize:11, color:"#67759B", fontWeight:700, textTransform:"uppercase", letterSpacing:.5, whiteSpace:"nowrap" }}>{h}</th>;
+              <tr style={{ background:"#121A24", borderBottom:"1px solid rgba(255,255,255,.08)" }}>
+                {["Anúncio","Seu preço","Mediana dos líderes","Faixa dos líderes","Diferença","Seu ranking","Status",""].map(function(h){
+                  return <th key={h} style={{ textAlign:"left", padding:"10px 14px", fontFamily:"'JetBrains Mono',monospace", fontSize:9, color:"#67759B", fontWeight:700, textTransform:"uppercase", letterSpacing:".12em", whiteSpace:"nowrap" }}>{h}</th>;
                 })}
               </tr>
             </thead>
             <tbody>
               {!visiveis.length && (
                 <tr><td colSpan={8} style={{ padding:"40px 20px", textAlign:"center", color:"#67759B", fontSize:13 }}>
-                  {ativos.length ? "Nenhum anúncio neste filtro. Clique em “Analisar todos” para buscar os dados do mercado." : "Nenhum anúncio ativo encontrado."}
+                  {ativos.length ? "Clique em “Analisar” para buscar os mais vendidos de cada categoria." : "Nenhum anúncio ativo encontrado."}
                 </td></tr>
               )}
               {visiveis.map(function(x){
-                var l = x.l, s = x.s;
+                var l = x.l, c = x.c;
                 var chip = chipCls[x.cls];
-                var diff = (s && !s.erro && s.sugerido != null) ? (l.salePrice - s.sugerido) / s.sugerido : null;
+                var diff = (c && c.mediana != null) ? (l.salePrice - c.mediana) / c.mediana : null;
+                var pos = minhaPosicao(l);
                 var aberto = expandido === l.id;
                 return (
                   <React.Fragment key={l.id}>
-                    <tr style={{ borderBottom:"1px solid rgba(255,255,255,.10)" }}>
+                    <tr style={{ borderBottom:"1px solid rgba(255,255,255,.06)" }}>
                       <td style={{ padding:"10px 14px", maxWidth:340 }}>
                         <div style={{ display:"flex", gap:10, alignItems:"center" }}>
                           {l.thumbnail && <img src={l.thumbnail.replace("http://","https://")} alt="" style={{ width:38, height:38, borderRadius:8, objectFit:"cover", border:"1px solid rgba(255,255,255,.12)", flexShrink:0 }} />}
@@ -2891,42 +2894,41 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
                           </div>
                         </div>
                       </td>
-                      <td style={{ padding:"10px 14px", fontWeight:700, fontSize:13, whiteSpace:"nowrap" }}>{fmt(l.salePrice)}</td>
-                      <td style={{ padding:"10px 14px", fontSize:13, whiteSpace:"nowrap", color:"#A9B4C5" }}>{s && !s.erro && s.sugerido != null ? fmt(s.sugerido) : "—"}</td>
-                      <td style={{ padding:"10px 14px", fontSize:13, whiteSpace:"nowrap", color:"#A9B4C5" }}>{s && !s.erro && s.menorMercado != null ? fmt(s.menorMercado) : "—"}</td>
-                      <td style={{ padding:"10px 14px", fontSize:13, fontWeight:700, whiteSpace:"nowrap", color: diff == null ? "#67759B" : diff > 0.02 ? "#FF5252" : diff < -0.02 ? "#3B8CFF" : "#00C853" }}>
+                      <td style={{ padding:"10px 14px", fontWeight:700, fontSize:13, whiteSpace:"nowrap", color:"#FFFFFF" }}>{fmt(l.salePrice)}</td>
+                      <td style={{ padding:"10px 14px", fontSize:13, whiteSpace:"nowrap", color:"#A9B4C5" }}>{c && c.mediana != null ? fmt(c.mediana) : "—"}</td>
+                      <td style={{ padding:"10px 14px", fontSize:12, whiteSpace:"nowrap", color:"#A9B4C5" }}>{c && c.min != null ? fmt(c.min) + " – " + fmt(c.max) : "—"}</td>
+                      <td style={{ padding:"10px 14px", fontSize:13, fontWeight:700, whiteSpace:"nowrap", color: diff == null ? "#67759B" : diff > 0.05 ? "#FF5252" : diff < -0.05 ? "#3B8CFF" : "#00C853" }}>
                         {diff == null ? "—" : (diff > 0 ? "+" : "") + (diff * 100).toFixed(1) + "%"}
                       </td>
-                      <td style={{ padding:"10px 14px", fontSize:13, whiteSpace:"nowrap" }}>
-                        {s && !s.erro && s.totalConcorrentes ? (
-                          <button onClick={function(){ setExpandido(aberto ? null : l.id); }}
-                            style={{ background:"#121A24", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, padding:"4px 10px", fontSize:12, cursor:"pointer", color:"#A9B4C5", fontWeight:600 }}>
-                            {s.totalConcorrentes} {aberto ? "▲" : "▼"}
-                          </button>
-                        ) : <span style={{ color:"#67759B" }}>—</span>}
+                      <td style={{ padding:"10px 14px", fontSize:12, whiteSpace:"nowrap", color: pos ? "#FFC107" : "#67759B", fontWeight: pos ? 700 : 400 }}>
+                        {pos ? ("#" + pos + " mais vendido") : "fora do top 8"}
                       </td>
                       <td style={{ padding:"10px 14px", whiteSpace:"nowrap" }}>
                         <span style={{ fontSize:11, fontWeight:700, color:chip.cor, background:chip.bg, border:"1px solid "+chip.border, padding:"3px 10px", borderRadius:20 }}>{chip.label}</span>
                       </td>
                       <td style={{ padding:"10px 14px", whiteSpace:"nowrap" }}>
-                        <button onClick={function(){ analisarUm(l.id); }} title="Atualizar dados deste anúncio"
-                          style={{ background:"transparent", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, padding:"4px 10px", fontSize:12, cursor:"pointer", color:"#A9B4C5" }}>
-                          🔄
-                        </button>
+                        {c && c.lideres && c.lideres.length > 0 && (
+                          <button onClick={function(){ setExpandido(aberto ? null : l.id); }}
+                            style={{ background:"#121A24", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, padding:"4px 10px", fontSize:12, cursor:"pointer", color:"#A9B4C5", fontWeight:600 }}>
+                            líderes {aberto ? "▲" : "▼"}
+                          </button>
+                        )}
                       </td>
                     </tr>
-                    {aberto && s && s.concorrentes && s.concorrentes.length > 0 && (
-                      <tr style={{ borderBottom:"1px solid rgba(255,255,255,.10)", background:"#121A24" }}>
+                    {aberto && c && c.lideres && c.lideres.length > 0 && (
+                      <tr style={{ borderBottom:"1px solid rgba(255,255,255,.06)", background:"#121A24" }}>
                         <td colSpan={8} style={{ padding:"10px 24px" }}>
-                          <div style={{ fontSize:11, color:"#67759B", fontWeight:700, textTransform:"uppercase", letterSpacing:.5, marginBottom:6 }}>Concorrentes na categoria</div>
+                          <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:9, color:"#67759B", fontWeight:700, textTransform:"uppercase", letterSpacing:".12em", marginBottom:6 }}>Mais vendidos da categoria</div>
                           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(240px, 1fr))", gap:8 }}>
-                            {s.concorrentes.map(function(c, i){
+                            {c.lideres.map(function(m, i){
                               return (
-                                <div key={i} style={{ background:"#182230", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, padding:"8px 12px", fontSize:12 }}>
-                                  <div style={{ color:"#A9B4C5", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.titulo}</div>
+                                <div key={i} style={{ background:"#182230", border:"1px solid "+(m.meu?"rgba(255,193,7,.5)":"rgba(255,255,255,.08)"), borderRadius:8, padding:"8px 12px", fontSize:12 }}>
+                                  <div style={{ color:"#A9B4C5", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                                    #{m.posicao} {m.meu ? "🟡 (seu anúncio)" : (m.titulo || "Concorrente")}
+                                  </div>
                                   <div style={{ color:"#67759B", marginTop:2 }}>
-                                    {c.preco != null ? <strong style={{ color:"#FFFFFF" }}>{fmt(c.preco)}</strong> : "—"}
-                                    {c.vendidos != null ? " · " + c.vendidos + " vendidos" : ""}
+                                    <strong style={{ color:"#FFFFFF" }}>{fmt(m.preco)}</strong>
+                                    {m.vendidos != null ? " · " + m.vendidos + " vendidos" : ""}
                                   </div>
                                 </div>
                               );
@@ -3355,7 +3357,7 @@ function PainelConfiguracoesGlobal(props) {
   var darkMode=props.darkMode, setDarkMode=props.setDarkMode;
   var onClose=props.onClose;
 
-  var [aba, setAba] = useState(abaInicial||"config");
+  var [aba, setAba] = useState(abaInicial==="config" ? "aparencia" : (abaInicial||"aparencia"));
   var [usuarios, setUsuarios] = useState(getUsuarios);
   var [editingUser, setEditingUser] = useState(null);
   var [showModalUser, setShowModalUser] = useState(false);
@@ -3380,10 +3382,9 @@ function PainelConfiguracoesGlobal(props) {
   }
 
   var ABAS = [
-    {k:"config",    l:"Impostos & Custos"},
-    {k:"aparencia", l:"Aparencia"},
+    {k:"aparencia", l:"Aparência"},
     {k:"backup",    l:"Backup"},
-    {k:"usuarios",  l:"Usuarios"},
+    {k:"usuarios",  l:"Usuários"},
   ];
 
   return (
@@ -4930,7 +4931,7 @@ export default function App() {
               <div style={{ color:"#67759B", fontSize:10 }}>{currentUser?.admin?"Admin":"Usuário"}</div>
             </div>
           </div>
-          <button onClick={function(){ setShowConfigPanel(true); setConfigPanelTab("config"); }}
+          <button onClick={function(){ setShowConfigPanel(true); setConfigPanelTab("aparencia"); }}
             style={{ background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", fontWeight:600, padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
             ⚙️ Config
           </button>

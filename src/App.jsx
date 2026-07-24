@@ -2559,7 +2559,9 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                   <td style={{ padding:"6px 8px" }}>
                     {isEditing ? (
                       <input type="number" step="0.01" defaultValue={custo}
-                        onBlur={function(e){ var v=parseFloat(e.target.value)||0; setCustosLocais(function(c){return {...c,[l.id]:v};}); setCostsAndSave(function(c){return {...c,[l.id]:v};}); setSelectedId(null); }}
+                        onChange={function(e){ var v=parseFloat(e.target.value)||0; setCustosLocais(function(c){return {...c,[l.id]:v};}); setCostsAndSave(function(c){return {...c,[l.id]:v};}); }}
+                        onBlur={function(){ setSelectedId(null); }}
+                        onKeyDown={function(e){ if(e.key==="Enter"){ e.target.blur(); } }}
                         autoFocus
                         style={{ width:72, background:"#182230", border:"1px solid #00F0FF", color:"#FFFFFF", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
                     ) : (

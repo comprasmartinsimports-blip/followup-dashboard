@@ -2513,8 +2513,9 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
               var precoBase = precoParaAnunciar > 0 ? precoParaAnunciar : bruto;
               // Preço que o cliente efetivamente paga (com desconto aplicado)
               var precoComDesc = precoVendaDesejado > 0 ? precoVendaDesejado : (descPct > 0 ? bruto * (1 - descPct/100) : bruto);
-              // Taxa ML calculada sobre o preço COM desconto (promoção)
-              var feeRate = taxa > 0 && bruto > 0 ? taxa/bruto : (l.feeRate||0.12);
+              // Taxa ML padronizada por tipo de anúncio: Clássico 12% / Premium 17%.
+              var _tipo = l.listing_type_id || "";
+              var feeRate = (_tipo === "gold_premium" || _tipo === "gold_pro") ? 0.17 : 0.12;
               var taxaSobreDesc = precoComDesc * feeRate;
               // Lucro e margem com desconto e frete
               var lucroFinal = precoComDesc - custo - frete - taxaSobreDesc;
@@ -2679,11 +2680,11 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                       R$ {taxaSobreDesc.toFixed(2).replace(".",",")}
                     </div>
                     <div style={{ fontSize:10, color:"#67759B" }}>
-                      {(feeRate*100).toFixed(1)}% s/ {descPct>0?"desc":"atual"}
+                      {(feeRate*100).toFixed(0)}% s/ {descPct>0?"desc":"atual"}
                     </div>
-                    <div title={l.feeIsReal ? "Taxa real calculada pelo Mercado Livre para esta categoria e preço" : "Taxa estimada (12%/17%) — o sistema ainda não conseguiu confirmar a taxa real deste anúncio no ML"}
-                      style={{ fontSize:9, fontWeight:700, color:l.feeIsReal?"#00C853":"#FFC107", marginTop:1 }}>
-                      {l.feeIsReal ? "✓ real ML" : "⚠ estimada"}
+                    <div title="Taxa padrão do Mercado Livre: Clássico 12% · Premium 17%"
+                      style={{ fontSize:9, fontWeight:700, color: isPremium?"#7c3aed":"#3B8CFF", marginTop:1 }}>
+                      {isPremium ? "Premium 17%" : "Clássico 12%"}
                     </div>
                   </td>
 
@@ -4508,9 +4509,8 @@ export default function App() {
 
   const enriched = listings.map(l => {
     const cost = costs[l.id] ?? 0;
-    // Prioriza a taxa REAL vinda do ML (por categoria + preço). Só cai para a tabela estimada
-    // (12%/17% por tipo de anúncio) se ainda não tivermos a taxa real desse anúncio.
-    const feeRate = realFees[l.id]?.feeRate ?? getRealFeeRate(l);
+    // Taxa ML padronizada por tipo de anúncio: Clássico 12% / Premium 17%.
+    const feeRate = getRealFeeRate(l);
     const realFeeInfo = realFees[l.id] || null;
     const promoData = promosData[l.id];
     const { salePrice: salePriceApi, originalPrice: originalPriceApi, hasPromo: hasPromoApi } = getPrices(l);
@@ -4518,9 +4518,9 @@ export default function App() {
     const originalPrice = promoData ? promoData.originalPrice : originalPriceApi;
     const hasPromo = promoData ? true : hasPromoApi;
     const freteSeller = shippingData[l.id] ?? 0;
-    // A taxa real (listing_prices) já embute a tarifa fixa; na estimada, soma a fixa por faixa
+    // Taxa padronizada 12%/17% sobre o preço — sem somar tarifa fixa por faixa.
     const margin = calcMargin(salePrice, cost, feeRate, freteSeller, {
-      feeFixa: realFeeInfo ? 0 : estimarTarifaFixaML(salePrice),
+      feeFixa: 0,
       impostoPct: impostoPctVenda,
     });
     const { score, checks } = calcQualityScore(l);
@@ -4681,10 +4681,10 @@ export default function App() {
       const tarifaUnit = pay.tarifaML / (o.qty || 1);
       base = calcMargin(o.price, cost, tarifaUnit / o.price, freteSeller, { impostoPct: impostoPctVenda });
     } else {
-      const realFeeInfo = listing ? realFees[listing.id] : null;
-      const feeRate = realFeeInfo?.feeRate ?? (listing ? getRealFeeRate(listing) : 0.12);
+      // Sem dados reais de tarifa do pedido → usa a taxa padrão por tipo (12%/17%).
+      const feeRate = listing ? getRealFeeRate(listing) : 0.12;
       base = calcMargin(o.price, cost, feeRate, freteSeller, {
-        feeFixa: realFeeInfo ? 0 : estimarTarifaFixaML(o.price),
+        feeFixa: 0,
         impostoPct: impostoPctVenda,
       });
     }
@@ -4837,6 +4837,7 @@ export default function App() {
         ::-webkit-scrollbar-track{background:transparent}
         ::-webkit-scrollbar-thumb{background:#4A5878;border-radius:99px}
         ::-webkit-scrollbar-thumb:hover{background:#67759B}
+        .app-header::-webkit-scrollbar{display:none}
         input:focus,textarea:focus,select:focus{outline:2px solid #4DB3FF;outline-offset:1px}
 
         /* ── TABELAS ── */
@@ -4885,9 +4886,9 @@ export default function App() {
         @keyframes slPulse{0%,100%{opacity:1}50%{opacity:.4}}
       `}</style>
 
-      <header style={{ background:darkMode?"#121A24":"#182230", borderBottom:`1px solid ${darkMode?"#182230":"rgba(255,255,255,.12)"}`, padding:"0 32px", display:"flex", alignItems:"center", position:"sticky", top:0, zIndex:100, boxShadow:"0 1px 2px rgba(15,23,42,.06)", minHeight:62 }}>
+      <header className="app-header" style={{ background:darkMode?"#121A24":"#182230", borderBottom:`1px solid ${darkMode?"#182230":"rgba(255,255,255,.12)"}`, padding:"0 20px", display:"flex", alignItems:"center", position:"sticky", top:0, zIndex:100, boxShadow:"0 1px 2px rgba(15,23,42,.06)", minHeight:62, overflowX:"auto", overflowY:"hidden", scrollbarWidth:"none", msOverflowStyle:"none" }}>
         {/* Logo + divisor + Abas */}
-        <div style={{ display:"flex", alignItems:"stretch", flex:1, minWidth:0, overflow:"hidden", height:50 }}>
+        <div style={{ display:"flex", alignItems:"stretch", flexShrink:0, height:50 }}>
           {/* Logo */}
           <div style={{ display:"flex", alignItems:"center", gap:7, paddingRight:28, marginRight:4, borderRight:`1px solid ${darkMode?"#182230":"rgba(255,255,255,.10)"}`, flexShrink:0 }}>
             <div style={{ width:34, height:34, borderRadius:"50%", background:"rgba(77,179,255,.12)", border:"1px solid rgba(77,179,255,.45)", boxShadow:"0 0 14px rgba(77,179,255,.35)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:15, color:"#4DB3FF", letterSpacing:-0.5 }}>F</div>
@@ -4948,6 +4949,8 @@ export default function App() {
             })()}
           </div>
         </div>
+        {/* Espaçador — mantém os botões na direita em telas largas e some quando aperta */}
+        <div style={{ flex:"1 1 16px", minWidth:16 }} />
         <div style={{ display:"flex", alignItems:"center", gap:7, flexShrink:0, paddingLeft:16, borderLeft:`1px solid ${darkMode?"#182230":"rgba(255,255,255,.10)"}` }}>
           {usingMock && !token && <span style={{ background: "#223048", border: "1px solid rgba(255,255,255,.12)", color: "#67759B", fontSize: 11, padding: "3px 10px", borderRadius: 20, fontWeight: 500 }}>Demonstração</span>}
           {token && <span style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", color: "#00C853", fontSize: 11, padding: "3px 12px", borderRadius: 20, fontWeight: 600 }}>● {user?.nickname}</span>}

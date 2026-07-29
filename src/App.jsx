@@ -2337,6 +2337,24 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
     return true;
   });
 
+  // Novos produtos (ainda sem anúncio no ML) viram "pseudo-anúncios" e entram na MESMA tabela,
+  // com as mesmas colunas e regras. Custo/frete config/vender por/desconto usam os mesmos
+  // configs por id — a precificação funciona idêntica à de um anúncio real.
+  var extrasPseudo = (produtosExtras||[]).filter(function(p){ return !p.vinculado; }).map(function(p){
+    return {
+      id: p.id, seller_sku: p.sku, sku: p.sku, title: p.nome,
+      price: parseFloat(p.precoVenda) || 0,
+      listing_type_id: (parseFloat(p.taxaMl||12) >= 17) ? "gold_pro" : "gold_special",
+      freteSeller: parseFloat(p.frete) || 0,
+      status: "active", _isExtra: true,
+    };
+  });
+  if (busca.trim()) {
+    var qE = busca.trim().toLowerCase();
+    extrasPseudo = extrasPseudo.filter(function(p){ return (p.title||"").toLowerCase().includes(qE) || (p.sku||"").toLowerCase().includes(qE); });
+  }
+  listsFiltrados = extrasPseudo.concat(listsFiltrados);
+
   function calcPrecos(bruto, custo, frete, taxa, precoVendaCustom) {
     // Se tem preço de venda customizado, usa ele; senão usa o preço atual do anúncio
     var precoBase = precoVendaCustom > 0 ? precoVendaCustom : bruto;
@@ -2433,7 +2451,11 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
             <div style={{ fontWeight:700, fontSize:15, marginBottom:14 }}>+ Precificar Novo Produto</div>
             <NovoProdutoPrecForm
               onSave={function(p){
-                saveProdutosExtras([...produtosExtras, Object.assign({id:"extra_"+Date.now()}, p)]);
+                var id = "NOVO_" + Date.now();
+                saveProdutosExtras([...produtosExtras, { id:id, nome:p.nome, sku:p.sku, taxaMl:p.taxaMl, precoVenda:p.precoVenda, frete:p.frete }]);
+                // Custo vai para o mesmo lugar dos anúncios (costs_config) → mesma regra e edição.
+                var custoNum = parseFloat(p.custo) || 0;
+                if (custoNum > 0) setCostsAndSave(function(c){ return Object.assign({}, c, { [id]: custoNum }); });
                 setShowNovoProdutoPrec(false);
               }}
               onClose={function(){ setShowNovoProdutoPrec(false); }}
@@ -2443,38 +2465,6 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
       )}
 
       {/* Produtos extras (ainda não anunciados) */}
-      {produtosExtras.filter(function(p){return !p.vinculado;}).length > 0 && (
-        <div style={{ marginBottom:10 }}>
-          <div style={{ fontSize:11, fontWeight:700, color:"#7c3aed", textTransform:"uppercase", marginBottom:6 }}>📦 Produtos aguardando anúncio no ML</div>
-          {produtosExtras.filter(function(p){return !p.vinculado;}).map(function(p){
-            var custo = parseFloat(p.custo||0);
-            var bruto = parseFloat(p.precoVenda||0);
-            var taxa = bruto * (parseFloat(p.taxaMl||12)/100);
-            var frete = parseFloat(p.frete||0);
-            var lucro = bruto - custo - frete - taxa;
-            var margem = bruto>0?(lucro/bruto)*100:0;
-            var mCor = margem>=margemAlvo?"#00C853":margem>=0?"#FFC107":"#FF5252";
-            return (
-              <div key={p.id} style={{ display:"flex", gap:10, alignItems:"center", background:"rgba(139,92,246,.12)", border:"1px solid rgba(139,92,246,.35)", borderRadius:10, padding:"10px 14px", marginBottom:6 }}>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:13, fontWeight:700, color:"#FFFFFF" }}>{p.nome}</div>
-                  <div style={{ fontSize:11, color:"#7c3aed" }}>SKU: {p.sku} · Aguardando anúncio no ML</div>
-                </div>
-                <div style={{ fontSize:12, color:"#A9B4C5" }}>Custo: R$ {custo.toFixed(2).replace(".",",")}</div>
-                <div style={{ fontSize:12, fontWeight:700, color:"#FFFFFF" }}>Venda: R$ {bruto.toFixed(2).replace(".",",")}</div>
-                <span style={{ fontSize:12, fontWeight:700, color:mCor, background:mCor+"18", padding:"2px 8px", borderRadius:6 }}>
-                  {margem.toFixed(1)}%
-                </span>
-                <button onClick={function(){
-                  if(!window.confirm("Remover este produto?")) return;
-                  saveProdutosExtras(produtosExtras.filter(function(x){return x.id!==p.id;}));
-                }} style={{ background:"rgba(255,82,82,.12)", border:"none", color:"#FF5252", width:24, height:24, borderRadius:6, cursor:"pointer", fontSize:11 }}>✕</button>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
       {/* Tabela */}
       <div style={{ background:"#182230", border:"1px solid rgba(255,255,255,.12)", borderRadius:12, overflow:"auto" }}>
         <table style={{ borderCollapse:"collapse", width:"100%", minWidth:900 }}>
@@ -2537,7 +2527,9 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
 
                   {/* MLB */}
                   <td style={{ padding:"6px 8px", fontSize:11, color:"#00F0FF", fontFamily:"monospace" }}>
-                    {l.id}
+                    {l._isExtra
+                      ? <span style={{ fontSize:10, fontWeight:700, color:"#FFC107", background:"rgba(255,193,7,.12)", border:"1px solid rgba(255,193,7,.35)", padding:"2px 7px", borderRadius:5, whiteSpace:"nowrap" }}>🆕 Novo</span>
+                      : l.id}
                   </td>
 
                   {/* Tipo */}
@@ -2716,16 +2708,25 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
 
                   {/* Ação */}
                   <td style={{ padding:"6px 8px" }}>
-                    <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
-                      <a href={"https://www.mercadolivre.com.br/seller-admin/listing/edit?itemId="+l.id} target="_blank" rel="noreferrer"
-                        style={{ fontSize:11, color:"#00F0FF", textDecoration:"none", fontWeight:600 }}>
-                        Editar ML ↗
-                      </a>
-                      <a href={"https://vendedores.mercadolivre.com.br/ferramentas/promocoes"} target="_blank" rel="noreferrer"
-                        style={{ fontSize:10, color:"#7c3aed", textDecoration:"none", fontWeight:600 }}>
-                        Promoções ↗
-                      </a>
-                    </div>
+                    {l._isExtra ? (
+                      <button onClick={function(){
+                        if(!window.confirm("Remover este produto?")) return;
+                        saveProdutosExtras(produtosExtras.filter(function(x){return x.id!==l.id;}));
+                      }} style={{ background:"rgba(255,82,82,.12)", border:"1px solid rgba(255,82,82,.35)", color:"#FF5252", padding:"4px 10px", borderRadius:6, cursor:"pointer", fontSize:11, fontWeight:600, whiteSpace:"nowrap" }}>
+                        ✕ Remover
+                      </button>
+                    ) : (
+                      <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+                        <a href={"https://www.mercadolivre.com.br/seller-admin/listing/edit?itemId="+l.id} target="_blank" rel="noreferrer"
+                          style={{ fontSize:11, color:"#00F0FF", textDecoration:"none", fontWeight:600 }}>
+                          Editar ML ↗
+                        </a>
+                        <a href={"https://vendedores.mercadolivre.com.br/ferramentas/promocoes"} target="_blank" rel="noreferrer"
+                          style={{ fontSize:10, color:"#7c3aed", textDecoration:"none", fontWeight:600 }}>
+                          Promoções ↗
+                        </a>
+                      </div>
+                    )}
                   </td>
                 </tr>
               );
@@ -4423,50 +4424,12 @@ export default function App() {
     return function(){ clearInterval(intervalId); };
   }, [token]);
 
-  const MOCK_LISTINGS = [
-    {
-      id: "MLB6685879548", seller_sku: "1461", listing_type_id: "gold_premium",
-      title: "Lanterna Traseira Gol G4 2006 2007 2008 A 2014 Fume Vermelho Direito Passageiro",
-      price: 61.69, original_price: 62.34,
-      sold_quantity: 0, status: "active",
-      permalink: "https://www.mercadolivre.com.br",
-      shipping: { free_shipping: false, logistic_type: "xd_drop_off" },
-      pictures: [{}], description: { plain_text: "Lanterna traseira." },
-      attributes: [{ id: "SELLER_SKU", name: "SKU", value_name: "1461" }], condition: "new"
-    },
-    {
-      id: "MLB6581658690", seller_sku: "012", listing_type_id: "gold_premium",
-      title: "Break Light Toyota Hilux 2016 2017 2018 2019 2020 A 2026",
-      price: 102.99, original_price: 121.16,
-      sold_quantity: 0, status: "active",
-      permalink: "https://www.mercadolivre.com.br",
-      shipping: { free_shipping: true, logistic_type: "xd_drop_off" },
-      pictures: [{},{},{},{},{},{}],
-      description: { plain_text: "Break light Toyota Hilux original novo." },
-      attributes: [{ id: "SELLER_SKU", name: "SKU", value_name: "012" }], condition: "new"
-    },
-  ];
+  // Sem dados de demonstração: enquanto não conectar a conta, as telas ficam vazias.
+  const listings = realListings;
+  const shippingData = sellerShipping;
+  const promosData = promos;
 
-  const MOCK_PROMOS = {
-    "MLB6685879548": { salePrice: 61.69, originalPrice: 62.34 },
-    "MLB6581658690": { salePrice: 102.99, originalPrice: 121.16 },
-  };
-
-  const MOCK_SHIPPING = {
-    "MLB6685879548": 8.55,
-    "MLB6581658690": 15.45,
-  };
-
-  const MOCK_ORDERS = [
-    { id: "2000001", listing_id: "MLB6685879548", date: "2026-05-13", price: 61.69, qty: 1, seller_shipping_cost: 8.55 },
-    { id: "2000002", listing_id: "MLB6581658690", date: "2026-05-10", price: 102.99, qty: 1, seller_shipping_cost: 15.45 },
-  ];
-
-  const listings = usingMock ? MOCK_LISTINGS : realListings;
-  const shippingData = usingMock ? MOCK_SHIPPING : sellerShipping;
-  const promosData = usingMock ? MOCK_PROMOS : promos;
-
-  const rawOrders = usingMock ? MOCK_ORDERS : realOrders.map(o => {
+  const rawOrders = realOrders.map(o => {
     const item = o.order_items?.[0];
     const buyerShippingCost = parseFloat(o.payments?.[0]?.shipping_cost) || 0;
     const shipmentCost = shipmentCosts[String(o.id)] ?? 0;
@@ -4954,7 +4917,7 @@ export default function App() {
         {/* Espaçador — mantém os botões na direita em telas largas e some quando aperta */}
         <div style={{ flex:"1 1 16px", minWidth:16 }} />
         <div style={{ display:"flex", alignItems:"center", gap:7, flexShrink:0, paddingLeft:16, borderLeft:`1px solid ${darkMode?"#182230":"rgba(255,255,255,.10)"}` }}>
-          {usingMock && !token && <span style={{ background: "#223048", border: "1px solid rgba(255,255,255,.12)", color: "#67759B", fontSize: 11, padding: "3px 10px", borderRadius: 20, fontWeight: 500 }}>Demonstração</span>}
+          {!token && <span style={{ background: "#223048", border: "1px solid rgba(255,255,255,.12)", color: "#67759B", fontSize: 11, padding: "3px 10px", borderRadius: 20, fontWeight: 500 }}>Não conectado</span>}
           {token && <span style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", color: "#00C853", fontSize: 11, padding: "3px 12px", borderRadius: 20, fontWeight: 600 }}>● {user?.nickname}</span>}
           {loading && <span style={{ color: "#67759B", fontSize: 12 }}>⏳ {loadingMsg}</span>}
           {loadError && <span style={{ color: "#FF5252", fontSize: 12 }}>⚠ {loadError}</span>}

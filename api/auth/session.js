@@ -1,19 +1,9 @@
 // api/auth/session.js
-// Retorna se o usuário está autenticado e dados básicos da sessão
+// Retorna se o usuário está autenticado no ML e dados básicos da sessão.
+// A conexão do ML é ISOLADA por usuário do sistema — o fallback do KV usa o
+// token do PRÓPRIO usuário logado (mlmargem_ml_token_<uid>), nunca o de outra conta.
 
-const SHARED_ML_TOKEN_KEY = "mlmargem_shared_ml_token";
-
-async function kvGet(key) {
-  if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) return null;
-  try {
-    const r = await fetch(process.env.KV_REST_API_URL + "/get/" + key, {
-      headers: { Authorization: "Bearer " + process.env.KV_REST_API_TOKEN },
-    });
-    const d = await r.json();
-    if (d && d.result) return JSON.parse(d.result);
-  } catch {}
-  return null;
-}
+import { verificarSessao, lerMLToken } from "../_lib/auth.js";
 
 export default async function handler(req, res) {
   const cookies = Object.fromEntries(
@@ -28,15 +18,18 @@ export default async function handler(req, res) {
   let expiresAt = parseInt(cookies.ml_expires_at || "0");
   let viaShared = false;
 
-  // Se este navegador nunca conectou (sem cookie), usa a conexão compartilhada da equipe —
-  // assim qualquer usuário do sistema já entra conectado ao ML automaticamente.
+  // Se este navegador não tem cookie próprio, herda a conexão do MESMO usuário do
+  // sistema (ex: o usuário abriu em outro navegador). Nunca herda a de outro usuário.
   if (!accessToken || !userId) {
-    const shared = await kvGet(SHARED_ML_TOKEN_KEY);
-    if (shared && shared.accessToken && shared.userId) {
-      accessToken = shared.accessToken;
-      userId = shared.userId;
-      expiresAt = shared.expiresAt || 0;
-      viaShared = true;
+    const sessao = await verificarSessao(req);
+    if (sessao && sessao.uid) {
+      const meu = await lerMLToken(sessao.uid);
+      if (meu && meu.accessToken && meu.userId) {
+        accessToken = meu.accessToken;
+        userId = meu.userId;
+        expiresAt = meu.expiresAt || 0;
+        viaShared = true;
+      }
     }
   }
 

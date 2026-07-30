@@ -14,8 +14,6 @@ import {
   semSenha,
 } from "./_lib/auth.js";
 
-const SHARED_ML_TOKEN_KEY = "mlmargem_shared_ml_token";
-
 // Chaves de dados de negócio que ficam sincronizadas entre TODOS os usuários (não só no
 // navegador de quem editou) — cada uma vira uma entrada no KV, prefixada para não colidir
 // com outras chaves.
@@ -140,11 +138,15 @@ export default async function handler(req, res) {
   if (!token) {
     token = cookies.ml_access_token;
   }
-  // Último fallback: conexão compartilhada da equipe (quando este navegador nunca conectou
-  // e por algum motivo o front-end ainda não tinha enviado o header com o token compartilhado).
+  // Último fallback: a conexão do PRÓPRIO usuário do sistema salva no KV (quando este
+  // navegador ainda não enviou o header e não tem cookie). Isolada por usuário — nunca
+  // usa o token de outra conta.
   if (!token) {
-    const shared = await kvGet(SHARED_ML_TOKEN_KEY);
-    if (shared && shared.accessToken) token = shared.accessToken;
+    const sessao = await verificarSessao(req);
+    if (sessao && sessao.uid) {
+      const meu = await kvGet("mlmargem_ml_token_" + sessao.uid);
+      if (meu && meu.accessToken) token = meu.accessToken;
+    }
   }
 
   if (!token) {

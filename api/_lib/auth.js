@@ -40,6 +40,22 @@ export async function kvSet(key, value) {
   return false;
 }
 
+// ── Conexão com o Mercado Livre, ISOLADA por usuário do sistema ──────────────
+// Cada usuário do app tem a sua própria conexão com o ML (seu próprio token),
+// para que duas contas diferentes do Mercado Livre possam ser usadas ao mesmo
+// tempo sem uma derrubar a outra. Chave no KV: mlmargem_ml_token_<uid>.
+export function mlTokenKey(uid) { return "mlmargem_ml_token_" + uid; }
+
+export async function lerMLToken(uid) {
+  if (!uid) return null;
+  return await kvGet(mlTokenKey(uid));
+}
+
+export async function salvarMLToken(uid, tokenData) {
+  if (!uid) return false;
+  return await kvSet(mlTokenKey(uid), tokenData);
+}
+
 // ── Senhas ───────────────────────────────────────────────────
 // Formato novo: "s2$<salt hex>$<scrypt hex>". Hashes antigos (número simples,
 // gerados pelo hash fraco que rodava no navegador) continuam aceitos no login

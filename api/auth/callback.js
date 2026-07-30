@@ -1,25 +1,9 @@
 // api/auth/callback.js
-// Recebe o code do ML e troca por access_token + refresh_token
+// Recebe o code do ML e troca por access_token + refresh_token.
+// A conexão fica ISOLADA por usuário do sistema (mlmargem_ml_token_<uid>) — assim
+// duas contas diferentes do Mercado Livre convivem sem uma derrubar a outra.
 
-const SHARED_ML_TOKEN_KEY = "mlmargem_shared_ml_token";
-
-async function kvSet(key, value) {
-  if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) return false;
-  try {
-    // A API REST do Upstash/Vercel KV usa o corpo da requisição como o próprio valor a
-    // gravar (não deve vir embrulhado em {value: ...}) — ver docs.upstash.com/redis/features/restapi
-    await fetch(process.env.KV_REST_API_URL + "/set/" + key, {
-      method: "POST",
-      headers: {
-        Authorization: "Bearer " + process.env.KV_REST_API_TOKEN,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(value),
-    });
-    return true;
-  } catch {}
-  return false;
-}
+import { verificarSessao, salvarMLToken } from "../_lib/auth.js";
 
 export default async function handler(req, res) {
   const { code } = req.query;
@@ -61,15 +45,17 @@ export default async function handler(req, res) {
       `ml_expires_at=${Date.now() + maxAge * 1000}; Path=/; Max-Age=${maxAge}`,
     ]);
 
-    // Também salva a conexão de forma COMPARTILHADA (KV) — assim qualquer outro usuário do
-    // sistema, em qualquer navegador/computador, passa a usar essa mesma conexão com o ML
-    // automaticamente, sem precisar conectar de novo.
-    await kvSet(SHARED_ML_TOKEN_KEY, {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-      userId: data.user_id,
-      expiresAt: Date.now() + maxAge * 1000,
-    });
+    // Guarda a conexão no KV SOMENTE para o usuário do sistema que fez o login (isolada).
+    // Outros usuários (em outros navegadores) só herdam essa conexão se forem o MESMO usuário.
+    const sessao = await verificarSessao(req);
+    if (sessao && sessao.uid) {
+      await salvarMLToken(sessao.uid, {
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token,
+        userId: data.user_id,
+        expiresAt: Date.now() + maxAge * 1000,
+      });
+    }
 
     // Redirecionar de volta ao dashboard
     return res.redirect("/?auth=success");

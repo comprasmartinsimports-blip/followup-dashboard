@@ -1,37 +1,9 @@
 // api/auth/refresh.js
-// Renova o access_token usando o refresh_token
+// Renova o access_token usando o refresh_token.
+// A conexão do ML é ISOLADA por usuário do sistema: o fallback e a regravação no KV
+// usam o token do PRÓPRIO usuário logado (mlmargem_ml_token_<uid>).
 
-const SHARED_ML_TOKEN_KEY = "mlmargem_shared_ml_token";
-
-async function kvGet(key) {
-  if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) return null;
-  try {
-    const r = await fetch(process.env.KV_REST_API_URL + "/get/" + key, {
-      headers: { Authorization: "Bearer " + process.env.KV_REST_API_TOKEN },
-    });
-    const d = await r.json();
-    if (d && d.result) return JSON.parse(d.result);
-  } catch {}
-  return null;
-}
-
-async function kvSet(key, value) {
-  if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) return false;
-  try {
-    // A API REST do Upstash/Vercel KV usa o corpo da requisição como o próprio valor a
-    // gravar (não deve vir embrulhado em {value: ...}) — ver docs.upstash.com/redis/features/restapi
-    await fetch(process.env.KV_REST_API_URL + "/set/" + key, {
-      method: "POST",
-      headers: {
-        Authorization: "Bearer " + process.env.KV_REST_API_TOKEN,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(value),
-    });
-    return true;
-  } catch {}
-  return false;
-}
+import { verificarSessao, lerMLToken, salvarMLToken } from "../_lib/auth.js";
 
 export default async function handler(req, res) {
   const APP_ID = process.env.ML_APP_ID;
@@ -45,15 +17,15 @@ export default async function handler(req, res) {
     })
   );
 
+  const sessao = await verificarSessao(req);
   let refreshToken = cookies.ml_refresh_token;
   let viaShared = false;
 
-  // Se este navegador não tem cookie próprio (ex: outro usuário da equipe que nunca conectou
-  // manualmente), usa o refresh_token da conexão compartilhada salva no KV.
-  if (!refreshToken) {
-    const shared = await kvGet(SHARED_ML_TOKEN_KEY);
-    if (shared && shared.refreshToken) {
-      refreshToken = shared.refreshToken;
+  // Sem cookie próprio → usa o refresh_token do MESMO usuário do sistema (não de outra conta).
+  if (!refreshToken && sessao && sessao.uid) {
+    const meu = await lerMLToken(sessao.uid);
+    if (meu && meu.refreshToken) {
+      refreshToken = meu.refreshToken;
       viaShared = true;
     }
   }
@@ -77,8 +49,8 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (data.error) {
-      // Refresh inválido — limpar cookies deste navegador (não mexe na conexão compartilhada,
-      // que pode ter sido renovada por outro navegador nesse meio tempo)
+      // Refresh inválido — limpar cookies deste navegador (não mexe na conexão salva no KV,
+      // que pode ter sido renovada por outro navegador do mesmo usuário nesse meio tempo)
       if (!viaShared) {
         res.setHeader("Set-Cookie", [
           "ml_access_token=; HttpOnly; Secure; Path=/; Max-Age=0",
@@ -100,14 +72,15 @@ export default async function handler(req, res) {
       `ml_expires_at=${Date.now() + maxAge * 1000}; Path=/; Max-Age=${maxAge}`,
     ]);
 
-    // Mantém a conexão compartilhada sempre atualizada, para que todos os outros navegadores
-    // da equipe também peguem o token renovado.
-    await kvSet(SHARED_ML_TOKEN_KEY, {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-      userId: data.user_id || cookies.ml_user_id,
-      expiresAt: Date.now() + maxAge * 1000,
-    });
+    // Mantém a conexão do PRÓPRIO usuário atualizada no KV (para outros navegadores dele).
+    if (sessao && sessao.uid) {
+      await salvarMLToken(sessao.uid, {
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token,
+        userId: data.user_id || cookies.ml_user_id,
+        expiresAt: Date.now() + maxAge * 1000,
+      });
+    }
 
     return res.json({
       access_token: data.access_token,

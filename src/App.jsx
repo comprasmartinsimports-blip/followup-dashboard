@@ -4150,6 +4150,23 @@ export default function App() {
       const me = await meRes.json();
       if (!me.id) throw new Error("Token inválido");
       setUser({ nickname: me.nickname ?? "Minha Conta ML", id: me.id });
+
+      // ── Isolamento entre contas: se este navegador conectar uma conta ML DIFERENTE da
+      // anterior, limpa os dados de negócio locais (custos, produtos, precificação) para não
+      // misturar as contas. Na primeira conexão (sem conta registrada) não limpa nada.
+      try {
+        var contaAnterior = localStorage.getItem("ml_connected_seller");
+        if (contaAnterior && contaAnterior !== String(me.id)) {
+          SYNC_ALL_KEYS.forEach(function(k){ try { localStorage.removeItem(k); } catch(e){} });
+          try { localStorage.removeItem("ml_orders_cache"); } catch(e){}
+          try { idbDel(ML_SNAPSHOT_KEY); } catch(e){}
+          lastSyncRef.current = {}; // força re-puxar os dados da conta nova do servidor
+          setCosts({}); setFretesConfig({}); setDescontosConfig({}); setPrecosVendaConfig({});
+          setPendentesAtualizacao({}); setRealFees({}); setProdutos([]);
+        }
+        localStorage.setItem("ml_connected_seller", String(me.id));
+      } catch(e) {}
+
       // Atualiza nickname salvo
       const saved = loadSavedTokens();
       if (saved) saveTokens(saved.accessToken, saved.refreshToken, (saved.expiry - Date.now()) / 1000, me.id, me.nickname);

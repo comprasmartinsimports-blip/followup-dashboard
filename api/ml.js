@@ -46,6 +46,7 @@ const SYNC_KEYS_PERMITIDAS = [
   "vendas_estoque_baixadas",
   "chat_interno_mensagens",
   "chat_interno_tarefas",
+  "sku_overrides",
 ];
 
 export default async function handler(req, res) {

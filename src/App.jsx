@@ -2238,15 +2238,26 @@ function NovoProdutoPrecForm({ onSave, onClose }) {
   );
 }
 
-function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFretesAndSave, descontosConfig, setDescontosAndSave, precosVendaConfig, setPrecosVendaAndSave, pendentesAtualizacao, setPendentesAndSave, rawOrders }) {
+function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFretesAndSave, descontosConfig, setDescontosAndSave, precosVendaConfig, setPrecosVendaAndSave, pendentesAtualizacao, setPendentesAndSave, setSkuOverridesAndSave, rawOrders }) {
   const [busca, setBusca] = useState("");
   const [margemAlvo, setMargemAlvo] = useState(20);
   const [selectedId, setSelectedId] = useState(null);
   const [editingFreteId, setEditingFreteId] = useState(null);
   const [editingDescId, setEditingDescId] = useState(null);
+  const [editingSkuId, setEditingSkuId] = useState(null);
   const [custosLocais, setCustosLocais] = useState({});
   function setDesconto(id, pct) {
     setDescontosAndSave(function(prev){ return Object.assign({}, prev, { [id]: pct }); });
+  }
+  // Salva o SKU editado: produto novo atualiza o próprio cadastro; anúncio do ML grava um
+  // override local (sku_overrides) que passa a valer na tela.
+  function salvarSku(l, valor) {
+    var novo = (valor || "").trim();
+    if (l._isExtra) {
+      saveProdutosExtras(produtosExtras.map(function(x){ return x.id === l.id ? Object.assign({}, x, { sku: novo }) : x; }));
+    } else if (setSkuOverridesAndSave) {
+      setSkuOverridesAndSave(function(prev){ return Object.assign({}, prev, { [l.id]: novo }); });
+    }
   }
   // Preços de venda sugeridos (digitados pelo usuário)
   const [editingPrecoId, setEditingPrecoId] = useState(null);
@@ -2518,11 +2529,21 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
               return (
                 <tr key={l.id} style={{ borderBottom:"1px solid rgba(255,255,255,.10)", background:i%2===0?"#182230":"#121A24" }}>
 
-                  {/* SKU */}
+                  {/* SKU — editável */}
                   <td style={{ padding:"6px 8px" }}>
-                    <span style={{ fontSize:11, fontFamily:"monospace", fontWeight:700, color:"#A9B4C5", background:"#223048", padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
-                      {l.seller_sku||l.sku||"—"}
-                    </span>
+                    {editingSkuId === l.id ? (
+                      <input type="text" defaultValue={l.seller_sku||l.sku||""} autoFocus
+                        onChange={function(e){ salvarSku(l, e.target.value); }}
+                        onBlur={function(){ setEditingSkuId(null); }}
+                        onKeyDown={function(e){ if(e.key==="Enter"||e.key==="Escape"){ setEditingSkuId(null); } }}
+                        style={{ width:80, background:"#182230", border:"1px solid #00F0FF", color:"#FFFFFF", padding:"2px 6px", borderRadius:4, fontSize:11, fontFamily:"monospace", outline:"none" }} />
+                    ) : (
+                      <span onClick={function(){ setEditingSkuId(l.id); }} title="Clique para editar o SKU"
+                        style={{ cursor:"pointer", fontSize:11, fontFamily:"monospace", fontWeight:700, color:"#A9B4C5", background:"#223048", padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap", display:"inline-flex", alignItems:"center", gap:4 }}>
+                        {l.seller_sku||l.sku||"—"}
+                        <span style={{ color:"#00F0FF", fontSize:9 }}>✎</span>
+                      </span>
+                    )}
                   </td>
 
                   {/* MLB */}
@@ -3611,6 +3632,18 @@ export default function App() {
   const [pendentesAtualizacao, setPendentesAtualizacao] = useState(function() {
     try { return JSON.parse(localStorage.getItem("precos_pendentes_ml") || "{}"); } catch { return {}; }
   });
+  // SKU editado manualmente pelo usuário na Precificação (por anúncio) — sobrepõe o SKU do ML.
+  const [skuOverrides, setSkuOverrides] = useState(function() {
+    try { return JSON.parse(localStorage.getItem("sku_overrides") || "{}"); } catch { return {}; }
+  });
+  function setSkuOverridesAndSave(updater) {
+    setSkuOverrides(function(prev) {
+      var next = typeof updater === "function" ? updater(prev) : updater;
+      try { localStorage.setItem("sku_overrides", JSON.stringify(next)); } catch {}
+      kvSyncPush("sku_overrides", next);
+      return next;
+    });
+  }
   function setFretesAndSave(updater) {
     setFretesConfig(function(prev) {
       var next = typeof updater === "function" ? updater(prev) : updater;
@@ -3987,7 +4020,7 @@ export default function App() {
     "custos_fixos_config","impostos_config","irpj_csll_config","icms_por_estado","lancamentos",
     "mov_estoque","metaMensal","min_stock_anuncios","real_fees_config","pedidos_compra",
     "precificacao_extras","precos_pendentes_ml","depositos_estoque","estoque_depositos",
-    "envios_full","vendas_estoque_baixadas",
+    "envios_full","vendas_estoque_baixadas","sku_overrides",
   ]).current;
   // Para os dados guardados como dicionário (chave→valor, ex: custo por anúncio), mesclar em
   // vez de substituir por inteiro — evita que um "pull" com dados parciais do servidor apague
@@ -4017,6 +4050,7 @@ export default function App() {
     metaMensal: function(v){ setMetaMensal(parseFloat(v)||0); },
     min_stock_anuncios: mesclarSetter(setMinStock),
     real_fees_config: mesclarSetter(setRealFees),
+    sku_overrides: mesclarSetter(setSkuOverrides),
   }).current;
   // Tipo esperado de cada chave — usado para blindar contra um valor no formato errado
   // (ex: um objeto onde deveria vir uma lista) travando a tela com "x.filter is not a function".
@@ -4027,7 +4061,7 @@ export default function App() {
     custos_fixos_config: "array", impostos_config: "array", lancamentos: "array",
     costs_config: "object", fretes_config: "object", descontos_config: "object",
     precos_venda_config: "object", precos_pendentes_ml: "object", irpj_csll_config: "object",
-    min_stock_anuncios: "object", real_fees_config: "object",
+    min_stock_anuncios: "object", real_fees_config: "object", sku_overrides: "object",
   }).current;
   const lastSyncRef = useRef({}); // key -> string JSON já sincronizado (evita reenviar/reaplicar sem necessidade)
 
@@ -4506,9 +4540,11 @@ export default function App() {
       impostoPct: impostoPctVenda,
     });
     const { score, checks } = calcQualityScore(l);
-    const sku = getSku(l);
+    // SKU editado manualmente pelo usuário tem prioridade sobre o SKU vindo do ML.
+    const skuOverride = skuOverrides[l.id] && String(skuOverrides[l.id]).trim();
+    const sku = skuOverride || getSku(l);
     const youReceive = salePrice - margin.fee - freteSeller;
-    return { ...l, ...margin, cost, sku, salePrice, originalPrice, hasPromo, freteSeller, youReceive, totalProfit: margin.profit * (l.sold_quantity ?? 0), score, checks, feeIsReal: !!realFeeInfo };
+    return { ...l, seller_sku: skuOverride || l.seller_sku, ...margin, cost, sku, salePrice, originalPrice, hasPromo, freteSeller, youReceive, totalProfit: margin.profit * (l.sold_quantity ?? 0), score, checks, feeIsReal: !!realFeeInfo };
   });
 
   const filteredListings = useMemo(() => {
@@ -5453,6 +5489,7 @@ export default function App() {
             setPrecosVendaAndSave={setPrecosVendaAndSave}
             pendentesAtualizacao={pendentesAtualizacao}
             setPendentesAndSave={setPendentesAndSave}
+            setSkuOverridesAndSave={setSkuOverridesAndSave}
             rawOrders={rawOrders}
           />
         )}

@@ -21,9 +21,15 @@ function getDaysUntil(dateStr) {
 // Usa a rota /api/ml/_sync (KV compartilhado) — o mesmo mecanismo já usado para compartilhar
 // a lista de usuários e a conexão com o ML. Chamado tanto para "puxar" o que outros usuários
 // salvaram quanto para "empurrar" uma mudança feita localmente.
+// Conta do Mercado Livre atualmente conectada NESTE navegador. Os dados de negócio são
+// sincronizados dentro do espaço dessa conta (ns) — assim contas diferentes do ML nunca
+// misturam custos/produtos/precificação, mesmo que o login do sistema seja o mesmo.
+function syncNamespace() {
+  try { return localStorage.getItem("ml_connected_seller") || ""; } catch { return ""; }
+}
 async function kvSyncPull(key) {
   try {
-    const res = await fetch("/api/ml/_sync?key=" + encodeURIComponent(key));
+    const res = await fetch("/api/ml/_sync?key=" + encodeURIComponent(key) + "&ns=" + encodeURIComponent(syncNamespace()));
     if (!res.ok) return null;
     const d = await res.json();
     var v = d && d.value !== undefined ? d.value : null;
@@ -41,7 +47,7 @@ async function kvSyncPush(key, value) {
     await fetch("/api/ml/_sync", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key, value }),
+      body: JSON.stringify({ key, value, ns: syncNamespace() }),
     });
   } catch {}
 }

@@ -102,22 +102,26 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: "Não autenticado. Faça login no sistema." });
     }
 
-    // Chaves COMPARTILHADAS entre todos os usuários (ex: chat interno da equipe) — ficam no
-    // espaço global. As demais (dados de negócio: custos, produtos, precificação) ficam
-    // ISOLADAS por usuário do sistema para que contas diferentes do ML não se misturem.
+    // Chaves COMPARTILHADAS entre todos (ex: chat interno da equipe) → espaço global.
+    // As demais (dados de negócio: custos, produtos, precificação) ficam ISOLADAS por CONTA
+    // do Mercado Livre (ns = seller id enviado pelo navegador), para que contas diferentes
+    // do ML nunca misturem dados — mesmo que o login do sistema seja o mesmo. Sem conta
+    // conectada (ns vazio), cai num espaço neutro por usuário.
     const CHAVES_COMPARTILHADAS = ["chat_interno_mensagens", "chat_interno_tarefas"];
-    function kvKeyPara(key) {
-      return CHAVES_COMPARTILHADAS.includes(key)
-        ? "mlmargem_sync_" + key
-        : "mlmargem_sync_" + sessao.uid + "_" + key;
+    function kvKeyPara(key, ns) {
+      if (CHAVES_COMPARTILHADAS.includes(key)) return "mlmargem_sync_" + key;
+      var conta = (ns && String(ns).trim()) ? String(ns).trim() : ("u-" + sessao.uid);
+      return "mlmargem_sync_acc_" + conta + "_" + key;
     }
 
     if (req.method === "GET") {
-      const key = new URLSearchParams(path.split("?")[1] || "").get("key");
+      const qs = new URLSearchParams(path.split("?")[1] || "");
+      const key = qs.get("key");
+      const ns = qs.get("ns");
       if (!key || !SYNC_KEYS_PERMITIDAS.includes(key)) {
         return res.status(400).json({ error: "Chave de sincronização inválida" });
       }
-      const value = await kvGet(kvKeyPara(key));
+      const value = await kvGet(kvKeyPara(key, ns));
       return res.status(200).json({ key, value: value ?? null });
     }
 
@@ -127,7 +131,7 @@ export default async function handler(req, res) {
       if (!key || !SYNC_KEYS_PERMITIDAS.includes(key)) {
         return res.status(400).json({ error: "Chave de sincronização inválida" });
       }
-      await kvSet(kvKeyPara(key), body.value);
+      await kvSet(kvKeyPara(key, body.ns), body.value);
       return res.status(200).json({ ok: true });
     }
 

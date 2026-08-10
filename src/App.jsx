@@ -3597,6 +3597,8 @@ export default function App() {
           .then(function(session) {
             if (session.authenticated) {
               if (session.expiresAt) setTokenExpiry(session.expiresAt);
+              // Marca a conta ML já aqui (o mais cedo possível) para o namespace de sincronização.
+              try { if (session.userId) localStorage.setItem("ml_connected_seller", String(session.userId)); } catch(e) {}
               // Nova aba / reabertura: se já temos uma carga recente em cache, mostra na hora
               // sem refazer a reconexão pesada com o ML. "Atualizar" força a recarga completa.
               lerMLSnapshot().then(function(snap){
@@ -4167,6 +4169,8 @@ export default function App() {
   function hidratarDoSnapshot(snap, accessToken) {
     if (accessToken) setToken(accessToken);
     if (snap.user) setUser(snap.user);
+    // Marca a conta ML conectada (usada como fallback do namespace de sincronização).
+    try { if (snap.user && snap.user.id) localStorage.setItem("ml_connected_seller", String(snap.user.id)); } catch(e) {}
     setRealListings(snap.listings || []);
     setRealOrders(snap.orders || []);
     setSellerShipping(snap.sellerShipping || {});

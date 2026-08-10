@@ -104,13 +104,21 @@ export default async function handler(req, res) {
 
     // Chaves COMPARTILHADAS entre todos (ex: chat interno da equipe) → espaço global.
     // As demais (dados de negócio: custos, produtos, precificação) ficam ISOLADAS por CONTA
-    // do Mercado Livre (ns = seller id enviado pelo navegador), para que contas diferentes
-    // do ML nunca misturem dados — mesmo que o login do sistema seja o mesmo. Sem conta
-    // conectada (ns vazio), cai num espaço neutro por usuário.
+    // do Mercado Livre, para que contas diferentes do ML nunca misturem dados — mesmo com o
+    // mesmo login do sistema. A conta é identificada de forma confiável pelo cookie ml_user_id
+    // (o seller id conectado NESTE navegador, setado no OAuth). Só se não houver cookie usamos o
+    // ns enviado pelo cliente; por fim, um espaço neutro por usuário.
+    const cookiesSync = Object.fromEntries(
+      (req.headers.cookie || "").split(";").map(function(c){
+        const p = c.trim().split("="); return [p[0], p.slice(1).join("=")];
+      })
+    );
     const CHAVES_COMPARTILHADAS = ["chat_interno_mensagens", "chat_interno_tarefas"];
-    function kvKeyPara(key, ns) {
+    function kvKeyPara(key, nsCliente) {
       if (CHAVES_COMPARTILHADAS.includes(key)) return "mlmargem_sync_" + key;
-      var conta = (ns && String(ns).trim()) ? String(ns).trim() : ("u-" + sessao.uid);
+      var conta = (cookiesSync.ml_user_id && String(cookiesSync.ml_user_id).trim())
+        || (nsCliente && String(nsCliente).trim())
+        || ("u-" + sessao.uid);
       return "mlmargem_sync_acc_" + conta + "_" + key;
     }
 

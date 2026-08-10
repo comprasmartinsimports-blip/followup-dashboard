@@ -66,6 +66,23 @@ function getRealFeeRate(listing) {
   return 0.12;
 }
 
+// Taxa de venda da SHOPEE (Brasil, 2026) — comissão % + tarifa fixa por faixa de preço do item.
+// CNPJ: até R$79,99 = 20%+R$4 | R$80–99,99 = 14%+R$16 | R$100–199,99 = 14%+R$20 | R$200+ = 14%+R$26.
+// CPF: as mesmas faixas + R$3 por item. (O subsídio Pix é desconto ao comprador, não muda o repasse.)
+function taxaShopeeFaixa(preco) {
+  var p = parseFloat(preco) || 0;
+  if (p <= 79.99) return { pct: 0.20, fixo: 4 };
+  if (p <= 99.99) return { pct: 0.14, fixo: 16 };
+  if (p <= 199.99) return { pct: 0.14, fixo: 20 };
+  return { pct: 0.14, fixo: 26 };
+}
+function calcTaxaShopee(preco, doc) {
+  var p = parseFloat(preco) || 0;
+  if (p <= 0) return 0;
+  var f = taxaShopeeFaixa(p);
+  return p * f.pct + f.fixo + (doc === "CPF" ? 3 : 0);
+}
+
 function getListingTypeLabel(type) {
   // ML Brasil: gold_premium e gold_pro = Premium (17%)
   // gold_special, gold_extra, demais = Clássico (12%)
@@ -2180,17 +2197,29 @@ function BadgeTipoEnvio({ tipo }) {
 //  ABA PRECIFICAÇÃO — Calculadora vinculada aos anúncios
 // ════════════════════════════════════════════════════════════
 
-function NovoProdutoPrecForm({ onSave, onClose }) {
-  const [f, setF] = useState({ nome:"", sku:"", custo:"", precoVenda:"", frete:"", taxaMl:"12", desconto:"0" });
+function NovoProdutoPrecForm({ onSave, onClose, marketplaceInicial, shopeeDoc }) {
+  const [f, setF] = useState({ nome:"", sku:"", custo:"", precoVenda:"", frete:"", taxaMl:"12", desconto:"0", marketplace: marketplaceInicial || "ml" });
   var set = function(k,v){ setF(function(p){ return Object.assign({},p,{[k]:v}); }); };
+  var ehShopee = f.marketplace === "shopee";
   var custo=parseFloat(f.custo||0), bruto=parseFloat(f.precoVenda||0);
-  var taxa=bruto*(parseFloat(f.taxaMl||12)/100);
+  var taxa = ehShopee ? calcTaxaShopee(bruto, shopeeDoc) : bruto*(parseFloat(f.taxaMl||12)/100);
   var frete=parseFloat(f.frete||0);
   var lucro=bruto-custo-frete-taxa;
   var margem=bruto>0?(lucro/bruto)*100:0;
   var mCor=margem>=20?"#00C853":margem>=0?"#FFC107":"#FF5252";
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+      {/* Marketplace do produto */}
+      <div>
+        <div style={{ fontSize:10, color:"#67759B", marginBottom:4, fontWeight:600, textTransform:"uppercase" }}>Marketplace</div>
+        <div style={{ display:"flex", gap:6 }}>
+          {[{k:"ml",l:"🟡 Mercado Livre",c:"#FFC107"},{k:"shopee",l:"🛒 Shopee",c:"#EE4D2D"}].map(function(m){
+            var a=f.marketplace===m.k;
+            return <button key={m.k} onClick={function(){ set("marketplace",m.k); }}
+              style={{ flex:1, background:a?m.c:"#182230", color:a?"#fff":"#A9B4C5", border:"1px solid "+(a?m.c:"rgba(255,255,255,.12)"), borderRadius:8, padding:"8px", fontSize:12, fontWeight:700, cursor:"pointer" }}>{m.l}</button>;
+          })}
+        </div>
+      </div>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
         <div>
           <div style={{ fontSize:10, color:"#67759B", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Nome do Produto *</div>
@@ -2218,19 +2247,25 @@ function NovoProdutoPrecForm({ onSave, onClose }) {
             style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
         </div>
         <div>
-          <div style={{ fontSize:10, color:"#67759B", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Taxa ML (%)</div>
-          <select value={f.taxaMl} onChange={function(e){set("taxaMl",e.target.value);}}
-            style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", padding:"8px 10px", borderRadius:8, fontSize:12 }}>
-            <option value="12">12% — Clássico</option>
-            <option value="17">17% — Premium</option>
-          </select>
+          <div style={{ fontSize:10, color:"#67759B", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>{ehShopee ? "Taxa Shopee" : "Taxa ML (%)"}</div>
+          {ehShopee ? (
+            <div style={{ background:"#121A24", border:"1px solid rgba(238,77,45,.35)", color:"#EE4D2D", padding:"8px 10px", borderRadius:8, fontSize:12, fontWeight:700 }}>
+              {bruto>0 ? (function(){ var fx=taxaShopeeFaixa(bruto); return (fx.pct*100).toFixed(0)+"% + R$"+fx.fixo+(shopeeDoc==="CPF"?" + R$3":""); })() : "automática por preço"}
+            </div>
+          ) : (
+            <select value={f.taxaMl} onChange={function(e){set("taxaMl",e.target.value);}}
+              style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", padding:"8px 10px", borderRadius:8, fontSize:12 }}>
+              <option value="12">12% — Clássico</option>
+              <option value="17">17% — Premium</option>
+            </select>
+          )}
         </div>
       </div>
       {bruto > 0 && custo > 0 && (
         <div style={{ background:"#121A24", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, padding:"10px 14px", display:"flex", gap:16 }}>
           <div><div style={{ fontSize:10, color:"#67759B" }}>Lucro</div><div style={{ fontWeight:700, color:lucro>=0?"#00F0FF":"#FF5252" }}>R$ {lucro.toFixed(2).replace(".",",")}</div></div>
           <div><div style={{ fontSize:10, color:"#67759B" }}>Margem</div><div style={{ fontWeight:700, color:mCor }}>{margem.toFixed(1)}%</div></div>
-          <div><div style={{ fontSize:10, color:"#67759B" }}>Taxa ML</div><div style={{ fontWeight:700, color:"#FF5252" }}>R$ {taxa.toFixed(2).replace(".",",")}</div></div>
+          <div><div style={{ fontSize:10, color:"#67759B" }}>Taxa {ehShopee?"Shopee":"ML"}</div><div style={{ fontWeight:700, color:"#FF5252" }}>R$ {taxa.toFixed(2).replace(".",",")}</div></div>
         </div>
       )}
       <div style={{ display:"flex", gap:8, marginTop:4 }}>
@@ -2252,6 +2287,10 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
   const [editingDescId, setEditingDescId] = useState(null);
   const [editingSkuId, setEditingSkuId] = useState(null);
   const [custosLocais, setCustosLocais] = useState({});
+  // Sub-aba do marketplace (Mercado Livre / Shopee) e tipo de documento p/ a taxa da Shopee.
+  const [mktSel, setMktSel] = useState("ml");
+  const [shopeeDoc, setShopeeDoc] = useState(function(){ try { return localStorage.getItem("shopee_doc") || "CNPJ"; } catch { return "CNPJ"; } });
+  function setShopeeDocSave(v){ setShopeeDoc(v); try { localStorage.setItem("shopee_doc", v); } catch {} }
   function setDesconto(id, pct) {
     setDescontosAndSave(function(prev){ return Object.assign({}, prev, { [id]: pct }); });
   }
@@ -2299,7 +2338,9 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
     var absorvidos = 0;
     produtosExtras.forEach(function(p){
       var skuP = (p.sku||"").trim().toLowerCase();
-      if (!skuP) { restantes.push(p); return; }
+      // Só absorve produto do Mercado Livre em anúncio do ML. Produtos da Shopee ficam como estão
+      // (a integração com a Shopee ainda não traz os anúncios para casar).
+      if (!skuP || (p.marketplace && p.marketplace !== "ml")) { restantes.push(p); return; }
       var pPrem = parseFloat(p.taxaMl||12) >= 17;
       function bateSku(l){ return !l._isExtra && (l.seller_sku||l.sku||"").trim().toLowerCase() === skuP; }
       var match = enriched.find(function(l){
@@ -2368,8 +2409,8 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
 
   const [buscaSku, setBuscaSku] = useState("");
 
-  var listsFiltrados = (enriched||[]).filter(function(l) {
-    // Campo único busca por título, MLB e SKU
+  // Anúncios reais do ML só aparecem na sub-aba Mercado Livre (todos são do ML).
+  var listsFiltrados = (mktSel === "ml" ? (enriched||[]) : []).filter(function(l) {
     if (busca.trim()) {
       var q = busca.trim().toLowerCase();
       var matchTitulo = (l.title||"").toLowerCase().includes(q);
@@ -2380,16 +2421,17 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
     return true;
   });
 
-  // Novos produtos (ainda sem anúncio no ML) viram "pseudo-anúncios" e entram na MESMA tabela,
-  // com as mesmas colunas e regras. Custo/frete config/vender por/desconto usam os mesmos
-  // configs por id — a precificação funciona idêntica à de um anúncio real.
-  var extrasPseudo = (produtosExtras||[]).filter(function(p){ return !p.vinculado; }).map(function(p){
+  // Novos produtos (ainda sem anúncio) viram "pseudo-anúncios" na MESMA tabela, filtrados pela
+  // sub-aba do marketplace (Mercado Livre / Shopee). A precificação usa os mesmos configs por id.
+  var extrasPseudo = (produtosExtras||[]).filter(function(p){
+    return !p.vinculado && ((p.marketplace||"ml") === mktSel);
+  }).map(function(p){
     return {
       id: p.id, seller_sku: p.sku, sku: p.sku, title: p.nome,
       price: parseFloat(p.precoVenda) || 0,
       listing_type_id: (parseFloat(p.taxaMl||12) >= 17) ? "gold_pro" : "gold_special",
       freteSeller: parseFloat(p.frete) || 0,
-      status: "active", _isExtra: true,
+      status: "active", _isExtra: true, marketplace: p.marketplace || "ml",
     };
   });
   if (busca.trim()) {
@@ -2431,8 +2473,41 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
         </div>
       </div>
 
-      {/* Banner de avisos — preços pendentes de atualização no ML */}
-      {Object.keys(pendentesAtualizacao).length > 0 && (
+      {/* Sub-abas do marketplace + (Shopee) seletor CNPJ/CPF */}
+      <div style={{ display:"flex", alignItems:"center", gap:2, borderBottom:"2px solid rgba(255,255,255,.10)", margin:"12px 0 4px" }}>
+        {[
+          { key:"ml",     label:"🟡 Mercado Livre", cor:"#FFC107" },
+          { key:"shopee", label:"🛒 Shopee",        cor:"#EE4D2D" },
+        ].map(function(m){
+          var ativo = mktSel === m.key;
+          return (
+            <button key={m.key} onClick={function(){ setMktSel(m.key); }}
+              style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 18px", border:"none",
+                borderBottom: ativo ? "2px solid "+m.cor : "2px solid transparent", marginBottom:-2,
+                background:"transparent", color: ativo ? "#FFFFFF" : "#67759B",
+                fontWeight: ativo?700:500, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>
+              {m.label}
+            </button>
+          );
+        })}
+        {mktSel === "shopee" && (
+          <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:6 }}>
+            <span style={{ fontSize:11, color:"#67759B", fontWeight:600 }}>Taxa como:</span>
+            {["CNPJ","CPF"].map(function(d){
+              var ativo = shopeeDoc === d;
+              return (
+                <button key={d} onClick={function(){ setShopeeDocSave(d); }}
+                  style={{ background: ativo?"#EE4D2D":"#182230", color: ativo?"#fff":"#A9B4C5",
+                    border:"1px solid "+(ativo?"#EE4D2D":"rgba(255,255,255,.12)"), borderRadius:16,
+                    padding:"3px 12px", fontSize:11, fontWeight:700, cursor:"pointer" }}>{d}</button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Banner de avisos — preços pendentes de atualização no ML (só na aba Mercado Livre) */}
+      {mktSel === "ml" && Object.keys(pendentesAtualizacao).length > 0 && (
         <div style={{ background:"rgba(255,193,7,.12)", border:"1px solid rgba(255,193,7,.35)", borderRadius:10, padding:"12px 16px", margin:"12px 0" }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
             <div style={{ fontSize:13, fontWeight:700, color:"#FFC107" }}>
@@ -2493,12 +2568,16 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
           <div style={{ background:"#182230", borderRadius:14, width:480, padding:20 }}>
             <div style={{ fontWeight:700, fontSize:15, marginBottom:14 }}>+ Precificar Novo Produto</div>
             <NovoProdutoPrecForm
+              marketplaceInicial={mktSel}
+              shopeeDoc={shopeeDoc}
               onSave={function(p){
                 var id = "NOVO_" + Date.now();
-                saveProdutosExtras([...produtosExtras, { id:id, nome:p.nome, sku:p.sku, taxaMl:p.taxaMl, precoVenda:p.precoVenda, frete:p.frete }]);
+                saveProdutosExtras([...produtosExtras, { id:id, nome:p.nome, sku:p.sku, taxaMl:p.taxaMl, precoVenda:p.precoVenda, frete:p.frete, marketplace:p.marketplace||"ml" }]);
                 // Custo vai para o mesmo lugar dos anúncios (costs_config) → mesma regra e edição.
                 var custoNum = parseFloat(p.custo) || 0;
                 if (custoNum > 0) setCostsAndSave(function(c){ return Object.assign({}, c, { [id]: custoNum }); });
+                // Se o usuário criou na aba Shopee, garante que a tabela mostre a aba certa.
+                if (p.marketplace) setMktSel(p.marketplace);
                 setShowNovoProdutoPrec(false);
               }}
               onClose={function(){ setShowNovoProdutoPrec(false); }}
@@ -2548,8 +2627,17 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
               var precoComDesc = precoVendaDesejado > 0 ? precoVendaDesejado : (descPct > 0 ? bruto * (1 - descPct/100) : bruto);
               // Taxa ML padronizada por tipo de anúncio: Clássico 12% / Premium 17%.
               var _tipo = l.listing_type_id || "";
-              var feeRate = (_tipo === "gold_premium" || _tipo === "gold_pro") ? 0.17 : 0.12;
-              var taxaSobreDesc = precoComDesc * feeRate;
+              var ehShopee = (mktSel === "shopee") || (l.marketplace === "shopee");
+              var feeRate, taxaSobreDesc;
+              if (ehShopee) {
+                // Taxa da Shopee: comissão % + tarifa fixa por faixa (varia com o preço final).
+                taxaSobreDesc = calcTaxaShopee(precoComDesc, shopeeDoc);
+                feeRate = precoComDesc > 0 ? (taxaSobreDesc / precoComDesc) : 0;
+              } else {
+                // Taxa ML padronizada por tipo: Clássico 12% / Premium 17%.
+                feeRate = (_tipo === "gold_premium" || _tipo === "gold_pro") ? 0.17 : 0.12;
+                taxaSobreDesc = precoComDesc * feeRate;
+              }
               // Lucro e margem com desconto e frete
               var lucroFinal = precoComDesc - custo - frete - taxaSobreDesc;
               var margemFinal = precoComDesc > 0 ? (lucroFinal/precoComDesc)*100 : 0;
@@ -2587,12 +2675,19 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
 
                   {/* Tipo */}
                   <td style={{ padding:"6px 8px" }}>
-                    <span style={{ fontSize:10, fontWeight:700, padding:"2px 6px", borderRadius:5, whiteSpace:"nowrap",
-                      background: isPremium?"rgba(139,92,246,.14)":"rgba(59,140,255,.14)",
-                      color: isPremium?"#7c3aed":"#3B8CFF",
-                      border:"1px solid "+(isPremium?"rgba(139,92,246,.35)":"rgba(77,179,255,.35)") }}>
-                      {isPremium?"⭐ Premium":"📋 Clássico"}
-                    </span>
+                    {ehShopee ? (
+                      <span style={{ fontSize:10, fontWeight:700, padding:"2px 6px", borderRadius:5, whiteSpace:"nowrap",
+                        background:"rgba(238,77,45,.14)", color:"#EE4D2D", border:"1px solid rgba(238,77,45,.4)" }}>
+                        🛒 Shopee
+                      </span>
+                    ) : (
+                      <span style={{ fontSize:10, fontWeight:700, padding:"2px 6px", borderRadius:5, whiteSpace:"nowrap",
+                        background: isPremium?"rgba(139,92,246,.14)":"rgba(59,140,255,.14)",
+                        color: isPremium?"#7c3aed":"#3B8CFF",
+                        border:"1px solid "+(isPremium?"rgba(139,92,246,.35)":"rgba(77,179,255,.35)") }}>
+                        {isPremium?"⭐ Premium":"📋 Clássico"}
+                      </span>
+                    )}
                   </td>
 
                   {/* Anúncio */}
@@ -2721,18 +2816,34 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                     )}
                   </td>
 
-                  {/* Taxa ML sobre preço c/ desconto */}
+                  {/* Taxa sobre preço c/ desconto */}
                   <td style={{ padding:"6px 8px", background:"rgba(139,92,246,.12)" }}>
                     <div style={{ fontSize:12, fontWeight:700, color:"#FF5252" }}>
                       R$ {taxaSobreDesc.toFixed(2).replace(".",",")}
                     </div>
-                    <div style={{ fontSize:10, color:"#67759B" }}>
-                      {(feeRate*100).toFixed(0)}% s/ {descPct>0?"desc":"atual"}
-                    </div>
-                    <div title="Taxa padrão do Mercado Livre: Clássico 12% · Premium 17%"
-                      style={{ fontSize:9, fontWeight:700, color: isPremium?"#7c3aed":"#3B8CFF", marginTop:1 }}>
-                      {isPremium ? "Premium 17%" : "Clássico 12%"}
-                    </div>
+                    {ehShopee ? (() => {
+                      var f = taxaShopeeFaixa(precoComDesc);
+                      return (
+                        <>
+                          <div style={{ fontSize:10, color:"#67759B" }}>
+                            {(f.pct*100).toFixed(0)}% + R$ {f.fixo}{shopeeDoc==="CPF" ? " + R$3" : ""}
+                          </div>
+                          <div title="Taxa da Shopee 2026 por faixa de preço" style={{ fontSize:9, fontWeight:700, color:"#EE4D2D", marginTop:1 }}>
+                            Shopee {shopeeDoc}
+                          </div>
+                        </>
+                      );
+                    })() : (
+                      <>
+                        <div style={{ fontSize:10, color:"#67759B" }}>
+                          {(feeRate*100).toFixed(0)}% s/ {descPct>0?"desc":"atual"}
+                        </div>
+                        <div title="Taxa padrão do Mercado Livre: Clássico 12% · Premium 17%"
+                          style={{ fontSize:9, fontWeight:700, color: isPremium?"#7c3aed":"#3B8CFF", marginTop:1 }}>
+                          {isPremium ? "Premium 17%" : "Clássico 12%"}
+                        </div>
+                      </>
+                    )}
                   </td>
 
                   {/* Lucro Simulado (com desconto se houver) */}

@@ -2288,17 +2288,43 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
     window.addEventListener("mlmargem-sync", aoSincronizar);
     return function(){ window.removeEventListener("mlmargem-sync", aoSincronizar); };
   }, []);
-  // Auto-vincular produtos extras a anúncios quando o SKU for encontrado nos enriched listings
+  // Quando o ANÚNCIO do produto novo é criado no ML (mesmo SKU), a precificação que o usuário
+  // fez ANTES é transferida para o anúncio (custo, preço de venda, desconto e frete, por MLB) e o
+  // item "Novo" é absorvido — some da lista, sem virar cadastro duplicado. Casa por SKU + tipo
+  // (Clássico/Premium) para respeitar variações; se não achar o tipo, casa só pelo SKU.
   useEffect(function(){
     if (!enriched || !produtosExtras.length) return;
-    var atualizados = false;
-    var novaLista = produtosExtras.map(function(p){
-      if (p.vinculado) return p; // já vinculado
-      var match = enriched.find(function(l){ return l.seller_sku && l.seller_sku.trim() === p.sku.trim(); });
-      if (match) { atualizados = true; return Object.assign({}, p, { vinculado: true, mlbVinculado: match.id, titulo: match.title }); }
-      return p;
+    var restantes = [];
+    var addCosts = {}, addPrecos = {}, addDesc = {}, addFretes = {};
+    var absorvidos = 0;
+    produtosExtras.forEach(function(p){
+      var skuP = (p.sku||"").trim().toLowerCase();
+      if (!skuP) { restantes.push(p); return; }
+      var pPrem = parseFloat(p.taxaMl||12) >= 17;
+      function bateSku(l){ return !l._isExtra && (l.seller_sku||l.sku||"").trim().toLowerCase() === skuP; }
+      var match = enriched.find(function(l){
+        if (!bateSku(l)) return false;
+        var lPrem = l.listing_type_id === "gold_pro" || l.listing_type_id === "gold_premium";
+        return lPrem === pPrem;
+      }) || enriched.find(bateSku);
+      if (!match) { restantes.push(p); return; }
+      absorvidos++;
+      // Transfere a precificação do produto novo para o anúncio (só se o anúncio ainda não tiver).
+      var custoExtra = parseFloat(costs && costs[p.id]) || 0;
+      if (custoExtra > 0 && !(costs && costs[match.id] > 0)) addCosts[match.id] = custoExtra;
+      if (p.precoVenda && !(precosVendaConfig && precosVendaConfig[match.id])) addPrecos[match.id] = p.precoVenda;
+      var descExtra = descontosConfig && descontosConfig[p.id];
+      if (descExtra && !(descontosConfig && descontosConfig[match.id])) addDesc[match.id] = descExtra;
+      if (p.frete && !(fretesConfig && fretesConfig[match.id])) addFretes[match.id] = parseFloat(p.frete) || 0;
+      // não vai para "restantes" → o produto novo é absorvido pelo anúncio real
     });
-    if (atualizados) saveProdutosExtras(novaLista);
+    if (absorvidos > 0) {
+      if (Object.keys(addCosts).length) setCostsAndSave(function(c){ return Object.assign({}, c, addCosts); });
+      if (Object.keys(addPrecos).length) setPrecosVendaAndSave(function(c){ return Object.assign({}, c, addPrecos); });
+      if (Object.keys(addDesc).length) setDescontosAndSave(function(c){ return Object.assign({}, c, addDesc); });
+      if (Object.keys(addFretes).length) setFretesAndSave(function(c){ return Object.assign({}, c, addFretes); });
+      saveProdutosExtras(restantes);
+    }
   }, [enriched]);
   function setPrecoVenda(id, preco) {
     setPrecosVendaAndSave(function(prev){ return Object.assign({}, prev, { [id]: preco }); });

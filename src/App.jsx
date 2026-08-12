@@ -2281,7 +2281,18 @@ function NovoProdutoPrecForm({ onSave, onClose, marketplaceInicial, shopeeDoc })
 
 function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFretesAndSave, descontosConfig, setDescontosAndSave, precosVendaConfig, setPrecosVendaAndSave, pendentesAtualizacao, setPendentesAndSave, setSkuOverridesAndSave, rawOrders }) {
   const [busca, setBusca] = useState("");
+  const [buscaTipo, setBuscaTipo] = useState("all"); // all | title | sku | mlb
   const [margemAlvo, setMargemAlvo] = useState(20);
+  // Casa um item (anúncio ou produto novo) com a busca conforme o tipo escolhido.
+  function casaBusca(sku, id, titulo) {
+    var q = busca.trim().toLowerCase();
+    if (!q) return true;
+    var s = (sku||"").toLowerCase(), m = (id||"").toLowerCase(), t = (titulo||"").toLowerCase();
+    if (buscaTipo === "title") return t.includes(q);
+    if (buscaTipo === "sku")   return s === q;               // SKU exato
+    if (buscaTipo === "mlb")   return m.includes(q);
+    return t.includes(q) || m.includes(q) || s.includes(q);  // tudo
+  }
   const [selectedId, setSelectedId] = useState(null);
   const [editingFreteId, setEditingFreteId] = useState(null);
   const [editingDescId, setEditingDescId] = useState(null);
@@ -2378,11 +2389,19 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
     setPendentesAndSave(next);
   }
   function marcarPendente(id, novoPreco) {
+    // Descobre o item (anúncio do ML OU produto novo Shopee/ML) e seu marketplace.
     var listing = (enriched||[]).find(function(l){ return l.id===id; });
-    if (!listing) return;
+    var mkt = "ml", precoAtual, titulo;
+    if (listing) {
+      precoAtual = listing.price; titulo = listing.title; mkt = "ml";
+    } else {
+      var extra = (produtosExtras||[]).find(function(p){ return p.id===id; });
+      if (!extra) return;
+      precoAtual = parseFloat(extra.precoVenda) || 0; titulo = extra.nome; mkt = extra.marketplace || "ml";
+    }
     var next = Object.assign({}, pendentesAtualizacao);
-    if (novoPreco > 0 && novoPreco !== listing.price) {
-      next[id] = { precoAntigo: listing.price, precoNovo: novoPreco, data: new Date().toISOString(), titulo: listing.title };
+    if (novoPreco > 0 && novoPreco !== precoAtual) {
+      next[id] = { precoAntigo: precoAtual, precoNovo: novoPreco, data: new Date().toISOString(), titulo: titulo, marketplace: mkt };
     } else {
       delete next[id];
     }
@@ -2399,26 +2418,21 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
     var mudou = false;
     Object.keys(next).forEach(function(id){
       var listing = (enriched||[]).find(function(l){ return l.id===id; });
-      if (listing && listing.price === next[id].precoNovo) {
+      var extra = (produtosExtras||[]).find(function(p){ return p.id===id; });
+      var precoAtual = listing ? listing.price : (extra ? parseFloat(extra.precoVenda) || 0 : null);
+      if (precoAtual !== null && precoAtual === next[id].precoNovo) {
         delete next[id];
         mudou = true;
       }
     });
     if (mudou) salvarPendentes(next);
-  }, [enriched]);
+  }, [enriched, produtosExtras]);
 
   const [buscaSku, setBuscaSku] = useState("");
 
   // Anúncios reais do ML só aparecem na sub-aba Mercado Livre (todos são do ML).
   var listsFiltrados = (mktSel === "ml" ? (enriched||[]) : []).filter(function(l) {
-    if (busca.trim()) {
-      var q = busca.trim().toLowerCase();
-      var matchTitulo = (l.title||"").toLowerCase().includes(q);
-      var matchMlb    = (l.id||"").toLowerCase().includes(q);
-      var matchSku    = (l.seller_sku||l.sku||"").toLowerCase().includes(q);
-      return matchTitulo || matchMlb || matchSku;
-    }
-    return true;
+    return casaBusca(l.seller_sku||l.sku, l.id, l.title);
   });
 
   // Novos produtos (ainda sem anúncio) viram "pseudo-anúncios" na MESMA tabela, filtrados pela
@@ -2435,8 +2449,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
     };
   });
   if (busca.trim()) {
-    var qE = busca.trim().toLowerCase();
-    extrasPseudo = extrasPseudo.filter(function(p){ return (p.title||"").toLowerCase().includes(qE) || (p.sku||"").toLowerCase().includes(qE); });
+    extrasPseudo = extrasPseudo.filter(function(p){ return casaBusca(p.sku, p.id, p.title); });
   }
   listsFiltrados = extrasPseudo.concat(listsFiltrados);
 
@@ -2506,19 +2519,25 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
         )}
       </div>
 
-      {/* Banner de avisos — preços pendentes de atualização no ML (só na aba Mercado Livre) */}
-      {mktSel === "ml" && Object.keys(pendentesAtualizacao).length > 0 && (
+      {/* Banner de avisos — preços pendentes de atualização, filtrados pelo marketplace da aba ativa */}
+      {(function(){
+        var nomeMkt = mktSel === "shopee" ? "na Shopee" : "no Mercado Livre";
+        var pendentesDoMkt = Object.entries(pendentesAtualizacao).filter(function([id, p]){ return (p.marketplace || "ml") === mktSel; });
+        if (pendentesDoMkt.length === 0) return null;
+        return (
         <div style={{ background:"rgba(255,193,7,.12)", border:"1px solid rgba(255,193,7,.35)", borderRadius:10, padding:"12px 16px", margin:"12px 0" }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
             <div style={{ fontSize:13, fontWeight:700, color:"#FFC107" }}>
-              ⚠️ {Object.keys(pendentesAtualizacao).length} anúncio(s) com preço pendente de atualização no Mercado Livre
+              ⚠️ {pendentesDoMkt.length} anúncio(s) com preço pendente de atualização {nomeMkt}
             </div>
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:6, maxHeight:160, overflowY:"auto" }}>
-            {Object.entries(pendentesAtualizacao).map(function([id, p]){
+            {pendentesDoMkt.map(function([id, p]){
               var listingRef = (enriched||[]).find(function(l){ return l.id===id; });
-              var skuRef = listingRef?.sku || p.sku || "—";
+              var extraRef = (produtosExtras||[]).find(function(x){ return x.id===id; });
+              var skuRef = listingRef?.sku || extraRef?.sku || p.sku || "—";
               var tipoPrem = listingRef && (listingRef.listing_type_id==="gold_pro" || listingRef.listing_type_id==="gold_premium");
+              var ehShopee = (p.marketplace || "ml") === "shopee";
               return (
                 <div key={id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"#182230", border:"1px solid rgba(255,193,7,.35)", borderRadius:8, padding:"7px 12px" }}>
                   <div style={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontSize:12, color:"#FFFFFF" }}>
@@ -2535,10 +2554,18 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                   <div style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
                     <span style={{ fontSize:11, color:"#67759B", textDecoration:"line-through" }}>R$ {p.precoAntigo.toFixed(2).replace(".",",")}</span>
                     <span style={{ fontSize:12, fontWeight:700, color:"#7c3aed" }}>→ R$ {p.precoNovo.toFixed(2).replace(".",",")}</span>
-                    <a href={"https://www.mercadolivre.com.br/seller-admin/listing/edit?itemId="+id} target="_blank" rel="noreferrer"
-                      style={{ fontSize:11, color:"#00F0FF", textDecoration:"none", fontWeight:600, whiteSpace:"nowrap" }}>
-                      Editar no ML ↗
-                    </a>
+                    {!ehShopee && (
+                      <a href={"https://www.mercadolivre.com.br/seller-admin/listing/edit?itemId="+id} target="_blank" rel="noreferrer"
+                        style={{ fontSize:11, color:"#00F0FF", textDecoration:"none", fontWeight:600, whiteSpace:"nowrap" }}>
+                        Editar no ML ↗
+                      </a>
+                    )}
+                    {ehShopee && (
+                      <a href="https://seller.shopee.com.br/portal/product/list/all" target="_blank" rel="noreferrer"
+                        style={{ fontSize:11, color:"#EE4D2D", textDecoration:"none", fontWeight:600, whiteSpace:"nowrap" }}>
+                        Editar na Shopee ↗
+                      </a>
+                    )}
                     <button onClick={function(){ confirmarAtualizado(id); }}
                       style={{ background:"#00C853", border:"none", color:"#fff", fontWeight:700, padding:"4px 10px", borderRadius:6, cursor:"pointer", fontSize:11, whiteSpace:"nowrap" }}>
                       ✓ Já atualizei
@@ -2549,7 +2576,8 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
             })}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Botão novo produto + Busca */}
       <div style={{ display:"flex", gap:7, margin:"14px 0", alignItems:"center" }}>
@@ -2565,6 +2593,13 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
             <button onClick={function(){setBusca("");}} style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:"#67759B", cursor:"pointer", fontSize:18, lineHeight:1 }}>×</button>
           )}
         </div>
+        <select value={buscaTipo} onChange={function(e){setBuscaTipo(e.target.value);}}
+          style={{ background:"#182230", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"10px 12px", borderRadius:10, fontSize:12, outline:"none", cursor:"pointer", flexShrink:0 }}>
+          <option value="all">Tudo</option>
+          <option value="title">Título</option>
+          <option value="sku">SKU (exato)</option>
+          <option value="mlb">MLB</option>
+        </select>
         <div style={{ display:"flex", alignItems:"center", gap:8, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", borderRadius:10, padding:"0 14px", fontSize:12, color:"#A9B4C5", whiteSpace:"nowrap" }}>
           {listsFiltrados.length} anúncio(s)
         </div>
@@ -2778,7 +2813,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                             </div>
                             {pendentesAtualizacao[l.id] && (
                               <div style={{ fontSize:9, fontWeight:700, color:"#FFC107", background:"rgba(255,193,7,.12)", border:"1px solid rgba(255,193,7,.35)", padding:"1px 5px", borderRadius:4, marginTop:2, display:"inline-block" }}>
-                                ⏳ pendente ML
+                                ⏳ pendente {(pendentesAtualizacao[l.id].marketplace || "ml") === "shopee" ? "Shopee" : "ML"}
                               </div>
                             )}
                           </div>

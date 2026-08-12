@@ -2518,10 +2518,18 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
             {Object.entries(pendentesAtualizacao).map(function([id, p]){
               var listingRef = (enriched||[]).find(function(l){ return l.id===id; });
               var skuRef = listingRef?.sku || p.sku || "—";
+              var tipoPrem = listingRef && (listingRef.listing_type_id==="gold_pro" || listingRef.listing_type_id==="gold_premium");
               return (
                 <div key={id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"#182230", border:"1px solid rgba(255,193,7,.35)", borderRadius:8, padding:"7px 12px" }}>
                   <div style={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontSize:12, color:"#FFFFFF" }}>
                     <span style={{ fontWeight:700, color:"#FFC107", marginRight:6 }}>SKU {skuRef}</span>
+                    {listingRef && (
+                      <span style={{ fontSize:9, fontWeight:700, padding:"1px 6px", borderRadius:4, marginRight:6, whiteSpace:"nowrap",
+                        background: tipoPrem?"rgba(139,92,246,.18)":"rgba(59,140,255,.18)",
+                        color: tipoPrem?"#a78bfa":"#3B8CFF" }}>
+                        {tipoPrem?"⭐ Premium 17%":"📋 Clássico 12%"}
+                      </span>
+                    )}
                     {p.titulo}
                   </div>
                   <div style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
@@ -2588,7 +2596,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
 
       {/* Produtos extras (ainda não anunciados) */}
       {/* Tabela */}
-      <div style={{ background:"#182230", border:"1px solid rgba(255,255,255,.12)", borderRadius:12, overflow:"auto" }}>
+      <div className="scroll-x" style={{ background:"#182230", border:"1px solid rgba(255,255,255,.12)", borderRadius:12, overflow:"auto" }}>
         <table style={{ borderCollapse:"collapse", width:"100%", minWidth:900 }}>
           <thead>
             <tr style={{ background:"#121A24" }}>
@@ -4992,7 +5000,7 @@ export default function App() {
   if (!currentUser) return <LoginScreen onLogin={(user) => { setCurrentUser(user); }} />;
 
   return (
-    <div className={darkMode?"dark":""} style={{ minHeight:"100vh", background:"transparent", color:"#FFFFFF", fontFamily:"'Inter',system-ui,sans-serif", transition:"background .2s,color .2s" }}>
+    <div className={darkMode?"dark":""} style={{ minHeight:"100vh", background:"transparent", color:"#FFFFFF", fontFamily:"'Inter',system-ui,sans-serif", transition:"background .2s,color .2s", display:"flex", alignItems:"flex-start" }}>
       <style>{`
         *{box-sizing:border-box;margin:0;padding:0}
         body,#root{font-family:'Inter',system-ui,sans-serif}
@@ -5003,6 +5011,12 @@ export default function App() {
         ::-webkit-scrollbar-thumb{background:#4A5878;border-radius:99px}
         ::-webkit-scrollbar-thumb:hover{background:#67759B}
         .app-header::-webkit-scrollbar{display:none}
+        /* Barra de rolagem horizontal visível e "pegável" nas tabelas largas */
+        .scroll-x{overflow-x:auto;overflow-y:visible}
+        .scroll-x::-webkit-scrollbar{height:12px}
+        .scroll-x::-webkit-scrollbar-track{background:rgba(255,255,255,.05);border-radius:8px}
+        .scroll-x::-webkit-scrollbar-thumb{background:#4A5878;border-radius:8px;border:2px solid transparent;background-clip:padding-box}
+        .scroll-x::-webkit-scrollbar-thumb:hover{background:#7C8AAE}
         input:focus,textarea:focus,select:focus{outline:2px solid #4DB3FF;outline-offset:1px}
 
         /* ── TABELAS ── */
@@ -5051,128 +5065,110 @@ export default function App() {
         @keyframes slPulse{0%,100%{opacity:1}50%{opacity:.4}}
       `}</style>
 
-      <header className="app-header" style={{ background:darkMode?"#121A24":"#182230", borderBottom:`1px solid ${darkMode?"#182230":"rgba(255,255,255,.12)"}`, padding:"0 20px", display:"flex", alignItems:"center", position:"sticky", top:0, zIndex:100, boxShadow:"0 1px 2px rgba(15,23,42,.06)", minHeight:62, overflowX:"auto", overflowY:"hidden", scrollbarWidth:"none", msOverflowStyle:"none" }}>
-        {/* Logo + divisor + Abas */}
-        <div style={{ display:"flex", alignItems:"stretch", flexShrink:0, height:50 }}>
-          {/* Logo */}
-          <div style={{ display:"flex", alignItems:"center", gap:7, paddingRight:28, marginRight:4, borderRight:`1px solid ${darkMode?"#182230":"rgba(255,255,255,.10)"}`, flexShrink:0 }}>
-            <div style={{ width:34, height:34, borderRadius:"50%", background:"rgba(77,179,255,.12)", border:"1px solid rgba(77,179,255,.45)", boxShadow:"0 0 14px rgba(77,179,255,.35)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:15, color:"#4DB3FF", letterSpacing:-0.5 }}>F</div>
-            <div>
-              <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:14, color:"#FFFFFF", letterSpacing:-0.4, lineHeight:1.2 }}>Flow</div>
-              <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:8, color:"#67759B", letterSpacing:2.2, textTransform:"uppercase", lineHeight:1, marginTop:2 }}>Marketplaces</div>
-            </div>
-          </div>
-          {/* Abas de navegação no header */}
-          <div style={{ display:"flex", gap:0, alignItems:"stretch", overflowX:"auto", msOverflowStyle:"none", scrollbarWidth:"none" }}>
-            {(function() {
-              var navTabs = [
-                currentUser?.permissoes?.includes("listings")   && { key:"listings",     label:"Anúncios",       badge:enriched.length },
-                currentUser?.permissoes?.includes("orders")     && { key:"orders",       label:"Pedidos",        badge:enrichedOrders.length },
-                currentUser?.permissoes?.includes("listings")   && { key:"precificacao", label:"💲 Precificação", badge:null },
-                currentUser?.permissoes?.includes("listings")   && { key:"concorrencia", label:"🔎 Concorrência", badge:null },
-              ].filter(Boolean);
-              return navTabs.map(function(t) {
-                var isActive = tab === t.key;
-                return (
-                  <div key={t.key} style={{ display:"flex", alignItems:"stretch", position:"relative" }}
-                    onMouseEnter={function(e){ e.currentTarget.querySelector(".open-tab-btn").style.opacity="1"; }}
-                    onMouseLeave={function(e){ e.currentTarget.querySelector(".open-tab-btn").style.opacity="0"; }}>
-                    <button onClick={function(){ setTab(t.key); }}
-                      style={{ display:"flex", alignItems:"center", gap:6, padding:"0 16px", height:50, background:"transparent", border:"none",
-                        borderBottom: isActive ? "2px solid #4DB3FF" : "2px solid transparent",
-                        color: isActive ? (darkMode?"#A9B4C5":"#FFFFFF") : "#67759B",
-                        fontWeight: isActive ? 600 : 400, fontSize:13, cursor:"pointer",
-                        fontFamily:"inherit", whiteSpace:"nowrap", transition:"color .15s,border-color .15s",
-                        borderTop: "2px solid transparent" }}>
-                      {t.label}
-                      {t.badge !== null && (
-                        <span style={{ fontSize:10, fontWeight:600, padding:"1px 6px", borderRadius:10,
-                          background: isActive ? "#1976FF" : "#223048",
-                          color: isActive ? "#fff" : "#67759B", lineHeight:1.6 }}>
-                          {t.badge}
-                        </span>
-                      )}
-                    </button>
-                    {/* Botão abrir em nova guia — aparece no hover */}
-                    <button className="open-tab-btn"
-                      title={"Abrir " + t.label + " em nova guia"}
-                      onClick={function(e){
-                        e.stopPropagation();
-                        window.open(window.location.pathname + "?tab=" + t.key, "_blank");
-                      }}
-                      style={{ opacity:0, position:"absolute", top:8, right:2, width:18, height:18,
-                        borderRadius:4, border:"1px solid rgba(255,255,255,.12)", background:"#182230",
-                        color:"#67759B", cursor:"pointer", fontSize:9, display:"flex", alignItems:"center",
-                        justifyContent:"center", transition:"opacity .15s", zIndex:10 }}
-                      onMouseEnter={function(e){ e.currentTarget.style.background="rgba(59,140,255,.14)"; e.currentTarget.style.color="#3B8CFF"; e.currentTarget.style.borderColor="rgba(77,179,255,.35)"; }}
-                      onMouseLeave={function(e){ e.currentTarget.style.background="#182230"; e.currentTarget.style.color="#67759B"; e.currentTarget.style.borderColor="rgba(255,255,255,.12)"; }}>
-                      ↗
-                    </button>
-                  </div>
-                );
-              });
-            })()}
+      {/* ── BARRA LATERAL ESQUERDA — logo + abas (vertical) + status + botões (Config por último) ── */}
+      <aside style={{ width:214, flexShrink:0, position:"sticky", top:0, height:"100vh", overflowY:"auto",
+        background:darkMode?"#0E1622":"#121A24", borderRight:"1px solid rgba(255,255,255,.08)",
+        display:"flex", flexDirection:"column", padding:"14px 12px", zIndex:100 }}>
+        {/* Logo */}
+        <div style={{ display:"flex", alignItems:"center", gap:9, padding:"2px 6px 14px", borderBottom:"1px solid rgba(255,255,255,.08)", marginBottom:10 }}>
+          <div style={{ width:34, height:34, borderRadius:"50%", background:"rgba(77,179,255,.12)", border:"1px solid rgba(77,179,255,.45)", boxShadow:"0 0 14px rgba(77,179,255,.35)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:15, color:"#4DB3FF", letterSpacing:-0.5, flexShrink:0 }}>F</div>
+          <div>
+            <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:15, color:"#FFFFFF", letterSpacing:-0.4, lineHeight:1.2 }}>Flow</div>
+            <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:8, color:"#67759B", letterSpacing:2, textTransform:"uppercase", lineHeight:1, marginTop:2 }}>Marketplaces</div>
           </div>
         </div>
-        {/* Espaçador — mantém os botões na direita em telas largas e some quando aperta */}
-        <div style={{ flex:"1 1 16px", minWidth:16 }} />
-        <div style={{ display:"flex", alignItems:"center", gap:7, flexShrink:0, paddingLeft:16, borderLeft:`1px solid ${darkMode?"#182230":"rgba(255,255,255,.10)"}` }}>
-          {!token && <span style={{ background: "#223048", border: "1px solid rgba(255,255,255,.12)", color: "#67759B", fontSize: 11, padding: "3px 10px", borderRadius: 20, fontWeight: 500 }}>Não conectado</span>}
-          {token && <span style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", color: "#00C853", fontSize: 11, padding: "3px 12px", borderRadius: 20, fontWeight: 600 }}>● {user?.nickname}</span>}
-          {loading && <span style={{ color: "#67759B", fontSize: 12 }}>⏳ {loadingMsg}</span>}
-          {loadError && <span style={{ color: "#FF5252", fontSize: 12 }}>⚠ {loadError}</span>}
+        {/* Abas de navegação — verticais */}
+        <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+          {(function() {
+            var navTabs = [
+              currentUser?.permissoes?.includes("listings")   && { key:"listings",     label:"📢 Anúncios",     badge:enriched.length },
+              currentUser?.permissoes?.includes("orders")     && { key:"orders",       label:"📦 Pedidos",      badge:enrichedOrders.length },
+              currentUser?.permissoes?.includes("listings")   && { key:"precificacao", label:"💲 Precificação", badge:null },
+              currentUser?.permissoes?.includes("listings")   && { key:"concorrencia", label:"🔎 Concorrência", badge:null },
+            ].filter(Boolean);
+            return navTabs.map(function(t) {
+              var isActive = tab === t.key;
+              return (
+                <button key={t.key} onClick={function(){ setTab(t.key); }}
+                  style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:6, width:"100%",
+                    padding:"10px 12px", borderRadius:9, border:"none", cursor:"pointer", fontFamily:"inherit",
+                    fontSize:13, textAlign:"left",
+                    background: isActive ? "rgba(25,118,255,.16)" : "transparent",
+                    color: isActive ? "#FFFFFF" : "#8593AE",
+                    fontWeight: isActive ? 700 : 500,
+                    borderLeft: "3px solid "+(isActive ? "#4DB3FF" : "transparent"),
+                    transition:"background .15s,color .15s" }}>
+                  <span style={{ whiteSpace:"nowrap" }}>{t.label}</span>
+                  {t.badge !== null && (
+                    <span style={{ fontSize:10, fontWeight:700, padding:"1px 7px", borderRadius:10,
+                      background: isActive ? "#1976FF" : "#223048",
+                      color: isActive ? "#fff" : "#67759B", lineHeight:1.6 }}>
+                      {t.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            });
+          })()}
+        </div>
+
+        {/* Empurra o rodapé (status + botões) para baixo */}
+        <div style={{ flex:1, minHeight:14 }} />
+
+        {/* Rodapé: status + botões (Config por último) */}
+        <div style={{ borderTop:"1px solid rgba(255,255,255,.08)", paddingTop:10, display:"flex", flexDirection:"column", gap:8 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+            {!token && <span style={{ background: "#223048", border: "1px solid rgba(255,255,255,.12)", color: "#67759B", fontSize: 10, padding: "3px 9px", borderRadius: 20, fontWeight: 600 }}>● Não conectado</span>}
+            {token && <span style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", color: "#00C853", fontSize: 10, padding: "3px 9px", borderRadius: 20, fontWeight: 700, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"100%" }}>● {user?.nickname}</span>}
+            <SinoNotificacoes notificacoes={notificacoes} setNotificacoes={setNotificacoes} darkMode={darkMode} />
+          </div>
+          {loading && <span style={{ color: "#67759B", fontSize: 11 }}>⏳ {loadingMsg}</span>}
+          {loadError && <span style={{ color: "#FF5252", fontSize: 11 }}>⚠ {loadError}</span>}
           {token && lastUpdate && (() => {
             const mins = Math.round((Date.now() - parseInt(lastUpdate)) / 60000);
             const horas = Math.floor(mins / 60);
-            const isStale = mins >= 300; // avisa após 5h (token expira em 6h)
+            const isStale = mins >= 300;
             return (
-              <div style={{ fontSize:11, textAlign:"right", lineHeight:1.4 }}>
-                <div style={{ color: isStale ? "#FF5252" : "#67759B" }}>
-                  {isStale ? "⚠️ " : "✓ "}
-                  {horas > 0 ? `${horas}h ${mins%60}min` : `${mins}min`} atrás
-                </div>
-                <div style={{ color:"#4A5878", fontSize:10 }}>
-                  {isStale ? "Token próximo de expirar" : "dados atualizados"}
-                </div>
+              <div style={{ fontSize:10, lineHeight:1.4 }}>
+                <span style={{ color: isStale ? "#FF5252" : "#67759B" }}>{isStale ? "⚠️ " : "✓ "}{horas > 0 ? `${horas}h ${mins%60}min` : `${mins}min`} atrás</span>
+                <span style={{ color:"#4A5878" }}> · {isStale ? "token expirando" : "atualizado"}</span>
               </div>
             );
           })()}
           {token && (
             <button onClick={clicarAtualizarManual} disabled={refreshingManual}
               title="Busca pedidos novos e atualiza os dados sem recarregar tudo"
-              style={{ background: refreshingManual?"#223048":"#121A24", border: "1px solid rgba(255,255,255,.12)", color: "#A9B4C5", fontWeight: 600, padding: "8px 14px", borderRadius: 8, cursor: refreshingManual?"wait":"pointer", fontSize: 13, display:"flex", alignItems:"center", gap:5 }}>
+              style={{ background: refreshingManual?"#223048":"#182230", border: "1px solid rgba(255,255,255,.12)", color: "#A9B4C5", fontWeight: 600, padding: "9px", borderRadius: 8, cursor: refreshingManual?"wait":"pointer", fontSize: 12, width:"100%" }}>
               {refreshingManual ? "⏳ Atualizando..." : refreshManualMsg ? refreshManualMsg : "🔄 Atualizar"}
             </button>
           )}
           <button onClick={function(){ window.location.href = "/api/auth/login"; }}
-            style={{ background: "#1976FF", border: "none", color: "#fff", fontWeight: 700, padding: "8px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>
+            style={{ background: "#1976FF", border: "none", color: "#fff", fontWeight: 700, padding: "9px", borderRadius: 8, cursor: "pointer", fontSize: 12, width:"100%" }}>
             {token ? "Reconectar" : "Conectar ML"}
           </button>
-          <SinoNotificacoes
-            notificacoes={notificacoes}
-            setNotificacoes={setNotificacoes}
-            darkMode={darkMode}
-          />
-          <div style={{ display:"flex", alignItems:"center", gap:6, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, padding:"5px 10px" }}>
-            <div style={{ width:26, height:26, borderRadius:8, background:"#1976FF", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:800, color:"#FFC107" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:6, background:"#182230", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, padding:"6px 8px" }}>
+            <div style={{ width:26, height:26, borderRadius:8, background:"#1976FF", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:800, color:"#FFC107", flexShrink:0 }}>
               {currentUser?.nome?.charAt(0).toUpperCase()}
             </div>
-            <div style={{ fontSize:12, lineHeight:1.3 }}>
-              <div style={{ fontWeight:600, color:"#FFFFFF" }}>{currentUser?.nome}</div>
+            <div style={{ fontSize:12, lineHeight:1.3, minWidth:0 }}>
+              <div style={{ fontWeight:600, color:"#FFFFFF", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{currentUser?.nome}</div>
               <div style={{ color:"#67759B", fontSize:10 }}>{currentUser?.admin?"Admin":"Usuário"}</div>
             </div>
           </div>
-          <button onClick={function(){ setShowConfigPanel(true); setConfigPanelTab("aparencia"); }}
-            style={{ background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", fontWeight:600, padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
-            ⚙️ Config
-          </button>
           <button onClick={() => { fetch("/api/auth/app-logout", { method:"POST" }).catch(()=>{}); clearSession(); clearSavedTokens(); setCurrentUser(null); setToken(null); setUser(null); }}
-            style={{ background:"rgba(255,82,82,.12)", border:"1px solid rgba(255,82,82,.35)", color:"#FF5252", fontWeight:600, padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+            style={{ background:"rgba(255,82,82,.12)", border:"1px solid rgba(255,82,82,.35)", color:"#FF5252", fontWeight:600, padding:"9px", borderRadius:8, cursor:"pointer", fontSize:12, width:"100%" }}>
             Sair
           </button>
+          {/* Config — SEMPRE por último */}
+          <button onClick={function(){ setShowConfigPanel(true); setConfigPanelTab("aparencia"); }}
+            style={{ background:"#182230", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", fontWeight:600, padding:"9px", borderRadius:8, cursor:"pointer", fontSize:12, width:"100%" }}>
+            ⚙️ Configurações
+          </button>
         </div>
-      </header>
+      </aside>
 
+      {/* Coluna do conteúdo */}
+      <div style={{ flex:1, minWidth:0 }}>
       <main style={{ maxWidth: "100%", padding: "12px 20px" }}>
 
         {/* Abas agora estão no header */}
@@ -5258,7 +5254,7 @@ export default function App() {
                 </div>
               }>
 
-            <div style={{ background: "#182230", border: "1px solid rgba(255,255,255,.12)", borderRadius: 12, overflow: "auto", boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
+            <div className="scroll-x" style={{ background: "#182230", border: "1px solid rgba(255,255,255,.12)", borderRadius: 12, overflow: "auto", boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
               <table>
                 <thead>
                   <tr>
@@ -5509,7 +5505,7 @@ export default function App() {
                     placeholder="Buscar por nº pedido, cliente, CPF, e-mail..." style={{ width:"100%", paddingLeft:36 }} />
                 </div>
               }>
-              <div style={{ background: "#182230", border: "1px solid rgba(255,255,255,.12)", borderRadius: 12, overflow: "auto", boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
+              <div className="scroll-x" style={{ background: "#182230", border: "1px solid rgba(255,255,255,.12)", borderRadius: 12, overflow: "auto", boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
               <table style={{ borderCollapse:"collapse", width:"100%", tableLayout:"fixed" }}>
                 <colgroup>
                   <col style={{ width:130 }} />
@@ -5646,6 +5642,7 @@ export default function App() {
         {tab === "concorrencia" && currentUser?.permissoes?.includes("listings") && (
           <ConcorrenciaTab enriched={enriched} token={token} sellerId={user?.id} />
         )}
+      </div>{/* fecha a coluna do conteúdo */}
 
       {showBackup && <PainelBackup onClose={() => setShowBackup(false)} />}
 

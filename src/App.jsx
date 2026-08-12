@@ -895,7 +895,11 @@ function clearSavedTokens() {
 // de anúncios — o localStorage estoura em ~5 MB e o cache simplesmente não salvava.
 // Vale por um TTL; passou disso, a aba recarrega do ML normalmente.
 const ML_SNAPSHOT_KEY = "ml_snapshot_v1";
-const ML_SNAPSHOT_TTL = 60 * 60 * 1000; // 1h
+// Cache do último carregamento completo: vale por 7 dias, para reaproveitar entre sessões
+// (abrir instantâneo) em vez de refazer a carga pesada do ML a cada acesso. Ao hidratar do
+// cache, um refresh incremental de pedidos roda em segundo plano; anúncios/taxas/promoções
+// ficam do cache até o "Atualizar" manual ou o próximo carregamento completo (pós-TTL).
+const ML_SNAPSHOT_TTL = 7 * 24 * 60 * 60 * 1000; // 7 dias
 
 // ── Mini-wrapper de IndexedDB (armazena valores grandes que não cabem no localStorage) ──
 function idbOpen() {
@@ -4357,7 +4361,11 @@ export default function App() {
   // Reaproveita a última carga completa (snapshot em cache) ao abrir uma nova aba: preenche os
   // dados na hora, sem o carregamento pesado do ML. Depois dispara uma atualização leve em
   // segundo plano para pegar pedidos novos, sem travar a tela.
+  const hidratouDoCacheRef = useRef(false);
   function hidratarDoSnapshot(snap, accessToken) {
+    // Marca que abrimos a partir do cache — o efeito do token dispara, logo em seguida, um
+    // refresh incremental de pedidos em segundo plano (sem esperar os 3 min do intervalo).
+    hidratouDoCacheRef.current = true;
     if (accessToken) setToken(accessToken);
     if (snap.user) setUser(snap.user);
     // Marca a conta ML conectada (usada como fallback do namespace de sincronização).
@@ -4672,6 +4680,12 @@ export default function App() {
   // Dispara a atualização automática a cada 3 minutos, sozinha, sem precisar de nenhum clique.
   useEffect(function(){
     if (!token) return;
+    // Se acabamos de abrir a partir do cache (hidratação), busca pedidos novos JÁ — assim o que
+    // mudou no ML desde a última sessão aparece em segundos, sem esperar o intervalo de 3 min.
+    if (hidratouDoCacheRef.current) {
+      hidratouDoCacheRef.current = false;
+      setTimeout(function(){ refreshOrdersIncrementalRef.current(); }, 600);
+    }
     var intervalId = setInterval(function(){ refreshOrdersIncrementalRef.current(); }, 180000); // 3 minutos
     return function(){ clearInterval(intervalId); };
   }, [token]);

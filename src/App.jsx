@@ -2538,6 +2538,10 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
               var skuRef = listingRef?.sku || extraRef?.sku || p.sku || "—";
               var tipoPrem = listingRef && (listingRef.listing_type_id==="gold_pro" || listingRef.listing_type_id==="gold_premium");
               var ehShopee = (p.marketplace || "ml") === "shopee";
+              // Valor riscado = preço BRUTO (anunciar por): o preço de venda desejado (precoNovo)
+              // acrescido do % de desconto da promoção, mesma fórmula da coluna "Anunciar por".
+              var descItem = parseFloat(descontosConfig && descontosConfig[id] || 0);
+              var precoBruto = descItem > 0 ? p.precoNovo / (1 - descItem/100) : p.precoNovo;
               return (
                 <div key={id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"#182230", border:"1px solid rgba(255,193,7,.35)", borderRadius:8, padding:"7px 12px" }}>
                   <div style={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontSize:12, color:"#FFFFFF" }}>
@@ -2552,7 +2556,9 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                     {p.titulo}
                   </div>
                   <div style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
-                    <span style={{ fontSize:11, color:"#67759B", textDecoration:"line-through" }}>R$ {p.precoAntigo.toFixed(2).replace(".",",")}</span>
+                    {precoBruto > p.precoNovo + 0.001 && (
+                      <span style={{ fontSize:11, color:"#67759B", textDecoration:"line-through" }}>R$ {precoBruto.toFixed(2).replace(".",",")}</span>
+                    )}
                     <span style={{ fontSize:12, fontWeight:700, color:"#7c3aed" }}>→ R$ {p.precoNovo.toFixed(2).replace(".",",")}</span>
                     {!ehShopee && (
                       <a href={"https://www.mercadolivre.com.br/seller-admin/listing/edit?itemId="+id} target="_blank" rel="noreferrer"

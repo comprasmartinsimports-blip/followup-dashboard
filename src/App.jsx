@@ -4260,17 +4260,22 @@ export default function App() {
     // mudanças locais para enviar.
     puxarDoServidor().finally(function(){
       pushMudancasLocais();
-      pushInterval = setInterval(pushMudancasLocais, 15000); // varre a cada 15s
-      pullInterval = setInterval(puxarDoServidor, 45000); // a cada 45s
+      pushInterval = setInterval(pushMudancasLocais, 12000); // envia mudanças locais a cada 12s
+      pullInterval = setInterval(puxarDoServidor, 15000); // busca o que outros editaram a cada 15s
     });
 
-    function aoEsconderAba(){ if (document.visibilityState === "hidden") pushMudancasLocais(); }
-    document.addEventListener("visibilitychange", aoEsconderAba);
+    // Ao esconder a aba: envia o que mudou. Ao voltar para a aba: puxa na hora o que os outros
+    // usuários editaram (não espera o ciclo) — a edição de um aparece para todos rapidamente.
+    function aoMudarVisibilidade(){
+      if (document.visibilityState === "hidden") pushMudancasLocais();
+      else { pushMudancasLocais(); puxarDoServidor(); }
+    }
+    document.addEventListener("visibilitychange", aoMudarVisibilidade);
     window.addEventListener("beforeunload", pushMudancasLocais);
     return function(){
       clearInterval(pushInterval);
       clearInterval(pullInterval);
-      document.removeEventListener("visibilitychange", aoEsconderAba);
+      document.removeEventListener("visibilitychange", aoMudarVisibilidade);
       window.removeEventListener("beforeunload", pushMudancasLocais);
     };
   }, []);

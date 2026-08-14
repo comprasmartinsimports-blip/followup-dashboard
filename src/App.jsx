@@ -3913,6 +3913,9 @@ export default function App() {
   const [showClienteDetalhe, setShowClienteDetalhe] = useState(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const [filterListingExtra, setFilterListingExtra] = useState("all");
+  // Anúncio cujo campo de custo está sendo editado agora: fica isento do filtro "Sem custo"
+  // enquanto digita, senão a linha some no 1º dígito (custo passa a >0) e não dá pra terminar.
+  const [editandoCustoId, setEditandoCustoId] = useState(null);
   const [token, setToken] = useState(() => loadSavedTokens()?.accessToken ?? null);
   // Guarda quando o token atual vence (vem da sessão do servidor — cookie próprio ou conexão
   // compartilhada da equipe). Usado por getValidToken() para saber quando renovar.
@@ -4785,7 +4788,7 @@ export default function App() {
     }
     if (statusFilter === "active") results = results.filter(l => l.status === "active");
     if (statusFilter === "paused") results = results.filter(l => l.status === "paused");
-    if (filterListingExtra === "sem_custo")  results = results.filter(l => !(costs[l.id] > 0));
+    if (filterListingExtra === "sem_custo")  results = results.filter(l => l.id === editandoCustoId || !(costs[l.id] > 0));
     if (filterListingExtra === "com_promo")  results = results.filter(l => l.hasPromo);
     if (filterListingExtra === "sem_promo")  results = results.filter(l => !l.hasPromo);
     if (filterListingExtra === "sem_atacado") {
@@ -4807,7 +4810,7 @@ export default function App() {
       });
     }
     return results;
-  }, [enriched, searchListings, searchType, statusFilter, filterListingExtra, costs]);
+  }, [enriched, searchListings, searchType, statusFilter, filterListingExtra, costs, editandoCustoId]);
 
   const sorted = [...filteredListings].sort((a, b) =>
     sortBy === "score" ? a.score - b.score :
@@ -5149,24 +5152,35 @@ export default function App() {
             return navTabs.map(function(t) {
               var isActive = tab === t.key;
               return (
-                <button key={t.key} onClick={function(){ setTab(t.key); }}
-                  style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:6, width:"100%",
-                    padding:"10px 12px", borderRadius:9, border:"none", cursor:"pointer", fontFamily:"inherit",
-                    fontSize:13, textAlign:"left",
-                    background: isActive ? "rgba(25,118,255,.16)" : "transparent",
-                    color: isActive ? "#FFFFFF" : "#8593AE",
-                    fontWeight: isActive ? 700 : 500,
-                    borderLeft: "3px solid "+(isActive ? "#4DB3FF" : "transparent"),
-                    transition:"background .15s,color .15s" }}>
-                  <span style={{ whiteSpace:"nowrap" }}>{t.label}</span>
-                  {t.badge !== null && (
-                    <span style={{ fontSize:10, fontWeight:700, padding:"1px 7px", borderRadius:10,
-                      background: isActive ? "#1976FF" : "#223048",
-                      color: isActive ? "#fff" : "#67759B", lineHeight:1.6 }}>
-                      {t.badge}
-                    </span>
-                  )}
-                </button>
+                <div key={t.key} style={{ display:"flex", alignItems:"center", gap:2 }}>
+                  <button onClick={function(){ setTab(t.key); }}
+                    style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:6, flex:1, minWidth:0,
+                      padding:"10px 12px", borderRadius:9, border:"none", cursor:"pointer", fontFamily:"inherit",
+                      fontSize:13, textAlign:"left",
+                      background: isActive ? "rgba(25,118,255,.16)" : "transparent",
+                      color: isActive ? "#FFFFFF" : "#8593AE",
+                      fontWeight: isActive ? 700 : 500,
+                      borderLeft: "3px solid "+(isActive ? "#4DB3FF" : "transparent"),
+                      transition:"background .15s,color .15s" }}>
+                    <span style={{ whiteSpace:"nowrap" }}>{t.label}</span>
+                    {t.badge !== null && (
+                      <span style={{ fontSize:10, fontWeight:700, padding:"1px 7px", borderRadius:10,
+                        background: isActive ? "#1976FF" : "#223048",
+                        color: isActive ? "#fff" : "#67759B", lineHeight:1.6 }}>
+                        {t.badge}
+                      </span>
+                    )}
+                  </button>
+                  <button title={"Abrir " + t.label + " em nova aba"}
+                    onClick={function(){ window.open(window.location.pathname + "?tab=" + t.key, "_blank"); }}
+                    style={{ flexShrink:0, width:26, height:26, display:"flex", alignItems:"center", justifyContent:"center",
+                      background:"transparent", border:"none", borderRadius:7, cursor:"pointer", color:"#67759B", fontSize:13,
+                      transition:"background .15s,color .15s" }}
+                    onMouseEnter={function(e){ e.currentTarget.style.background="#223048"; e.currentTarget.style.color="#4DB3FF"; }}
+                    onMouseLeave={function(e){ e.currentTarget.style.background="transparent"; e.currentTarget.style.color="#67759B"; }}>
+                    ↗
+                  </button>
+                </div>
               );
             });
           })()}
@@ -5455,6 +5469,8 @@ export default function App() {
                         </td>
                         <td>
                           <input type="number" value={l.cost || ""} onChange={e => setCostsAndSave(c => ({ ...c, [l.id]: Number(e.target.value) }))} placeholder="0,00"
+                            onFocus={function(){ setEditandoCustoId(l.id); }}
+                            onBlur={function(){ setEditandoCustoId(function(cur){ return cur === l.id ? null : cur; }); }}
                             style={{ background: "#121A24", border: "1px solid rgba(255,255,255,.12)", color: "#FFFFFF", padding: "5px 8px", borderRadius: 6, width: 80, fontSize: 12, textAlign: "right" }} />
                         </td>
                         <td style={{ color: l.profit >= 0 ? "#00C853" : "#FF5252", fontWeight: 700 }}>{fmt(l.profit)}</td>

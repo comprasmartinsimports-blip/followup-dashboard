@@ -11,6 +11,10 @@
       body{background:#0A0F18;
         background-image:radial-gradient(1100px 500px at 75% -10%, rgba(25,118,255,.09), transparent 60%),
                          radial-gradient(800px 420px at -10% 110%, rgba(0,240,255,.05), transparent 60%);}
+      /* Remove as setinhas (spinner) dos campos numéricos em todo o sistema */
+      input[type="number"]::-webkit-outer-spin-button,
+      input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+      input[type="number"]{ -moz-appearance:textfield; appearance:textfield; }
     </style>
   </head>
   <body>

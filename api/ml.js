@@ -96,6 +96,47 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  // ── Backfill one-shot KV → Postgres (flow.sync_store) — exige ADMIN ──
+  // Copia as chaves de negócio do Vercel KV para o Postgres, SÓ onde o Postgres ainda
+  // está vazio (idempotente: nunca sobrescreve um valor mais novo já gravado pelo dual-write).
+  // Uso: abrir /api/ml/_migrate_kv logado como admin; pode rodar quantas vezes quiser.
+  if (path === "/_migrate_kv" || path.startsWith("/_migrate_kv?")) {
+    const sessao = await verificarSessao(req);
+    if (!sessao) return res.status(401).json({ error: "Não autenticado. Faça login no sistema." });
+    if (!sessao.admin) return res.status(403).json({ error: "Apenas administradores." });
+    if (!dbEnabled()) return res.status(400).json({ error: "SUPABASE_DB_URL não configurada no servidor." });
+
+    const cookiesMig = Object.fromEntries(
+      (req.headers.cookie || "").split(";").map(function(c){ const p = c.trim().split("="); return [p[0], p.slice(1).join("=")]; })
+    );
+    const qsMig = new URLSearchParams(path.split("?")[1] || "");
+    const nsClienteMig = qsMig.get("ns");
+    const COMPART = ["chat_interno_mensagens", "chat_interno_tarefas"];
+    function contaMig() {
+      return (cookiesMig.ml_user_id && String(cookiesMig.ml_user_id).trim())
+        || (nsClienteMig && String(nsClienteMig).trim())
+        || ("u-" + sessao.uid);
+    }
+    function kvKeyMig(key) { return COMPART.includes(key) ? ("mlmargem_sync_" + key) : ("mlmargem_sync_acc_" + contaMig() + "_" + key); }
+    function nsScopeMig(key) { return COMPART.includes(key) ? "shared" : contaMig(); }
+
+    const migrated = [], skipped = [], vazias = [], erros = [];
+    for (let i = 0; i < SYNC_KEYS_PERMITIDAS.length; i += 5) {
+      const lote = SYNC_KEYS_PERMITIDAS.slice(i, i + 5);
+      await Promise.all(lote.map(async function(key){
+        try {
+          const kvVal = await kvGet(kvKeyMig(key));
+          if (kvVal === null || kvVal === undefined) { vazias.push(key); return; }
+          const pgVal = await syncGet(nsScopeMig(key), key);
+          if (pgVal !== null && pgVal !== undefined) { skipped.push(key); return; }
+          await syncSet(nsScopeMig(key), key, kvVal);
+          migrated.push(key);
+        } catch (e) { erros.push(key + ": " + (e && e.message)); }
+      }));
+    }
+    return res.status(200).json({ ok: true, conta: contaMig(), migrated, skipped_ja_no_postgres: skipped, vazias_no_kv: vazias, erros });
+  }
+
   // ── Rota de sincronização de dados de negócio — exige sessão do app ──
   if (path === "/_sync" || path.startsWith("/_sync?")) {
     const sessao = await verificarSessao(req);

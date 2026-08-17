@@ -4,6 +4,7 @@ import {
   PieChart, Pie, Cell, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, Legend,
 } from "recharts";
+import { BR_VIEWBOX, BR_ESTADOS } from "./brazilMap.js";
 
 const ML = (path) => `/api/ml${path}`;
 const fmt = (n) => `R$ ${Number(n).toFixed(2).replace(".", ",")}`;
@@ -1539,7 +1540,608 @@ function ComprasTab({ produtos, pedidos, salvar }) {
 
 // Dashboard com os dados REAIS da empresa (a partir dos pedidos já sincronizados): faturamento,
 // lucro líquido, margem, taxas, impostos, custo e top produtos — com filtro por período.
-function DashboardTab({ enrichedOrders }) {
+// ═══════════════════════════════════════════════════════════════════════════
+// SUB-DASHBOARDS (abas internas do Dashboard): Estados, Margem por pedido,
+// Estoque, Clientes e Curva ABC. Compartilham os helpers abaixo.
+// ═══════════════════════════════════════════════════════════════════════════
+function pct1(n){ n = isFinite(n) ? n : 0; return n.toFixed(1).replace(".", ",") + "%"; }
+var _inpDataG = { background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"6px 8px", borderRadius:8, fontSize:12 };
+var _wideWrap = { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, overflowX:"auto" };
+var _btnExp = { display:"inline-flex", alignItems:"center", gap:6, padding:"7px 13px", borderRadius:8, border:"1px solid var(--border)", background:"var(--surface)", color:"var(--text-2)", fontSize:12, fontWeight:700, cursor:"pointer" };
+
+// Downloads iniciados pelo usuário (clique nos botões Excel/CSV) — dados do próprio usuário.
+function _dispararDownload(blob, nome){
+  var url = URL.createObjectURL(blob); var a = document.createElement("a");
+  a.href = url; a.download = nome; document.body.appendChild(a); a.click();
+  document.body.removeChild(a); setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+}
+function baixarCSV(nome, colunas, linhas){
+  var esc = function(v){ v = (v==null?"":String(v)); return /[";\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; };
+  var txt = colunas.map(esc).join(";") + "\n" + linhas.map(function(r){ return r.map(esc).join(";"); }).join("\n");
+  _dispararDownload(new Blob(["﻿"+txt], { type:"text/csv;charset=utf-8;" }), nome+".csv");
+}
+function baixarExcel(nome, colunas, linhas){
+  var esc = function(v){ return String(v==null?"":v).replace(/&/g,"&amp;").replace(/</g,"&lt;"); };
+  var html = "<table border='1'><tr>" + colunas.map(function(c){ return "<th>"+esc(c)+"</th>"; }).join("") + "</tr>" +
+    linhas.map(function(r){ return "<tr>" + r.map(function(c){ return "<td>"+esc(c)+"</td>"; }).join("") + "</tr>"; }).join("") + "</table>";
+  _dispararDownload(new Blob(['<html><head><meta charset="utf-8"></head><body>'+html+'</body></html>'], { type:"application/vnd.ms-excel" }), nome+".xls");
+}
+function BotoesExport({ nome, colunas, linhas }){
+  return <div style={{ display:"flex", gap:8 }}>
+    <button style={_btnExp} onClick={function(){ baixarExcel(nome, colunas, linhas()); }}>Excel</button>
+    <button style={_btnExp} onClick={function(){ baixarCSV(nome, colunas, linhas()); }}>CSV</button>
+    <button style={_btnExp} onClick={exportarPDF}>PDF</button>
+  </div>;
+}
+
+// Filtra pedidos (não cancelados) por período. periodo: hoje|7|30|90|mesatual|tudo|custom.
+function filtrarPeriodo(orders, periodo, deData, ateData){
+  var hoje = new Date().toISOString().slice(0,10);
+  var cut = "0000-00-00";
+  if (periodo==="7"||periodo==="30"||periodo==="90"){ var d=new Date(); d.setDate(d.getDate()-parseInt(periodo,10)); cut=d.toISOString().slice(0,10); }
+  return (orders||[]).filter(function(o){
+    if (o.status==="cancelled") return false;
+    var dt=(o.date||"").slice(0,10); if(!dt) return periodo==="tudo";
+    if (periodo==="hoje") return dt===hoje;
+    if (periodo==="mesatual") return dt.slice(0,7)===hoje.slice(0,7);
+    if (periodo==="tudo") return true;
+    if (periodo==="custom"){ if(deData&&dt<deData) return false; if(ateData&&dt>ateData) return false; return true; }
+    return dt>=cut;
+  });
+}
+function BarraPeriodo({ periodo, setPeriodo, deData, setDeData, ateData, setAteData }){
+  var ops=[["hoje","Hoje"],["7","7 dias"],["30","30 dias"],["mesatual","Mês atual"],["tudo","Tudo"]];
+  return <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
+    {ops.map(function(p){ var a=periodo===p[0]; return <button key={p[0]} onClick={function(){ setPeriodo(p[0]); }}
+      style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background:a?"#1976FF":"var(--surface)", color:a?"#fff":"var(--text-3)" }}>{p[1]}</button>; })}
+    <div style={{ display:"flex", alignItems:"center", gap:5, padding:"4px 8px", borderRadius:8, border:"1px solid var(--border)", background: periodo==="custom"?"rgba(25,118,255,.10)":"var(--surface)" }}>
+      <input type="date" value={deData} onChange={function(e){ setDeData(e.target.value); setPeriodo("custom"); }} style={_inpDataG} />
+      <span style={{ fontSize:11, color:"var(--text-3)" }}>até</span>
+      <input type="date" value={ateData} onChange={function(e){ setAteData(e.target.value); setPeriodo("custom"); }} style={_inpDataG} />
+      {(deData||ateData) && <button onClick={function(){ setDeData(""); setAteData(""); setPeriodo("30"); }} style={{ background:"none", border:"none", color:"var(--text-3)", cursor:"pointer", fontSize:14 }}>✕</button>}
+    </div>
+  </div>;
+}
+
+// ── Sub-aba ESTADOS: mapa do Brasil (choropleth) + vendas por estado ─────────
+function EstadosDash({ enrichedOrders }){
+  const [ufSel, setUfSel] = useState(null);
+  var agg = {};
+  (enrichedOrders||[]).filter(function(o){ return o.status!=="cancelled"; }).forEach(function(o){
+    var uf=((o.buyerUF||"")+"").toUpperCase()||"—"; var q=o.qty||1;
+    if(!agg[uf]) agg[uf]={ uf:uf, fat:0, pecas:0, pedidos:0, prod:{} };
+    var a=agg[uf]; a.fat+=(o.price||0)*q; a.pecas+=q; a.pedidos+=1;
+    var k=o.title||o.listing_id||"?"; if(!a.prod[k]) a.prod[k]={ titulo:o.title||("Anúncio "+k), qtd:0, fat:0 }; a.prod[k].qtd+=q; a.prod[k].fat+=(o.price||0)*q;
+  });
+  var lista = Object.keys(agg).map(function(k){ var a=agg[k]; a.ticket=a.pedidos?a.fat/a.pedidos:0; a.produtos=Object.keys(a.prod).map(function(x){return a.prod[x];}).sort(function(x,y){return y.qtd-x.qtd;}); return a; }).sort(function(x,y){ return y.fat-x.fat; });
+  var max = lista.reduce(function(m,e){ return (e.uf!=="—" && e.fat>m) ? e.fat : m; }, 1);
+  var NOMES={}; BR_ESTADOS.forEach(function(s){ NOMES[s.uf]=s.nome; });
+  var sel = (ufSel && agg[ufSel]) ? agg[ufSel] : (lista.filter(function(e){return e.uf!=="—";})[0]||null);
+  function fillUF(uf){ var a=agg[uf]; if(!a||!a.fat) return { f:"var(--surface-3)", o:1 }; return { f:"#1976FF", o:0.22+0.78*Math.pow(a.fat/max,.5) }; }
+  return (
+    <div style={{ padding:2 }}>
+      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Vendas por estado</div>
+      <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Mapa do Brasil por faturamento. Clique num estado para ver os detalhes.</div>
+      <div style={{ display:"flex", gap:14, flexWrap:"wrap", alignItems:"stretch" }}>
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 16px", flex:"1 1 360px", minWidth:320 }}>
+          <svg viewBox={BR_VIEWBOX} style={{ width:"100%", height:"auto", display:"block", maxHeight:460 }}>
+            {BR_ESTADOS.map(function(s){ var c=fillUF(s.uf); var a=agg[s.uf]; var isSel = sel && sel.uf===s.uf;
+              return <path key={s.uf} d={s.d} fill={c.f} fillOpacity={c.o} stroke={isSel?"#FFC107":"var(--bg-2)"} strokeWidth={isSel?1.6:0.5}
+                style={{ cursor:"pointer" }} onClick={function(){ setUfSel(s.uf); }}>
+                <title>{s.nome} ({s.uf}) — {a?fmt(a.fat)+" · "+a.pedidos+" pedido(s)":"sem vendas"}</title>
+              </path>;
+            })}
+          </svg>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:8, fontSize:11, color:"var(--text-3)" }}>
+            <span>Menos</span>
+            <div style={{ flex:1, height:8, borderRadius:4, background:"linear-gradient(90deg, var(--surface-3), #1976FF)" }} />
+            <span>Mais</span>
+          </div>
+        </div>
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", flex:"1 1 320px", minWidth:300 }}>
+          {!sel ? <div style={{ color:"var(--text-3)", fontSize:13 }}>Sem vendas para exibir.</div> : <>
+            <div style={{ fontWeight:800, fontSize:17, color:"var(--text-strong)" }}>{NOMES[sel.uf]||sel.uf} <span style={{ color:"var(--text-3)", fontWeight:600, fontSize:13 }}>({sel.uf})</span></div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:10, margin:"12px 0" }}>
+              <div style={_kpiCard}><div style={_kpiLbl}>Faturamento</div><div style={{ ..._kpiVal, color:"var(--text-strong)" }}>{fmt(sel.fat)}</div></div>
+              <div style={_kpiCard}><div style={_kpiLbl}>Peças vendidas</div><div style={{ ..._kpiVal, color:"var(--text-strong)" }}>{sel.pecas}</div></div>
+              <div style={_kpiCard}><div style={_kpiLbl}>Pedidos</div><div style={{ ..._kpiVal, color:"var(--text-strong)" }}>{sel.pedidos}</div></div>
+              <div style={_kpiCard}><div style={_kpiLbl}>Ticket médio</div><div style={{ ..._kpiVal, color:"var(--text-strong)" }}>{fmt(sel.ticket)}</div></div>
+            </div>
+            <div style={{ fontSize:12, fontWeight:700, color:"var(--text-3)", textTransform:"uppercase", letterSpacing:.5, margin:"4px 0 6px" }}>Produtos vendidos</div>
+            <div style={{ maxHeight:220, overflowY:"auto" }}>
+              {sel.produtos.map(function(p,i){ return <div key={i} style={{ display:"flex", justifyContent:"space-between", gap:10, padding:"7px 0", borderBottom: i<sel.produtos.length-1?"1px solid var(--border-soft)":"none" }}>
+                <span style={{ fontSize:12.5, color:"var(--text-2)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.titulo}</span>
+                <span style={{ fontSize:12.5, color:"var(--text-strong)", fontWeight:700, whiteSpace:"nowrap" }}>{p.qtd}× · {fmt(p.fat)}</span>
+              </div>; })}
+            </div>
+          </>}
+        </div>
+      </div>
+      <div style={{ ..._wideWrap, marginTop:14 }}>
+        <table style={_table}>
+          <thead><tr>{["Estado","UF","Faturamento","Peças","Pedidos","Ticket médio"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+          <tbody>
+            {lista.length===0 ? <tr><td style={_td} colSpan={6}>Sem vendas.</td></tr> :
+            lista.map(function(e,i){ var isSel=sel&&sel.uf===e.uf;
+              return <tr key={i} onClick={function(){ setUfSel(e.uf); }} style={{ cursor:"pointer", background:isSel?"rgba(25,118,255,.08)":"transparent" }}>
+                <td style={{ ..._td, fontWeight:600, color:"var(--text-strong)" }}>{NOMES[e.uf]||(e.uf==="—"?"Não informado":e.uf)}</td>
+                <td style={_tdMono}>{e.uf}</td>
+                <td style={_tdMono}>{fmt(e.fat)}</td>
+                <td style={_td}>{e.pecas}</td>
+                <td style={_td}>{e.pedidos}</td>
+                <td style={_tdMono}>{fmt(e.ticket)}</td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── Sub-aba MARGEM POR PEDIDO ────────────────────────────────────────────────
+function _painel(titulo, extra, itens){
+  return <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px" }}>
+    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:12, gap:8 }}>
+      <div style={{ fontWeight:700, fontSize:14, color:"var(--text-strong)" }}>{titulo}</div>
+      {extra ? <div style={{ fontSize:11, color:"var(--text-3)" }}>{extra}</div> : null}
+    </div>
+    <div style={{ display:"flex", gap:20, flexWrap:"wrap" }}>
+      {itens.map(function(m,i){ return <div key={i} style={{ minWidth:88 }}>
+        <div style={{ fontSize:11, color:"var(--text-3)", marginBottom:4 }}>{m.l}</div>
+        <div style={{ fontSize:18, fontWeight:800, color:m.c||"var(--text-strong)" }}>{m.v}</div>
+      </div>; })}
+    </div>
+  </div>;
+}
+function MargemPedidoDash({ enrichedOrders }){
+  const [periodo,setPeriodo]=useState("mesatual");
+  const [deData,setDeData]=useState(""); const [ateData,setAteData]=useState("");
+  const [aba,setAba]=useState("todos"); const [busca,setBusca]=useState(""); const [pagina,setPagina]=useState(1);
+  var base=filtrarPeriodo(enrichedOrders, periodo, deData, ateData);
+  function calc(o){ var q=o.qty||1; var valorBase=(o.price||0)*q, custo=(o.cost||0)*q, taxa=(o.fee||0)*q, imp=(o.imposto||0)*q, fv=o.freteSeller||0, fc=o.buyer_shipping_cost||0;
+    var contrib=valorBase-custo-taxa-imp-fv; return { q, valorBase, valorPedido:valorBase+fc, custo, taxa, taxaPct: valorBase?taxa/valorBase*100:0, imp, fv, fc, contrib, contribPct: valorBase?contrib/valorBase*100:0 }; }
+  var linhas=base.map(function(o){ return Object.assign({ o:o, id:o.id, data:o.date }, calc(o)); }).sort(function(a,b){ return (b.data||"").localeCompare(a.data||""); });
+  var T={ fat:0,custo:0,taxa:0,imp:0,fv:0,fc:0,contrib:0 };
+  linhas.forEach(function(r){ T.fat+=r.valorBase; T.custo+=r.custo; T.taxa+=r.taxa; T.imp+=r.imp; T.fv+=r.fv; T.fc+=r.fc; T.contrib+=r.contrib; });
+  var nped=linhas.length, ticket=nped?T.fat/nped:0, margPct=T.fat?T.contrib/T.fat*100:0;
+  var filtradas=linhas.filter(function(r){ if(aba==="lucro") return r.contrib>=0; if(aba==="prejuizo") return r.contrib<0; return true; });
+  if(busca.trim()){ var qq=busca.trim().toLowerCase(); filtradas=filtradas.filter(function(r){ return String(r.id).toLowerCase().indexOf(qq)>=0 || (r.o.title||"").toLowerCase().indexOf(qq)>=0; }); }
+  var dmap={};
+  linhas.forEach(function(r){ var dia=(r.data||"").slice(0,10); if(!dia)return; if(!dmap[dia]) dmap[dia]={ ord:dia, dia:dia.slice(8,10)+"/"+dia.slice(5,7), margem:0, imposto:0, taxa:0, freteSum:0, fatSum:0, ped:0 }; var d=dmap[dia]; d.margem+=r.contrib; d.imposto+=r.imp; d.taxa+=r.taxa; d.freteSum+=r.fv; d.fatSum+=r.valorBase; d.ped+=1; });
+  var serie=Object.keys(dmap).sort().map(function(k){ var d=dmap[k]; return { dia:d.dia, margem:d.margem, imposto:d.imposto, taxa:d.taxa, freteMedio:d.ped?d.freteSum/d.ped:0, ticketMedio:d.ped?d.fatSum/d.ped:0 }; });
+  var POR=100, totalPg=Math.max(1,Math.ceil(filtradas.length/POR)), pg=Math.min(pagina,totalPg), slice=filtradas.slice((pg-1)*POR,pg*POR);
+  var cols=["Nº","ID Pedido","Marketplace","Data","Valor do Pedido","Valor Base","Custo","$ Taxa Marketplace","% Taxa Marketplace","Imposto","Frete Vendedor","Frete Comprador","$ Contribuição","% Contribuição"];
+  function rowsExport(){ return filtradas.map(function(r,i){ return [i+1, r.id, "Mercado Livre", fmtDate(r.data)||r.data, r.valorPedido.toFixed(2), r.valorBase.toFixed(2), r.custo.toFixed(2), r.taxa.toFixed(2), r.taxaPct.toFixed(2)+"%", r.imp.toFixed(2), r.fv.toFixed(2), r.fc.toFixed(2), r.contrib.toFixed(2), r.contribPct.toFixed(2)+"%"]; }); }
+  var abas=[["todos","Todos"],["lucro","Lucro"],["prejuizo","Prejuízo"]];
+  return (
+    <div style={{ padding:2 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:14 }}>
+        <div><div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Margem por pedido</div>
+          <div style={{ fontSize:13, color:"var(--text-3)" }}>Margem de contribuição de cada pedido e indicadores do período.</div></div>
+        <BarraPeriodo periodo={periodo} setPeriodo={setPeriodo} deData={deData} setDeData={setDeData} ateData={ateData} setAteData={setAteData} />
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(300px, 1fr))", gap:12, marginBottom:14 }}>
+        {_painel("Indicadores Operacionais", null, [
+          { l:"Faturamento total", v:fmt(T.fat) }, { l:"Ticket médio", v:fmt(ticket) }, { l:"Quantidade de pedidos", v:String(nped) },
+        ])}
+        {_painel("Frete", "Frete comprador só no Mercado Livre", [
+          { l:"Frete comprador", v:fmt(T.fc) }, { l:"Frete vendedor", v:fmt(T.fv), c:"#FF7043" },
+        ])}
+        {_painel("Custos variáveis", null, [
+          { l:"Custo", v:fmt(T.custo), c:"#FF7043" }, { l:"Imposto", v:fmt(T.imp), c:"#FF7043" }, { l:"Taxa de marketplace", v:fmt(T.taxa), c:"#FF7043" },
+        ])}
+        {_painel("Margem de contribuição", null, [
+          { l:"Total", v:fmt(T.contrib), c:T.contrib>=0?"#0a9d4e":"#FF5252" }, { l:"Percentual", v:pct1(margPct), c:margPct>=0?"#0a9d4e":"#FF5252" },
+        ])}
+      </div>
+      <ChartCard titulo="Gráfico de progressão" sub="Por dia no período" flex={null}>
+        {serie.length===0 ? <div style={{ color:"var(--text-3)", fontSize:13, padding:"30px 0", textAlign:"center" }}>Sem vendas no período.</div> :
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart data={serie} margin={{ top:6, right:12, left:0, bottom:0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} vertical={false} />
+            <XAxis dataKey="dia" tick={{ fill:CHART_AXIS, fontSize:11 }} tickLine={false} axisLine={{ stroke:CHART_GRID }} minTickGap={14} />
+            <YAxis tick={{ fill:CHART_AXIS, fontSize:11 }} tickLine={false} axisLine={false} width={58} tickFormatter={function(v){ return "R$"+(Math.abs(v)>=1000?(v/1000).toFixed(0)+"k":v); }} />
+            <RTooltip content={<TipMoeda />} />
+            <Legend wrapperStyle={{ fontSize:12 }} />
+            <Line type="monotone" dataKey="margem" name="Margem de Contribuição" stroke="#0a6b3b" strokeWidth={2.2} dot={false} />
+            <Line type="monotone" dataKey="imposto" name="Impostos" stroke="#FF9800" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="taxa" name="Taxa Marketplace" stroke="#7c3aed" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="freteMedio" name="Frete Médio" stroke="#EC4899" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="ticketMedio" name="Ticket Médio" stroke="#38BDF8" strokeWidth={2} dot={false} />
+          </LineChart>
+        </ResponsiveContainer>}
+      </ChartCard>
+      <div style={{ marginTop:14, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:10 }}>
+          <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)" }}>Margem de contribuição por pedido</div>
+          <BotoesExport nome="margem-por-pedido" colunas={cols} linhas={rowsExport} />
+        </div>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:10 }}>
+          <div style={{ display:"flex", gap:2, borderBottom:"1px solid var(--border)" }}>
+            {abas.map(function(t){ var a=aba===t[0]; return <button key={t[0]} onClick={function(){ setAba(t[0]); setPagina(1); }}
+              style={{ padding:"8px 16px", border:"none", borderBottom:a?"2px solid #0a9d4e":"2px solid transparent", marginBottom:-1, background:"transparent", color:a?"var(--text-strong)":"var(--text-3)", fontWeight:a?700:500, fontSize:13, cursor:"pointer" }}>{t[1]}</button>; })}
+          </div>
+          <input value={busca} onChange={function(e){ setBusca(e.target.value); setPagina(1); }} placeholder="Procurar por pedido ou produto..."
+            style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"7px 10px", borderRadius:8, fontSize:12, minWidth:240 }} />
+        </div>
+        <div style={{ overflowX:"auto" }}>
+          <table style={_table}>
+            <thead><tr>{["Nº","ID Pedido","Marketplace","Data","Valor do Pedido","Valor Base","Custo","$ Taxa","% Taxa","Imposto","Frete Vend.","Frete Comp.","$ Contrib.","% Contrib."].map(function(h){ return <th key={h} style={{ ..._th, whiteSpace:"nowrap" }}>{h}</th>; })}</tr></thead>
+            <tbody>
+              {slice.length===0 ? <tr><td style={_td} colSpan={14}>Nenhum pedido.</td></tr> :
+              slice.map(function(r,i){ var neg=r.contrib<0;
+                return <tr key={r.id||i}>
+                  <td style={_tdMono}>{(pg-1)*POR+i+1}</td>
+                  <td style={_tdMono}>{r.id}</td>
+                  <td style={_td}>Mercado Livre</td>
+                  <td style={_td}>{fmtDate(r.data)||r.data}</td>
+                  <td style={_tdMono}>{fmt(r.valorPedido)}</td>
+                  <td style={_tdMono}>{fmt(r.valorBase)}</td>
+                  <td style={_tdMono}>{fmt(r.custo)}</td>
+                  <td style={_tdMono}>{fmt(r.taxa)}</td>
+                  <td style={_td}>{pct1(r.taxaPct)}</td>
+                  <td style={_tdMono}>{fmt(r.imp)}</td>
+                  <td style={_tdMono}>{fmt(r.fv)}</td>
+                  <td style={_tdMono}>{fmt(r.fc)}</td>
+                  <td style={{ ..._tdMono, fontWeight:700, color:neg?"#FF5252":"#0a9d4e" }}>{fmt(r.contrib)}</td>
+                  <td style={{ ..._td, fontWeight:700, color:neg?"#FF5252":"#0a9d4e" }}>{pct1(r.contribPct)}</td>
+                </tr>;
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:10, fontSize:12, color:"var(--text-3)" }}>
+          <span>{filtradas.length===0?0:((pg-1)*POR+1)}–{Math.min(pg*POR,filtradas.length)} de {filtradas.length}</span>
+          <div style={{ display:"flex", gap:6 }}>
+            <button disabled={pg<=1} onClick={function(){ setPagina(pg-1); }} style={{ ..._btnExp, opacity:pg<=1?.5:1, cursor:pg<=1?"default":"pointer" }}>Anterior</button>
+            <span style={{ alignSelf:"center" }}>Pág. {pg}/{totalPg}</span>
+            <button disabled={pg>=totalPg} onClick={function(){ setPagina(pg+1); }} style={{ ..._btnExp, opacity:pg>=totalPg?.5:1, cursor:pg>=totalPg?"default":"pointer" }}>Próxima</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Sub-aba ESTOQUE DE PRODUTOS ──────────────────────────────────────────────
+function EstoqueDash({ produtos }){
+  const [busca,setBusca]=useState(""); const [pagina,setPagina]=useState(1); const [modo,setModo]=useState("todos");
+  var lista=(produtos||[]).map(function(p){ var est=parseInt(p.estoqueAtual)||0, cu=parseFloat(p.precoCusto)||0, pv=parseFloat(p.precoVenda)||0;
+    return { codigo:p.codigo||p.sku||p.id||"—", desc:nomeProd(p), est:est, custo:est*cu, valor:est*pv }; });
+  if(busca.trim()){ var qq=busca.trim().toLowerCase(); lista=lista.filter(function(x){ return String(x.codigo).toLowerCase().indexOf(qq)>=0 || x.desc.toLowerCase().indexOf(qq)>=0; }); }
+  var totEst=lista.reduce(function(s,x){return s+x.est;},0), totCusto=lista.reduce(function(s,x){return s+x.custo;},0), totValor=lista.reduce(function(s,x){return s+x.valor;},0);
+  var POR=40, totalPg=Math.max(1,Math.ceil(lista.length/POR)), pg=Math.min(pagina,totalPg), slice=lista.slice((pg-1)*POR,pg*POR);
+  var cols=["Código","Descrição","Estoque","Custo","Valor"];
+  function rowsExport(){ return lista.map(function(x){ return [x.codigo, x.desc, x.est, x.custo.toFixed(2), x.valor.toFixed(2)]; }); }
+  return (
+    <div style={{ padding:2 }}>
+      <div style={{ display:"flex", gap:14, flexWrap:"wrap", alignItems:"flex-start" }}>
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", flex:"1 1 520px", minWidth:340 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:12 }}>
+            <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)" }}>Tabela de Estoques — Todos</div>
+            <div style={{ display:"flex", gap:4, background:"var(--surface-3)", borderRadius:8, padding:2 }}>
+              {[["todos","Variações + Simples + Composições"],["produtos","Produtos"]].map(function(t){ var a=modo===t[0]; return <button key={t[0]} onClick={function(){ setModo(t[0]); }} style={{ padding:"6px 12px", borderRadius:7, border:"none", cursor:"pointer", fontSize:11.5, fontWeight:700, background:a?"var(--surface)":"transparent", color:a?"#0a9d4e":"var(--text-3)" }}>{t[1]}</button>; })}
+            </div>
+          </div>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:10 }}>
+            <BotoesExport nome="estoque-produtos" colunas={cols} linhas={rowsExport} />
+            <input value={busca} onChange={function(e){ setBusca(e.target.value); setPagina(1); }} placeholder="Procurar por código ou descrição..."
+              style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"7px 10px", borderRadius:8, fontSize:12, minWidth:220 }} />
+          </div>
+          <div style={{ overflowX:"auto" }}>
+            <table style={_table}>
+              <thead><tr>{["Código","Descrição","Estoque","Custo","Valor"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+              <tbody>
+                {slice.length===0 ? <tr><td style={{ ..._td, textAlign:"center", padding:"32px 12px", color:"var(--text-3)" }} colSpan={5}>{(produtos||[]).length===0?"Nenhum produto cadastrado. Importe em Produtos.":"Nada encontrado."}</td></tr> :
+                slice.map(function(x,i){ return <tr key={i}>
+                  <td style={_tdMono}>{x.codigo}</td>
+                  <td style={{ ..._td, maxWidth:360, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)", fontWeight:500 }}>{x.desc}</td>
+                  <td style={{ ..._td, fontWeight:700 }}>{x.est}</td>
+                  <td style={_tdMono}>{fmt(x.custo)}</td>
+                  <td style={_tdMono}>{fmt(x.valor)}</td>
+                </tr>; })}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:10, fontSize:12, color:"var(--text-3)" }}>
+            <span>{lista.length} item(ns)</span>
+            <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+              <button disabled={pg<=1} onClick={function(){ setPagina(pg-1); }} style={{ ..._btnExp, opacity:pg<=1?.5:1 }}>Anterior</button>
+              <span>Pág. {pg}/{totalPg}</span>
+              <button disabled={pg>=totalPg} onClick={function(){ setPagina(pg+1); }} style={{ ..._btnExp, opacity:pg>=totalPg?.5:1 }}>Próxima</button>
+            </div>
+          </div>
+        </div>
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", flex:"1 1 280px", minWidth:260 }}>
+          <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)", marginBottom:12 }}>Estoque consolidado</div>
+          <table style={_table}>
+            <thead><tr>{["Depósito","Estoque","Custo","Valor"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+            <tbody>
+              <tr>
+                <td style={{ ..._td, fontWeight:700, color:"var(--text-strong)" }}>Estoque geral</td>
+                <td style={{ ..._td, fontWeight:700 }}>{totEst}</td>
+                <td style={_tdMono}>{fmt(totCusto)}</td>
+                <td style={_tdMono}>{fmt(totValor)}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div style={{ fontSize:11, color:"var(--text-3)", marginTop:10, lineHeight:1.5 }}>A separação por depósito (Distribue, Full, etc.) aparece aqui quando a integração de estoque por depósito for ativada. <b>Valor</b> = estoque × preço de venda; fica R$ 0,00 nos produtos sem preço de venda cadastrado.</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Sub-aba CLIENTES (recorrentes × novos) ───────────────────────────────────
+function ClientesDash({ enrichedOrders, user }){
+  const [aba,setAba]=useState("recorrentes"); const [busca,setBusca]=useState(""); const [cliSel,setCliSel]=useState(null);
+  var loja = (user && user.nickname) ? user.nickname : "Mercado Livre";
+  var mapa={};
+  (enrichedOrders||[]).filter(function(o){ return o.status!=="cancelled"; }).forEach(function(o){
+    var chave=String(o.buyerDoc||o.buyerName||o.buyerEmail||o.id); var q=o.qty||1;
+    var fat=(o.price||0)*q, custo=(o.cost||0)*q, contrib=fat-(o.fee||0)*q-(o.freteSeller||0)-custo-(o.imposto||0)*q;
+    if(!mapa[chave]) mapa[chave]={ nome:o.buyerName||"Cliente ML", fone:o.buyerPhone||"", pedidos:0, produtos:0, valor:0, custo:0, lucro:0, ordens:[] };
+    var c=mapa[chave]; c.pedidos+=1; c.produtos+=q; c.valor+=fat; c.custo+=custo; c.lucro+=contrib; if(!c.fone&&o.buyerPhone)c.fone=o.buyerPhone;
+    c.ordens.push({ data:o.date, titulo:o.title||"—", valor:fat, lucro:contrib, qtd:q });
+  });
+  var clientes=Object.keys(mapa).map(function(k){ var c=mapa[k]; c.recorrente=c.pedidos>=2; c.margBruta=c.valor?(c.valor-c.custo)/c.valor*100:0; c.pctLucro=c.valor?c.lucro/c.valor*100:0; return c; });
+  var rec=clientes.filter(function(c){return c.recorrente;}), nov=clientes.filter(function(c){return !c.recorrente;});
+  var totGeral=clientes.reduce(function(s,c){return s+c.valor;},0)||1;
+  function seg(arr){ var valor=arr.reduce(function(s,c){return s+c.valor;},0), ped=arr.reduce(function(s,c){return s+c.pedidos;},0), prod=arr.reduce(function(s,c){return s+c.produtos;},0);
+    return { valor:valor, ticket:arr.length?valor/arr.length:0, produtos:ped?prod/ped:0, share:valor/totGeral*100, n:arr.length }; }
+  var sRec=seg(rec), sNov=seg(nov);
+  var donut=[{ name:"Recorrentes", value:rec.length, cor:"#2E8B57" },{ name:"Novos", value:nov.length, cor:"#86E0A6" }].filter(function(d){return d.value>0;});
+  var alvo=(aba==="recorrentes"?rec:nov).slice().sort(function(a,b){return b.valor-a.valor;});
+  if(busca.trim()){ var qq=busca.trim().toLowerCase(); alvo=alvo.filter(function(c){ return c.nome.toLowerCase().indexOf(qq)>=0; }); }
+  var cols=["Nome","Loja","Produtos","Valor","Margem Bruta %","Lucro Venda","%","Celular"];
+  function rowsExport(){ return alvo.map(function(c){ return [c.nome, loja, c.produtos, c.valor.toFixed(2), c.margBruta.toFixed(2)+"%", c.lucro.toFixed(2), c.pctLucro.toFixed(2)+"%", c.fone||"—"]; }); }
+  function CardSeg(titulo, s, cor){ return <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", flex:"1 1 260px", minWidth:240 }}>
+    <div style={{ textAlign:"center", fontWeight:800, fontSize:16, color:"var(--text-strong)" }}>{titulo}</div>
+    <div style={{ textAlign:"center", fontWeight:800, fontSize:22, color:cor, margin:"4px 0 12px" }}>{fmt(s.valor)}</div>
+    <div style={{ display:"flex", justifyContent:"space-around", textAlign:"center", gap:8 }}>
+      <div><div style={{ fontWeight:800, color:"var(--text-strong)", fontSize:15 }}>{fmt(s.ticket)}</div><div style={{ fontSize:10, color:"var(--text-3)", textTransform:"uppercase" }}>Ticket médio</div></div>
+      <div><div style={{ fontWeight:800, color:"var(--text-strong)", fontSize:15 }}>{s.produtos.toFixed(2).replace(".",",")}</div><div style={{ fontSize:10, color:"var(--text-3)", textTransform:"uppercase" }}>Produtos</div></div>
+      <div><div style={{ fontWeight:800, color:"var(--text-strong)", fontSize:15 }}>{pct1(s.share)}</div><div style={{ fontSize:10, color:"var(--text-3)", textTransform:"uppercase" }}>Share</div></div>
+    </div>
+    <div style={{ textAlign:"center", fontSize:11, color:"var(--text-3)", marginTop:8 }}>{s.n} cliente(s)</div>
+  </div>; }
+  return (
+    <div style={{ padding:2 }}>
+      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Clientes</div>
+      <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Recorrentes (2+ pedidos) e novos (1 pedido), com faturamento e margem.</div>
+      <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:16 }}>
+        {CardSeg("Clientes Recorrentes", sRec, "#2E8B57")}
+        {CardSeg("Clientes Novos", sNov, "#0a9d4e")}
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", flex:"1 1 300px", minWidth:280 }}>
+          <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)", marginBottom:6 }}>Recorrentes × Novos</div>
+          {donut.length===0 ? <div style={{ color:"var(--text-3)", fontSize:13 }}>Sem clientes.</div> :
+          <ResponsiveContainer width="100%" height={190}>
+            <PieChart>
+              <Pie data={donut} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={78} label={function(e){ return e.value; }} stroke="none">
+                {donut.map(function(d,i){ return <Cell key={i} fill={d.cor} />; })}
+              </Pie>
+              <RTooltip formatter={function(v,n){ return [v+" cliente(s)", n]; }} />
+              <Legend wrapperStyle={{ fontSize:12 }} />
+            </PieChart>
+          </ResponsiveContainer>}
+        </div>
+      </div>
+      <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:10 }}>
+          <div style={{ display:"flex", gap:2, borderBottom:"1px solid var(--border)" }}>
+            {[["recorrentes","Clientes Recorrentes"],["novos","Clientes Novos"]].map(function(t){ var a=aba===t[0]; return <button key={t[0]} onClick={function(){ setAba(t[0]); }}
+              style={{ padding:"8px 16px", border:"none", borderBottom:a?"2px solid #0a9d4e":"2px solid transparent", marginBottom:-1, background:"transparent", color:a?"var(--text-strong)":"var(--text-3)", fontWeight:a?700:500, fontSize:13, cursor:"pointer" }}>{t[1]}</button>; })}
+          </div>
+          <BotoesExport nome="clientes" colunas={cols} linhas={rowsExport} />
+        </div>
+        <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Procurar cliente..."
+          style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"7px 10px", borderRadius:8, fontSize:12, minWidth:240, marginBottom:10 }} />
+        <div style={{ overflowX:"auto" }}>
+          <table style={_table}>
+            <thead><tr>{["Nome","Loja","Produtos","Valor","Margem Bruta %","Lucro Venda","%","Celular","Histórico"].map(function(h){ return <th key={h} style={{ ..._th, whiteSpace:"nowrap" }}>{h}</th>; })}</tr></thead>
+            <tbody>
+              {alvo.length===0 ? <tr><td style={_td} colSpan={9}>Nenhum cliente.</td></tr> :
+              alvo.slice(0,300).map(function(c,i){ return <tr key={i}>
+                <td style={{ ..._td, fontWeight:600, color:"var(--text-strong)", maxWidth:260, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.nome}</td>
+                <td style={_td}>{loja}</td>
+                <td style={_td}>{c.produtos}</td>
+                <td style={_tdMono}>{fmt(c.valor)}</td>
+                <td style={_td}>{pct1(c.margBruta)}</td>
+                <td style={{ ..._tdMono, fontWeight:700, color:c.lucro>=0?"#0a9d4e":"#FF5252" }}>{fmt(c.lucro)}</td>
+                <td style={{ ..._td, color:c.pctLucro>=0?"#0a9d4e":"#FF5252" }}>{pct1(c.pctLucro)}</td>
+                <td style={_td}>{c.fone||"—"}</td>
+                <td style={_td}><button onClick={function(){ setCliSel(c); }} style={{ ..._btnExp, padding:"5px 10px" }}>Ver Pedidos</button></td>
+              </tr>; })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {cliSel && <>
+        <div onClick={function(){ setCliSel(null); }} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.4)", zIndex:400 }} />
+        <div style={{ position:"fixed", top:0, right:0, bottom:0, width:440, maxWidth:"100vw", background:"var(--bg-2)", borderLeft:"1px solid var(--border)", boxShadow:"-8px 0 32px rgba(0,0,0,.28)", zIndex:401, overflowY:"auto", padding:"22px 24px" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, marginBottom:4 }}>
+            <div style={{ fontWeight:800, fontSize:17, color:"var(--text-strong)" }}>{cliSel.nome}</div>
+            <button onClick={function(){ setCliSel(null); }} style={{ background:"none", border:"none", color:"var(--text-3)", fontSize:22, cursor:"pointer" }}>×</button>
+          </div>
+          <div style={{ fontSize:12, color:"var(--text-3)", marginBottom:14 }}>{cliSel.pedidos} pedido(s) · {fmt(cliSel.valor)} · {cliSel.fone||"sem telefone"}</div>
+          {cliSel.ordens.slice().sort(function(a,b){return (b.data||"").localeCompare(a.data||"");}).map(function(od,i){ return <div key={i} style={{ padding:"10px 0", borderBottom:"1px solid var(--border-soft)" }}>
+            <div style={{ fontSize:12, color:"var(--text-2)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{od.titulo}</div>
+            <div style={{ display:"flex", justifyContent:"space-between", marginTop:3, fontSize:12 }}>
+              <span style={{ color:"var(--text-3)" }}>{fmtDate(od.data)||od.data} · {od.qtd}×</span>
+              <span style={{ color:"var(--text-strong)", fontWeight:700 }}>{fmt(od.valor)} <span style={{ color:od.lucro>=0?"#0a9d4e":"#FF5252" }}>({fmt(od.lucro)})</span></span>
+            </div>
+          </div>; })}
+        </div>
+      </>}
+    </div>
+  );
+}
+
+// ── Sub-aba CURVA ABC ────────────────────────────────────────────────────────
+function CurvaAbcDash({ enrichedOrders }){
+  const [periodo,setPeriodo]=useState("mesatual"); const [deData,setDeData]=useState(""); const [ateData,setAteData]=useState("");
+  const [aberto,setAberto]=useState({ A:true, B:false, C:false });
+  var base=filtrarPeriodo(enrichedOrders, periodo, deData, ateData);
+  var abc=curvaABC(base);
+  var grupos={ A:[], B:[], C:[] }; abc.forEach(function(x){ grupos[x.classe].push(x); });
+  var soma=function(arr){ return arr.reduce(function(s,x){ return s+x.fat; }, 0); };
+  var totFat=soma(abc)||1;
+  var cor={ A:"#86E0A6", B:"#3CB371", C:"#1E6B3A" };
+  var donut=[{ name:"Curva A", value:soma(grupos.A), cor:cor.A },{ name:"Curva B", value:soma(grupos.B), cor:cor.B },{ name:"Curva C", value:soma(grupos.C), cor:cor.C }].filter(function(d){ return d.value>0; });
+  function Accordion(classe){
+    var arr=grupos[classe], ab=aberto[classe];
+    return <div style={{ borderBottom:"1px solid var(--border-soft)" }}>
+      <button onClick={function(){ setAberto(function(s){ var n=Object.assign({},s); n[classe]=!n[classe]; return n; }); }}
+        style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 4px", background:"none", border:"none", cursor:"pointer" }}>
+        <span style={{ fontWeight:800, fontSize:15, color:cor[classe] }}>Curva {classe} <span style={{ color:"var(--text-3)", fontWeight:600, fontSize:12 }}>· {arr.length} SKU(s) · {fmt(soma(arr))}</span></span>
+        <span style={{ color:cor[classe], fontSize:14 }}>{ab?"▲":"▼"}</span>
+      </button>
+      {ab && <div style={{ overflowX:"auto", paddingBottom:8 }}>
+        <table style={_table}>
+          <thead><tr>{["Produto","Qtd","Faturamento","% acum."].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+          <tbody>
+            {arr.length===0 ? <tr><td style={_td} colSpan={4}>Sem produtos.</td></tr> :
+            arr.map(function(x,i){ return <tr key={i}>
+              <td style={{ ..._td, maxWidth:380, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)" }}>{x.titulo}</td>
+              <td style={_td}>{x.qtd}</td>
+              <td style={_tdMono}>{fmt(x.fat)}</td>
+              <td style={_td}>{x.pctAcc.toFixed(1)}%</td>
+            </tr>; })}
+          </tbody>
+        </table>
+      </div>}
+    </div>;
+  }
+  return (
+    <div style={{ padding:2 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:14 }}>
+        <div><div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Curva ABC</div>
+          <div style={{ fontSize:13, color:"var(--text-3)" }}>A = 80% do faturamento · B = próximos 15% · C = os 5% restantes.</div></div>
+        <BarraPeriodo periodo={periodo} setPeriodo={setPeriodo} deData={deData} setDeData={setDeData} ateData={ateData} setAteData={setAteData} />
+      </div>
+      <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:14 }}>
+        <ChartCard titulo="Gráfico da Curva ABC" sub="Faturamento por classe" minW={340} flex={1.6}>
+          {donut.length===0 ? <div style={{ color:"var(--text-3)", fontSize:13, padding:"30px 0", textAlign:"center" }}>Sem vendas no período.</div> :
+          <ResponsiveContainer width="100%" height={260}>
+            <PieChart>
+              <Pie data={donut} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100}
+                label={function(e){ return pct1(e.value/totFat*100); }} stroke="none">
+                {donut.map(function(d,i){ return <Cell key={i} fill={d.cor} />; })}
+              </Pie>
+              <RTooltip content={<TipMoeda />} />
+              <Legend wrapperStyle={{ fontSize:12 }} />
+            </PieChart>
+          </ResponsiveContainer>}
+        </ChartCard>
+        <div style={{ display:"flex", flexDirection:"column", gap:12, flex:"1 1 220px", minWidth:200 }}>
+          {["A","B","C"].map(function(cl){ return <div key={cl} style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ width:34, height:34, borderRadius:9, background:cor[cl], display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:800 }}>{cl}</div>
+            <div><div style={{ fontSize:12, color:"var(--text-3)" }}>Curva {cl}</div><div style={{ fontSize:18, fontWeight:800, color:"var(--text-strong)" }}>{grupos[cl].length} SKUs</div></div>
+          </div>; })}
+        </div>
+      </div>
+      <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"8px 18px" }}>
+        <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)", padding:"10px 4px 4px" }}>Curva ABC — produtos</div>
+        {Accordion("A")}{Accordion("B")}{Accordion("C")}
+      </div>
+    </div>
+  );
+}
+
+// ── Sub-aba METAS ────────────────────────────────────────────────────────────
+function MetasDash({ metas, salvar, enrichedOrders }){
+  const [f,setF]=useState({ nome:"", inicio:"", conclusao:"", segmentacao:"", valor:"" });
+  function set(k,v){ setF(function(s){ var n=Object.assign({},s); n[k]=v; return n; }); }
+  function add(){
+    if(!f.nome.trim()){ alert("Informe o nome da meta."); return; }
+    if(!f.valor){ alert("Informe o valor da meta."); return; }
+    var nova={ id:"meta_"+Date.now(), nome:f.nome.trim(), inicio:f.inicio, conclusao:f.conclusao, segmentacao:f.segmentacao.trim(), valor:parseFloat(String(f.valor).replace(",","."))||0 };
+    salvar([nova].concat(metas||[]));
+    setF({ nome:"", inicio:"", conclusao:"", segmentacao:"", valor:"" });
+  }
+  function excluir(id){ if(!window.confirm("Excluir esta meta?")) return; salvar((metas||[]).filter(function(m){ return m.id!==id; })); }
+  function realizado(m){
+    var ini=m.inicio||"0000-00-00", fim=m.conclusao||"9999-12-31", seg=(m.segmentacao||"").toLowerCase();
+    if(seg.indexOf("shopee")>=0) return 0; // ainda sem vendas Shopee
+    return (enrichedOrders||[]).filter(function(o){ if(o.status==="cancelled") return false; var dt=(o.date||"").slice(0,10); return dt>=ini && dt<=fim; })
+      .reduce(function(s,o){ return s+(o.price||0)*(o.qty||1); }, 0);
+  }
+  var lbl={ display:"block", fontSize:11, color:"var(--text-3)", fontWeight:600, marginBottom:4, textTransform:"uppercase", letterSpacing:.4 };
+  var campo={ width:"100%", background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 10px", borderRadius:8, fontSize:13 };
+  return (
+    <div style={{ padding:2 }}>
+      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Metas</div>
+      <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Defina metas de faturamento e acompanhe o realizado do período.</div>
+      <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", marginBottom:16 }}>
+        <div style={{ fontWeight:700, fontSize:14, color:"var(--text-strong)", marginBottom:12 }}>Nova meta</div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))", gap:12, alignItems:"end" }}>
+          <div style={{ gridColumn:"span 2", minWidth:200 }}><label style={lbl}>Nome da meta</label><input value={f.nome} onChange={function(e){ set("nome", e.target.value); }} placeholder="Ex.: Faturamento agosto" style={campo} /></div>
+          <div><label style={lbl}>Data de início</label><input type="date" value={f.inicio} onChange={function(e){ set("inicio", e.target.value); }} style={campo} /></div>
+          <div><label style={lbl}>Data de conclusão</label><input type="date" value={f.conclusao} onChange={function(e){ set("conclusao", e.target.value); }} style={campo} /></div>
+          <div><label style={lbl}>Segmentação</label>
+            <input list="dl-seg" value={f.segmentacao} onChange={function(e){ set("segmentacao", e.target.value); }} placeholder="Geral" style={campo} />
+            <datalist id="dl-seg"><option value="Geral" /><option value="Mercado Livre" /><option value="Shopee" /><option value="Por estado" /><option value="Por produto" /></datalist>
+          </div>
+          <div><label style={lbl}>Valor da meta (R$)</label><input type="number" step="0.01" value={f.valor} onChange={function(e){ set("valor", e.target.value); }} placeholder="0,00" style={campo} /></div>
+          <div><button onClick={add} style={{ width:"100%", background:"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"10px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Adicionar meta</button></div>
+        </div>
+      </div>
+      {(metas||[]).length===0 ? (
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"32px 18px", textAlign:"center", color:"var(--text-3)", fontSize:13 }}>Nenhuma meta cadastrada ainda. Crie a primeira acima.</div>
+      ) : (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(320px, 1fr))", gap:12 }}>
+          {(metas||[]).map(function(m){
+            var real=realizado(m), pctv=m.valor?Math.min(100, real/m.valor*100):0, bateu=real>=m.valor && m.valor>0;
+            return <div key={m.id} style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10 }}>
+                <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)" }}>{m.nome}</div>
+                <button onClick={function(){ excluir(m.id); }} title="Excluir" style={{ background:"none", border:"none", color:"var(--text-3)", cursor:"pointer", fontSize:14 }}>✕</button>
+              </div>
+              <div style={{ fontSize:12, color:"var(--text-3)", marginTop:2 }}>
+                {(m.inicio? (fmtDate(m.inicio)||m.inicio) : "—")} até {(m.conclusao? (fmtDate(m.conclusao)||m.conclusao) : "—")}{m.segmentacao ? " · "+m.segmentacao : ""}
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", margin:"12px 0 6px" }}>
+                <span style={{ fontSize:20, fontWeight:800, color:"var(--text-strong)" }}>{fmt(real)}</span>
+                <span style={{ fontSize:12, color:"var(--text-3)" }}>de {fmt(m.valor)}</span>
+              </div>
+              <div style={{ height:10, borderRadius:6, background:"var(--surface-3)", overflow:"hidden" }}>
+                <div style={{ width:pctv+"%", height:"100%", background: bateu?"#0a9d4e":"#1976FF", transition:"width .3s" }} />
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", marginTop:6, fontSize:12 }}>
+                <span style={{ color: bateu?"#0a9d4e":"var(--text-2)", fontWeight:700 }}>{pct1(m.valor?real/m.valor*100:0)}</span>
+                <span style={{ color:"var(--text-3)" }}>{bateu ? "🎯 Meta batida!" : "Faltam "+fmt(Math.max(0, m.valor-real))}</span>
+              </div>
+            </div>;
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Wrapper do Dashboard: barra de sub-abas + conteúdo.
+function DashboardTab({ enrichedOrders, produtos, user, metas, salvarMetas }){
+  const [sub, setSub] = useState("geral");
+  var subs=[["geral","Visão geral"],["estados","Estados"],["margem","Margem por pedido"],["estoque","Estoque de produtos"],["clientes","Clientes"],["abc","Curva ABC"],["metas","Metas"]];
+  return (
+    <div style={{ padding:"2px" }}>
+      <div style={{ display:"flex", gap:2, borderBottom:"2px solid var(--border)", marginBottom:14, overflowX:"auto" }}>
+        {subs.map(function(t){ var a=sub===t[0]; return <button key={t[0]} onClick={function(){ setSub(t[0]); }}
+          style={{ padding:"10px 16px", border:"none", borderBottom:a?"2px solid #1976FF":"2px solid transparent", marginBottom:-2, background:"transparent", color:a?"var(--text-strong)":"var(--text-3)", fontWeight:a?700:500, fontSize:13, cursor:"pointer", whiteSpace:"nowrap", fontFamily:"inherit" }}>{t[1]}</button>; })}
+      </div>
+      {sub==="geral" && <DashboardGeral enrichedOrders={enrichedOrders} />}
+      {sub==="estados" && <EstadosDash enrichedOrders={enrichedOrders} />}
+      {sub==="margem" && <MargemPedidoDash enrichedOrders={enrichedOrders} />}
+      {sub==="estoque" && <EstoqueDash produtos={produtos} />}
+      {sub==="clientes" && <ClientesDash enrichedOrders={enrichedOrders} user={user} />}
+      {sub==="abc" && <CurvaAbcDash enrichedOrders={enrichedOrders} />}
+      {sub==="metas" && <MetasDash metas={metas} salvar={salvarMetas} enrichedOrders={enrichedOrders} />}
+    </div>
+  );
+}
+
+function DashboardGeral({ enrichedOrders }) {
   const [periodo, setPeriodo] = useState("30"); // hoje | 7 | 30 | mesatual | custom
   const [deData, setDeData] = useState("");
   const [ateData, setAteData] = useState("");
@@ -5466,6 +6068,16 @@ export default function App() {
     try { kvSyncPush("produtos_cadastro", lista); } catch(e) {}
   }
 
+  // Metas comerciais (aba Dashboard → Metas): estado + localStorage + sync pro servidor.
+  const [metas, setMetas] = useState(() => {
+    try { var v = JSON.parse(localStorage.getItem("metas") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
+  });
+  function salvarMetas(lista) {
+    setMetas(lista);
+    try { localStorage.setItem("metas", JSON.stringify(lista)); } catch(e) {}
+    try { kvSyncPush("metas", lista); } catch(e) {}
+  }
+
   // Sincroniza automaticamente o estoque mínimo definido no cadastro de Produtos
   // (campo estoqueMinimo) com a coluna "Mín" da aba Anúncios, usando o MLB vinculado.
   useEffect(function(){
@@ -5690,6 +6302,7 @@ export default function App() {
     precos_venda_config: mesclarSetter(setPrecosVendaConfig),
     precos_pendentes_ml: mesclarSetter(setPendentesAtualizacao),
     produtos_cadastro: setProdutos,
+    metas: setMetas,
     fornecedores_cadastro: setFornecedores,
     contas_pagar: setContasPagar,
     pedidos_compra: setPedidosCompra,
@@ -7225,7 +7838,7 @@ export default function App() {
           <AdminTab currentUser={currentUser} />
         )}
         {tab === "dashboard" && (
-          <DashboardTab enrichedOrders={enrichedOrders} />
+          <DashboardTab enrichedOrders={enrichedOrders} produtos={produtos} user={user} metas={metas} salvarMetas={salvarMetas} />
         )}
         {tab === "produtos" && <ProdutosTab produtos={produtos} salvar={salvarProdutos} />}
         {tab === "estoque" && <EstoqueTab produtos={produtos} />}

@@ -13,6 +13,7 @@ import {
   verificarSessao,
   semSenha,
 } from "./_lib/auth.js";
+import { dbEnabled, syncGet, syncSet } from "./_lib/db.js";
 
 // Chaves de dados de negócio que ficam sincronizadas entre TODOS os usuários (não só no
 // navegador de quem editou) — cada uma vira uma entrada no KV, prefixada para não colidir
@@ -121,6 +122,14 @@ export default async function handler(req, res) {
         || ("u-" + sessao.uid);
       return "mlmargem_sync_acc_" + conta + "_" + key;
     }
+    // Escopo (ns) usado no Postgres (flow.sync_store): 'shared' para chaves da equipe,
+    // senão a CONTA do ML — mesma regra de isolamento do kvKeyPara.
+    function nsScopePara(key, nsCliente) {
+      if (CHAVES_COMPARTILHADAS.includes(key)) return "shared";
+      return (cookiesSync.ml_user_id && String(cookiesSync.ml_user_id).trim())
+        || (nsCliente && String(nsCliente).trim())
+        || ("u-" + sessao.uid);
+    }
 
     if (req.method === "GET") {
       const qs = new URLSearchParams(path.split("?")[1] || "");
@@ -128,6 +137,18 @@ export default async function handler(req, res) {
       const ns = qs.get("ns");
       if (!key || !SYNC_KEYS_PERMITIDAS.includes(key)) {
         return res.status(400).json({ error: "Chave de sincronização inválida" });
+      }
+      // Dual-mode: Postgres (flow.sync_store) como fonte primária; se a chave ainda não
+      // existir lá (dado antigo), lê do KV como fallback (read-through). Qualquer erro no
+      // Postgres cai no KV — o _sync nunca quebra por causa do banco novo.
+      if (dbEnabled()) {
+        try {
+          let value = await syncGet(nsScopePara(key, ns), key);
+          if (value === null || value === undefined) {
+            value = await kvGet(kvKeyPara(key, ns));
+          }
+          return res.status(200).json({ key, value: value ?? null });
+        } catch (e) { /* cai no KV abaixo */ }
       }
       const value = await kvGet(kvKeyPara(key, ns));
       return res.status(200).json({ key, value: value ?? null });
@@ -138,6 +159,15 @@ export default async function handler(req, res) {
       const key = body.key;
       if (!key || !SYNC_KEYS_PERMITIDAS.includes(key)) {
         return res.status(400).json({ error: "Chave de sincronização inválida" });
+      }
+      // Dual-write durante a transição: grava no Postgres E mantém o KV atualizado,
+      // para um rollback seguro. Se o Postgres falhar, ainda grava no KV.
+      if (dbEnabled()) {
+        try {
+          await syncSet(nsScopePara(key, body.ns), key, body.value);
+          try { await kvSet(kvKeyPara(key, body.ns), body.value); } catch (e) {}
+          return res.status(200).json({ ok: true });
+        } catch (e) { /* cai no KV abaixo */ }
       }
       await kvSet(kvKeyPara(key, body.ns), body.value);
       return res.status(200).json({ ok: true });

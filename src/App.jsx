@@ -1528,27 +1528,111 @@ function ContasPagarTab({ contas, salvar }) {
 }
 
 // Modal de pedido de compra.
+// Novo pedido de compra — formulário em TELA CHEIA (estilo Bling).
 function PedidoCompraModal({ pedido, onSave, onClose }) {
-  const [f, setF] = useState(function(){ return Object.assign({ fornecedor:"", itens:"", valor:"", data: new Date().toISOString().slice(0,10), status:"aberto" }, pedido || {}); });
+  const [f, setF] = useState(function(){ return Object.assign({ fornecedor:"", data:new Date().toISOString().slice(0,10), dataPrevista:"", numero:"", ordem:"", condicao:"", categoria:"Compras de fornecedores", desconto:"0", frete:"", transportador:"", freteConta:"CIF", obs:"", obsInterna:"", status:"aberto" }, pedido || {}); });
+  const [itens, setItens] = useState(function(){ if (pedido && Array.isArray(pedido.itensList) && pedido.itensList.length) return pedido.itensList; return [{ nome:"", codigo:"", un:"UN", qtd:"", precoUn:"" }]; });
   function set(k,v){ setF(function(s){ return Object.assign({}, s, { [k]:v }); }); }
+  function setItem(i,k,v){ setItens(function(arr){ var n=arr.slice(); n[i]=Object.assign({},n[i],{ [k]:v }); return n; }); }
+  function addItem(){ setItens(function(a){ return a.concat([{ nome:"", codigo:"", un:"UN", qtd:"", precoUn:"" }]); }); }
+  function delItem(i){ setItens(function(a){ return a.length>1 ? a.filter(function(_,j){ return j!==i; }) : a; }); }
+  var totalProdutos = itens.reduce(function(s,it){ return s + (parseFloat(it.qtd)||0)*(parseFloat(it.precoUn)||0); }, 0);
+  var somaQtd = itens.reduce(function(s,it){ return s + (parseFloat(it.qtd)||0); }, 0);
+  var nItens = itens.filter(function(it){ return it.nome || it.codigo; }).length;
+  var desconto = parseFloat(f.desconto)||0, frete = parseFloat(f.frete)||0;
+  var totalPedido = Math.max(0, totalProdutos - desconto + frete);
   var novo = !pedido || !pedido.id;
-  function salvar(){ var p = Object.assign({}, f); if (!p.fornecedor && !p.itens){ alert("Informe fornecedor ou itens."); return; } if (!p.id) p.id = "pc_" + Date.now(); onSave(p); }
-  var campo = { width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"10px 12px", borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box" };
-  var lbl = { fontSize:11, color:"var(--text-3)", fontWeight:600, textTransform:"none", letterSpacing:.4, marginBottom:4, display:"block" };
+  function salvar(){
+    var limpos = itens.filter(function(it){ return it.nome || it.codigo; });
+    if (!f.fornecedor && !limpos.length){ alert("Informe o fornecedor e ao menos um item."); return; }
+    var resumo = limpos.map(function(it){ return (it.qtd||"?")+"x "+(it.nome||it.codigo); }).join(", ");
+    var p = Object.assign({}, f, { itensList:limpos, itens:resumo, valor: totalPedido.toFixed(2) });
+    if (!p.id) p.id = "pc_"+Date.now();
+    onSave(p);
+  }
+  var campo = { width:"100%", background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 11px", borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box" };
+  var readonly = { ...campo, background:"var(--bg-2)", color:"var(--text-2)" };
+  var lbl = { fontSize:11.5, color:"var(--text-3)", fontWeight:600, marginBottom:4, display:"block" };
+  var sec = { fontWeight:600, fontSize:15, color:"var(--text-strong)", margin:"22px 0 12px" };
+  var cell = { padding:"6px 6px", borderBottom:"1px solid var(--border-soft)" };
+  var inCell = { width:"100%", background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"7px 8px", borderRadius:7, fontSize:12.5, outline:"none", boxSizing:"border-box" };
   return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:600, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }} onClick={onClose}>
-      <div onClick={function(e){ e.stopPropagation(); }} style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:14, width:460, maxWidth:"100%", padding:22 }}>
-        <div style={{ fontWeight:600, fontSize:17, color:"var(--text-strong)", marginBottom:16 }}>{novo ? "Novo pedido de compra" : "Editar pedido"}</div>
-        <div style={{ marginBottom:10 }}><label style={lbl}>Fornecedor</label><input value={f.fornecedor || ""} onChange={function(e){ set("fornecedor", e.target.value); }} style={campo} /></div>
-        <div style={{ marginBottom:10 }}><label style={lbl}>Itens</label><textarea value={f.itens || ""} onChange={function(e){ set("itens", e.target.value); }} rows={3} style={{ ...campo, resize:"vertical" }} /></div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:18 }}>
-          <div><label style={lbl}>Data</label><input type="date" value={f.data || ""} onChange={function(e){ set("data", e.target.value); }} style={campo} /></div>
-          <div><label style={lbl}>Valor (R$)</label><input type="number" step="0.01" value={f.valor || ""} onChange={function(e){ set("valor", e.target.value); }} style={campo} /></div>
-          <div><label style={lbl}>Situação</label><select value={f.status || "aberto"} onChange={function(e){ set("status", e.target.value); }} style={campo}><option value="aberto">Em aberto</option><option value="recebido">Recebido</option><option value="cancelado">Cancelado</option></select></div>
+    <div style={{ position:"fixed", inset:0, background:"var(--bg)", zIndex:600, overflowY:"auto" }}>
+      <div style={{ maxWidth:1120, margin:"0 auto", padding:"20px 22px 60px" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap", position:"sticky", top:0, background:"var(--bg)", padding:"6px 0 12px", zIndex:2, borderBottom:"1px solid var(--border-soft)", marginBottom:8 }}>
+          <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>{novo ? "Pedido de compra" : "Editar pedido de compra"}</div>
+          <div style={{ display:"flex", gap:10 }}>
+            <button onClick={onClose} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"10px 22px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Cancelar</button>
+            <button onClick={salvar} style={{ background:"#0a9d4e", border:"none", color:"#fff", fontWeight:600, padding:"10px 26px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Salvar</button>
+          </div>
         </div>
-        <div style={{ display:"flex", gap:8 }}>
-          <button onClick={onClose} style={{ flex:1, background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
-          <button onClick={salvar} style={{ flex:2, background:"#768692", border:"none", color:"#fff", fontWeight:500, padding:"11px", borderRadius:10, cursor:"pointer" }}>Salvar</button>
+        <div style={{ textAlign:"right", fontSize:11, color:"#FF5252", marginBottom:4 }}>(*) Campos obrigatórios</div>
+
+        <div style={sec}>Fornecedor</div>
+        <div><label style={lbl}>Fornecedor <span style={{ color:"#FF5252" }}>*</span></label><input value={f.fornecedor||""} onChange={function(e){ set("fornecedor", e.target.value); }} placeholder="Nome do fornecedor" style={campo} /></div>
+
+        <div style={sec}>Itens do pedido de compra</div>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:720 }}>
+            <thead><tr>{["#","Item","Código","Un","Qtde","Preço un","Preço total",""].map(function(h){ return <th key={h} style={{ ...cell, textAlign:"left", fontSize:11, color:"var(--text-3)", fontWeight:600 }}>{h}</th>; })}</tr></thead>
+            <tbody>
+              {itens.map(function(it,i){ var tot=(parseFloat(it.qtd)||0)*(parseFloat(it.precoUn)||0);
+                return <tr key={i}>
+                  <td style={{ ...cell, color:"var(--text-3)", fontSize:12 }}>{i+1}</td>
+                  <td style={cell}><input value={it.nome||""} onChange={function(e){ setItem(i,"nome",e.target.value); }} placeholder="Digite parte do nome ou código" style={inCell} /></td>
+                  <td style={{ ...cell, width:120 }}><input value={it.codigo||""} onChange={function(e){ setItem(i,"codigo",e.target.value); }} style={inCell} /></td>
+                  <td style={{ ...cell, width:64 }}><input value={it.un||""} onChange={function(e){ setItem(i,"un",e.target.value); }} style={inCell} /></td>
+                  <td style={{ ...cell, width:80 }}><input type="number" value={it.qtd||""} onChange={function(e){ setItem(i,"qtd",e.target.value); }} style={inCell} /></td>
+                  <td style={{ ...cell, width:100 }}><input type="number" step="0.01" value={it.precoUn||""} onChange={function(e){ setItem(i,"precoUn",e.target.value); }} style={inCell} /></td>
+                  <td style={{ ...cell, width:110, fontVariantNumeric:"tabular-nums", color:"var(--text-strong)", fontSize:12.5 }}>{fmt(tot)}</td>
+                  <td style={{ ...cell, width:34 }}><button onClick={function(){ delItem(i); }} title="Remover" style={{ background:"none", border:"none", color:"#FF5252", cursor:"pointer", fontSize:14 }}>🗑</button></td>
+                </tr>;
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ textAlign:"right", marginTop:8 }}><button onClick={addItem} style={{ background:"none", border:"none", color:"#0a9d4e", fontWeight:600, cursor:"pointer", fontSize:13 }}>+ Adicionar outro item</button></div>
+
+        <div style={sec}>Totais da compra</div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12 }}>
+          <div><label style={lbl}>Total dos produtos</label><input readOnly value={fmt(totalProdutos)} style={readonly} /></div>
+          <div><label style={lbl}>Desconto</label><input type="number" step="0.01" value={f.desconto||""} onChange={function(e){ set("desconto", e.target.value); }} style={campo} /></div>
+          <div><label style={lbl}>Frete</label><input type="number" step="0.01" value={f.frete||""} onChange={function(e){ set("frete", e.target.value); }} style={campo} /></div>
+          <div><label style={lbl}>Total do pedido</label><input readOnly value={fmt(totalPedido)} style={{ ...readonly, fontWeight:700, color:"var(--text-strong)" }} /></div>
+          <div><label style={lbl}>Nº de itens</label><input readOnly value={String(nItens)} style={readonly} /></div>
+          <div><label style={lbl}>Soma das qtdes</label><input readOnly value={String(somaQtd)} style={readonly} /></div>
+        </div>
+
+        <div style={sec}>Detalhes da compra</div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12 }}>
+          <div><label style={lbl}>Número do pedido</label><input value={f.numero||""} onChange={function(e){ set("numero", e.target.value); }} style={campo} /></div>
+          <div><label style={lbl}>Ordem de compra</label><input value={f.ordem||""} onChange={function(e){ set("ordem", e.target.value); }} style={campo} /></div>
+          <div><label style={lbl}>Data da compra</label><input type="date" value={f.data||""} onChange={function(e){ set("data", e.target.value); }} style={campo} /></div>
+          <div><label style={lbl}>Data prevista</label><input type="date" value={f.dataPrevista||""} onChange={function(e){ set("dataPrevista", e.target.value); }} style={campo} /></div>
+        </div>
+
+        <div style={sec}>Pagamento</div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:12 }}>
+          <div><label style={lbl}>Condição de pagamento</label><input value={f.condicao||""} onChange={function(e){ set("condicao", e.target.value); }} placeholder="Ex.: 30/60/90" style={campo} /></div>
+          <div><label style={lbl}>Categoria</label><input value={f.categoria||""} onChange={function(e){ set("categoria", e.target.value); }} style={campo} /></div>
+          <div><label style={lbl}>Situação</label><select value={f.status||"aberto"} onChange={function(e){ set("status", e.target.value); }} style={campo}><option value="aberto">Em aberto</option><option value="recebido">Recebido</option><option value="cancelado">Cancelado</option></select></div>
+        </div>
+
+        <div style={sec}>Transportador</div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:12 }}>
+          <div><label style={lbl}>Nome</label><input value={f.transportador||""} onChange={function(e){ set("transportador", e.target.value); }} style={campo} /></div>
+          <div><label style={lbl}>Frete por conta</label><select value={f.freteConta||"CIF"} onChange={function(e){ set("freteConta", e.target.value); }} style={campo}><option value="CIF">0 - Remetente (CIF)</option><option value="FOB">1 - Destinatário (FOB)</option></select></div>
+        </div>
+
+        <div style={sec}>Dados adicionais</div>
+        <div style={{ display:"grid", gap:12 }}>
+          <div><label style={lbl}>Observações</label><textarea value={f.obs||""} onChange={function(e){ set("obs", e.target.value); }} rows={3} style={{ ...campo, resize:"vertical" }} /></div>
+          <div><label style={lbl}>Observações internas</label><textarea value={f.obsInterna||""} onChange={function(e){ set("obsInterna", e.target.value); }} rows={3} style={{ ...campo, resize:"vertical" }} /></div>
+        </div>
+
+        <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:24 }}>
+          <button onClick={onClose} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"10px 22px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Cancelar</button>
+          <button onClick={salvar} style={{ background:"#0a9d4e", border:"none", color:"#fff", fontWeight:600, padding:"10px 26px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Salvar</button>
         </div>
       </div>
     </div>
@@ -1558,6 +1642,11 @@ function PedidoCompraModal({ pedido, onSave, onClose }) {
 function ComprasTab({ produtos, pedidos, salvar }) {
   const [modal, setModal] = useState(null);
   const [verSug, setVerSug] = useState(false);
+  const [mostrarFiltros, setMostrarFiltros] = useState(true);
+  const [mostrarAcoes, setMostrarAcoes] = useState(true);
+  const [busca, setBusca] = useState("");
+  const [fSituacao, setFSituacao] = useState("todas");
+  const [fProduto, setFProduto] = useState("");
   var sugestoes = (produtos || []).filter(function(p){ var a = parseInt(p.estoqueAtual) || 0, m = parseInt(p.estoqueMinimo) || 0; return m > 0 && a <= m; });
   var abertos = (pedidos || []).filter(function(x){ return x.status !== "recebido" && x.status !== "cancelado"; });
   var valorAberto = abertos.reduce(function(s,x){ return s + (parseFloat(x.valor) || 0); }, 0);
@@ -1573,55 +1662,110 @@ function ComprasTab({ produtos, pedidos, salvar }) {
   function receber(p){ salvar((pedidos || []).map(function(x){ return x.id === p.id ? Object.assign({}, x, { status:"recebido" }) : x; })); }
   var badgeP = { aberto:["#FFC107","rgba(255,193,7,.14)","Em aberto"], recebido:["#0a9d4e","rgba(10,157,78,.14)","Recebido"], cancelado:["var(--text-3)","var(--surface-3)","Cancelado"] };
   var pedidosOrd = (pedidos || []).slice().sort(function(a,b){ return (b.data || "").localeCompare(a.data || ""); });
+  var lista = pedidosOrd.filter(function(p){
+    if (fSituacao!=="todas" && (p.status||"aberto")!==fSituacao) return false;
+    if (fProduto && String(p.itens||"").toLowerCase().indexOf(fProduto.toLowerCase())<0) return false;
+    var q=busca.trim().toLowerCase();
+    if (q && String(p.fornecedor||"").toLowerCase().indexOf(q)<0 && String(p.numero||"").toLowerCase().indexOf(q)<0 && String(p.itens||"").toLowerCase().indexOf(q)<0) return false;
+    return true;
+  });
+  var valorTotalLista = lista.reduce(function(s,p){ return s+(parseFloat(p.valor)||0); }, 0);
+  var temFiltro = fSituacao!=="todas" || fProduto || busca;
+  function limpar(){ setFSituacao("todas"); setFProduto(""); setBusca(""); }
+  function exportarCompras(){ baixarCSV("pedidos-compra", ["Data","Fornecedor","Nº pedido","Itens","Valor","Situação"], lista.map(function(p){ return [p.data||"", p.fornecedor||"", p.numero||"", p.itens||"", (parseFloat(p.valor)||0).toFixed(2), p.status||"aberto"]; })); }
+  var selFiltro = { width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"7px 9px", borderRadius:8, fontSize:12.5 };
+  var acaoItem = { background:"none", border:"none", textAlign:"left", padding:"9px 10px", borderRadius:7, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" };
+  var filtBtn = { background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"9px 12px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" };
   return (
     <div style={{ padding:2 }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap" }}>
-        <div>
-          <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Compras</div>
-          <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Pedidos aos fornecedores e sugestão de reposição.</div>
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12, flexWrap:"wrap" }}>
+        <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Pedidos de compra</div>
+        <button onClick={function(){ setMostrarFiltros(function(v){return !v;}); }} style={{ ...filtBtn, background: mostrarFiltros?"rgba(118,133,146,.14)":"var(--surface)" }}>⚙ Filtros</button>
+        <div style={{ position:"relative", flex:1, minWidth:220, maxWidth:520 }}>
+          <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:"var(--text-3)", fontSize:13 }}>🔍</span>
+          <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Pesquisa por nome, número do pedido ou item" style={{ width:"100%", background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 12px 9px 34px", borderRadius:9, fontSize:13, outline:"none" }} />
         </div>
-        <div style={{ display:"flex", gap:8 }}>
-          <button onClick={function(){ setVerSug(function(v){ return !v; }); }} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"9px 16px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>Sugerir reposição{sugestoes.length ? " (" + sugestoes.length + ")" : ""}</button>
-          <button onClick={function(){ setModal({}); }} style={{ background:"#768692", border:"none", color:"#fff", fontWeight:500, padding:"9px 18px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>+ Novo pedido</button>
-        </div>
+        <div style={{ flex:1 }} />
+        <button onClick={function(){ setVerSug(function(v){ return !v; }); }} style={filtBtn}>Sugerir reposição{sugestoes.length ? " ("+sugestoes.length+")" : ""}</button>
+        <button onClick={function(){ setMostrarAcoes(function(v){return !v;}); }} style={filtBtn}>Ações</button>
       </div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:12, marginBottom:14 }}>
-        {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
-      </div>
-      {verSug && (
-        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 18px", marginBottom:14 }}>
-          <div style={{ fontWeight:500, fontSize:14, color:"var(--text-strong)", marginBottom:10 }}>Sugestão de reposição (abaixo do estoque mínimo)</div>
-          {sugestoes.length === 0 ? <div style={{ color:"var(--text-3)", fontSize:13 }}>Nenhum produto abaixo do mínimo.</div> :
-            sugestoes.slice(0,50).map(function(p,i){ return <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"7px 0", borderBottom: i < Math.min(sugestoes.length,50)-1 ? "1px solid var(--border-soft)" : "none", fontSize:13 }}>
-              <span style={{ color:"var(--text-2)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{nomeProd(p)}</span>
-              <span style={{ color:"#FFC107", fontWeight:600, flexShrink:0, marginLeft:12 }}>{parseInt(p.estoqueAtual)||0} / mín {parseInt(p.estoqueMinimo)||0}</span>
-            </div>; })}
+
+      <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
+        {mostrarFiltros && (
+          <div style={{ width:230, flexShrink:0, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px", display:"flex", flexDirection:"column", gap:11 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <span style={{ fontWeight:600, fontSize:14, color:"var(--text-strong)" }}>Filtrar</span>
+              {temFiltro && <button onClick={limpar} style={{ background:"none", border:"none", color:"#768592", cursor:"pointer", fontSize:12 }}>Limpar</button>}
+            </div>
+            <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Situação</div><select value={fSituacao} onChange={function(e){ setFSituacao(e.target.value); }} style={selFiltro}><option value="todas">Todas</option><option value="aberto">Em aberto</option><option value="recebido">Recebido</option><option value="cancelado">Cancelado</option></select></div>
+            <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Produto</div><input value={fProduto} onChange={function(e){ setFProduto(e.target.value); }} placeholder="Item do pedido" style={selFiltro} /></div>
+            <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Lote / Observação</div><input disabled placeholder="Indisponível" style={{ ...selFiltro, opacity:.45 }} /></div>
+            <button onClick={function(){}} style={{ background:"var(--surface)", border:"1px solid #0a9d4e", color:"#0a9d4e", fontWeight:600, padding:"9px", borderRadius:9, cursor:"pointer", fontSize:13, marginTop:2 }}>Filtrar</button>
+            <button onClick={limpar} style={{ background:"none", border:"none", color:"#0a9d4e", fontWeight:600, cursor:"pointer", fontSize:12.5 }}>Limpar filtros</button>
+          </div>
+        )}
+
+        <div style={{ flex:1, minWidth:0 }}>
+          {verSug && (
+            <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 18px", marginBottom:12 }}>
+              <div style={{ fontWeight:600, fontSize:14, color:"var(--text-strong)", marginBottom:10 }}>Sugestão de reposição (abaixo do estoque mínimo)</div>
+              {sugestoes.length === 0 ? <div style={{ color:"var(--text-3)", fontSize:13 }}>Nenhum produto abaixo do mínimo.</div> :
+                sugestoes.slice(0,50).map(function(p,i){ return <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"7px 0", borderBottom: i < Math.min(sugestoes.length,50)-1 ? "1px solid var(--border-soft)" : "none", fontSize:13 }}>
+                  <span style={{ color:"var(--text-2)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{nomeProd(p)}</span>
+                  <span style={{ color:"#FFC107", fontWeight:600, flexShrink:0, marginLeft:12 }}>{parseInt(p.estoqueAtual)||0} / mín {parseInt(p.estoqueMinimo)||0}</span>
+                </div>; })}
+            </div>
+          )}
+          {lista.length === 0 ? (
+            <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"60px 20px", textAlign:"center" }}>
+              <div style={{ fontSize:40, marginBottom:10 }}>🗎</div>
+              <div style={{ fontWeight:600, fontSize:16, color:"#0a9d4e" }}>Nenhum resultado encontrado.</div>
+              <div style={{ fontSize:13, color:"var(--text-3)", marginTop:4 }}>Crie um pedido em "Incluir pedido" ou ajuste os filtros.</div>
+            </div>
+          ) : (
+            <div style={_tableWrap}>
+              <table style={_table}>
+                <thead><tr>{["Data","Fornecedor","Itens","Valor","Situação","Ações"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+                <tbody>
+                  {lista.map(function(p,i){
+                    var b = badgeP[p.status] || badgeP.aberto;
+                    return <tr key={p.id || i}>
+                      <td style={_td}>{p.data ? (fmtDate(p.data)||p.data) : "—"}</td>
+                      <td style={{ ..._td, color:"var(--text-strong)" }}>{p.fornecedor || "—"}</td>
+                      <td style={{ ..._td, maxWidth:260, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.itens || "—"}</td>
+                      <td style={{ ..._tdMono, fontWeight:600 }}>{fmt(parseFloat(p.valor) || 0)}</td>
+                      <td style={_td}><span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
+                      <td style={_td}>
+                        <div style={{ display:"flex", gap:8 }}>
+                          {p.status === "aberto" && <button onClick={function(){ receber(p); }} style={{ background:"rgba(10,157,78,.12)", border:"none", color:"#0a9d4e", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Receber</button>}
+                          <button onClick={function(){ setModal(p); }} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Editar</button>
+                          <button onClick={function(){ excluir(p); }} style={{ background:"rgba(255,82,82,.1)", border:"none", color:"#FF5252", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Excluir</button>
+                        </div>
+                      </td>
+                    </tr>;
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-      )}
-      <div style={_tableWrap}>
-        <table style={_table}>
-          <thead><tr>{["Data","Fornecedor","Itens","Valor","Situação","Ações"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
-          <tbody>
-            {pedidosOrd.map(function(p,i){
-              var b = badgeP[p.status] || badgeP.aberto;
-              return <tr key={p.id || i}>
-                <td style={_td}>{p.data || "—"}</td>
-                <td style={{ ..._td, color:"var(--text-strong)" }}>{p.fornecedor || "—"}</td>
-                <td style={{ ..._td, maxWidth:240, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.itens || "—"}</td>
-                <td style={{ ..._td, fontWeight:500 }}>{fmt(parseFloat(p.valor) || 0)}</td>
-                <td style={_td}><span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
-                <td style={_td}>
-                  <div style={{ display:"flex", gap:8 }}>
-                    {p.status === "aberto" && <button onClick={function(){ receber(p); }} style={{ background:"rgba(10,157,78,.12)", border:"none", color:"#0a9d4e", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Receber</button>}
-                    <button onClick={function(){ setModal(p); }} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Editar</button>
-                    <button onClick={function(){ excluir(p); }} style={{ background:"rgba(255,82,82,.1)", border:"none", color:"#FF5252", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Excluir</button>
-                  </div>
-                </td>
-              </tr>;
-            })}
-          </tbody>
-        </table>
-        {pedidosOrd.length === 0 && <div style={{ padding:24, textAlign:"center", color:"var(--text-3)" }}>Nenhum pedido de compra. Use "+ Novo pedido".</div>}
+
+        {mostrarAcoes && (
+          <div style={{ width:236, flexShrink:0, display:"flex", flexDirection:"column", gap:8 }}>
+            <button onClick={function(){ setModal({}); }} style={{ background:"#0a9d4e", border:"none", color:"#fff", fontWeight:600, padding:"11px", borderRadius:9, cursor:"pointer", fontSize:13.5 }}>+ Incluir pedido</button>
+            <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"6px", display:"flex", flexDirection:"column" }}>
+              <button onClick={exportarCompras} style={acaoItem}>Exportar para planilha</button>
+              <button onClick={function(){ window.print(); }} style={acaoItem}>Imprimir</button>
+            </div>
+            <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"12px 14px" }}>
+              <div style={{ fontWeight:600, fontSize:13, color:"var(--text-strong)", marginBottom:8 }}>Informações</div>
+              <div style={{ fontSize:12, color:"var(--text-3)" }}>Quantidade de pedidos</div>
+              <div style={{ fontSize:20, fontWeight:600, color:"#0a9d4e", marginBottom:8 }}>{lista.length}</div>
+              <div style={{ fontSize:12, color:"var(--text-3)" }}>Valor total</div>
+              <div style={{ fontSize:20, fontWeight:600, color:"#0a9d4e" }}>{fmt(valorTotalLista)}</div>
+            </div>
+          </div>
+        )}
       </div>
       {modal && <PedidoCompraModal pedido={modal} onSave={salvarPedido} onClose={function(){ setModal(null); }} />}
     </div>
@@ -2269,41 +2413,12 @@ function HomeTab({ enrichedOrders, currentUser, setTab }){
       { key:"integracoes", label:"Integrações", desc:"Conexões e marketplaces" },
     ]},
   ];
-  function abrir(key){ try { setTab(key); } catch(e){} }
   return (
     <div style={{ padding:2 }}>
-      <div style={{ marginBottom:18 }}>
+      <div style={{ marginTop:6 }}>
         <div style={{ fontWeight:600, fontSize:24, color:"var(--text-strong)", letterSpacing:-0.3 }}>Olá, {currentUser?.nome || "bem-vindo"}</div>
         <div style={{ fontSize:14, color:"var(--text-3)", marginTop:2 }}>Bem-vindo ao Flow Marketplaces. Escolha por onde começar.</div>
       </div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(200px, 1fr))", gap:12, marginBottom:22 }}>
-        {resumo.map(function(k,i){ return <div key={i} className="kpi-card">
-          <div className="kpi-lbl">{k.l}</div>
-          <div style={{ fontSize:22, fontWeight:600, color:k.c, marginTop:6 }}>{k.v}</div>
-        </div>; })}
-      </div>
-      {grupos.map(function(g){
-        var itens = g.itens.filter(Boolean);
-        if (!itens.length) return null;
-        return <div key={g.titulo} style={{ marginBottom:20 }}>
-          <div style={{ fontSize:12, fontWeight:600, letterSpacing:.6, color:"var(--text-4)", marginBottom:10 }}>{g.titulo}</div>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(210px, 1fr))", gap:12 }}>
-            {itens.map(function(t){
-              return <a key={t.key} href={"?tab=" + t.key}
-                onClick={function(e){ if (e.metaKey||e.ctrlKey||e.shiftKey||e.altKey) return; e.preventDefault(); abrir(t.key); }}
-                style={{ display:"block", textDecoration:"none", background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"15px 16px", transition:"border-color .15s, transform .1s" }}
-                onMouseEnter={function(e){ e.currentTarget.style.borderColor = "#768692"; e.currentTarget.style.transform = "translateY(-1px)"; }}
-                onMouseLeave={function(e){ e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.transform = "none"; }}>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
-                  <span style={{ fontSize:15, fontWeight:600, color:"var(--text-strong)" }}>{t.label}</span>
-                  <span style={{ color:"#768692", fontSize:16 }}>→</span>
-                </div>
-                <div style={{ fontSize:12.5, color:"var(--text-3)", marginTop:4, lineHeight:1.4 }}>{t.desc}</div>
-              </a>;
-            })}
-          </div>
-        </div>;
-      })}
     </div>
   );
 }

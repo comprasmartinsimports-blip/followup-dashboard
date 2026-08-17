@@ -1528,7 +1528,7 @@ function LoginScreen({ onLogin }) {
   }
 
   return (
-    <div style={{ minHeight:"100vh", background:"var(--bg)", backgroundImage:"radial-gradient(1100px 500px at 75% -10%, rgba(25,118,255,.12), transparent 60%), radial-gradient(800px 420px at -10% 110%, rgba(0,240,255,.06), transparent 60%)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Inter','Segoe UI',sans-serif", padding:24 }}>
+    <div style={{ minHeight:"100vh", backgroundColor:"var(--bg)", backgroundImage:"radial-gradient(1100px 500px at 75% -10%, rgba(25,118,255,.12), transparent 60%), radial-gradient(800px 420px at -10% 110%, rgba(0,240,255,.06), transparent 60%)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Inter','Segoe UI',sans-serif", padding:24 }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');*{box-sizing:border-box;margin:0;padding:0}`}</style>
       <div style={{ width:"100%", maxWidth:420 }}>
         {/* Logo */}
@@ -5203,71 +5203,73 @@ export default function App() {
           {(function() {
             var grupos = [
               { titulo:"Operação", itens:[
-                { key:"dashboard", label:"📊 Dashboard" },
-                { key:"produtos", label:"📦 Produtos" },
-                currentUser?.permissoes?.includes("listings") && { key:"listings", label:"📢 Anúncios", badge:enriched.length },
-                { key:"vincular", label:"🔗 Vincular anúncios" },
-                currentUser?.permissoes?.includes("listings") && { key:"precificacao", label:"💲 Precificação" },
-                currentUser?.permissoes?.includes("orders") && { key:"orders", label:"🧾 Vendas", badge:enrichedOrders.length },
-                { key:"expedicao", label:"🚚 Expedição" },
-                { key:"compras", label:"🛒 Compras" },
-                { key:"estoque", label:"📦 Estoque" },
+                { key:"dashboard", label:"Dashboard" },
+                { key:"produtos", label:"Produtos" },
+                currentUser?.permissoes?.includes("listings") && { key:"listings", label:"Anúncios", badge:enriched.length },
+                { key:"vincular", label:"Vincular anúncios" },
+                currentUser?.permissoes?.includes("listings") && { key:"precificacao", label:"Precificação" },
+                currentUser?.permissoes?.includes("orders") && { key:"orders", label:"Vendas", badge:enrichedOrders.length },
+                { key:"expedicao", label:"Expedição" },
+                { key:"compras", label:"Compras" },
+                { key:"estoque", label:"Estoque" },
               ]},
               { titulo:"Financeiro", itens:[
-                { key:"contas_pagar", label:"⬇️ Contas a pagar" },
-                { key:"contas_receber", label:"⬆️ Contas a receber" },
-                { key:"clientes", label:"👥 Clientes" },
-                { key:"fornecedores", label:"🏭 Fornecedores" },
-                { key:"notas_fiscais", label:"📄 Notas fiscais" },
-                { key:"dre", label:"⚖️ DRE e conciliação" },
+                { key:"contas_pagar", label:"Contas a pagar" },
+                { key:"contas_receber", label:"Contas a receber" },
+                { key:"clientes", label:"Clientes" },
+                { key:"fornecedores", label:"Fornecedores" },
+                { key:"notas_fiscais", label:"Notas fiscais" },
+                { key:"dre", label:"DRE e conciliação" },
               ]},
               { titulo:"Inteligência", itens:[
-                { key:"relatorios", label:"📈 Relatórios" },
-                currentUser?.permissoes?.includes("listings") && { key:"concorrencia", label:"🔎 Concorrência" },
+                { key:"relatorios", label:"Relatórios" },
+                currentUser?.permissoes?.includes("listings") && { key:"concorrencia", label:"Concorrência" },
               ]},
               { titulo:"Configuração", itens:[
-                currentUser?.permissoes?.includes("admin") && { key:"admin", label:"👥 Equipe" },
-                { key:"integracoes", label:"🔌 Integrações" },
-                { key:"__config", label:"⚙️ Configurações", acao:"config" },
+                currentUser?.permissoes?.includes("admin") && { key:"admin", label:"Equipe" },
+                { key:"integracoes", label:"Integrações" },
+                { key:"__config", label:"Configurações", acao:"config" },
               ]},
             ];
             function renderItem(t) {
               var isActive = tab === t.key;
-              var abrir = t.acao === "config"
-                ? function(){ setShowConfigPanel(true); setConfigPanelTab("aparencia"); }
-                : function(){ setTab(t.key); };
-              return (
-                <div key={t.key} style={{ display:"flex", alignItems:"center", gap:2 }}>
-                  <button onClick={abrir}
-                    style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:6, flex:1, minWidth:0,
-                      padding:"9px 12px", borderRadius:9, border:"none", cursor:"pointer", fontFamily:"inherit",
-                      fontSize:13, textAlign:"left",
-                      background: isActive ? "rgba(25,118,255,.16)" : "transparent",
-                      color: isActive ? "var(--text-strong)" : "var(--text-3)",
-                      fontWeight: isActive ? 700 : 500,
-                      borderLeft: "3px solid "+(isActive ? "#4DB3FF" : "transparent"),
-                      transition:"background .15s,color .15s" }}>
-                    <span style={{ whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{t.label}</span>
-                    {t.badge != null && (
-                      <span style={{ fontSize:10, fontWeight:700, padding:"1px 7px", borderRadius:10, flexShrink:0,
-                        background: isActive ? "#1976FF" : "var(--surface-3)",
-                        color: isActive ? "#fff" : "var(--text-3)", lineHeight:1.6 }}>
-                        {t.badge}
-                      </span>
-                    )}
+              var estilo = {
+                display:"flex", alignItems:"center", justifyContent:"space-between", gap:6, width:"100%", boxSizing:"border-box",
+                padding:"9px 12px", borderRadius:9, border:"none", cursor:"pointer", fontFamily:"inherit",
+                fontSize:13, textAlign:"left", textDecoration:"none",
+                background: isActive ? "rgba(25,118,255,.16)" : "transparent",
+                color: isActive ? "var(--text-strong)" : "var(--text-3)",
+                fontWeight: isActive ? 700 : 500,
+                borderLeft: "3px solid "+(isActive ? "#4DB3FF" : "transparent"),
+                transition:"background .15s,color .15s",
+              };
+              var conteudo = [
+                <span key="l" style={{ whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{t.label}</span>,
+                t.badge != null ? (
+                  <span key="b" style={{ fontSize:10, fontWeight:700, padding:"1px 7px", borderRadius:10, flexShrink:0,
+                    background: isActive ? "#1976FF" : "var(--surface-3)",
+                    color: isActive ? "#fff" : "var(--text-3)", lineHeight:1.6 }}>
+                    {t.badge}
+                  </span>
+                ) : null,
+              ];
+              // "Configurações" abre um painel (modal), então segue como botão.
+              if (t.acao === "config") {
+                return (
+                  <button key={t.key} onClick={function(){ setShowConfigPanel(true); setConfigPanelTab("aparencia"); }} style={estilo}>
+                    {conteudo}
                   </button>
-                  {t.acao !== "config" && (
-                    <button title={"Abrir " + t.label + " em nova aba"}
-                      onClick={function(){ window.open(window.location.pathname + "?tab=" + t.key, "_blank"); }}
-                      style={{ flexShrink:0, width:24, height:24, display:"flex", alignItems:"center", justifyContent:"center",
-                        background:"transparent", border:"none", borderRadius:7, cursor:"pointer", color:"var(--text-4)", fontSize:12,
-                        transition:"background .15s,color .15s" }}
-                      onMouseEnter={function(e){ e.currentTarget.style.background="var(--surface-3)"; e.currentTarget.style.color="#4DB3FF"; }}
-                      onMouseLeave={function(e){ e.currentTarget.style.background="transparent"; e.currentTarget.style.color="var(--text-4)"; }}>
-                      ↗
-                    </button>
-                  )}
-                </div>
+                );
+              }
+              // Demais itens são LINKS reais: clique esquerdo troca a aba (sem recarregar); clique
+              // direito, do meio ou com Ctrl/Cmd → o navegador abre em NOVA GUIA nativamente (a opção
+              // "Abrir em nova guia" aparece sozinha no menu de contexto do link).
+              return (
+                <a key={t.key} href={"?tab=" + t.key}
+                  onClick={function(e){ if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; e.preventDefault(); setTab(t.key); }}
+                  style={estilo}>
+                  {conteudo}
+                </a>
               );
             }
             return grupos.map(function(g){

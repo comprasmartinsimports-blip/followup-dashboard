@@ -80,7 +80,7 @@ export async function syncListings(sellerId, token) {
         thumbnail: it.thumbnail || null,
         permalink: it.permalink || null,
         free_shipping: it.shipping ? !!it.shipping.free_shipping : null,
-        raw: JSON.stringify(it),
+        raw: it, // objeto — o postgres.js serializa p/ jsonb uma vez (não pré-stringificar)
         ml_last_updated: it.last_updated || null,
       });
     }
@@ -122,7 +122,7 @@ export async function syncOrders(sellerId, token, cutoff = "2026-04-01") {
       unit_price: it.unit_price ?? null,
       total_amount: o.total_amount ?? null,
       date_created: o.date_created || o.date_closed || null,
-      raw: JSON.stringify(o),
+      raw: o, // objeto — serializado uma vez pelo postgres.js
     };
   });
   const cols = ["seller_id", "id", "listing_id", "title", "seller_sku", "status", "qty", "unit_price", "total_amount", "date_created", "raw"];

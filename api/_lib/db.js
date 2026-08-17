@@ -38,6 +38,20 @@ export async function listConexoesMl() {
   return await sql`select seller_id, access_token, refresh_token, expira_em from flow.conexao_ml`;
 }
 
+// Lê uma página de anúncios do cache (raw = item ML completo, mesma shape do fetchAllListings).
+export async function listCacheListings(sellerId, limit, offset) {
+  const sql = getSql();
+  if (!sql) return [];
+  return await sql`select raw from flow.ml_listing where seller_id=${String(sellerId)} order by id limit ${limit} offset ${offset}`;
+}
+
+// Lê uma página de pedidos do cache (raw = pedido ML completo, mesma shape do fetchAllOrders).
+export async function listCacheOrders(sellerId, limit, offset) {
+  const sql = getSql();
+  if (!sql) return [];
+  return await sql`select raw from flow.ml_order where seller_id=${String(sellerId)} order by date_created desc nulls last limit ${limit} offset ${offset}`;
+}
+
 // Guarda/atualiza o token do ML de uma conta em flow.conexao_ml, para o servidor
 // (cron/webhook) sincronizar sem o usuário estar logado. Preserva o refresh_token antigo
 // se o novo vier vazio.

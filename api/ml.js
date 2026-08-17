@@ -13,7 +13,7 @@ import {
   verificarSessao,
   semSenha,
 } from "./_lib/auth.js";
-import { dbEnabled, syncGet, syncSet, upsertConexaoMl, listConexoesMl } from "./_lib/db.js";
+import { dbEnabled, syncGet, syncSet, upsertConexaoMl, listConexoesMl, listCacheListings, listCacheOrders } from "./_lib/db.js";
 import { syncListings, syncOrders, garantirToken } from "./_lib/mlsync.js";
 
 // A sincronização do cache do ML (/_sync_ml) puxa centenas de itens — pede mais tempo que o
@@ -140,6 +140,32 @@ export default async function handler(req, res) {
       }));
     }
     return res.status(200).json({ ok: true, conta: contaMig(), migrated, skipped_ja_no_postgres: skipped, vazias_no_kv: vazias, erros });
+  }
+
+  // ── Leitura do cache (anúncios/pedidos) para o app ler no boot — exige sessão ──
+  // Devolve o item/pedido ML completo (raw), paginado, na MESMA shape das buscas ao ML.
+  if (path === "/cache_listings" || path.startsWith("/cache_listings?") ||
+      path === "/cache_orders" || path.startsWith("/cache_orders?")) {
+    const sessao = await verificarSessao(req);
+    if (!sessao) return res.status(401).json({ error: "Não autenticado. Faça login no sistema." });
+    const ehPedidos = path.indexOf("/cache_orders") === 0;
+    if (!dbEnabled()) return res.status(200).json({ items: [], hasMore: false, cache: false });
+    const ck = Object.fromEntries(
+      (req.headers.cookie || "").split(";").map(function(c){ const p = c.trim().split("="); return [p[0], p.slice(1).join("=")]; })
+    );
+    const qs = new URLSearchParams(path.split("?")[1] || "");
+    const sellerId = qs.get("seller") || ck.ml_user_id;
+    if (!sellerId) return res.status(200).json({ items: [], hasMore: false, cache: false });
+    const limit = Math.min(parseInt(qs.get("limit"), 10) || 400, 1000);
+    const offset = parseInt(qs.get("offset"), 10) || 0;
+    try {
+      const rows = ehPedidos
+        ? await listCacheOrders(sellerId, limit, offset)
+        : await listCacheListings(sellerId, limit, offset);
+      return res.status(200).json({ items: rows.map(function(r){ return r.raw; }), hasMore: rows.length === limit, cache: true });
+    } catch (e) {
+      return res.status(200).json({ items: [], hasMore: false, cache: false });
+    }
   }
 
   // ── Cron: sincroniza o cache do ML de TODAS as contas — autenticado por secret ──

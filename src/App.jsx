@@ -270,6 +270,28 @@ async function fetchAllListings(userId, tk) {
   return details.filter(d => d && d.id);
 }
 
+// Lê anúncios/pedidos do CACHE do servidor (Postgres via /api/ml/cache_*), paginado.
+// Devolve { items, cache }: items na mesma shape das buscas ao ML; cache=false quando não há
+// cache disponível (aí o chamador cai no fetch direto ao ML). Instantâneo vs. puxar tudo do ML.
+async function carregarCachePaginado(rota) {
+  var todos = [], offset = 0, limit = 400;
+  try {
+    while (true) {
+      var res = await fetch(rota + "?limit=" + limit + "&offset=" + offset);
+      if (!res.ok) return { items: null, cache: false };
+      var d = await res.json();
+      if (!d || d.cache === false) return { items: null, cache: false };
+      todos = todos.concat(d.items || []);
+      if (!d.hasMore) break;
+      offset += limit;
+      if (offset > 30000) break; // trava de segurança
+    }
+  } catch (e) { return { items: null, cache: false }; }
+  return { items: todos, cache: true };
+}
+function carregarAnunciosDoCache() { return carregarCachePaginado("/api/ml/cache_listings"); }
+function carregarPedidosDoCache() { return carregarCachePaginado("/api/ml/cache_orders"); }
+
 // Importa/sincroniza anúncios ML para o cadastro de produtos
 function syncListingsToProdutos(listings, produtosExistentes) {
   var hoje = new Date().toLocaleDateString("sv-SE");
@@ -4417,22 +4439,15 @@ export default function App() {
       const saved = loadSavedTokens();
       if (saved) saveTokens(saved.accessToken, saved.refreshToken, (saved.expiry - Date.now()) / 1000, me.id, me.nickname);
 
-      setLoadingMsg("Buscando anúncios...");
-      const listings = await fetchAllListings(me.id, validTk);
+      // Anúncios: lê do CACHE do servidor (instantâneo). Só puxa do ML se o cache estiver vazio
+      // (ex.: 1º acesso, antes do primeiro sync do servidor). Mesma shape nos dois casos.
+      setLoadingMsg("Carregando anúncios...");
+      var cacheL = await carregarAnunciosDoCache();
+      const listings = (cacheL.cache && cacheL.items && cacheL.items.length) ? cacheL.items : await fetchAllListings(me.id, validTk);
       setRealListings(listings);
 
-      // Busca a taxa REAL de cada anúncio no ML (por categoria + preço), em vez de usar uma
-      // tabela fixa 12%/17% que não reflete a comissão real de cada categoria nem a tarifa
-      // fixa cobrada em produtos de baixo valor.
-      setLoadingMsg("Calculando taxas reais do ML...");
-      const feeMap = await fetchRealFeesForListings(listings, validTk, function(partial, done, total) {
-        setRealFeesAndSave(function(f){ return Object.assign({}, f, partial); });
-        setLoadingMsg(`Calculando taxas reais do ML... ${done}/${total}`);
-      });
-      setRealFeesAndSave(function(f){ return Object.assign({}, f, feeMap); });
-
-      // Auto-importar anúncios para cadastro de produtos
-      setLoadingMsg("Sincronizando produtos com ML...");
+      // Auto-importar anúncios para cadastro de produtos (rápido, local)
+      setLoadingMsg("Sincronizando produtos...");
       const produtosAtuais = JSON.parse(localStorage.getItem("produtos_cadastro") || "[]");
       const produtosSincronizados = syncListingsToProdutos(listings, produtosAtuais);
       localStorage.setItem("produtos_cadastro", JSON.stringify(produtosSincronizados));
@@ -4448,8 +4463,10 @@ export default function App() {
       });
       setCostsAndSave(Object.assign({}, costsExistentes, costsFromProdutos));
 
-      setLoadingMsg("Buscando pedidos...");
-      const orders = await fetchAllOrders(me.id, validTk);
+      // Pedidos: também do CACHE (instantâneo), com fallback ao ML.
+      setLoadingMsg("Carregando pedidos...");
+      var cacheO = await carregarPedidosDoCache();
+      const orders = (cacheO.cache && cacheO.items && cacheO.items.length) ? cacheO.items : await fetchAllOrders(me.id, validTk);
       ordersCarregados = orders;
       setRealOrders(orders);
       // Salvar pedidos no localStorage para uso offline pelo Reprocessar Vendas
@@ -4459,59 +4476,48 @@ export default function App() {
         });
         localStorage.setItem("ml_orders_cache", JSON.stringify(ordersLeve));
       } catch(e) {}
-      // Baixa automática de estoque para pedidos pagos
-      // (o useEffect vai cuidar disso quando realOrders mudar)
-      // Aqui só garantimos que realOrders foi atualizado
-      console.log("[ESTOQUE] " + orders.filter(function(o){return o.status==="paid";}).length + " pedidos pagos carregados para processamento.");
 
-      setLoadingMsg("Buscando custo de frete por anúncio...");
-      const shippingMap = {};
-      for (let i = 0; i < listings.length; i += 5) {
-        const batch = listings.slice(i, i + 5);
-        const results = await Promise.all(
-          batch.map(l => fetchSellerShippingCost(l.id, me.id, validTk).then(cost => ({ id: l.id, cost })))
-        );
-        results.forEach(r => { shippingMap[r.id] = r.cost; });
-        if (i % 50 === 0) setLoadingMsg(`Buscando frete... ${Math.min(i + 5, listings.length)}/${listings.length}`);
-      }
-      setSellerShipping(shippingMap);
+      // ✅ A partir daqui a tela JÁ renderiza (anúncios + pedidos carregados). Taxa real, frete,
+      // pagamento e promoções (que já vêm do cache local) são refrescados em SEGUNDO PLANO,
+      // sem travar a abertura — o setLoading(false) logo abaixo é alcançado na hora.
+      (async function enriquecerBg(){
+        try {
+          const feeMap = await fetchRealFeesForListings(listings, validTk, function(partial){
+            setRealFeesAndSave(function(f){ return Object.assign({}, f, partial); });
+          });
+          setRealFeesAndSave(function(f){ return Object.assign({}, f, feeMap); });
 
-      // Buscar frete real via /shipments/{id}/costs → senders[0].save
-      setLoadingMsg("Buscando frete dos pedidos...");
-      const { shippingMap: orderShippingMap, statusMap: shipmentStatusMap } = await fetchShippingForOrders(orders, validTk, function(partialShipping, partialStatus, done, total) {
-        setShipmentCosts({...partialShipping});
-        setLoadingMsg(`Buscando frete dos pedidos... ${done}/${total}`);
-      });
-      setShipmentCosts({...orderShippingMap});
-      setShipmentStatuses({...shipmentStatusMap});
+          const shippingMap = {};
+          for (let i = 0; i < listings.length; i += 5) {
+            const batch = listings.slice(i, i + 5);
+            const results = await Promise.all(batch.map(l => fetchSellerShippingCost(l.id, me.id, validTk).then(cost => ({ id: l.id, cost }))));
+            results.forEach(r => { shippingMap[r.id] = r.cost; });
+          }
+          setSellerShipping(shippingMap);
 
-      // Buscar dados de pagamento usando /orders/{id} com campo completo de payment
-      // Isso retorna os dados reais de valor líquido e data de liberação
-      setLoadingMsg("Buscando dados de pagamento...");
-      const paymentMap = await fetchPaymentForOrders(orders, validTk, function(partial, done, total) {
-        setPaymentData({...partial});
-        setLoadingMsg(`Buscando dados de pagamento... ${done}/${total}`);
-      });
-      setPaymentData({...paymentMap});
+          const { shippingMap: orderShippingMap, statusMap: shipmentStatusMap } = await fetchShippingForOrders(orders, validTk, function(partialShipping){ setShipmentCosts({ ...partialShipping }); });
+          setShipmentCosts({ ...orderShippingMap });
+          setShipmentStatuses({ ...shipmentStatusMap });
 
-      setLoadingMsg("Buscando promoções...");
-      const promoMap = {};
-      for (let i = 0; i < listings.length; i += 10) {
-        const batch = listings.slice(i, i + 10);
-        const results = await Promise.all(
-          batch.map(l => fetchPromoPrice(l.id, validTk).then(promo => ({ id: l.id, promo })))
-        );
-        results.forEach(r => { if (r.promo) promoMap[r.id] = r.promo; });
-      }
-      setPromos(promoMap);
+          const paymentMap = await fetchPaymentForOrders(orders, validTk, function(partial){ setPaymentData({ ...partial }); });
+          setPaymentData({ ...paymentMap });
 
-      // Snapshot completo → novas abas reaproveitam sem refazer a carga do ML.
-      salvarMLSnapshot({
-        user: { nickname: me.nickname ?? "Minha Conta ML", id: me.id },
-        listings: listings, orders: orders,
-        sellerShipping: shippingMap, shipmentCosts: orderShippingMap,
-        shipmentStatuses: shipmentStatusMap, paymentData: paymentMap, promos: promoMap,
-      });
+          const promoMap = {};
+          for (let i = 0; i < listings.length; i += 10) {
+            const batch = listings.slice(i, i + 10);
+            const results = await Promise.all(batch.map(l => fetchPromoPrice(l.id, validTk).then(promo => ({ id: l.id, promo }))));
+            results.forEach(r => { if (r.promo) promoMap[r.id] = r.promo; });
+          }
+          setPromos(promoMap);
+
+          salvarMLSnapshot({
+            user: { nickname: me.nickname ?? "Minha Conta ML", id: me.id },
+            listings: listings, orders: orders,
+            sellerShipping: shippingMap, shipmentCosts: orderShippingMap,
+            shipmentStatuses: shipmentStatusMap, paymentData: paymentMap, promos: promoMap,
+          });
+        } catch (e) { console.warn("[enriquecimento bg] falhou:", e && e.message); }
+      })();
     } catch (e) { setLoadError(e.message); }
     setLoading(false); setLoadingMsg("");
     const now = Date.now().toString();

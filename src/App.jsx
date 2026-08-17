@@ -93,10 +93,10 @@ function getListingTypeLabel(type) {
   // ML Brasil: gold_premium e gold_pro = Premium (17%)
   // gold_special, gold_extra, demais = Clássico (12%)
   if (type === "gold_premium" || type === "gold_pro") return { label: "Premium · 17%", color: "#7c3aed" };
-  if (type === "gold_special" || type === "gold_extra") return { label: "Clássico · 12%", color: "#1976FF" };
+  if (type === "gold_special" || type === "gold_extra") return { label: "Clássico · 12%", color: "#768692" };
   if (type === "silver") return { label: "Gratuito", color: "var(--text-3)" };
   if (type === "free") return { label: "Gratuito", color: "var(--text-3)" };
-  return { label: type ? "Clássico" : "—", color: "#1976FF" };
+  return { label: type ? "Clássico" : "—", color: "#768692" };
 }
 
 function getPrices(listing) {
@@ -372,7 +372,7 @@ function ProdutoModal({ produto, onSave, onClose }) {
         </div>
         <div style={{ display:"flex", gap:8 }}>
           <button onClick={onClose} style={{ flex:1, background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
-          <button onClick={salvar} style={{ flex:2, background:"#1976FF", border:"none", color:"#fff", fontWeight:500, padding:"11px", borderRadius:10, cursor:"pointer" }}>Salvar</button>
+          <button onClick={salvar} style={{ flex:2, background:"#768692", border:"none", color:"#fff", fontWeight:500, padding:"11px", borderRadius:10, cursor:"pointer" }}>Salvar</button>
         </div>
       </div>
     </div>
@@ -448,7 +448,7 @@ function ProdutosTab({ produtos, salvar }) {
         <div style={{ display:"flex", gap:8 }}>
           <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display:"none" }} onChange={function(e){ if (e.target.files && e.target.files[0]) importarCSV(e.target.files[0]); e.target.value=""; }} />
           <button onClick={function(){ if (fileRef.current) fileRef.current.click(); }} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"9px 16px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>Importar CSV</button>
-          <button onClick={function(){ setEditando({}); }} style={{ background:"#1976FF", border:"none", color:"#fff", fontWeight:500, padding:"9px 18px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>+ Novo produto</button>
+          <button onClick={function(){ setEditando({}); }} style={{ background:"#768692", border:"none", color:"#fff", fontWeight:500, padding:"9px 18px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>+ Novo produto</button>
         </div>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12, marginBottom:14 }}>
@@ -518,7 +518,7 @@ function EstoqueTab({ produtos }) {
         {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
       </div>
       <div style={{ display:"flex", gap:6, marginBottom:12 }}>
-        {filtros.map(function(f){ var a = filtro === f[0]; return <button key={f[0]} onClick={function(){ setFiltro(f[0]); }} style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background: a ? "#1976FF" : "var(--surface)", color: a ? "#fff" : "var(--text-3)" }}>{f[1]}</button>; })}
+        {filtros.map(function(f){ var a = filtro === f[0]; return <button key={f[0]} onClick={function(){ setFiltro(f[0]); }} style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background: a ? "#768692" : "var(--surface)", color: a ? "#fff" : "var(--text-3)" }}>{f[1]}</button>; })}
       </div>
       <div style={_tableWrap}>
         <table style={_table}>
@@ -599,13 +599,13 @@ function VincularTab({ enriched, produtos, salvar }) {
           <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Vincular anúncios</div>
           <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Ligue cada anúncio ao produto do catálogo — o vínculo dá baixa no estoque a cada venda.</div>
         </div>
-        <button onClick={vincularAuto} style={{ background:"#1976FF", border:"none", color:"#fff", fontWeight:500, padding:"9px 18px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>Vincular automático</button>
+        <button onClick={vincularAuto} style={{ background:"#768692", border:"none", color:"#fff", fontWeight:500, padding:"9px 18px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>Vincular automático</button>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12, marginBottom:14 }}>
         {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
       </div>
       <div style={{ display:"flex", gap:6, marginBottom:10, flexWrap:"wrap" }}>
-        {filtros.map(function(f){ var a = filtro === f[0]; return <button key={f[0]} onClick={function(){ setFiltro(f[0]); }} style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background: a ? "#1976FF" : "var(--surface)", color: a ? "#fff" : "var(--text-3)" }}>{f[1]}</button>; })}
+        {filtros.map(function(f){ var a = filtro === f[0]; return <button key={f[0]} onClick={function(){ setFiltro(f[0]); }} style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background: a ? "#768692" : "var(--surface)", color: a ? "#fff" : "var(--text-3)" }}>{f[1]}</button>; })}
       </div>
       <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Buscar por título, SKU ou MLB..." style={_inputBusca} />
       <datalist id="dl-produtos">
@@ -642,8 +642,8 @@ function VincularTab({ enriched, produtos, salvar }) {
 // ─────────────────────────────────────────────────────────────────────────
 var CHART_AXIS = "#8492a8";                       // cor dos rótulos dos eixos (legível nos 2 temas)
 var CHART_GRID = "rgba(128,140,168,.16)";         // linhas de grade
-var CORES_DINHEIRO = { custo:"#1976FF", taxas:"#FFC107", impostos:"#FF7043", lucro:"#0a9d4e" };
-var PALETA_ABC = ["#1976FF","#00A3B5","#0a9d4e","#FFC107","#FF7043","#9C6ADE","#E7515A","#5A6B86"];
+var CORES_DINHEIRO = { custo:"#768692", taxas:"#FFC107", impostos:"#FF7043", lucro:"#0a9d4e" };
+var PALETA_ABC = ["#768692","#00A3B5","#0a9d4e","#FFC107","#FF7043","#9C6ADE","#E7515A","#5A6B86"];
 
 // Tooltip padrão em R$ (respeita o tema via var(--...)).
 function TipMoeda({ active, payload, label }){
@@ -769,7 +769,7 @@ function RelatoriosTab({ enrichedOrders }) {
           {PERIODOS_REL.map(function(p){ var ativo = periodo===p[0];
             return <button key={p[0]} onClick={function(){ setPeriodo(p[0]); }}
               style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600,
-                background: ativo ? "#1976FF" : "var(--surface)", color: ativo ? "#fff" : "var(--text-3)" }}>{p[1]}</button>; })}
+                background: ativo ? "#768692" : "var(--surface)", color: ativo ? "#fff" : "var(--text-3)" }}>{p[1]}</button>; })}
           <button onClick={exportarPDF} style={{ ..._btnPdf, marginLeft:4 }} title="Salvar/Imprimir como PDF">⬇ Exportar PDF</button>
         </div>
       </div>
@@ -787,7 +787,7 @@ function RelatoriosTab({ enrichedOrders }) {
           <ResponsiveContainer width="100%" height={260}>
             <AreaChart data={serieDia} margin={{ top:6, right:10, left:0, bottom:0 }}>
               <defs>
-                <linearGradient id="gFat" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#1976FF" stopOpacity={.35}/><stop offset="100%" stopColor="#1976FF" stopOpacity={0}/></linearGradient>
+                <linearGradient id="gFat" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#768692" stopOpacity={.35}/><stop offset="100%" stopColor="#768692" stopOpacity={0}/></linearGradient>
                 <linearGradient id="gLucro" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#0a9d4e" stopOpacity={.35}/><stop offset="100%" stopColor="#0a9d4e" stopOpacity={0}/></linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} vertical={false} />
@@ -795,7 +795,7 @@ function RelatoriosTab({ enrichedOrders }) {
               <YAxis tick={{ fill:CHART_AXIS, fontSize:11 }} tickLine={false} axisLine={false} width={54} tickFormatter={function(v){ return "R$"+(v>=1000?(v/1000).toFixed(0)+"k":v); }} />
               <RTooltip content={<TipMoeda />} />
               <Legend wrapperStyle={{ fontSize:12 }} />
-              <Area type="monotone" dataKey="fat" name="Faturamento" stroke="#1976FF" strokeWidth={2} fill="url(#gFat)" />
+              <Area type="monotone" dataKey="fat" name="Faturamento" stroke="#768692" strokeWidth={2} fill="url(#gFat)" />
               <Area type="monotone" dataKey="lucro" name="Lucro" stroke="#0a9d4e" strokeWidth={2} fill="url(#gLucro)" />
             </AreaChart>
           </ResponsiveContainer>}
@@ -957,7 +957,7 @@ function ClientesTab({ rawOrders }) {
         {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
       </div>
       <div style={{ display:"flex", gap:6, marginBottom:10, flexWrap:"wrap" }}>
-        {filtros.map(function(f){ var a = filtro === f[0]; return <button key={f[0]} onClick={function(){ setFiltro(f[0]); }} style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background: a ? "#1976FF" : "var(--surface)", color: a ? "#fff" : "var(--text-3)" }}>{f[1]}</button>; })}
+        {filtros.map(function(f){ var a = filtro === f[0]; return <button key={f[0]} onClick={function(){ setFiltro(f[0]); }} style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background: a ? "#768692" : "var(--surface)", color: a ? "#fff" : "var(--text-3)" }}>{f[1]}</button>; })}
       </div>
       <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Buscar por nome ou documento..." style={_inputBusca} />
       <div style={_tableWrap}>
@@ -1012,7 +1012,7 @@ function VendasTab({ enrichedOrders }) {
       <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Vendas</div>
       <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Cada venda guarda os custos e taxas do momento. Clique para ver o detalhamento.</div>
       <div style={{ display:"flex", gap:6, marginBottom:12 }}>
-        {filtros.map(function(f){ var a = situacao === f[0]; return <button key={f[0]} onClick={function(){ setSituacao(f[0]); }} style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background: a ? "#1976FF" : "var(--surface)", color: a ? "#fff" : "var(--text-3)" }}>{f[1]}</button>; })}
+        {filtros.map(function(f){ var a = situacao === f[0]; return <button key={f[0]} onClick={function(){ setSituacao(f[0]); }} style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background: a ? "#768692" : "var(--surface)", color: a ? "#fff" : "var(--text-3)" }}>{f[1]}</button>; })}
       </div>
       <div style={_tableWrap}>
         <table style={_table}>
@@ -1154,10 +1154,10 @@ function ExpedicaoTab({ rawOrders }) {
   var kpis = [
     { l:"Pedidos", v:String(base.length), c:"var(--text-strong)" },
     { l:"A enviar", v:String(cont.aenviar), c: cont.aenviar > 0 ? "#FFC107" : "var(--text-strong)" },
-    { l:"Enviados", v:String(cont.enviado), c:"#1976FF" },
+    { l:"Enviados", v:String(cont.enviado), c:"#768692" },
     { l:"Entregues", v:String(cont.entregue), c:"#0a9d4e" },
   ];
-  var badge = { aenviar:["#FFC107","rgba(255,193,7,.14)","A enviar"], enviado:["#1976FF","rgba(59,140,255,.14)","Enviado"], entregue:["#0a9d4e","rgba(0,200,83,.14)","Entregue"], problema:["#FF5252","rgba(255,82,82,.14)","Problema"], sem:["var(--text-3)","var(--surface-3)","—"] };
+  var badge = { aenviar:["#FFC107","rgba(255,193,7,.14)","A enviar"], enviado:["#768692","rgba(118,134,146,.14)","Enviado"], entregue:["#0a9d4e","rgba(0,200,83,.14)","Entregue"], problema:["#FF5252","rgba(255,82,82,.14)","Problema"], sem:["var(--text-3)","var(--surface-3)","—"] };
   var filtros = [["todos","Todos"],["aenviar","A enviar"],["enviado","Enviados"],["entregue","Entregues"]];
   return (
     <div style={{ padding:2 }}>
@@ -1167,7 +1167,7 @@ function ExpedicaoTab({ rawOrders }) {
         {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
       </div>
       <div style={{ display:"flex", gap:6, marginBottom:12, flexWrap:"wrap" }}>
-        {filtros.map(function(f){ var a = filtro === f[0]; return <button key={f[0]} onClick={function(){ setFiltro(f[0]); }} style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background: a ? "#1976FF" : "var(--surface)", color: a ? "#fff" : "var(--text-3)" }}>{f[1]}</button>; })}
+        {filtros.map(function(f){ var a = filtro === f[0]; return <button key={f[0]} onClick={function(){ setFiltro(f[0]); }} style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background: a ? "#768692" : "var(--surface)", color: a ? "#fff" : "var(--text-3)" }}>{f[1]}</button>; })}
       </div>
       <div style={_tableWrap}>
         <table style={_table}>
@@ -1197,7 +1197,7 @@ function ExpedicaoTab({ rawOrders }) {
 // Integrações: status das conexões do sistema.
 function IntegracoesTab({ token, user, lastUpdate }) {
   var mins = lastUpdate ? Math.round((Date.now() - parseInt(lastUpdate)) / 60000) : null;
-  var badgeStatus = { conectado:["#0a9d4e","rgba(0,200,83,.14)","● Conectado"], disponivel:["#1976FF","rgba(59,140,255,.14)","Disponível"], construcao:["#FFC107","rgba(255,193,7,.14)","🚧 Em construção"] };
+  var badgeStatus = { conectado:["#0a9d4e","rgba(0,200,83,.14)","● Conectado"], disponivel:["#768692","rgba(118,134,146,.14)","Disponível"], construcao:["#FFC107","rgba(255,193,7,.14)","🚧 Em construção"] };
   var cards = [
     { nome:"Mercado Livre", desc:"Anúncios, pedidos, taxas e repasses — sincronizados automaticamente.", status: token ? "conectado" : "disponivel", extra: token && user && user.nickname ? ("Conta: " + user.nickname + (mins != null ? " · última sync há " + mins + " min" : "")) : null },
     { nome:"Bling", desc:"ERP: produtos, custos, estoque e notas fiscais.", status:"disponivel", extra:null },
@@ -1267,7 +1267,7 @@ function DreTab({ enrichedOrders }) {
     ["Receita bruta", fat, false, "var(--text-strong)"],
     ["(-) Impostos e deduções", -impostos, false, "#FF7043"],
     ["= Receita líquida", recLiq, true, "var(--text-strong)"],
-    ["(-) Custo dos produtos (CMV)", -custo, false, "#1976FF"],
+    ["(-) Custo dos produtos (CMV)", -custo, false, "#768692"],
     ["= Lucro bruto", lucroBruto, true, "var(--text-strong)"],
     ["(-) Taxas dos marketplaces", -taxas, false, "#FFC107"],
     ["(-) Despesas e custos fixos", -despesasFixas, false, "#8492a8"],
@@ -1275,7 +1275,7 @@ function DreTab({ enrichedOrders }) {
   ];
   // Composição do resultado (barras) — quanto de cada peça sai do faturamento.
   var composicao = [
-    { name:"Receita bruta", value:fat, cor:"#1976FF" },
+    { name:"Receita bruta", value:fat, cor:"#768692" },
     { name:"Impostos", value:impostos, cor:"#FF7043" },
     { name:"CMV", value:custo, cor:"#9C6ADE" },
     { name:"Taxas ML", value:taxas, cor:"#FFC107" },
@@ -1293,7 +1293,7 @@ function DreTab({ enrichedOrders }) {
           {PERIODOS_REL.map(function(p){ var ativo = periodo===p[0];
             return <button key={p[0]} onClick={function(){ setPeriodo(p[0]); }}
               style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600,
-                background: ativo ? "#1976FF" : "var(--surface)", color: ativo ? "#fff" : "var(--text-3)" }}>{p[1]}</button>; })}
+                background: ativo ? "#768692" : "var(--surface)", color: ativo ? "#fff" : "var(--text-3)" }}>{p[1]}</button>; })}
           <button onClick={exportarPDF} style={{ ..._btnPdf, marginLeft:4 }} title="Salvar/Imprimir como PDF">⬇ Exportar PDF</button>
         </div>
       </div>
@@ -1359,7 +1359,7 @@ function ContaModal({ conta, onSave, onClose }) {
         </div>
         <div style={{ display:"flex", gap:8 }}>
           <button onClick={onClose} style={{ flex:1, background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
-          <button onClick={salvar} style={{ flex:2, background:"#1976FF", border:"none", color:"#fff", fontWeight:500, padding:"11px", borderRadius:10, cursor:"pointer" }}>Salvar</button>
+          <button onClick={salvar} style={{ flex:2, background:"#768692", border:"none", color:"#fff", fontWeight:500, padding:"11px", borderRadius:10, cursor:"pointer" }}>Salvar</button>
         </div>
       </div>
     </div>
@@ -1396,7 +1396,7 @@ function ContasPagarTab({ contas, salvar }) {
           <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Contas a pagar</div>
           <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Despesas com fornecedores, vencimentos e baixas.</div>
         </div>
-        <button onClick={function(){ setModal({}); }} style={{ background:"#1976FF", border:"none", color:"#fff", fontWeight:500, padding:"9px 18px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>+ Nova conta</button>
+        <button onClick={function(){ setModal({}); }} style={{ background:"#768692", border:"none", color:"#fff", fontWeight:500, padding:"9px 18px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>+ Nova conta</button>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:12, marginBottom:14 }}>
         {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
@@ -1458,7 +1458,7 @@ function PedidoCompraModal({ pedido, onSave, onClose }) {
         </div>
         <div style={{ display:"flex", gap:8 }}>
           <button onClick={onClose} style={{ flex:1, background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
-          <button onClick={salvar} style={{ flex:2, background:"#1976FF", border:"none", color:"#fff", fontWeight:500, padding:"11px", borderRadius:10, cursor:"pointer" }}>Salvar</button>
+          <button onClick={salvar} style={{ flex:2, background:"#768692", border:"none", color:"#fff", fontWeight:500, padding:"11px", borderRadius:10, cursor:"pointer" }}>Salvar</button>
         </div>
       </div>
     </div>
@@ -1492,7 +1492,7 @@ function ComprasTab({ produtos, pedidos, salvar }) {
         </div>
         <div style={{ display:"flex", gap:8 }}>
           <button onClick={function(){ setVerSug(function(v){ return !v; }); }} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"9px 16px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>Sugerir reposição{sugestoes.length ? " (" + sugestoes.length + ")" : ""}</button>
-          <button onClick={function(){ setModal({}); }} style={{ background:"#1976FF", border:"none", color:"#fff", fontWeight:500, padding:"9px 18px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>+ Novo pedido</button>
+          <button onClick={function(){ setModal({}); }} style={{ background:"#768692", border:"none", color:"#fff", fontWeight:500, padding:"9px 18px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>+ Novo pedido</button>
         </div>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:12, marginBottom:14 }}>
@@ -1593,8 +1593,8 @@ function BarraPeriodo({ periodo, setPeriodo, deData, setDeData, ateData, setAteD
   var ops=[["hoje","Hoje"],["7","7 dias"],["30","30 dias"],["mesatual","Mês atual"],["tudo","Tudo"]];
   return <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
     {ops.map(function(p){ var a=periodo===p[0]; return <button key={p[0]} onClick={function(){ setPeriodo(p[0]); }}
-      style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background:a?"#1976FF":"var(--surface)", color:a?"#fff":"var(--text-3)" }}>{p[1]}</button>; })}
-    <div style={{ display:"flex", alignItems:"center", gap:5, padding:"4px 8px", borderRadius:8, border:"1px solid var(--border)", background: periodo==="custom"?"rgba(25,118,255,.10)":"var(--surface)" }}>
+      style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background:a?"#768692":"var(--surface)", color:a?"#fff":"var(--text-3)" }}>{p[1]}</button>; })}
+    <div style={{ display:"flex", alignItems:"center", gap:5, padding:"4px 8px", borderRadius:8, border:"1px solid var(--border)", background: periodo==="custom"?"rgba(118,134,146,.10)":"var(--surface)" }}>
       <input type="date" value={deData} onChange={function(e){ setDeData(e.target.value); setPeriodo("custom"); }} style={_inpDataG} />
       <span style={{ fontSize:11, color:"var(--text-3)" }}>até</span>
       <input type="date" value={ateData} onChange={function(e){ setAteData(e.target.value); setPeriodo("custom"); }} style={_inpDataG} />
@@ -1617,7 +1617,7 @@ function EstadosDash({ enrichedOrders }){
   var max = lista.reduce(function(m,e){ return (e.uf!=="—" && e.fat>m) ? e.fat : m; }, 1);
   var NOMES={}; BR_ESTADOS.forEach(function(s){ NOMES[s.uf]=s.nome; });
   var sel = (ufSel && agg[ufSel]) ? agg[ufSel] : (lista.filter(function(e){return e.uf!=="—";})[0]||null);
-  function fillUF(uf){ var a=agg[uf]; if(!a||!a.fat) return { f:"var(--surface-3)", o:1 }; return { f:"#1976FF", o:0.22+0.78*Math.pow(a.fat/max,.5) }; }
+  function fillUF(uf){ var a=agg[uf]; if(!a||!a.fat) return { f:"var(--surface-3)", o:1 }; return { f:"#768692", o:0.22+0.78*Math.pow(a.fat/max,.5) }; }
   return (
     <div style={{ padding:2 }}>
       <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Vendas por estado</div>
@@ -1634,7 +1634,7 @@ function EstadosDash({ enrichedOrders }){
           </svg>
           <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:8, fontSize:11, color:"var(--text-3)" }}>
             <span>Menos</span>
-            <div style={{ flex:1, height:8, borderRadius:4, background:"linear-gradient(90deg, var(--surface-3), #1976FF)" }} />
+            <div style={{ flex:1, height:8, borderRadius:4, background:"linear-gradient(90deg, var(--surface-3), #768692)" }} />
             <span>Mais</span>
           </div>
         </div>
@@ -1663,7 +1663,7 @@ function EstadosDash({ enrichedOrders }){
           <tbody>
             {lista.length===0 ? <tr><td style={_td} colSpan={6}>Sem vendas.</td></tr> :
             lista.map(function(e,i){ var isSel=sel&&sel.uf===e.uf;
-              return <tr key={i} onClick={function(){ setUfSel(e.uf); }} style={{ cursor:"pointer", background:isSel?"rgba(25,118,255,.08)":"transparent" }}>
+              return <tr key={i} onClick={function(){ setUfSel(e.uf); }} style={{ cursor:"pointer", background:isSel?"rgba(118,134,146,.08)":"transparent" }}>
                 <td style={{ ..._td, fontWeight:600, color:"var(--text-strong)" }}>{NOMES[e.uf]||(e.uf==="—"?"Não informado":e.uf)}</td>
                 <td style={_tdMono}>{e.uf}</td>
                 <td style={_tdMono}>{fmt(e.fat)}</td>
@@ -2084,7 +2084,7 @@ function MetasDash({ metas, salvar, enrichedOrders }){
             <datalist id="dl-seg"><option value="Geral" /><option value="Mercado Livre" /><option value="Shopee" /><option value="Por estado" /><option value="Por produto" /></datalist>
           </div>
           <div><label style={lbl}>Valor da meta (R$)</label><input type="number" step="0.01" value={f.valor} onChange={function(e){ set("valor", e.target.value); }} placeholder="0,00" style={campo} /></div>
-          <div><button onClick={add} style={{ width:"100%", background:"#1976FF", border:"none", color:"#fff", fontWeight:500, padding:"10px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Adicionar meta</button></div>
+          <div><button onClick={add} style={{ width:"100%", background:"#768692", border:"none", color:"#fff", fontWeight:500, padding:"10px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Adicionar meta</button></div>
         </div>
       </div>
       {(metas||[]).length===0 ? (
@@ -2106,7 +2106,7 @@ function MetasDash({ metas, salvar, enrichedOrders }){
                 <span style={{ fontSize:12, color:"var(--text-3)" }}>de {fmt(m.valor)}</span>
               </div>
               <div style={{ height:10, borderRadius:6, background:"var(--surface-3)", overflow:"hidden" }}>
-                <div style={{ width:pctv+"%", height:"100%", background: bateu?"#0a9d4e":"#1976FF", transition:"width .3s" }} />
+                <div style={{ width:pctv+"%", height:"100%", background: bateu?"#0a9d4e":"#768692", transition:"width .3s" }} />
               </div>
               <div style={{ display:"flex", justifyContent:"space-between", marginTop:6, fontSize:12 }}>
                 <span style={{ color: bateu?"#0a9d4e":"var(--text-2)", fontWeight:500 }}>{pct1(m.valor?real/m.valor*100:0)}</span>
@@ -2128,7 +2128,7 @@ function DashboardTab({ enrichedOrders, produtos, user, metas, salvarMetas }){
     <div style={{ padding:"2px" }}>
       <div style={{ display:"flex", gap:2, borderBottom:"2px solid var(--border)", marginBottom:14, overflowX:"auto" }}>
         {subs.map(function(t){ var a=sub===t[0]; return <button key={t[0]} onClick={function(){ setSub(t[0]); }}
-          style={{ padding:"10px 16px", border:"none", borderBottom:a?"2px solid #1976FF":"2px solid transparent", marginBottom:-2, background:"transparent", color:a?"var(--text-strong)":"var(--text-3)", fontWeight:a?700:500, fontSize:13, cursor:"pointer", whiteSpace:"nowrap", fontFamily:"inherit" }}>{t[1]}</button>; })}
+          style={{ padding:"10px 16px", border:"none", borderBottom:a?"2px solid #768692":"2px solid transparent", marginBottom:-2, background:"transparent", color:a?"var(--text-strong)":"var(--text-3)", fontWeight:a?700:500, fontSize:13, cursor:"pointer", whiteSpace:"nowrap", fontFamily:"inherit" }}>{t[1]}</button>; })}
       </div>
       {sub==="geral" && <DashboardGeral enrichedOrders={enrichedOrders} />}
       {sub==="estados" && <EstadosDash enrichedOrders={enrichedOrders} />}
@@ -2212,10 +2212,10 @@ function DashboardGeral({ enrichedOrders }) {
             var ativo = periodo === p[0];
             return <button key={p[0]} onClick={function(){ setPeriodo(p[0]); }}
               style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600,
-                background: ativo ? "#1976FF" : "var(--surface)", color: ativo ? "#fff" : "var(--text-3)" }}>{p[1]}</button>;
+                background: ativo ? "#768692" : "var(--surface)", color: ativo ? "#fff" : "var(--text-3)" }}>{p[1]}</button>;
           })}
           {/* Intervalo personalizado De/Até */}
-          <div style={{ display:"flex", alignItems:"center", gap:5, padding:"4px 8px", borderRadius:8, border:"1px solid var(--border)", background: periodo==="custom" ? "rgba(25,118,255,.10)" : "var(--surface)" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:5, padding:"4px 8px", borderRadius:8, border:"1px solid var(--border)", background: periodo==="custom" ? "rgba(118,134,146,.10)" : "var(--surface)" }}>
             <input type="date" value={deData} max={ateData || undefined}
               onChange={function(e){ setDeData(e.target.value); setPeriodo("custom"); }}
               title="Data inicial" style={_inpData} />
@@ -2276,7 +2276,7 @@ function DashboardGeral({ enrichedOrders }) {
               <ResponsiveContainer width="100%" height={240}>
                 <AreaChart data={serieDia} margin={{ top:6, right:10, left:0, bottom:0 }}>
                   <defs>
-                    <linearGradient id="dFat" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#1976FF" stopOpacity={.35}/><stop offset="100%" stopColor="#1976FF" stopOpacity={0}/></linearGradient>
+                    <linearGradient id="dFat" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#768692" stopOpacity={.35}/><stop offset="100%" stopColor="#768692" stopOpacity={0}/></linearGradient>
                     <linearGradient id="dLucro" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#0a9d4e" stopOpacity={.35}/><stop offset="100%" stopColor="#0a9d4e" stopOpacity={0}/></linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} vertical={false} />
@@ -2284,7 +2284,7 @@ function DashboardGeral({ enrichedOrders }) {
                   <YAxis tick={{ fill:CHART_AXIS, fontSize:11 }} tickLine={false} axisLine={false} width={54} tickFormatter={function(v){ return "R$"+(v>=1000?(v/1000).toFixed(0)+"k":v); }} />
                   <RTooltip content={<TipMoeda />} />
                   <Legend wrapperStyle={{ fontSize:12 }} />
-                  <Area type="monotone" dataKey="fat" name="Faturamento" stroke="#1976FF" strokeWidth={2} fill="url(#dFat)" />
+                  <Area type="monotone" dataKey="fat" name="Faturamento" stroke="#768692" strokeWidth={2} fill="url(#dFat)" />
                   <Area type="monotone" dataKey="lucro" name="Lucro" stroke="#0a9d4e" strokeWidth={2} fill="url(#dLucro)" />
                 </AreaChart>
               </ResponsiveContainer>}
@@ -2743,7 +2743,7 @@ function getOrderStatusInfo(status, tags, fulfilled, shipmentStatus) {
   if (isDevolvido) return { label: "Devolvido", color: "#7c3aed", bg: "rgba(139,92,246,.14)" };
   if (isMediation) return { label: "Em disputa", color: "#FFC107", bg: "rgba(255,193,7,.12)" };
   if (status === "cancelled") return { label: "Cancelado", color: "#FF5252", bg: "rgba(255,82,82,.12)" };
-  if (isDelivered) return { label: "Entregue", color: "#1976FF", bg: "rgba(59,140,255,.14)" };
+  if (isDelivered) return { label: "Entregue", color: "#768692", bg: "rgba(118,134,146,.14)" };
   // Enviado = apenas postado na transportadora
   // ready_to_ship = etiqueta gerada mas NÃO postado → Ag. Envio
   if (["shipped", "in_transit"].includes(shipmentStatus))
@@ -2776,8 +2776,8 @@ function Paginacao({ total, porPagina, paginaAtual, onMudar }) {
   }
 
   var btnStyle = function(ativo) { return {
-    padding:"6px 11px", borderRadius:7, border: ativo ? "2px solid #1976FF" : "1px solid var(--border)",
-    background: ativo ? "#1976FF" : "var(--surface)", color: ativo ? "#fff" : "var(--text-2)",
+    padding:"6px 11px", borderRadius:7, border: ativo ? "2px solid #768692" : "1px solid var(--border)",
+    background: ativo ? "#768692" : "var(--surface)", color: ativo ? "#fff" : "var(--text-2)",
     fontWeight: ativo ? 700 : 400, fontSize:13, cursor:"pointer", fontFamily:"inherit", minWidth:34
   }; };
 
@@ -2878,7 +2878,7 @@ function AIPanel({ listing, onClose }) {
             ))}
           </div>
         </div>
-        {state === "idle" && <div style={{ textAlign: "center", padding: "28px 0" }}><div style={{ color: "var(--text-3)", fontSize: 13, marginBottom: 16 }}>Analise com IA para receber sugestões personalizadas</div><button onClick={runAnalysis} style={{ background: "#1976FF", border: "none", color: "#fff", fontWeight: 500, padding: "11px 32px", borderRadius: 10, cursor: "pointer", fontSize: 14 }}>✦ Analisar com IA</button></div>}
+        {state === "idle" && <div style={{ textAlign: "center", padding: "28px 0" }}><div style={{ color: "var(--text-3)", fontSize: 13, marginBottom: 16 }}>Analise com IA para receber sugestões personalizadas</div><button onClick={runAnalysis} style={{ background: "#768692", border: "none", color: "#fff", fontWeight: 500, padding: "11px 32px", borderRadius: 10, cursor: "pointer", fontSize: 14 }}>✦ Analisar com IA</button></div>}
         {state === "loading" && <div style={{ textAlign: "center", padding: "32px 0", color: "var(--text-3)" }}><div style={{ fontSize: 28, marginBottom: 12, animation: "spin 1.2s linear infinite", display: "inline-block" }}>⟳</div><style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style><div style={{ fontSize: 13 }}>Analisando...</div></div>}
         {state === "error" && <div style={{ textAlign: "center", padding: "24px 0" }}><div style={{ color: "#FF5252", fontSize: 13, marginBottom: 12 }}>Erro: {errorMsg}</div><button onClick={runAnalysis} style={{ background: "var(--surface-3)", border: "1px solid var(--border)", color: "var(--text-2)", padding: "8px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>Tentar novamente</button></div>}
         {state === "done" && result && (
@@ -3063,7 +3063,7 @@ function MLConnectModal({ onConnect, onClose }) {
         </div>
         {errorMsg && <div style={{ background: "rgba(255,82,82,.12)", border: "1px solid rgba(255,82,82,.35)", color: "#FF5252", fontSize: 13, padding: "10px 14px", borderRadius: 8, marginBottom: 16 }}>⚠ {errorMsg}</div>}
         <button onClick={handleConnect} disabled={loading || !tokenInput.trim()}
-          style={{ width: "100%", background: loading || !tokenInput.trim() ? "var(--surface-3)" : "#1976FF", border: "none", color: loading || !tokenInput.trim() ? "var(--text-3)" : "#fff", fontWeight: 500, padding: "12px", borderRadius: 10, cursor: loading || !tokenInput.trim() ? "not-allowed" : "pointer", fontSize: 14 }}>
+          style={{ width: "100%", background: loading || !tokenInput.trim() ? "var(--surface-3)" : "#768692", border: "none", color: loading || !tokenInput.trim() ? "var(--text-3)" : "#fff", fontWeight: 500, padding: "12px", borderRadius: 10, cursor: loading || !tokenInput.trim() ? "not-allowed" : "pointer", fontSize: 14 }}>
           {loading ? "Verificando..." : "Conectar"}
         </button>
       </div>
@@ -3148,7 +3148,7 @@ function SinoNotificacoes({ notificacoes, setNotificacoes, darkMode }) {
                 </div>
               ) : notificacoes.map(n => (
                 <div key={n.id} onClick={() => marcarLida(n.id)}
-                  style={{ padding: "12px 16px", borderBottom: `1px solid ${border}`, cursor: "pointer", background: !n.lido ? (darkMode ? "#1e3a5f" : "rgba(59,140,255,.14)") : "transparent", transition: "background .15s" }}>
+                  style={{ padding: "12px 16px", borderBottom: `1px solid ${border}`, cursor: "pointer", background: !n.lido ? (darkMode ? "#3a4750" : "rgba(118,134,146,.14)") : "transparent", transition: "background .15s" }}>
                   <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                     <div style={{ width: 36, height: 36, borderRadius: 10, background: n.tipo === "pedido" ? "rgba(0,200,83,.18)" : "rgba(255,193,7,.18)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
                       {n.tipo === "pedido" ? "🛒" : "⚠️"}
@@ -3168,8 +3168,8 @@ function SinoNotificacoes({ notificacoes, setNotificacoes, darkMode }) {
 
             {/* Footer — permissão browser */}
             {typeof Notification !== "undefined" && Notification.permission === "default" && (
-              <div style={{ padding: "10px 16px", borderTop: `1px solid ${border}`, background: darkMode ? "#1976FF" : "var(--bg-2)" }}>
-                <button onClick={pedirPermissao} style={{ width: "100%", background: "#1976FF", border: "none", color: "#fff", fontWeight: 600, padding: "8px", borderRadius: 8, cursor: "pointer", fontSize: 12 }}>
+              <div style={{ padding: "10px 16px", borderTop: `1px solid ${border}`, background: darkMode ? "#768692" : "var(--bg-2)" }}>
+                <button onClick={pedirPermissao} style={{ width: "100%", background: "#768692", border: "none", color: "#fff", fontWeight: 600, padding: "8px", borderRadius: 8, cursor: "pointer", fontSize: 12 }}>
                   🔔 Ativar notificações do navegador
                 </button>
               </div>
@@ -3386,13 +3386,13 @@ function PainelBackup({ onClose }) {
             </div>
 
             {/* Importar */}
-            <div style={{ background:"rgba(59,140,255,.14)", border:"1px solid rgba(77,179,255,.35)", borderRadius:12, padding:"18px 20px" }}>
+            <div style={{ background:"rgba(118,134,146,.14)", border:"1px solid rgba(118,134,146,.35)", borderRadius:12, padding:"18px 20px" }}>
               <div style={{ fontSize:28, marginBottom:8 }}>⬆️</div>
-              <div style={{ fontWeight:500, fontSize:14, color:"#1976FF", marginBottom:4 }}>Restaurar Backup</div>
+              <div style={{ fontWeight:500, fontSize:14, color:"#768692", marginBottom:4 }}>Restaurar Backup</div>
               <div style={{ fontSize:12, color:"var(--text-2)", marginBottom:8, lineHeight:1.5 }}>
                 Selecione um arquivo de backup (.json) para restaurar seus dados.
               </div>
-              <label style={{ display:"block", width:"100%", background:"#1976FF", border:"none", color:"#fff", fontWeight:500, padding:"11px", borderRadius:10, cursor:"pointer", fontSize:13, textAlign:"center" }}>
+              <label style={{ display:"block", width:"100%", background:"#768692", border:"none", color:"#fff", fontWeight:500, padding:"11px", borderRadius:10, cursor:"pointer", fontSize:13, textAlign:"center" }}>
                 {importing ? "Lendo arquivo..." : "⬆️ Selecionar Arquivo"}
                 <input type="file" accept=".json" style={{ display:"none" }} onChange={e => { if(e.target.files[0]) handleImportFile(e.target.files[0]); e.target.value=""; }} />
               </label>
@@ -3519,12 +3519,12 @@ function LoginScreen({ onLogin }) {
   }
 
   return (
-    <div style={{ minHeight:"100vh", backgroundColor:"var(--bg)", backgroundImage:"radial-gradient(1100px 500px at 75% -10%, rgba(25,118,255,.12), transparent 60%), radial-gradient(800px 420px at -10% 110%, rgba(0,240,255,.06), transparent 60%)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Inter','Segoe UI',sans-serif", padding:24 }}>
+    <div style={{ minHeight:"100vh", backgroundColor:"var(--bg)", backgroundImage:"radial-gradient(1100px 500px at 75% -10%, rgba(118,134,146,.12), transparent 60%), radial-gradient(800px 420px at -10% 110%, rgba(0,240,255,.06), transparent 60%)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Inter','Segoe UI',sans-serif", padding:24 }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');*{box-sizing:border-box;margin:0;padding:0}`}</style>
       <div style={{ width:"100%", maxWidth:420 }}>
         {/* Logo */}
         <div style={{ textAlign:"center", marginBottom:32 }}>
-          <div style={{ width:64, height:64, borderRadius:"50%", background:"rgba(77,179,255,.12)", border:"1px solid rgba(77,179,255,.45)", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"'Space Grotesk',sans-serif", fontSize:30, fontWeight:500, color:"#1976FF", marginBottom:12, boxShadow:"0 0 32px rgba(77,179,255,.4)" }}>F</div>
+          <div style={{ width:64, height:64, borderRadius:"50%", background:"rgba(118,134,146,.12)", border:"1px solid rgba(118,134,146,.45)", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"'Space Grotesk',sans-serif", fontSize:30, fontWeight:500, color:"#768692", marginBottom:12, boxShadow:"0 0 32px rgba(118,134,146,.4)" }}>F</div>
           <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:500, fontSize:24, color:"var(--text-strong)", letterSpacing:-0.5 }}>Flow Marketplaces</div>
           <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:11, color:"var(--text-3)", marginTop:6, letterSpacing:".24em", textTransform:"none" }}>Gestão de Anúncios</div>
         </div>
@@ -3663,7 +3663,7 @@ function ModalUsuario({ usuario, onSave, onClose }) {
                   var temTudo = todasKeys.every(function(k){ return (form.permissoes||[]).includes(k); });
                   set("permissoes", temTudo ? [] : todasKeys);
                 }}
-                style={{ fontSize:11, color:"#1976FF", background:"transparent", border:"none", cursor:"pointer", fontWeight:600 }}>
+                style={{ fontSize:11, color:"#768692", background:"transparent", border:"none", cursor:"pointer", fontWeight:600 }}>
                 {(function(){
                   var total = 0;
                   PERMISSOES_DISPONIVEIS.forEach(function(p){ total++; if(p.sub) total+=p.sub.length; });
@@ -3682,8 +3682,8 @@ function ModalUsuario({ usuario, onSave, onClose }) {
                   <div key={p.key}>
                     {/* Item pai */}
                     <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", padding:"5px 8px", borderRadius:8,
-                      background: isChecked || subChecked > 0 ? "rgba(59,140,255,.14)" : "var(--surface)",
-                      border: "1px solid " + (isChecked || subChecked > 0 ? "#1976FF" : "var(--border)"),
+                      background: isChecked || subChecked > 0 ? "rgba(118,134,146,.14)" : "var(--surface)",
+                      border: "1px solid " + (isChecked || subChecked > 0 ? "#768692" : "var(--border)"),
                       transition:"all .15s" }}>
                       <input type="checkbox" checked={isChecked} ref={function(el){ try { if (el) el.indeterminate = isIndeterminate; } catch(e){} }}
                         onChange={function() {
@@ -3701,7 +3701,7 @@ function ModalUsuario({ usuario, onSave, onClose }) {
                           }
                         }}
                         style={{ width:14, height:14, cursor:"pointer" }} />
-                      <span style={{ fontSize:13, fontWeight:600, color: isChecked || subChecked > 0 ? "#1976FF" : "var(--text-2)", flex:1 }}>{p.label}</span>
+                      <span style={{ fontSize:13, fontWeight:600, color: isChecked || subChecked > 0 ? "#768692" : "var(--text-2)", flex:1 }}>{p.label}</span>
                       {p.sub && <span style={{ fontSize:10, color:"var(--text-3)" }}>{subChecked}/{subTotal}</span>}
                     </label>
                     {/* Sub-permissões */}
@@ -3711,7 +3711,7 @@ function ModalUsuario({ usuario, onSave, onClose }) {
                           var sChecked = (form.permissoes||[]).includes(s.key);
                           return (
                             <label key={s.key} style={{ display:"flex", alignItems:"center", gap:6, cursor:"pointer", padding:"6px 10px", borderRadius:7,
-                              background: sChecked ? "rgba(77,179,255,.12)" : "var(--bg-2)",
+                              background: sChecked ? "rgba(118,134,146,.12)" : "var(--bg-2)",
                               border: "1px solid " + (sChecked ? "#bae6fd" : "var(--border)"),
                               transition:"all .15s" }}>
                               <input type="checkbox" checked={sChecked}
@@ -3730,7 +3730,7 @@ function ModalUsuario({ usuario, onSave, onClose }) {
                                   set("permissoes", newPerms);
                                 }}
                                 style={{ width:12, height:12, cursor:"pointer" }} />
-                              <span style={{ fontSize:12, color: sChecked ? "#1976FF" : "var(--text-2)", fontWeight: sChecked ? 600 : 400 }}>{s.label}</span>
+                              <span style={{ fontSize:12, color: sChecked ? "#768692" : "var(--text-2)", fontWeight: sChecked ? 600 : 400 }}>{s.label}</span>
                             </label>
                           );
                         })}
@@ -3758,7 +3758,7 @@ function ModalUsuario({ usuario, onSave, onClose }) {
         <div style={{ display:"flex", gap:8 }}>
           <button onClick={onClose} style={{ flex:1, background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
           <button onClick={handleSave} disabled={!form.nome||!form.usuario}
-            style={{ flex:2, background:!form.nome||!form.usuario?"var(--surface-3)":"#1976FF", border:"none", color:!form.nome||!form.usuario?"var(--text-3)":"#fff", fontWeight:500, padding:"11px", borderRadius:10, cursor:!form.nome||!form.usuario?"not-allowed":"pointer" }}>
+            style={{ flex:2, background:!form.nome||!form.usuario?"var(--surface-3)":"#768692", border:"none", color:!form.nome||!form.usuario?"var(--text-3)":"#fff", fontWeight:500, padding:"11px", borderRadius:10, cursor:!form.nome||!form.usuario?"not-allowed":"pointer" }}>
             Salvar Usuário
           </button>
         </div>
@@ -3807,7 +3807,7 @@ function AdminTab({ currentUser }) {
           <div style={{ fontSize:13, color:"var(--text-3)", marginTop:2 }}>Gerencie quem pode acessar o dashboard e o que cada um pode ver</div>
         </div>
         <button onClick={()=>{ setEditingUser(null); setShowModal(true); }}
-          style={{ background:"#1976FF", border:"none", color:"#fff", fontWeight:500, padding:"10px 22px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
+          style={{ background:"#768692", border:"none", color:"#fff", fontWeight:500, padding:"10px 22px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
           + Novo Usuário
         </button>
       </div>
@@ -3817,18 +3817,18 @@ function AdminTab({ currentUser }) {
           var eu = u.id === currentUser.id;
           return (
             <div key={u.id} style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 18px", borderBottom: idx < usuarios.length-1 ? "1px solid var(--border-soft)" : "none", opacity: u.ativo ? 1 : 0.55 }}>
-              <div style={{ width:40, height:40, borderRadius:10, background: u.admin ? "#1976FF" : "var(--surface-3)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:15, fontWeight:600, color: u.admin ? "#fff" : "var(--text-2)", flexShrink:0 }}>
+              <div style={{ width:40, height:40, borderRadius:10, background: u.admin ? "#768692" : "var(--surface-3)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:15, fontWeight:600, color: u.admin ? "#fff" : "var(--text-2)", flexShrink:0 }}>
                 {(u.nome || "?").charAt(0).toUpperCase()}
               </div>
               <div style={{ width:190, flexShrink:0, minWidth:0 }}>
                 <div style={{ fontWeight:500, fontSize:14, color:"var(--text-strong)", display:"flex", alignItems:"center", gap:8 }}>
                   <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{u.nome}</span>
-                  {eu && <span style={{ fontSize:10, fontWeight:500, color:"#1976FF", background:"rgba(25,118,255,.12)", padding:"1px 7px", borderRadius:20, flexShrink:0 }}>Você</span>}
+                  {eu && <span style={{ fontSize:10, fontWeight:500, color:"#768692", background:"rgba(118,134,146,.12)", padding:"1px 7px", borderRadius:20, flexShrink:0 }}>Você</span>}
                 </div>
                 <div style={{ fontSize:12, color:"var(--text-3)", fontFamily:"'JetBrains Mono',monospace" }}>@{u.usuario}{u.admin ? " · admin" : ""}</div>
               </div>
               <div style={{ flex:1, display:"flex", flexWrap:"wrap", gap:4, minWidth:0 }}>
-                {PERMISSOES_DISPONIVEIS.map(function(p){ var on = u.permissoes && u.permissoes.includes(p.key); return <span key={p.key} style={{ fontSize:11, padding:"2px 8px", borderRadius:20, background: on ? "rgba(25,118,255,.12)" : "var(--bg-2)", color: on ? "#1976FF" : "var(--text-4)", border:"1px solid " + (on ? "rgba(25,118,255,.3)" : "var(--border)"), fontWeight: on ? 600 : 400 }}>{p.label}</span>; })}
+                {PERMISSOES_DISPONIVEIS.map(function(p){ var on = u.permissoes && u.permissoes.includes(p.key); return <span key={p.key} style={{ fontSize:11, padding:"2px 8px", borderRadius:20, background: on ? "rgba(118,134,146,.12)" : "var(--bg-2)", color: on ? "#768692" : "var(--text-4)", border:"1px solid " + (on ? "rgba(118,134,146,.3)" : "var(--border)"), fontWeight: on ? 600 : 400 }}>{p.label}</span>; })}
               </div>
               <button onClick={function(){ toggleAtivo(u.id); }} style={{ fontSize:11, fontWeight:500, padding:"4px 10px", borderRadius:20, cursor:"pointer", flexShrink:0, background: u.ativo ? "rgba(10,157,78,.12)" : "var(--bg-2)", border:"1px solid " + (u.ativo ? "rgba(10,157,78,.35)" : "var(--border)"), color: u.ativo ? "#0a9d4e" : "var(--text-3)" }}>{u.ativo ? "Ativo" : "Inativo"}</button>
               <button onClick={function(){ setEditingUser(u); setShowModal(true); }} style={{ fontSize:12, fontWeight:600, padding:"5px 12px", borderRadius:8, cursor:"pointer", flexShrink:0, background:"var(--surface-3)", border:"none", color:"var(--text-2)" }}>Editar</button>
@@ -4050,14 +4050,14 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
               {["R$","%"].map(function(t){
                 return <button key={t} onClick={function(){setNovoCusto(function(s){return Object.assign({},s,{tipo:t});});}}
                   style={{ padding:"7px 10px", border:"none", cursor:"pointer", fontSize:12, fontWeight:500,
-                    background: novoCusto.tipo===t?"#1976FF":"var(--surface)", color: novoCusto.tipo===t?"#fff":"var(--text-2)" }}>{t}</button>;
+                    background: novoCusto.tipo===t?"#768692":"var(--surface)", color: novoCusto.tipo===t?"#fff":"var(--text-2)" }}>{t}</button>;
               })}
             </div>
             <input type="number" step="0.01" value={novoCusto.valor} onChange={function(e){setNovoCusto(function(s){return Object.assign({},s,{valor:e.target.value});});}}
               placeholder={novoCusto.tipo==="R$" ? "0,00" : "0"}
               style={{ width:90, background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"7px 10px", borderRadius:8, fontSize:12, outline:"none", flexShrink:0 }} />
             <button onClick={addCusto} disabled={!novoCusto.nome||!novoCusto.valor}
-              style={{ background: (novoCusto.nome&&novoCusto.valor)?"#1976FF":"var(--surface-3)", border:"none", color:(novoCusto.nome&&novoCusto.valor)?"#fff":"var(--text-3)",
+              style={{ background: (novoCusto.nome&&novoCusto.valor)?"#768692":"var(--surface-3)", border:"none", color:(novoCusto.nome&&novoCusto.valor)?"#fff":"var(--text-3)",
                 fontWeight:500, padding:"7px 16px", borderRadius:8, cursor:(novoCusto.nome&&novoCusto.valor)?"pointer":"not-allowed", fontSize:12, flexShrink:0 }}>+ Adicionar</button>
           </div>
         </div>
@@ -4209,7 +4209,7 @@ function detectTipoEnvio(o, shipmentStatuses) {
 function BadgeTipoEnvio({ tipo }) {
   if (!tipo) return null;
   var cfg = {
-    "FULL": { bg:"rgba(77,179,255,.22)", color:"#1976FF", label:"FULL" },
+    "FULL": { bg:"rgba(118,134,146,.22)", color:"#768692", label:"FULL" },
     "Flex": { bg:"rgba(139,92,246,.18)", color:"#7c3aed", label:"Flex" },
     "ME2":  { bg:"rgba(0,240,255,.25)", color:"#0e7490", label:"ME2" },
     "ME1":  { bg:"rgba(0,200,83,.18)", color:"#0a9d4e", label:"ME1" },
@@ -4577,8 +4577,8 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                     <span style={{ fontWeight:500, color:"#FFC107", marginRight:6 }}>SKU {skuRef}</span>
                     {listingRef && (
                       <span style={{ fontSize:9, fontWeight:500, padding:"1px 6px", borderRadius:4, marginRight:6, whiteSpace:"nowrap",
-                        background: tipoPrem?"rgba(139,92,246,.18)":"rgba(59,140,255,.18)",
-                        color: tipoPrem?"#a78bfa":"#1976FF" }}>
+                        background: tipoPrem?"rgba(139,92,246,.18)":"rgba(118,134,146,.18)",
+                        color: tipoPrem?"#a78bfa":"#768692" }}>
                         {tipoPrem?"⭐ Premium 17%":"📋 Clássico 12%"}
                       </span>
                     )}
@@ -4760,9 +4760,9 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                       </span>
                     ) : (
                       <span style={{ fontSize:10, fontWeight:500, padding:"2px 6px", borderRadius:5, whiteSpace:"nowrap",
-                        background: isPremium?"rgba(139,92,246,.14)":"rgba(59,140,255,.14)",
-                        color: isPremium?"#7c3aed":"#1976FF",
-                        border:"1px solid "+(isPremium?"rgba(139,92,246,.35)":"rgba(77,179,255,.35)") }}>
+                        background: isPremium?"rgba(139,92,246,.14)":"rgba(118,134,146,.14)",
+                        color: isPremium?"#7c3aed":"#768692",
+                        border:"1px solid "+(isPremium?"rgba(139,92,246,.35)":"rgba(118,134,146,.35)") }}>
                         {isPremium?"⭐ Premium":"📋 Clássico"}
                       </span>
                     )}
@@ -4917,7 +4917,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                           {(feeRate*100).toFixed(0)}% s/ {descPct>0?"desc":"atual"}
                         </div>
                         <div title="Taxa padrão do Mercado Livre: Clássico 12% · Premium 17%"
-                          style={{ fontSize:9, fontWeight:500, color: isPremium?"#7c3aed":"#1976FF", marginTop:1 }}>
+                          style={{ fontSize:9, fontWeight:500, color: isPremium?"#7c3aed":"#768692", marginTop:1 }}>
                           {isPremium ? "Premium 17%" : "Clássico 12%"}
                         </div>
                       </>
@@ -5164,7 +5164,7 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
             </>
           )}
           <button onClick={analisarTodos} disabled={analisando || !categoriasUnicas.length}
-            style={{ background: analisando?"var(--surface-3)":"#1976FF", border:"none", color:"#fff", fontWeight:500, padding:"9px 18px", borderRadius:8, cursor:analisando?"wait":"pointer", fontSize:13 }}>
+            style={{ background: analisando?"var(--surface-3)":"#768692", border:"none", color:"#fff", fontWeight:500, padding:"9px 18px", borderRadius:8, cursor:analisando?"wait":"pointer", fontSize:13 }}>
             {analisando ? "Analisando..." : "🔍 Analisar (" + categoriasUnicas.length + " categorias)"}
           </button>
         </div>
@@ -5195,7 +5195,7 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
           var ativo = filtro === f.key;
           return (
             <button key={f.key} onClick={function(){ setFiltro(f.key); }}
-              style={{ background:ativo?"#1976FF":"var(--surface)", color:ativo?"#fff":"var(--text-2)", border:"1px solid "+(ativo?"#1976FF":"var(--border)"), borderRadius:20, padding:"5px 14px", fontSize:12, fontWeight:600, cursor:"pointer" }}>
+              style={{ background:ativo?"#768692":"var(--surface)", color:ativo?"#fff":"var(--text-2)", border:"1px solid "+(ativo?"#768692":"var(--border)"), borderRadius:20, padding:"5px 14px", fontSize:12, fontWeight:600, cursor:"pointer" }}>
               {f.label}
             </button>
           );
@@ -5459,7 +5459,7 @@ function ChatInternoWidget({ currentUser }) {
       {/* Botão flutuante */}
       <button onClick={function(){ setOpen(true); marcarComoLidas(); }}
         style={{ position:"fixed", bottom:20, right:20, width:56, height:56, borderRadius:"50%",
-          background:"#1976FF", border:"none", color:"#FFC107", fontSize:24, cursor:"pointer",
+          background:"#768692", border:"none", color:"#FFC107", fontSize:24, cursor:"pointer",
           boxShadow:"0 6px 20px rgba(0,0,0,.25)", zIndex:500, display: open?"none":"flex",
           alignItems:"center", justifyContent:"center" }}>
         💬
@@ -5479,7 +5479,7 @@ function ChatInternoWidget({ currentUser }) {
           flexDirection:"column", overflow:"hidden", border:"1px solid var(--border)" }}>
 
           {/* Header */}
-          <div style={{ background:"#1976FF", padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div style={{ background:"#768692", padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <div style={{ color:"#fff", fontWeight:500, fontSize:14 }}>💬 Chat da Equipe</div>
             <button onClick={function(){setOpen(false);}} style={{ background:"transparent", border:"none", color:"var(--text-3)", fontSize:18, cursor:"pointer" }}>✕</button>
           </div>
@@ -5489,7 +5489,7 @@ function ChatInternoWidget({ currentUser }) {
             {[{k:"conversa",l:"💬 Conversa"},{k:"tarefas",l:"✓ Tarefas"+(tarefasMinhas>0?" ("+tarefasMinhas+")":"")}].map(function(t){
               var a = aba===t.k;
               return <button key={t.k} onClick={function(){setAba(t.k);}}
-                style={{ flex:1, padding:"9px", border:"none", borderBottom:a?"2px solid #1976FF":"2px solid transparent",
+                style={{ flex:1, padding:"9px", border:"none", borderBottom:a?"2px solid #768692":"2px solid transparent",
                   background:"transparent", color:a?"var(--text-strong)":"var(--text-3)", fontWeight:a?700:400, fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>
                 {t.l}
               </button>;
@@ -5503,8 +5503,8 @@ function ChatInternoWidget({ currentUser }) {
                 {canais.map(function(c){
                   var a = canalAtivo===c.k;
                   return <button key={c.k} onClick={function(){setCanalAtivo(c.k);}}
-                    style={{ padding:"5px 10px", borderRadius:14, border:"1px solid "+(a?"#1976FF":"var(--border)"),
-                      background:a?"#1976FF":"var(--surface)", color:a?"#fff":"var(--text-2)", fontSize:11, fontWeight:a?700:400, cursor:"pointer", whiteSpace:"nowrap" }}>
+                    style={{ padding:"5px 10px", borderRadius:14, border:"1px solid "+(a?"#768692":"var(--border)"),
+                      background:a?"#768692":"var(--surface)", color:a?"#fff":"var(--text-2)", fontSize:11, fontWeight:a?700:400, cursor:"pointer", whiteSpace:"nowrap" }}>
                     {c.icon} {c.l}
                   </button>;
                 })}
@@ -5522,13 +5522,13 @@ function ChatInternoWidget({ currentUser }) {
                   return (
                     <div key={m.id} style={{ display:"flex", flexDirection:"column", alignItems:isMe?"flex-end":"flex-start" }}>
                       {!isMe && <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:2, marginLeft:4 }}>{m.autorNome}</div>}
-                      <div style={{ maxWidth:"80%", background:isMe?"#1976FF":"var(--surface-3)", color:isMe?"#fff":"var(--text-strong)",
+                      <div style={{ maxWidth:"80%", background:isMe?"#768692":"var(--surface-3)", color:isMe?"#fff":"var(--text-strong)",
                         padding:"8px 12px", borderRadius:isMe?"12px 12px 4px 12px":"12px 12px 12px 4px", fontSize:13 }}>
                         {m.anexo && (
                           m.anexo.tipo?.startsWith("image/") ? (
                             <img src={m.anexo.data} alt={m.anexo.nome} style={{ maxWidth:200, borderRadius:8, marginBottom:m.texto?6:0, display:"block" }} />
                           ) : (
-                            <a href={m.anexo.data} download={m.anexo.nome} style={{ display:"flex", alignItems:"center", gap:6, color:isMe?"rgba(77,179,255,.35)":"#1976FF", textDecoration:"none", marginBottom:m.texto?6:0 }}>
+                            <a href={m.anexo.data} download={m.anexo.nome} style={{ display:"flex", alignItems:"center", gap:6, color:isMe?"rgba(118,134,146,.35)":"#768692", textDecoration:"none", marginBottom:m.texto?6:0 }}>
                               📎 {m.anexo.nome}
                             </a>
                           )
@@ -5554,7 +5554,7 @@ function ChatInternoWidget({ currentUser }) {
                 <input value={texto} onChange={function(e){setTexto(e.target.value);}} onKeyDown={handleKey} placeholder="Digite uma mensagem..."
                   style={{ flex:1, background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"8px 12px", borderRadius:9, fontSize:13, outline:"none" }} />
                 <button onClick={function(){enviarMensagem();}} disabled={!texto.trim()}
-                  style={{ background:texto.trim()?"#1976FF":"var(--surface-3)", border:"none", color:texto.trim()?"#fff":"var(--text-3)", width:36, height:36, borderRadius:9, cursor:texto.trim()?"pointer":"not-allowed", fontSize:16, flexShrink:0 }}>
+                  style={{ background:texto.trim()?"#768692":"var(--surface-3)", border:"none", color:texto.trim()?"#fff":"var(--text-3)", width:36, height:36, borderRadius:9, cursor:texto.trim()?"pointer":"not-allowed", fontSize:16, flexShrink:0 }}>
                   ➤
                 </button>
               </div>
@@ -5564,7 +5564,7 @@ function ChatInternoWidget({ currentUser }) {
               {/* Tarefas */}
               <div style={{ flex:1, overflowY:"auto", padding:"12px 14px" }}>
                 <button onClick={function(){setShowNovaTarefa(true);}}
-                  style={{ width:"100%", background:"#1976FF", border:"none", color:"#fff", fontWeight:500, padding:"9px", borderRadius:9, cursor:"pointer", fontSize:12, marginBottom:12 }}>
+                  style={{ width:"100%", background:"#768692", border:"none", color:"#fff", fontWeight:500, padding:"9px", borderRadius:9, cursor:"pointer", fontSize:12, marginBottom:12 }}>
                   + Nova Tarefa
                 </button>
                 {tarefas.length===0 && <div style={{ textAlign:"center", color:"var(--text-3)", fontSize:12, padding:20 }}>Nenhuma tarefa criada</div>}
@@ -5643,7 +5643,7 @@ function ModalNovaTarefa({ usuarios, onSave, onClose }) {
           <button onClick={onClose} style={{ flex:1, background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"10px", borderRadius:9, cursor:"pointer" }}>Cancelar</button>
           <button onClick={function(){ if(titulo.trim()) onSave({titulo,descricao,responsavelId,prazo,prioridade}); }}
             disabled={!titulo.trim()}
-            style={{ flex:2, background:titulo.trim()?"#1976FF":"var(--surface-3)", border:"none", color:titulo.trim()?"#fff":"var(--text-3)", fontWeight:500, padding:"10px", borderRadius:9, cursor:titulo.trim()?"pointer":"not-allowed" }}>
+            style={{ flex:2, background:titulo.trim()?"#768692":"var(--surface-3)", border:"none", color:titulo.trim()?"#fff":"var(--text-3)", fontWeight:500, padding:"10px", borderRadius:9, cursor:titulo.trim()?"pointer":"not-allowed" }}>
             Criar Tarefa
           </button>
         </div>
@@ -5699,21 +5699,21 @@ function PainelConfiguracoesGlobal(props) {
   return (
     React.createElement("div", {style:{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",backdropFilter:"blur(4px)",zIndex:800,display:"flex",alignItems:"flex-start",justifyContent:"flex-end",padding:"56px 8px 8px"}},
       React.createElement("div", {style:{background:"var(--surface)",borderRadius:14,width:700,maxHeight:"calc(100vh - 68px)",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,.22)",overflow:"hidden"}},
-        React.createElement("div", {style:{background:"#1976FF",padding:"13px 18px",display:"flex",justifyContent:"space-between",alignItems:"center"}},
+        React.createElement("div", {style:{background:"#768692",padding:"13px 18px",display:"flex",justifyContent:"space-between",alignItems:"center"}},
           React.createElement("div", {style:{color:"var(--text-strong)",fontWeight:500,fontSize:15}}, "Configuracoes do Sistema"),
           React.createElement("button", {onClick:onClose, style:{background:"transparent",border:"none",color:"var(--text-3)",fontSize:20,cursor:"pointer",lineHeight:1}}, "x")
         ),
         React.createElement("div", {style:{display:"flex",borderBottom:"2px solid var(--border)"}},
           ABAS.map(function(t){
             var a=aba===t.k;
-            return React.createElement("button",{key:t.k,onClick:function(){setAba(t.k);},style:{flex:1,padding:"10px",border:"none",borderBottom:a?"2px solid #1976FF":"2px solid transparent",background:"transparent",color:a?"var(--text-strong)":"var(--text-3)",fontWeight:a?700:400,fontSize:12,cursor:"pointer",fontFamily:"inherit",marginBottom:-2}}, t.l);
+            return React.createElement("button",{key:t.k,onClick:function(){setAba(t.k);},style:{flex:1,padding:"10px",border:"none",borderBottom:a?"2px solid #768692":"2px solid transparent",background:"transparent",color:a?"var(--text-strong)":"var(--text-3)",fontWeight:a?700:400,fontSize:12,cursor:"pointer",fontFamily:"inherit",marginBottom:-2}}, t.l);
           })
         ),
         React.createElement("div", {style:{flex:1,overflowY:"auto",padding:"16px 18px"}},
           aba==="config" ? React.createElement(ImpostosCompacto, {impostos:impostos,setImpostos:setImpostos,custosFixos:custosFixos,setCustosFixos:setCustosFixos,faturamentoMes:faturamentoMes,irpjCsllConfig:irpjCsllConfig,setIrpjCsllConfig:setIrpjCsllConfig}) :
           aba==="aparencia" ? React.createElement("div", {style:{display:"flex",gap:10}},
             [{v:false,l:"Claro"},{v:true,l:"Escuro"}].map(function(t){
-              return React.createElement("button",{key:String(t.v),onClick:function(){setDarkMode(t.v);localStorage.setItem("darkMode",t.v?"1":"0");},style:{flex:1,padding:14,borderRadius:10,border:"2px solid "+(darkMode===t.v?"#1976FF":"var(--border)"),background:darkMode===t.v?"#1976FF":"var(--surface)",color:darkMode===t.v?"#fff":"var(--text-2)",fontWeight:500,fontSize:14,cursor:"pointer"}}, t.v?"Escuro":"Claro");
+              return React.createElement("button",{key:String(t.v),onClick:function(){setDarkMode(t.v);localStorage.setItem("darkMode",t.v?"1":"0");},style:{flex:1,padding:14,borderRadius:10,border:"2px solid "+(darkMode===t.v?"#768692":"var(--border)"),background:darkMode===t.v?"#768692":"var(--surface)",color:darkMode===t.v?"#fff":"var(--text-2)",fontWeight:500,fontSize:14,cursor:"pointer"}}, t.v?"Escuro":"Claro");
             })
           ) :
           aba==="backup" ? React.createElement("div", {style:{display:"flex",flexDirection:"column",gap:14}},
@@ -5727,7 +5727,7 @@ function PainelConfiguracoesGlobal(props) {
                   var blob=new Blob([JSON.stringify(bk,null,2)],{type:"application/json"});
                   var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="mlmargem_backup_"+new Date().toLocaleDateString("sv-SE")+".json";a.click();
                 },
-                style:{background:"#1976FF",border:"none",color:"#fff",fontWeight:500,padding:"10px 20px",borderRadius:9,cursor:"pointer",fontSize:13}
+                style:{background:"#768692",border:"none",color:"#fff",fontWeight:500,padding:"10px 20px",borderRadius:9,cursor:"pointer",fontSize:13}
               }, "Exportar Backup")
             ),
             React.createElement("div", {style:{background:"var(--bg-2)",border:"1px solid var(--border)",borderRadius:12,padding:16}},
@@ -5748,19 +5748,19 @@ function PainelConfiguracoesGlobal(props) {
             usuarios.map(function(u){
               var isMe=u.id===currentUser.id;
               return React.createElement("div",{key:u.id,style:{background:"var(--bg-2)",border:"1px solid var(--border)",borderRadius:10,padding:"10px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:10}},
-                React.createElement("div",{style:{width:36,height:36,borderRadius:9,background:"#1976FF",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:600,color:"#FFC107",flexShrink:0}}, u.nome&&u.nome.charAt(0).toUpperCase()),
+                React.createElement("div",{style:{width:36,height:36,borderRadius:9,background:"#768692",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:600,color:"#FFC107",flexShrink:0}}, u.nome&&u.nome.charAt(0).toUpperCase()),
                 React.createElement("div",{style:{flex:1,minWidth:0}},
-                  React.createElement("div",{style:{fontWeight:500,fontSize:13,color:"var(--text-strong)"}}, u.nome, isMe&&React.createElement("span",{style:{fontSize:10,color:"#0e7490",background:"rgba(59,140,255,.14)",padding:"1px 5px",borderRadius:4,marginLeft:6}},"voce")),
+                  React.createElement("div",{style:{fontWeight:500,fontSize:13,color:"var(--text-strong)"}}, u.nome, isMe&&React.createElement("span",{style:{fontSize:10,color:"#0e7490",background:"rgba(118,134,146,.14)",padding:"1px 5px",borderRadius:4,marginLeft:6}},"voce")),
                   React.createElement("div",{style:{fontSize:11,color:"var(--text-2)"}}, "@"+u.usuario+" - "+(u.admin?"Admin":"Usuario")+" - ",React.createElement("span",{style:{color:u.ativo?"#0a9d4e":"#FF5252",fontWeight:600}},u.ativo?"Ativo":"Inativo")),
                   u.email&&React.createElement("div",{style:{fontSize:10,color:"var(--text-3)",marginTop:1}}, u.email)
                 ),
                 React.createElement("div",{style:{display:"flex",gap:6}},
-                  React.createElement("button",{onClick:function(){setEditingUser(u);setShowModalUser(true);},style:{background:"rgba(59,140,255,.14)",border:"1px solid rgba(77,179,255,.35)",color:"#1976FF",padding:"4px 10px",borderRadius:7,cursor:"pointer",fontSize:11,fontWeight:600}},"Editar"),
+                  React.createElement("button",{onClick:function(){setEditingUser(u);setShowModalUser(true);},style:{background:"rgba(118,134,146,.14)",border:"1px solid rgba(118,134,146,.35)",color:"#768692",padding:"4px 10px",borderRadius:7,cursor:"pointer",fontSize:11,fontWeight:600}},"Editar"),
                   !isMe&&React.createElement("button",{onClick:function(){deleteUser(u.id);},style:{background:"rgba(255,82,82,.12)",border:"1px solid rgba(255,82,82,.35)",color:"#FF5252",padding:"4px 8px",borderRadius:7,cursor:"pointer",fontSize:11}},"X")
                 )
               );
             }),
-            React.createElement("button",{onClick:function(){setEditingUser(null);setShowModalUser(true);},style:{width:"100%",background:"#1976FF",border:"none",color:"#fff",fontWeight:500,padding:10,borderRadius:9,cursor:"pointer",fontSize:13,marginTop:8}},
+            React.createElement("button",{onClick:function(){setEditingUser(null);setShowModalUser(true);},style:{width:"100%",background:"#768692",border:"none",color:"#fff",fontWeight:500,padding:10,borderRadius:9,cursor:"pointer",fontSize:13,marginTop:8}},
               "+ Novo Usuario"
             )
           )
@@ -5993,7 +5993,7 @@ export default function App() {
   const [showMLModal, setShowMLModal] = useState(false);
   // Tema: escuro por padrão (preserva o visual atual); só fica claro se o usuário escolher.
   // "1"/ausente = escuro; "0" = claro. Aplica data-theme na raiz p/ os tokens CSS trocarem.
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") !== "0");
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "1");
   useEffect(function(){
     try { document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light"); } catch(e) {}
   }, [darkMode]);
@@ -7107,8 +7107,8 @@ export default function App() {
     }
     return {
       topLabel: "Comprador paga",
-      topColor: "#1976FF",
-      topBg: "rgba(59,140,255,.14)",
+      topColor: "#768692",
+      topBg: "rgba(118,134,146,.14)",
       bottomLabel: cost > 0 ? `Seu custo: ${fmt(cost)}` : "Seu custo: calculando...",
       bottomColor: "#7c3aed",
     };
@@ -7154,7 +7154,7 @@ export default function App() {
         .scroll-x::-webkit-scrollbar-track{background:rgba(255,255,255,.05);border-radius:8px}
         .scroll-x::-webkit-scrollbar-thumb{background:var(--text-4);border-radius:8px;border:2px solid transparent;background-clip:padding-box}
         .scroll-x::-webkit-scrollbar-thumb:hover{background:#7C8AAE}
-        input:focus,textarea:focus,select:focus{outline:2px solid #1976FF;outline-offset:1px}
+        input:focus,textarea:focus,select:focus{outline:2px solid #768692;outline-offset:1px}
 
         /* ── TABELAS ── */
         table{border-collapse:collapse;width:100%}
@@ -7168,7 +7168,7 @@ export default function App() {
 
         /* ── FILTRO PERIOD ── */
         .filter-btn{background:var(--surface);border:1px solid var(--border);color:var(--text-2);padding:5px 14px;cursor:pointer;font-family:inherit;font-size:12px;border-radius:20px;transition:all .15s;font-weight:500}
-        .filter-btn.active{background:#1976FF;border-color:#1976FF;color:#fff;font-weight:600}
+        .filter-btn.active{background:#768692;border-color:#768692;color:#fff;font-weight:600}
         .filter-btn:hover:not(.active){background:var(--bg-2);border-color:var(--text-4)}
         .dark .filter-btn{background:var(--bg-2);border-color:var(--text-2);color:var(--text-3)}
         .dark .filter-btn.active{background:var(--surface-3);color:var(--text-strong)}
@@ -7182,15 +7182,15 @@ export default function App() {
 
         /* ── INPUTS ── */
         .search-input{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text-strong);padding:8px 14px 8px 38px;border-radius:8px;font-family:inherit;font-size:13px;outline:none;transition:border .15s}
-        .search-input:focus{border-color:#1976FF;box-shadow:0 0 0 3px rgba(15,23,42,.06)}
+        .search-input:focus{border-color:#768692;box-shadow:0 0 0 3px rgba(15,23,42,.06)}
         .dark input{background:var(--bg-2)!important;border-color:var(--text-2)!important;color:var(--text-2)!important}
         .dark select{background:var(--bg-2);border-color:var(--text-2);color:var(--text-2)}
 
         /* ── MISC ── */
         .copy-btn{background:transparent;border:none;color:var(--text-4);cursor:pointer;padding:2px 5px;border-radius:4px;font-size:11px;transition:all .15s}
         .copy-btn:hover{background:var(--surface-3);color:var(--text-2)}
-        .title-link{color:#1976FF;text-decoration:none;font-weight:500;transition:color .15s}
-        .title-link:hover{color:#1976FF;text-decoration:underline}
+        .title-link{color:#768692;text-decoration:none;font-weight:500;transition:color .15s}
+        .title-link:hover{color:#768692;text-decoration:underline}
         select{background:var(--surface);border:1px solid var(--border);color:var(--text-2);padding:7px 12px;border-radius:8px;font-family:inherit;font-size:13px;cursor:pointer;font-weight:400}
 
         /* ── CARDS ── */
@@ -7208,7 +7208,7 @@ export default function App() {
         display:"flex", flexDirection:"column", padding:"14px 12px", zIndex:100 }}>
         {/* Logo */}
         <div style={{ display:"flex", alignItems:"center", gap:9, padding:"2px 6px 14px", borderBottom:"1px solid var(--border-soft)", marginBottom:10 }}>
-          <div style={{ width:34, height:34, borderRadius:"50%", background:"rgba(77,179,255,.12)", border:"1px solid rgba(77,179,255,.45)", boxShadow:"0 0 14px rgba(77,179,255,.35)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Space Grotesk',sans-serif", fontWeight:500, fontSize:15, color:"#1976FF", letterSpacing:-0.5, flexShrink:0 }}>F</div>
+          <div style={{ width:34, height:34, borderRadius:"50%", background:"rgba(118,134,146,.12)", border:"1px solid rgba(118,134,146,.45)", boxShadow:"0 0 14px rgba(118,134,146,.35)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Space Grotesk',sans-serif", fontWeight:500, fontSize:15, color:"#768692", letterSpacing:-0.5, flexShrink:0 }}>F</div>
           <div>
             <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:500, fontSize:15, color:"var(--text-strong)", letterSpacing:-0.4, lineHeight:1.2 }}>Flow</div>
             <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:8, color:"var(--text-3)", letterSpacing:2, textTransform:"none", lineHeight:1, marginTop:2 }}>Marketplaces</div>
@@ -7252,17 +7252,17 @@ export default function App() {
                 display:"flex", alignItems:"center", justifyContent:"space-between", gap:6, width:"100%", boxSizing:"border-box",
                 padding:"9px 12px", borderRadius:9, border:"none", cursor:"pointer", fontFamily:"inherit",
                 fontSize:13, textAlign:"left", textDecoration:"none",
-                background: isActive ? "rgba(25,118,255,.16)" : "transparent",
+                background: isActive ? "rgba(118,134,146,.16)" : "transparent",
                 color: isActive ? "var(--text-strong)" : "var(--text-3)",
                 fontWeight: isActive ? 700 : 500,
-                borderLeft: "3px solid "+(isActive ? "#1976FF" : "transparent"),
+                borderLeft: "3px solid "+(isActive ? "#768692" : "transparent"),
                 transition:"background .15s,color .15s",
               };
               var conteudo = [
                 <span key="l" style={{ whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{t.label}</span>,
                 t.badge != null ? (
                   <span key="b" style={{ fontSize:10, fontWeight:500, padding:"1px 7px", borderRadius:10, flexShrink:0,
-                    background: isActive ? "#1976FF" : "var(--surface-3)",
+                    background: isActive ? "#768692" : "var(--surface-3)",
                     color: isActive ? "#fff" : "var(--text-3)", lineHeight:1.6 }}>
                     {t.badge}
                   </span>
@@ -7331,11 +7331,11 @@ export default function App() {
             </button>
           )}
           <button onClick={function(){ window.location.href = "/api/auth/login"; }}
-            style={{ background: "#1976FF", border: "none", color: "#fff", fontWeight: 500, padding: "9px", borderRadius: 8, cursor: "pointer", fontSize: 12, width:"100%" }}>
+            style={{ background: "#768692", border: "none", color: "#fff", fontWeight: 500, padding: "9px", borderRadius: 8, cursor: "pointer", fontSize: 12, width:"100%" }}>
             {token ? "Reconectar" : "Conectar ML"}
           </button>
           <div style={{ display:"flex", alignItems:"center", gap:6, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, padding:"6px 8px" }}>
-            <div style={{ width:26, height:26, borderRadius:8, background:"#1976FF", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:600, color:"#FFC107", flexShrink:0 }}>
+            <div style={{ width:26, height:26, borderRadius:8, background:"#768692", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:600, color:"#FFC107", flexShrink:0 }}>
               {currentUser?.nome?.charAt(0).toUpperCase()}
             </div>
             <div style={{ fontSize:12, lineHeight:1.3, minWidth:0 }}>
@@ -7374,12 +7374,12 @@ export default function App() {
                   <button key={t.key}
                     onClick={function(){ setAbaAnuncio(t.key); }}
                     style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 20px", border:"none",
-                      borderBottom: active?"2px solid #1976FF":"2px solid transparent", marginBottom:-2,
+                      borderBottom: active?"2px solid #768692":"2px solid transparent", marginBottom:-2,
                       background:"transparent", color:active?"var(--text-strong)":"var(--text-3)",
                       fontWeight:active?700:400, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>
                     {t.label}
                     {t.badge != null && (
-                      <span style={{ background:active?"#1976FF":"var(--surface-3)", color:active?"#fff":"var(--text-2)",
+                      <span style={{ background:active?"#768692":"var(--surface-3)", color:active?"#fff":"var(--text-2)",
                         fontSize:11, fontWeight:500, padding:"1px 7px", borderRadius:20 }}>{t.badge}</span>
                     )}
                   </button>
@@ -7594,7 +7594,7 @@ export default function App() {
                           <div style={{ fontSize: 10, color: "var(--text-3)" }}>{l.sold_quantity} vendidos</div>
                         </td>
                         <td>
-                          <button onClick={() => setSelectedListing(l)} style={{ background: "#1976FF", border: "none", color: "#fff", fontSize: 11, padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>✦ Analisar</button>
+                          <button onClick={() => setSelectedListing(l)} style={{ background: "#768692", border: "none", color: "#fff", fontSize: 11, padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>✦ Analisar</button>
                         </td>
                       </tr>
                     );
@@ -7626,12 +7626,12 @@ export default function App() {
                   <button key={t.key}
                     onClick={function(){ setAbaPedido(t.key); }}
                     style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 20px", border:"none",
-                      borderBottom: active?"2px solid #1976FF":"2px solid transparent", marginBottom:-2,
+                      borderBottom: active?"2px solid #768692":"2px solid transparent", marginBottom:-2,
                       background:"transparent", color:active?"var(--text-strong)":"var(--text-3)",
                       fontWeight:active?700:400, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>
                     {t.label}
                     {t.badge != null && (
-                      <span style={{ background:active?"#1976FF":"var(--surface-3)", color:active?"#fff":"var(--text-2)",
+                      <span style={{ background:active?"#768692":"var(--surface-3)", color:active?"#fff":"var(--text-2)",
                         fontSize:11, fontWeight:500, padding:"1px 7px", borderRadius:20 }}>{t.badge}</span>
                     )}
                   </button>
@@ -7659,7 +7659,7 @@ export default function App() {
                     })}
                   </FiltroGrupo>
                   <FiltroGrupo titulo="Tipo de Envio">
-                    {[{key:"todos",l:"Todos"},{key:"FULL",l:"FULL",c:"#1976FF",bg:"rgba(59,140,255,.14)"},{key:"Flex",l:"Flex",c:"#7c3aed",bg:"rgba(139,92,246,.14)"},{key:"ME2",l:"ME2",c:"#0e7490",bg:"rgba(0,240,255,.10)"},{key:"ME1",l:"ME1",c:"#1976FF",bg:"rgba(77,179,255,.2)"}].map(function(e){
+                    {[{key:"todos",l:"Todos"},{key:"FULL",l:"FULL",c:"#768692",bg:"rgba(118,134,146,.14)"},{key:"Flex",l:"Flex",c:"#7c3aed",bg:"rgba(139,92,246,.14)"},{key:"ME2",l:"ME2",c:"#0e7490",bg:"rgba(0,240,255,.10)"},{key:"ME1",l:"ME1",c:"#768692",bg:"rgba(118,134,146,.2)"}].map(function(e){
                       return <FiltroBotao key={e.key} label={e.l} active={filterEnvio===e.key} cor={e.c||"var(--text-strong)"} bg={e.bg||"var(--surface-3)"} onClick={function(){setFilterEnvio(e.key);setPaginaPedidos(1);}} />;
                     })}
                   </FiltroGrupo>

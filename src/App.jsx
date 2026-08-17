@@ -633,6 +633,67 @@ function IntegracoesTab({ token, user, lastUpdate }) {
   );
 }
 
+// Telas financeiras: estrutura (KPIs + colunas) pronta, porém SEM dados por escolha do usuário
+// (não conectadas a nenhuma fonte). Ficam prontas para receber dados/integração depois.
+const TELAS_FIN = {
+  compras:        { titulo:"Compras",           desc:"Pedidos de compra e reposição de estoque.",     kpis:[["Pedidos de compra","0"],["Em aberto","0"],["Recebidos","0"]],                 colunas:["Data","Fornecedor","Itens","Valor","Status"] },
+  contas_pagar:   { titulo:"Contas a pagar",     desc:"Despesas, vencimentos e baixas.",               kpis:[["Total a pagar","R$ 0,00"],["Vencidas","R$ 0,00"],["A vencer","R$ 0,00"]],      colunas:["Vencimento","Descrição","Categoria","Valor","Status"] },
+  contas_receber: { titulo:"Contas a receber",   desc:"Recebíveis a partir do repasse dos marketplaces.", kpis:[["Total a receber","R$ 0,00"],["Recebido","R$ 0,00"],["A receber","R$ 0,00"]], colunas:["Previsão","Origem","Cliente","Valor","Status"] },
+  clientes:       { titulo:"Clientes",           desc:"Cadastro de clientes e histórico.",             kpis:[["Clientes","0"],["Ativos","0"],["Novos no mês","0"]],                          colunas:["Nome","Documento","Cidade/UF","Pedidos","Total"] },
+  fornecedores:   { titulo:"Fornecedores",       desc:"Cadastro de fornecedores e condições.",         kpis:[["Fornecedores","0"],["Ativos","0"]],                                          colunas:["Nome","Documento","Contato","Produtos"] },
+  notas_fiscais:  { titulo:"Notas fiscais",      desc:"Emissão e gestão de NF-e a partir das vendas.", kpis:[["Emitidas","0"],["Pendentes","0"],["Valor total","R$ 0,00"]],                  colunas:["Data","Número","Cliente","Valor","Status"] },
+};
+function TelaEstruturada({ cfg }) {
+  return (
+    <div style={{ padding:2 }}>
+      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>{cfg.titulo}</div>
+      <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>{cfg.desc}</div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12, marginBottom:14 }}>
+        {cfg.kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k[0]}</div><div style={{ ..._kpiVal, color:"var(--text-strong)" }}>{k[1]}</div></div>; })}
+      </div>
+      <div style={_tableWrap}>
+        <table style={_table}>
+          <thead><tr>{cfg.colunas.map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+          <tbody><tr><td style={{ ..._td, textAlign:"center", padding:"32px 12px", color:"var(--text-3)" }} colSpan={cfg.colunas.length}>Nenhum registro ainda.</td></tr></tbody>
+        </table>
+      </div>
+      <div style={{ marginTop:12, fontSize:12, color:"var(--text-3)", background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 14px" }}>
+        🗂 Estrutura pronta. Ainda sem dados — esta área será conectada a uma fonte financeira depois.
+      </div>
+    </div>
+  );
+}
+// DRE (Demonstrativo de Resultado): estrutura zerada, sem dados por enquanto.
+function DreTab() {
+  var linhas = [
+    ["Receita bruta", "R$ 0,00", false],
+    ["(-) Impostos e deduções", "R$ 0,00", false],
+    ["= Receita líquida", "R$ 0,00", true],
+    ["(-) Custo dos produtos (CMV)", "R$ 0,00", false],
+    ["= Lucro bruto", "R$ 0,00", true],
+    ["(-) Taxas dos marketplaces", "R$ 0,00", false],
+    ["(-) Despesas e custos fixos", "R$ 0,00", false],
+    ["= Lucro líquido", "R$ 0,00", true],
+  ];
+  return (
+    <div style={{ padding:2 }}>
+      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>DRE e conciliação</div>
+      <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Demonstrativo de resultado do período.</div>
+      <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"8px 18px", maxWidth:520 }}>
+        {linhas.map(function(l,i){
+          return <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 0", borderBottom: i < linhas.length-1 ? "1px solid var(--border-soft)" : "none" }}>
+            <span style={{ fontSize:14, fontWeight: l[2] ? 800 : 500, color: l[2] ? "var(--text-strong)" : "var(--text-2)" }}>{l[0]}</span>
+            <span style={{ fontSize:14, fontWeight: l[2] ? 800 : 600, color: l[2] ? "var(--text-strong)" : "var(--text-3)", fontVariantNumeric:"tabular-nums" }}>{l[1]}</span>
+          </div>;
+        })}
+      </div>
+      <div style={{ marginTop:12, fontSize:12, color:"var(--text-3)", background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 14px", maxWidth:520 }}>
+        🗂 Estrutura pronta. Ainda sem dados — será conectada a uma fonte financeira depois.
+      </div>
+    </div>
+  );
+}
+
 // Dashboard com os dados REAIS da empresa (a partir dos pedidos já sincronizados): faturamento,
 // lucro líquido, margem, taxas, impostos, custo e top produtos — com filtro por período.
 function DashboardTab({ enrichedOrders }) {
@@ -6258,9 +6319,8 @@ export default function App() {
         {tab === "relatorios" && <RelatoriosTab enrichedOrders={enrichedOrders} />}
         {tab === "expedicao" && <ExpedicaoTab rawOrders={rawOrders} />}
         {tab === "integracoes" && <IntegracoesTab token={token} user={user} lastUpdate={lastUpdate} />}
-        {["compras","contas_pagar","contas_receber","clientes","fornecedores","notas_fiscais","dre"].indexOf(tab) >= 0 && (
-          <EmConstrucao tab={tab} />
-        )}
+        {tab === "dre" && <DreTab />}
+        {TELAS_FIN[tab] && <TelaEstruturada cfg={TELAS_FIN[tab]} />}
       </div>{/* fecha a coluna do conteúdo */}
 
       {showBackup && <PainelBackup onClose={() => setShowBackup(false)} />}

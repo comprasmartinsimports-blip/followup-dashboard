@@ -1978,8 +1978,12 @@ function BarraPeriodo({ periodo, setPeriodo, deData, setDeData, ateData, setAteD
 // ── Sub-aba ESTADOS: mapa do Brasil (choropleth) + vendas por estado ─────────
 function EstadosDash({ enrichedOrders }){
   const [ufSel, setUfSel] = useState(null);
+  const [periodo, setPeriodo] = useState("tudo");
+  const [deData, setDeData] = useState("");
+  const [ateData, setAteData] = useState("");
+  var validos = filtrarPeriodo(enrichedOrders, periodo, deData, ateData);
   var agg = {};
-  (enrichedOrders||[]).filter(function(o){ return o.status!=="cancelled"; }).forEach(function(o){
+  validos.forEach(function(o){
     var uf=((o.buyerUF||"")+"").toUpperCase()||"—"; var q=o.qty||1;
     if(!agg[uf]) agg[uf]={ uf:uf, fat:0, pecas:0, pedidos:0, prod:{} };
     var a=agg[uf]; a.fat+=(o.price||0)*q; a.pecas+=q; a.pedidos+=1;
@@ -1992,8 +1996,13 @@ function EstadosDash({ enrichedOrders }){
   function fillUF(uf){ var a=agg[uf]; if(!a||!a.fat) return { f:"var(--surface-3)", o:1 }; return { f:"#768692", o:0.22+0.78*Math.pow(a.fat/max,.5) }; }
   return (
     <div style={{ padding:2 }}>
-      <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Vendas por estado</div>
-      <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Mapa do Brasil por faturamento. Clique num estado para ver os detalhes.</div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:14 }}>
+        <div>
+          <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Vendas por estado</div>
+          <div style={{ fontSize:13, color:"var(--text-3)" }}>Mapa do Brasil por faturamento no período. Clique num estado para ver os detalhes.</div>
+        </div>
+        <BarraPeriodo periodo={periodo} setPeriodo={setPeriodo} deData={deData} setDeData={setDeData} ateData={ateData} setAteData={setAteData} />
+      </div>
       <div style={{ display:"flex", gap:14, flexWrap:"wrap", alignItems:"stretch" }}>
         <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 16px", flex:"1 1 360px", minWidth:320 }}>
           <svg viewBox={BR_VIEWBOX} style={{ width:"100%", height:"auto", display:"block", maxHeight:460 }}>

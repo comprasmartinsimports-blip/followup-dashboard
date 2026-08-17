@@ -546,12 +546,12 @@ function ProdutosTab({ produtos, salvar }) {
 
         {mostrarAcoes && (
           <div style={{ width:236, flexShrink:0, display:"flex", flexDirection:"column", gap:8 }}>
-            <button onClick={function(){ setEditando({}); }} style={{ background:"#0a9d4e", border:"none", color:"#fff", fontWeight:600, padding:"11px", borderRadius:9, cursor:"pointer", fontSize:13.5 }}>+ Incluir cadastro</button>
+            <button onClick={function(){ setEditando({}); }} style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"11px", borderRadius:9, cursor:"pointer", fontSize:13.5 }}>+ Incluir cadastro</button>
             <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"6px", display:"flex", flexDirection:"column" }}>
               <button onClick={function(){ if(fileRef.current) fileRef.current.click(); }} style={acaoItem}>Importar CSV</button>
               <button onClick={exportarPlanilha} style={acaoItem}>Exportar dados para planilha</button>
-              <button onClick={function(){ window.print(); }} style={acaoItem}>Imprimir etiquetas{idsSel.length?(" ("+idsSel.length+")"):""}</button>
-              <button onClick={function(){ setMaisAcoes(function(v){return !v;}); }} style={{ ...acaoItem, color:"#0a9d4e", fontWeight:600 }}>{maisAcoes?"− ":"+ "}Mais ações</button>
+              <button onClick={function(){ baixarPDF("produtos", cols, rowsExport()); }} style={acaoItem}>Imprimir{idsSel.length?(" ("+idsSel.length+" selec.)"):""}</button>
+              <button onClick={function(){ setMaisAcoes(function(v){return !v;}); }} style={{ ...acaoItem, color:"var(--ui-accent)", fontWeight:600 }}>{maisAcoes?"− ":"+ "}Mais ações</button>
               {maisAcoes && <div style={{ padding:"2px 8px 8px" }}>
                 <div style={{ fontSize:11, color:"var(--text-4)", margin:"6px 0 3px" }}>Planilhas</div>
                 <button onClick={exportarPlanilha} style={acaoSub}>Exportar dados para planilha</button>
@@ -562,7 +562,7 @@ function ProdutosTab({ produtos, salvar }) {
             </div>
             <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"12px 14px" }}>
               <div style={{ fontSize:12, color:"var(--text-3)" }}>Quantidade de produtos</div>
-              <div style={{ fontSize:22, fontWeight:600, color:"#0a9d4e" }}>{total}</div>
+              <div style={{ fontSize:22, fontWeight:600, color:"var(--ui-accent)" }}>{total}</div>
             </div>
           </div>
         )}
@@ -732,7 +732,9 @@ function VincularTab({ enriched, produtos, salvar }) {
 // ─────────────────────────────────────────────────────────────────────────
 var CHART_AXIS = "#8492a8";                       // cor dos rótulos dos eixos (legível nos 2 temas)
 var CHART_GRID = "rgba(128,140,168,.16)";         // linhas de grade
-var CORES_DINHEIRO = { custo:"#768692", taxas:"#FFC107", impostos:"#FF7043", lucro:"#0a9d4e" };
+var CORES_DINHEIRO = { custo:"#e5484d", taxas:"#FFC107", impostos:"#768692", lucro:"#0a9d4e" }; // custo=vermelho, taxas=amarelo, impostos=slate, lucro=verde
+// Paleta categórica alinhada às cores do sistema (slate + nude/camel + grafite + terracota).
+var PALETA_SISTEMA = ["#768692", "#c2a878", "#3a4550", "#b5714e"];
 var PALETA_ABC = ["#768692","#00A3B5","#0a9d4e","#FFC107","#FF7043","#768592","#E7515A","#5A6B86"];
 
 // Tooltip padrão em R$ (respeita o tema via var(--...)).
@@ -998,6 +1000,7 @@ function ContasReceberTab({ enrichedOrders, paymentData }) {
   var filtBtn = { background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"9px 12px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" };
   function limpar(){ setFSituacao("todas"); setBusca(""); }
   function exportar(){ baixarCSV("contas-receber", ["Cliente","Origem","Nº pedido","Previsão","Valor","Situação"], lista.map(function(r){ return [r.cliente, r.origem, r.id, r.previsao||"", r.valor.toFixed(2), r.recebido?"Recebido":"A receber"]; })); }
+  function imprimir(){ baixarPDF("contas-a-receber", ["Cliente","Origem","Nº pedido","Previsão","Valor","Situação"], lista.map(function(r){ return [r.cliente, r.origem, "#"+r.id, r.previsao?(fmtDate(r.previsao)||r.previsao):"—", fmt(r.valor), r.recebido?"Recebido":"A receber"]; })); }
   return (
     <div style={{ padding:2 }}>
       <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12, flexWrap:"wrap" }}>
@@ -1019,7 +1022,7 @@ function ContasReceberTab({ enrichedOrders, paymentData }) {
             </div>
             <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Opção</div><select value={fSituacao} onChange={function(e){ setFSituacao(e.target.value); }} style={selFiltro}><option value="todas">Todas</option><option value="aberto">Em aberto</option><option value="recebido">Recebido</option></select></div>
             <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Categoria</div><select disabled style={{ ...selFiltro, opacity:.45 }}><option>Todas categorias</option></select></div>
-            <button onClick={limpar} style={{ background:"none", border:"none", color:"#0a9d4e", fontWeight:600, cursor:"pointer", fontSize:12.5, textAlign:"left" }}>Limpar filtros</button>
+            <button onClick={limpar} style={{ background:"none", border:"none", color:"var(--ui-accent)", fontWeight:600, cursor:"pointer", fontSize:12.5, textAlign:"left" }}>Limpar filtros</button>
           </div>
         )}
         <div style={{ flex:1, minWidth:0 }}>
@@ -1038,27 +1041,27 @@ function ContasReceberTab({ enrichedOrders, paymentData }) {
                     <td style={_td}>
                       {r.baixaManual
                         ? <button onClick={function(){ estornar(r.id); }} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Estornar</button>
-                        : (!r.recebido && <button onClick={function(){ darBaixa(r.id); }} style={{ background:"rgba(10,157,78,.12)", border:"none", color:"#0a9d4e", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Dar baixa</button>)}
+                        : (!r.recebido && <button onClick={function(){ darBaixa(r.id); }} style={{ background:"rgba(10,157,78,.12)", border:"none", color:"var(--ui-accent)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Dar baixa</button>)}
                     </td>
                   </tr>;
                 })}
               </tbody>
             </table>
-            {lista.length === 0 && <div style={{ padding:40, textAlign:"center" }}><div style={{ fontWeight:600, color:"#0a9d4e" }}>Nenhum resultado encontrado.</div></div>}
+            {lista.length === 0 && <div style={{ padding:40, textAlign:"center" }}><div style={{ fontWeight:600, color:"var(--ui-accent)" }}>Nenhum resultado encontrado.</div></div>}
           </div>
         </div>
         {mostrarAcoes && (
           <div style={{ width:236, flexShrink:0, display:"flex", flexDirection:"column", gap:8 }}>
             <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"6px", display:"flex", flexDirection:"column" }}>
               <button onClick={exportar} style={{ background:"none", border:"none", textAlign:"left", padding:"9px 10px", borderRadius:7, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" }}>Exportar para planilha</button>
-              <button onClick={function(){ window.print(); }} style={{ background:"none", border:"none", textAlign:"left", padding:"9px 10px", borderRadius:7, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" }}>Imprimir</button>
+              <button onClick={function(){ imprimir(); }} style={{ background:"none", border:"none", textAlign:"left", padding:"9px 10px", borderRadius:7, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" }}>Imprimir</button>
             </div>
             <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"12px 14px" }}>
               <div style={{ fontWeight:600, fontSize:13, color:"var(--text-strong)", marginBottom:8 }}>Informações</div>
               <div style={{ fontSize:12, color:"var(--text-3)" }}>A receber</div>
               <div style={{ fontSize:19, fontWeight:600, color:"#FFC107", marginBottom:8 }}>{fmt(aReceber)}</div>
               <div style={{ fontSize:12, color:"var(--text-3)" }}>Recebido</div>
-              <div style={{ fontSize:19, fontWeight:600, color:"#0a9d4e", marginBottom:8 }}>{fmt(recebidoTot)}</div>
+              <div style={{ fontSize:19, fontWeight:600, color:"var(--ui-accent)", marginBottom:8 }}>{fmt(recebidoTot)}</div>
               <div style={{ fontSize:12, color:"var(--text-3)" }}>Quantidade</div>
               <div style={{ fontSize:19, fontWeight:600, color:"var(--text-strong)" }}>{lista.length}</div>
             </div>
@@ -1494,7 +1497,7 @@ function ContaModal({ conta, onSave, onClose }) {
   var campo = { width:"100%", background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 11px", borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box" };
   var lbl = { fontSize:11.5, color:"var(--text-3)", fontWeight:600, marginBottom:4, display:"block" };
   var req = <span style={{ color:"#FF5252" }}> *</span>;
-  function TabBtn(id, label){ var a=aba===id; return <button onClick={function(){ setAba(id); }} style={{ background:"none", border:"none", borderBottom: a?"2px solid #0a9d4e":"2px solid transparent", padding:"10px 4px", marginRight:22, cursor:"pointer", fontSize:13, fontWeight: a?700:500, color: a?"#0a9d4e":"var(--text-3)" }}>{label}</button>; }
+  function TabBtn(id, label){ var a=aba===id; return <button onClick={function(){ setAba(id); }} style={{ background:"none", border:"none", borderBottom: a?"2px solid var(--ui-accent)":"2px solid transparent", padding:"10px 4px", marginRight:22, cursor:"pointer", fontSize:13, fontWeight: a?700:500, color: a?"#0a9d4e":"var(--text-3)" }}>{label}</button>; }
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:600, display:"flex", alignItems:"flex-start", justifyContent:"center", padding:"24px 16px", overflowY:"auto" }} onClick={onClose}>
       <div onClick={function(e){ e.stopPropagation(); }} style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:14, width:780, maxWidth:"100%", display:"flex", flexDirection:"column", maxHeight:"92vh" }}>
@@ -1536,8 +1539,8 @@ function ContaModal({ conta, onSave, onClose }) {
         </div>
         <div style={{ display:"flex", justifyContent:"flex-end", gap:12, padding:"14px 22px", borderTop:"1px solid var(--border-soft)" }}>
           <button onClick={onClose} style={{ background:"none", border:"none", color:"var(--text-3)", fontWeight:600, padding:"10px 16px", cursor:"pointer", fontSize:13 }}>Cancelar</button>
-          <button onClick={function(){ salvar(true); }} style={{ background:"var(--surface)", border:"1px solid #0a9d4e", color:"#0a9d4e", fontWeight:600, padding:"10px 18px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Salvar e dar baixa</button>
-          <button onClick={function(){ salvar(false); }} style={{ background:"#0a9d4e", border:"none", color:"#fff", fontWeight:600, padding:"10px 24px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Salvar</button>
+          <button onClick={function(){ salvar(true); }} style={{ background:"var(--surface)", border:"1px solid var(--ui-accent)", color:"var(--ui-accent)", fontWeight:600, padding:"10px 18px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Salvar e dar baixa</button>
+          <button onClick={function(){ salvar(false); }} style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"10px 24px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Salvar</button>
         </div>
       </div>
     </div>
@@ -1576,6 +1579,7 @@ function ContasPagarTab({ contas, salvar }) {
   var filtBtn = { background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"9px 12px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" };
   function limpar(){ setSit("todas"); setFCategoria(""); setBusca(""); }
   function exportar(){ baixarCSV("contas-pagar", ["Vencimento","Fornecedor","Categoria","Valor","Situação"], lista.map(function(c){ return [c.vencimento||"", c.descricao||"", c.categoria||"", (parseFloat(c.valor)||0).toFixed(2), statusReal(c)]; })); }
+  function imprimir(){ baixarPDF("contas-a-pagar", ["Vencimento","Fornecedor","Categoria","Valor","Situação"], lista.map(function(c){ return [c.vencimento?(fmtDate(c.vencimento)||c.vencimento):"—", c.descricao||"", c.categoria||"", fmt(parseFloat(c.valor)||0), statusReal(c)]; })); }
   var temFiltro = sit!=="todas" || fCategoria || busca;
   return (
     <div style={{ padding:2 }}>
@@ -1598,14 +1602,14 @@ function ContasPagarTab({ contas, salvar }) {
             </div>
             <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Opção</div><select value={sit} onChange={function(e){ setSit(e.target.value); }} style={selFiltro}>{sits.map(function(s){ return <option key={s[0]} value={s[0]}>{s[1]}</option>; })}</select></div>
             <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Categoria</div><input value={fCategoria} onChange={function(e){ setFCategoria(e.target.value); }} placeholder="Todas categorias" style={selFiltro} /></div>
-            <button onClick={limpar} style={{ background:"none", border:"none", color:"#0a9d4e", fontWeight:600, cursor:"pointer", fontSize:12.5, textAlign:"left" }}>Limpar filtros</button>
+            <button onClick={limpar} style={{ background:"none", border:"none", color:"var(--ui-accent)", fontWeight:600, cursor:"pointer", fontSize:12.5, textAlign:"left" }}>Limpar filtros</button>
           </div>
         )}
         <div style={{ flex:1, minWidth:0 }}>
           {lista.length === 0 ? (
             <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"60px 20px", textAlign:"center" }}>
               <div style={{ fontSize:40, marginBottom:10 }}>🗎</div>
-              <div style={{ fontWeight:600, fontSize:16, color:"#0a9d4e" }}>Nenhum resultado encontrado.</div>
+              <div style={{ fontWeight:600, fontSize:16, color:"var(--ui-accent)" }}>Nenhum resultado encontrado.</div>
               <div style={{ fontSize:13, color:"var(--text-3)", marginTop:4 }}>Crie uma conta em "Incluir conta" ou ajuste os filtros.</div>
             </div>
           ) : (
@@ -1623,7 +1627,7 @@ function ContasPagarTab({ contas, salvar }) {
                       <td style={_td}><span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
                       <td style={_td}>
                         <div style={{ display:"flex", gap:8 }}>
-                          {s !== "paga" && s !== "cancelada" && <button onClick={function(){ baixar(c); }} style={{ background:"rgba(10,157,78,.12)", border:"none", color:"#0a9d4e", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Pagar</button>}
+                          {s !== "paga" && s !== "cancelada" && <button onClick={function(){ baixar(c); }} style={{ background:"rgba(10,157,78,.12)", border:"none", color:"var(--ui-accent)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Pagar</button>}
                           <button onClick={function(){ setModal(c); }} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Editar</button>
                           <button onClick={function(){ excluir(c); }} style={{ background:"rgba(255,82,82,.1)", border:"none", color:"#FF5252", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Excluir</button>
                         </div>
@@ -1637,10 +1641,10 @@ function ContasPagarTab({ contas, salvar }) {
         </div>
         {mostrarAcoes && (
           <div style={{ width:236, flexShrink:0, display:"flex", flexDirection:"column", gap:8 }}>
-            <button onClick={function(){ setModal({}); }} style={{ background:"#0a9d4e", border:"none", color:"#fff", fontWeight:600, padding:"11px", borderRadius:9, cursor:"pointer", fontSize:13.5 }}>+ Incluir conta</button>
+            <button onClick={function(){ setModal({}); }} style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"11px", borderRadius:9, cursor:"pointer", fontSize:13.5 }}>+ Incluir conta</button>
             <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"6px", display:"flex", flexDirection:"column" }}>
               <button onClick={exportar} style={{ background:"none", border:"none", textAlign:"left", padding:"9px 10px", borderRadius:7, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" }}>Exportar para planilha</button>
-              <button onClick={function(){ window.print(); }} style={{ background:"none", border:"none", textAlign:"left", padding:"9px 10px", borderRadius:7, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" }}>Imprimir</button>
+              <button onClick={function(){ imprimir(); }} style={{ background:"none", border:"none", textAlign:"left", padding:"9px 10px", borderRadius:7, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" }}>Imprimir</button>
             </div>
             <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"12px 14px" }}>
               <div style={{ fontWeight:600, fontSize:13, color:"var(--text-strong)", marginBottom:8 }}>Informações</div>
@@ -1691,7 +1695,7 @@ function PedidoCompraModal({ pedido, onSave, onClose }) {
           <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>{novo ? "Pedido de compra" : "Editar pedido de compra"}</div>
           <div style={{ display:"flex", gap:10 }}>
             <button onClick={onClose} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"10px 22px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Cancelar</button>
-            <button onClick={salvar} style={{ background:"#0a9d4e", border:"none", color:"#fff", fontWeight:600, padding:"10px 26px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Salvar</button>
+            <button onClick={salvar} style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"10px 26px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Salvar</button>
           </div>
         </div>
         <div style={{ textAlign:"right", fontSize:11, color:"#FF5252", marginBottom:4 }}>(*) Campos obrigatórios</div>
@@ -1719,7 +1723,7 @@ function PedidoCompraModal({ pedido, onSave, onClose }) {
             </tbody>
           </table>
         </div>
-        <div style={{ textAlign:"right", marginTop:8 }}><button onClick={addItem} style={{ background:"none", border:"none", color:"#0a9d4e", fontWeight:600, cursor:"pointer", fontSize:13 }}>+ Adicionar outro item</button></div>
+        <div style={{ textAlign:"right", marginTop:8 }}><button onClick={addItem} style={{ background:"none", border:"none", color:"var(--ui-accent)", fontWeight:600, cursor:"pointer", fontSize:13 }}>+ Adicionar outro item</button></div>
 
         <div style={sec}>Totais da compra</div>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12 }}>
@@ -1760,7 +1764,7 @@ function PedidoCompraModal({ pedido, onSave, onClose }) {
 
         <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:24 }}>
           <button onClick={onClose} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"10px 22px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Cancelar</button>
-          <button onClick={salvar} style={{ background:"#0a9d4e", border:"none", color:"#fff", fontWeight:600, padding:"10px 26px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Salvar</button>
+          <button onClick={salvar} style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"10px 26px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Salvar</button>
         </div>
       </div>
     </div>
@@ -1828,8 +1832,8 @@ function ComprasTab({ produtos, pedidos, salvar }) {
             <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Situação</div><select value={fSituacao} onChange={function(e){ setFSituacao(e.target.value); }} style={selFiltro}><option value="todas">Todas</option><option value="aberto">Em aberto</option><option value="recebido">Recebido</option><option value="cancelado">Cancelado</option></select></div>
             <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Produto</div><input value={fProduto} onChange={function(e){ setFProduto(e.target.value); }} placeholder="Item do pedido" style={selFiltro} /></div>
             <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Lote / Observação</div><input disabled placeholder="Indisponível" style={{ ...selFiltro, opacity:.45 }} /></div>
-            <button onClick={function(){}} style={{ background:"var(--surface)", border:"1px solid #0a9d4e", color:"#0a9d4e", fontWeight:600, padding:"9px", borderRadius:9, cursor:"pointer", fontSize:13, marginTop:2 }}>Filtrar</button>
-            <button onClick={limpar} style={{ background:"none", border:"none", color:"#0a9d4e", fontWeight:600, cursor:"pointer", fontSize:12.5 }}>Limpar filtros</button>
+            <button onClick={function(){}} style={{ background:"var(--surface)", border:"1px solid var(--ui-accent)", color:"var(--ui-accent)", fontWeight:600, padding:"9px", borderRadius:9, cursor:"pointer", fontSize:13, marginTop:2 }}>Filtrar</button>
+            <button onClick={limpar} style={{ background:"none", border:"none", color:"var(--ui-accent)", fontWeight:600, cursor:"pointer", fontSize:12.5 }}>Limpar filtros</button>
           </div>
         )}
 
@@ -1847,7 +1851,7 @@ function ComprasTab({ produtos, pedidos, salvar }) {
           {lista.length === 0 ? (
             <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"60px 20px", textAlign:"center" }}>
               <div style={{ fontSize:40, marginBottom:10 }}>🗎</div>
-              <div style={{ fontWeight:600, fontSize:16, color:"#0a9d4e" }}>Nenhum resultado encontrado.</div>
+              <div style={{ fontWeight:600, fontSize:16, color:"var(--ui-accent)" }}>Nenhum resultado encontrado.</div>
               <div style={{ fontSize:13, color:"var(--text-3)", marginTop:4 }}>Crie um pedido em "Incluir pedido" ou ajuste os filtros.</div>
             </div>
           ) : (
@@ -1865,7 +1869,7 @@ function ComprasTab({ produtos, pedidos, salvar }) {
                       <td style={_td}><span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
                       <td style={_td}>
                         <div style={{ display:"flex", gap:8 }}>
-                          {p.status === "aberto" && <button onClick={function(){ receber(p); }} style={{ background:"rgba(10,157,78,.12)", border:"none", color:"#0a9d4e", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Receber</button>}
+                          {p.status === "aberto" && <button onClick={function(){ receber(p); }} style={{ background:"rgba(10,157,78,.12)", border:"none", color:"var(--ui-accent)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Receber</button>}
                           <button onClick={function(){ setModal(p); }} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Editar</button>
                           <button onClick={function(){ excluir(p); }} style={{ background:"rgba(255,82,82,.1)", border:"none", color:"#FF5252", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Excluir</button>
                         </div>
@@ -1880,17 +1884,17 @@ function ComprasTab({ produtos, pedidos, salvar }) {
 
         {mostrarAcoes && (
           <div style={{ width:236, flexShrink:0, display:"flex", flexDirection:"column", gap:8 }}>
-            <button onClick={function(){ setModal({}); }} style={{ background:"#0a9d4e", border:"none", color:"#fff", fontWeight:600, padding:"11px", borderRadius:9, cursor:"pointer", fontSize:13.5 }}>+ Incluir pedido</button>
+            <button onClick={function(){ setModal({}); }} style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"11px", borderRadius:9, cursor:"pointer", fontSize:13.5 }}>+ Incluir pedido</button>
             <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"6px", display:"flex", flexDirection:"column" }}>
               <button onClick={exportarCompras} style={acaoItem}>Exportar para planilha</button>
-              <button onClick={function(){ window.print(); }} style={acaoItem}>Imprimir</button>
+              <button onClick={function(){ baixarPDF("pedidos-de-compra", ["Data","Fornecedor","Nº pedido","Itens","Valor","Situação"], lista.map(function(p){ return [p.data?(fmtDate(p.data)||p.data):"", p.fornecedor||"", p.numero||"", p.itens||"", fmt(parseFloat(p.valor)||0), p.status||"aberto"]; })); }} style={acaoItem}>Imprimir</button>
             </div>
             <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"12px 14px" }}>
               <div style={{ fontWeight:600, fontSize:13, color:"var(--text-strong)", marginBottom:8 }}>Informações</div>
               <div style={{ fontSize:12, color:"var(--text-3)" }}>Quantidade de pedidos</div>
-              <div style={{ fontSize:20, fontWeight:600, color:"#0a9d4e", marginBottom:8 }}>{lista.length}</div>
+              <div style={{ fontSize:20, fontWeight:600, color:"var(--ui-accent)", marginBottom:8 }}>{lista.length}</div>
               <div style={{ fontSize:12, color:"var(--text-3)" }}>Valor total</div>
-              <div style={{ fontSize:20, fontWeight:600, color:"#0a9d4e" }}>{fmt(valorTotalLista)}</div>
+              <div style={{ fontSize:20, fontWeight:600, color:"var(--ui-accent)" }}>{fmt(valorTotalLista)}</div>
             </div>
           </div>
         )}
@@ -1928,11 +1932,33 @@ function baixarExcel(nome, colunas, linhas){
     linhas.map(function(r){ return "<tr>" + r.map(function(c){ return "<td>"+esc(c)+"</td>"; }).join("") + "</tr>"; }).join("") + "</table>";
   _dispararDownload(new Blob(['<html><head><meta charset="utf-8"></head><body>'+html+'</body></html>'], { type:"application/vnd.ms-excel" }), nome+".xls");
 }
+// Gera um PDF SÓ com a tabela do relatório (abre uma aba limpa e imprime apenas os dados —
+// não a tela inteira do sistema). O usuário escolhe "Salvar como PDF" no diálogo.
+function baixarPDF(nome, colunas, linhas){
+  var esc = function(v){ return String(v==null?"":v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); };
+  var titulo = String(nome||"Relatório").replace(/[-_]/g," ").replace(/\b\w/g, function(m){ return m.toUpperCase(); });
+  var thead = "<tr>" + colunas.map(function(c){ return "<th>"+esc(c)+"</th>"; }).join("") + "</tr>";
+  var tbody = linhas.map(function(r){ return "<tr>" + r.map(function(c){ return "<td>"+esc(c)+"</td>"; }).join("") + "</tr>"; }).join("");
+  var html = '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>'+esc(titulo)+'</title>'
+    + '<style>*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#222;margin:0;padding:26px}'
+    + 'h1{font-size:17px;margin:0 0 2px}.sub{color:#666;font-size:11px;margin:0 0 16px}'
+    + 'table{border-collapse:collapse;width:100%;font-size:11px}'
+    + 'th{text-align:left;background:#f0f0f0;color:#333;padding:7px 8px;border-bottom:2px solid #ccc;white-space:nowrap}'
+    + 'td{padding:6px 8px;border-bottom:1px solid #eee}tbody tr:nth-child(even) td{background:#fafafa}'
+    + '@page{margin:14mm}</style></head><body>'
+    + '<h1>'+esc(titulo)+'</h1><div class="sub">'+new Date().toLocaleString("pt-BR")+' · Flow Marketplaces · '+linhas.length+' registro(s)</div>'
+    + '<table><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table>'
+    + '<script>window.onload=function(){window.focus();setTimeout(function(){window.print();},150);};window.onafterprint=function(){window.close();};<\/script>'
+    + '</body></html>';
+  var w = window.open("", "_blank");
+  if (!w){ alert("Habilite pop-ups para gerar o PDF do relatório."); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+}
 function BotoesExport({ nome, colunas, linhas }){
   return <div style={{ display:"flex", gap:8 }}>
     <button style={_btnExp} onClick={function(){ baixarExcel(nome, colunas, linhas()); }}>Excel</button>
     <button style={_btnExp} onClick={function(){ baixarCSV(nome, colunas, linhas()); }}>CSV</button>
-    <button style={_btnExp} onClick={exportarPDF}>PDF</button>
+    <button style={_btnExp} onClick={function(){ baixarPDF(nome, colunas, linhas()); }}>PDF</button>
   </div>;
 }
 
@@ -2141,7 +2167,7 @@ function MargemPedidoDash({ enrichedOrders }){
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:10 }}>
           <div style={{ display:"flex", gap:2, borderBottom:"1px solid var(--border)" }}>
             {abas.map(function(t){ var a=aba===t[0]; return <button key={t[0]} onClick={function(){ setAba(t[0]); setPagina(1); }}
-              style={{ padding:"8px 16px", border:"none", borderBottom:a?"2px solid #0a9d4e":"2px solid transparent", marginBottom:-1, background:"transparent", color:a?"var(--text-strong)":"var(--text-3)", fontWeight:a?700:500, fontSize:13, cursor:"pointer" }}>{t[1]}</button>; })}
+              style={{ padding:"8px 16px", border:"none", borderBottom:a?"2px solid var(--ui-accent)":"2px solid transparent", marginBottom:-1, background:"transparent", color:a?"var(--text-strong)":"var(--text-3)", fontWeight:a?700:500, fontSize:13, cursor:"pointer" }}>{t[1]}</button>; })}
           </div>
           <input value={busca} onChange={function(e){ setBusca(e.target.value); setPagina(1); }} placeholder="Procurar por pedido ou produto..."
             style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"7px 10px", borderRadius:8, fontSize:12, minWidth:240 }} />
@@ -2272,7 +2298,7 @@ function ClientesDash({ enrichedOrders, user }){
   function seg(arr){ var valor=arr.reduce(function(s,c){return s+c.valor;},0), ped=arr.reduce(function(s,c){return s+c.pedidos;},0), prod=arr.reduce(function(s,c){return s+c.produtos;},0);
     return { valor:valor, ticket:arr.length?valor/arr.length:0, produtos:ped?prod/ped:0, share:valor/totGeral*100, n:arr.length }; }
   var sRec=seg(rec), sNov=seg(nov);
-  var donut=[{ name:"Recorrentes", value:rec.length, cor:"#2E8B57" },{ name:"Novos", value:nov.length, cor:"#86E0A6" }].filter(function(d){return d.value>0;});
+  var donut=[{ name:"Recorrentes", value:rec.length, cor:"#768692" },{ name:"Novos", value:nov.length, cor:"#c2a878" }].filter(function(d){return d.value>0;});
   var alvo=(aba==="recorrentes"?rec:nov).slice().sort(function(a,b){return b.valor-a.valor;});
   if(busca.trim()){ var qq=busca.trim().toLowerCase(); alvo=alvo.filter(function(c){ return c.nome.toLowerCase().indexOf(qq)>=0; }); }
   var cols=["Nome","Loja","Produtos","Valor","Margem Bruta %","Lucro Venda","%","Celular"];
@@ -2292,8 +2318,8 @@ function ClientesDash({ enrichedOrders, user }){
       <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Clientes</div>
       <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Recorrentes (2+ pedidos) e novos (1 pedido), com faturamento e margem.</div>
       <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:16 }}>
-        {CardSeg("Clientes Recorrentes", sRec, "#2E8B57")}
-        {CardSeg("Clientes Novos", sNov, "#0a9d4e")}
+        {CardSeg("Clientes Recorrentes", sRec, "var(--ui-accent)")}
+        {CardSeg("Clientes Novos", sNov, "var(--ui-accent)")}
         <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", flex:"1 1 300px", minWidth:280 }}>
           <div style={{ fontWeight:500, fontSize:15, color:"var(--text-strong)", marginBottom:6 }}>Recorrentes × Novos</div>
           {donut.length===0 ? <div style={{ color:"var(--text-3)", fontSize:13 }}>Sem clientes.</div> :
@@ -2312,7 +2338,7 @@ function ClientesDash({ enrichedOrders, user }){
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:10 }}>
           <div style={{ display:"flex", gap:2, borderBottom:"1px solid var(--border)" }}>
             {[["recorrentes","Clientes Recorrentes"],["novos","Clientes Novos"]].map(function(t){ var a=aba===t[0]; return <button key={t[0]} onClick={function(){ setAba(t[0]); }}
-              style={{ padding:"8px 16px", border:"none", borderBottom:a?"2px solid #0a9d4e":"2px solid transparent", marginBottom:-1, background:"transparent", color:a?"var(--text-strong)":"var(--text-3)", fontWeight:a?700:500, fontSize:13, cursor:"pointer" }}>{t[1]}</button>; })}
+              style={{ padding:"8px 16px", border:"none", borderBottom:a?"2px solid var(--ui-accent)":"2px solid transparent", marginBottom:-1, background:"transparent", color:a?"var(--text-strong)":"var(--text-3)", fontWeight:a?700:500, fontSize:13, cursor:"pointer" }}>{t[1]}</button>; })}
           </div>
           <BotoesExport nome="clientes" colunas={cols} linhas={rowsExport} />
         </div>
@@ -2368,7 +2394,7 @@ function CurvaAbcDash({ enrichedOrders }){
   var grupos={ A:[], B:[], C:[] }; abc.forEach(function(x){ grupos[x.classe].push(x); });
   var soma=function(arr){ return arr.reduce(function(s,x){ return s+x.fat; }, 0); };
   var totFat=soma(abc)||1;
-  var cor={ A:"#86E0A6", B:"#3CB371", C:"#1E6B3A" };
+  var cor={ A:"#768692", B:"#c2a878", C:"#3a4550" };
   var donut=[{ name:"Curva A", value:soma(grupos.A), cor:cor.A },{ name:"Curva B", value:soma(grupos.B), cor:cor.B },{ name:"Curva C", value:soma(grupos.C), cor:cor.C }].filter(function(d){ return d.value>0; });
   function Accordion(classe){
     var arr=grupos[classe], ab=aberto[classe];
@@ -2693,7 +2719,7 @@ function DashboardGeral({ enrichedOrders }) {
         var dinheiro = [
           { name:"Custo produto", value:Math.max(0,custo), cor:CORES_DINHEIRO.custo },
           { name:"Taxas", value:Math.max(0,taxas), cor:CORES_DINHEIRO.taxas },
-          { name:"Frete grátis", value:Math.max(0,frete), cor:"#768592" },
+          { name:"Frete grátis", value:Math.max(0,frete), cor:"#f5872e" },
           { name:"Impostos", value:Math.max(0,impostos), cor:CORES_DINHEIRO.impostos },
           { name:"Lucro", value:Math.max(0,lucro), cor:CORES_DINHEIRO.lucro },
         ].filter(function(d){ return d.value > 0; });
@@ -3822,12 +3848,12 @@ function PainelBackup({ onClose }) {
             {/* Exportar */}
             <div style={{ background:"rgba(0,200,83,.12)", border:"1px solid rgba(0,200,83,.35)", borderRadius:12, padding:"18px 20px" }}>
               <div style={{ fontSize:28, marginBottom:8 }}>⬇️</div>
-              <div style={{ fontWeight:500, fontSize:14, color:"#0a9d4e", marginBottom:4 }}>Exportar Backup</div>
+              <div style={{ fontWeight:500, fontSize:14, color:"var(--ui-accent)", marginBottom:4 }}>Exportar Backup</div>
               <div style={{ fontSize:12, color:"var(--text-2)", marginBottom:8, lineHeight:1.5 }}>
                 Baixa um arquivo JSON com todos os seus dados. Guarde em local seguro.
               </div>
               <button onClick={exportarBackup}
-                style={{ width:"100%", background:"#0a9d4e", border:"none", color:"#fff", fontWeight:500, padding:"11px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
+                style={{ width:"100%", background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:500, padding:"11px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
                 ⬇️ Exportar Backup Agora
               </button>
             </div>
@@ -4668,7 +4694,7 @@ function BadgeTipoEnvio({ tipo }) {
     "FULL": { bg:"rgba(118,134,146,.22)", color:"#768692", label:"FULL" },
     "Flex": { bg:"rgba(118,133,146,.18)", color:"#768592", label:"Flex" },
     "ME2":  { bg:"rgba(0,240,255,.25)", color:"#0e7490", label:"ME2" },
-    "ME1":  { bg:"rgba(0,200,83,.18)", color:"#0a9d4e", label:"ME1" },
+    "ME1":  { bg:"rgba(0,200,83,.18)", color:"var(--ui-accent)", label:"ME1" },
   }[tipo];
   if (!cfg) return null;
   return (
@@ -5058,7 +5084,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                       </a>
                     )}
                     <button onClick={function(){ confirmarAtualizado(id); }}
-                      style={{ background:"#0a9d4e", border:"none", color:"#fff", fontWeight:500, padding:"4px 10px", borderRadius:6, cursor:"pointer", fontSize:11, whiteSpace:"nowrap" }}>
+                      style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:500, padding:"4px 10px", borderRadius:6, cursor:"pointer", fontSize:11, whiteSpace:"nowrap" }}>
                       ✓ Já atualizei
                     </button>
                   </div>
@@ -5684,7 +5710,7 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
                   {qtd === null
                     ? <span style={{ fontSize:12, color:"var(--text-3)" }}>não analisado</span>
                     : qtd === 0
-                      ? <span style={{ fontSize:12, fontWeight:500, color:"#0a9d4e" }}>✓ otimizado</span>
+                      ? <span style={{ fontSize:12, fontWeight:500, color:"var(--ui-accent)" }}>✓ otimizado</span>
                       : <span style={{ fontSize:13, fontWeight:600, color:corQtd }}>{qtd} melhoria{qtd>1?"s":""} {aberto ? "▲" : "▼"}</span>}
                 </div>
               </div>
@@ -6042,7 +6068,7 @@ function ChatInternoWidget({ currentUser }) {
                         </div>
                         {!concluida && t.responsavelId===currentUser.id && (
                           <button onClick={function(){mudarStatusTarefa(t.id,"concluida");}}
-                            style={{ background:"#0a9d4e", border:"none", color:"#fff", padding:"3px 9px", borderRadius:6, cursor:"pointer", fontSize:10, fontWeight:600 }}>
+                            style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", padding:"3px 9px", borderRadius:6, cursor:"pointer", fontSize:10, fontWeight:600 }}>
                             ✓ Concluir
                           </button>
                         )}
@@ -7786,7 +7812,7 @@ export default function App() {
 
         {/* Direita: status + sino + atualizar + reconectar + usuário + tema + sair */}
         <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", justifyContent:"flex-end" }}>
-          {token && <span style={{ background:"rgba(0,200,83,.12)", border:"1px solid rgba(0,200,83,.35)", color:"#0a9d4e", fontSize:10, padding:"3px 9px", borderRadius:20, fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:180 }}>● {user?.nickname}</span>}
+          {token && <span style={{ background:"rgba(0,200,83,.12)", border:"1px solid rgba(0,200,83,.35)", color:"var(--ui-accent)", fontSize:10, padding:"3px 9px", borderRadius:20, fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:180 }}>● {user?.nickname}</span>}
           {!token && <span style={{ background:"var(--surface-3)", border:"1px solid var(--border)", color:"var(--text-3)", fontSize:10, padding:"3px 9px", borderRadius:20, fontWeight:600 }}>● Não conectado</span>}
           {token && lastUpdate && (function(){ var mins=Math.round((Date.now()-parseInt(lastUpdate))/60000); var horas=Math.floor(mins/60); var isStale=mins>=300; return <span style={{ fontSize:10, color:isStale?"#FF5252":"var(--text-3)", whiteSpace:"nowrap" }}>{horas>0?(horas+"h "+(mins%60)+"min"):(mins+"min")} atrás</span>; })()}
           <SinoNotificacoes notificacoes={notificacoes} setNotificacoes={setNotificacoes} darkMode={darkMode} />
@@ -8248,7 +8274,7 @@ export default function App() {
                         <td style={{ padding:"7px 10px", fontSize:11, color:"var(--text-2)", textAlign:"center" }}>×{o.qty}</td>
                         <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#FFC107", fontWeight:600, fontSize:12 }}>{fmt(o.fee)}</span></td>
                         <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#768592", fontWeight:600, fontSize:12 }}>{o.freteSeller > 0 ? fmt(o.freteSeller) : "—"}</span></td>
-                        <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#0a9d4e", fontWeight:500, fontSize:12 }}>{fmt(youReceive)}</span></td>
+                        <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"var(--ui-accent)", fontWeight:500, fontSize:12 }}>{fmt(youReceive)}</span></td>
                         <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap", fontSize:12, color:o.profit>=0?"#0a9d4e":"#FF5252", fontWeight:500 }}>{o.cost > 0 ? fmt(o.profit) : "—"}</td>
                         <td style={{ padding:"10px 12px" }}><MarginBar value={o.margin} /></td>
                       </tr>

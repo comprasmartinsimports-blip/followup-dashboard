@@ -6413,7 +6413,11 @@ export default function App() {
     });
   }
   const [shipmentStatuses, setShipmentStatuses] = useState({});
-  const [shipmentAddresses, setShipmentAddresses] = useState({}); // {orderId: {uf, city, zip}} vindo do /shipments
+  // Endereços por pedido (cidade/UF) — persistidos numa chave PRÓPRIA e pequena, independente do
+  // snapshot grande (que pode estourar a cota do localStorage e não salvar). Isso mantém o mapa por
+  // estado preenchido entre recarregamentos.
+  const [shipmentAddresses, setShipmentAddresses] = useState(function(){ try { var v = JSON.parse(localStorage.getItem("ml_ship_addr") || "{}"); return (v && typeof v === "object") ? v : {}; } catch(e){ return {}; } });
+  useEffect(function(){ try { if (shipmentAddresses && Object.keys(shipmentAddresses).length) localStorage.setItem("ml_ship_addr", JSON.stringify(shipmentAddresses)); } catch(e){} }, [shipmentAddresses]);
   const [promos, setPromos] = useState({});
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
@@ -6892,7 +6896,7 @@ export default function App() {
     setSellerShipping(snap.sellerShipping || {});
     setShipmentCosts(snap.shipmentCosts || {});
     setShipmentStatuses(snap.shipmentStatuses || {});
-    setShipmentAddresses(snap.shipmentAddresses || {});
+    if (snap.shipmentAddresses && Object.keys(snap.shipmentAddresses).length) setShipmentAddresses(function(prev){ return Object.assign({}, prev, snap.shipmentAddresses); });
     setPaymentData(snap.paymentData || {});
     setPromos(snap.promos || {});
     var lu = localStorage.getItem("ml_last_update");
@@ -6994,7 +6998,7 @@ export default function App() {
           const { shippingMap: orderShippingMap, statusMap: shipmentStatusMap, addressMap: orderAddressMap } = await fetchShippingForOrders(orders, validTk, function(pShip, pStatus, pAddr){ setShipmentCosts({ ...pShip }); if (pStatus) setShipmentStatuses({ ...pStatus }); if (pAddr) setShipmentAddresses({ ...pAddr }); });
           setShipmentCosts({ ...orderShippingMap });
           setShipmentStatuses({ ...shipmentStatusMap });
-          setShipmentAddresses({ ...orderAddressMap });
+          setShipmentAddresses(function(prev){ return Object.assign({}, prev, orderAddressMap); });
 
           const paymentMap = await fetchPaymentForOrders(orders, validTk, function(partial){ setPaymentData({ ...partial }); });
           setPaymentData({ ...paymentMap });

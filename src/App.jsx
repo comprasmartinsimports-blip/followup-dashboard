@@ -92,7 +92,7 @@ function calcTaxaShopee(preco, doc) {
 function getListingTypeLabel(type) {
   // ML Brasil: gold_premium e gold_pro = Premium (17%)
   // gold_special, gold_extra, demais = Clássico (12%)
-  if (type === "gold_premium" || type === "gold_pro") return { label: "Premium · 17%", color: "#7c3aed" };
+  if (type === "gold_premium" || type === "gold_pro") return { label: "Premium · 17%", color: "#768592" };
   if (type === "gold_special" || type === "gold_extra") return { label: "Clássico · 12%", color: "#768692" };
   if (type === "silver") return { label: "Gratuito", color: "var(--text-3)" };
   if (type === "free") return { label: "Gratuito", color: "var(--text-3)" };
@@ -383,20 +383,44 @@ function ProdutoModal({ produto, onSave, onClose }) {
 function ProdutosTab({ produtos, salvar }) {
   const [busca, setBusca] = useState("");
   const [editando, setEditando] = useState(null);
+  const [mostrarFiltros, setMostrarFiltros] = useState(true);
+  const [mostrarAcoes, setMostrarAcoes] = useState(true);
+  const [maisAcoes, setMaisAcoes] = useState(false);
+  const [menuRow, setMenuRow] = useState(null);
+  const [sel, setSel] = useState({});
+  const [fSituacao, setFSituacao] = useState("todos");
+  const [fEstoque, setFEstoque] = useState("todos");
+  const [fMarca, setFMarca] = useState("");
+  const [fFornecedor, setFFornecedor] = useState("");
   const fileRef = useRef(null);
   const lista = (produtos || []).filter(function(p){
     var q = busca.trim().toLowerCase();
-    if (!q) return true;
-    return nomeProd(p).toLowerCase().indexOf(q) >= 0 || (p.sku || "").toLowerCase().indexOf(q) >= 0;
+    if (q) { var cod = String(p.codigo || p.sku || "").toLowerCase(); if (nomeProd(p).toLowerCase().indexOf(q) < 0 && cod.indexOf(q) < 0 && String(p.gtin||"").toLowerCase().indexOf(q) < 0) return false; }
+    var est = parseInt(p.estoqueAtual) || 0, min = parseInt(p.estoqueMinimo) || 0;
+    if (fSituacao === "sem_custo" && parseFloat(p.precoCusto) > 0) return false;
+    if (fSituacao === "com_custo" && !(parseFloat(p.precoCusto) > 0)) return false;
+    if (fEstoque === "com" && est <= 0) return false;
+    if (fEstoque === "sem" && est > 0) return false;
+    if (fEstoque === "abaixo" && !(min > 0 && est < min)) return false;
+    if (fMarca && String(p.marca||"").toLowerCase().indexOf(fMarca.toLowerCase()) < 0) return false;
+    if (fFornecedor && String(p.fornecedor||"").toLowerCase().indexOf(fFornecedor.toLowerCase()) < 0) return false;
+    return true;
   });
   const total = (produtos || []).length;
-  const semCusto = (produtos || []).filter(function(p){ return !(parseFloat(p.precoCusto) > 0); }).length;
-  const valorEstoque = (produtos || []).reduce(function(s,p){ return s + (parseFloat(p.precoCusto) || 0) * (parseInt(p.estoqueAtual) || 0); }, 0);
-  const kpis = [
-    { l:"Produtos", v:String(total), c:"var(--text-strong)" },
-    { l:"Sem custo", v:String(semCusto), c: semCusto > 0 ? "#FFC107" : "var(--text-strong)" },
-    { l:"Valor em estoque (custo)", v:fmt(valorEstoque), c:"var(--text-strong)" },
-  ];
+  function limparFiltros(){ setFSituacao("todos"); setFEstoque("todos"); setFMarca(""); setFFornecedor(""); }
+  var temFiltro = fSituacao!=="todos" || fEstoque!=="todos" || fMarca || fFornecedor;
+  const idsSel = Object.keys(sel).filter(function(k){ return sel[k]; });
+  function toggleSel(id){ setSel(function(s){ var n=Object.assign({},s); if(n[id]) delete n[id]; else n[id]=true; return n; }); }
+  function toggleTodos(){ if (idsSel.length === lista.length) setSel({}); else { var n={}; lista.forEach(function(p){ n[p.id]=true; }); setSel(n); } }
+  function excluir(id){ if(!window.confirm("Excluir este produto?")) return; salvar((produtos||[]).filter(function(p){ return p.id!==id; })); setMenuRow(null); }
+  function excluirSelecionados(){ if(!idsSel.length) return; if(!window.confirm("Excluir "+idsSel.length+" produto(s)?")) return; salvar((produtos||[]).filter(function(p){ return !sel[p.id]; })); setSel({}); }
+  function duplicar(p){ var novo = Object.assign({}, p, { id:"prod_"+Date.now(), nome: nomeProd(p)+" (cópia)", sku:"" }); salvar([novo].concat(produtos||[])); setMenuRow(null); }
+  function exportarPlanilha(){
+    var base = idsSel.length ? (produtos||[]).filter(function(p){ return sel[p.id]; }) : lista;
+    baixarCSV("produtos", ["Código","Descrição","GTIN","Estoque","Estoque mínimo","Marca","Fornecedor","Preço de custo","Preço de venda"],
+      base.map(function(p){ return [p.codigo||p.sku||"", nomeProd(p), p.gtin||"", parseInt(p.estoqueAtual)||0, parseInt(p.estoqueMinimo)||0, p.marca||"", p.fornecedor||"", (parseFloat(p.precoCusto)||0).toFixed(2), (parseFloat(p.precoVenda)||0).toFixed(2)]; }));
+  }
+  function copiar(txt){ try { navigator.clipboard.writeText(String(txt)); } catch(e){} }
   function salvarProduto(p){
     var arr = (produtos || []).slice();
     var idx = arr.findIndex(function(x){ return x.id === p.id; });
@@ -438,44 +462,110 @@ function ProdutosTab({ produtos, salvar }) {
     };
     reader.readAsText(file);
   }
+  var selFiltro = { width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"7px 9px", borderRadius:8, fontSize:12.5 };
+  var menuItem = { background:"none", border:"none", textAlign:"left", padding:"7px 10px", borderRadius:6, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" };
+  var acaoItem = { background:"none", border:"none", textAlign:"left", padding:"9px 10px", borderRadius:7, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" };
+  var acaoSub = { background:"none", border:"none", textAlign:"left", padding:"5px 2px", cursor:"pointer", fontSize:12, color:"var(--text-2)", width:"100%", display:"block" };
+  function Campo(props){ return <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>{props.label}</div>{props.children}</div>; }
   return (
     <div style={{ padding:2 }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap" }}>
-        <div>
-          <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Produtos</div>
-          <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Catálogo com custo, SKU, estoque e vínculo. Clique numa linha para editar.</div>
+      <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display:"none" }} onChange={function(e){ if (e.target.files && e.target.files[0]) importarCSV(e.target.files[0]); e.target.value=""; }} />
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12, flexWrap:"wrap" }}>
+        <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Produtos</div>
+        <button onClick={function(){ setMostrarFiltros(function(v){return !v;}); }} title="Filtros"
+          style={{ background: mostrarFiltros?"rgba(118,133,146,.14)":"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"9px 12px", borderRadius:9, cursor:"pointer", fontSize:13 }}>⚙ Filtros</button>
+        <div style={{ position:"relative", flex:1, minWidth:220, maxWidth:560 }}>
+          <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:"var(--text-3)", fontSize:13 }}>🔍</span>
+          <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Pesquisar por código, descrição ou GTIN"
+            style={{ width:"100%", background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 12px 9px 34px", borderRadius:9, fontSize:13, outline:"none" }} />
         </div>
-        <div style={{ display:"flex", gap:8 }}>
-          <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display:"none" }} onChange={function(e){ if (e.target.files && e.target.files[0]) importarCSV(e.target.files[0]); e.target.value=""; }} />
-          <button onClick={function(){ if (fileRef.current) fileRef.current.click(); }} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"9px 16px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>Importar CSV</button>
-          <button onClick={function(){ setEditando({}); }} style={{ background:"#768692", border:"none", color:"#fff", fontWeight:500, padding:"9px 18px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>+ Novo produto</button>
+        <div style={{ flex:1 }} />
+        <button onClick={function(){ setMostrarAcoes(function(v){return !v;}); }}
+          style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"9px 12px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Ações</button>
+      </div>
+
+      <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
+        {mostrarFiltros && (
+          <div style={{ width:230, flexShrink:0, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px", display:"flex", flexDirection:"column", gap:11 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <span style={{ fontWeight:600, fontSize:14, color:"var(--text-strong)" }}>Filtrar</span>
+              {temFiltro && <button onClick={limparFiltros} style={{ background:"none", border:"none", color:"#768592", cursor:"pointer", fontSize:12 }}>Limpar</button>}
+            </div>
+            <Campo label="Situação"><select value={fSituacao} onChange={function(e){ setFSituacao(e.target.value); }} style={selFiltro}><option value="todos">Todos</option><option value="com_custo">Com custo</option><option value="sem_custo">Sem custo</option></select></Campo>
+            <Campo label="Estoque"><select value={fEstoque} onChange={function(e){ setFEstoque(e.target.value); }} style={selFiltro}><option value="todos">Todos</option><option value="com">Com estoque</option><option value="sem">Sem estoque</option><option value="abaixo">Abaixo do mínimo</option></select></Campo>
+            <Campo label="Marca"><input value={fMarca} onChange={function(e){ setFMarca(e.target.value); }} placeholder="Marca" style={selFiltro} /></Campo>
+            <Campo label="Fornecedor"><input value={fFornecedor} onChange={function(e){ setFFornecedor(e.target.value); }} placeholder="Fornecedor" style={selFiltro} /></Campo>
+            {["Imagens","Lote","Tags","Categoria","NCM","Classificação","Tipo","Lojas virtuais","Cód fornecedor"].map(function(l){ return <Campo key={l} label={l}><select disabled style={{ ...selFiltro, opacity:.45, cursor:"not-allowed" }}><option>—</option></select></Campo>; })}
+            <div style={{ fontSize:10, color:"var(--text-4)", lineHeight:1.4 }}>Filtros acinzentados dependem de dados que só existem no ERP (Bling).</div>
+          </div>
+        )}
+
+        <div style={{ flex:1, minWidth:0 }}>
+          {idsSel.length > 0 && (
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8, background:"rgba(118,133,146,.10)", border:"1px solid var(--border)", borderRadius:9, padding:"7px 12px", fontSize:12 }}>
+              <span style={{ color:"var(--text-2)" }}>{idsSel.length} selecionado(s)</span>
+              <button onClick={exportarPlanilha} style={_btnExp}>Exportar</button>
+              <button onClick={excluirSelecionados} style={{ ..._btnExp, color:"#FF5252" }}>Excluir</button>
+              <button onClick={function(){ setSel({}); }} style={{ ..._btnExp, borderColor:"transparent", background:"transparent" }}>Limpar</button>
+            </div>
+          )}
+          <div style={_tableWrap}>
+            <table style={_table}>
+              <thead><tr>
+                <th style={{ ..._th, width:34 }}><input type="checkbox" checked={lista.length>0 && idsSel.length===lista.length} onChange={toggleTodos} /></th>
+                {["Descrição","Código","Estoque","Marca","Preço de custo",""].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}
+              </tr></thead>
+              <tbody>
+                {lista.slice(0,500).map(function(p,i){
+                  var cod = p.codigo || p.sku || "—";
+                  return <tr key={p.id||i}>
+                    <td style={_td}><input type="checkbox" checked={!!sel[p.id]} onChange={function(){ toggleSel(p.id); }} /></td>
+                    <td style={{ ..._td, maxWidth:340, color:"var(--text-strong)", fontWeight:500 }}><span style={{ display:"inline-block", maxWidth:"100%", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", verticalAlign:"middle" }}>{nomeProd(p)}</span></td>
+                    <td style={_tdMono}>{cod} <button className="copy-btn" onClick={function(){ copiar(cod); }}>⎘</button></td>
+                    <td style={_td}>{parseInt(p.estoqueAtual)||0}</td>
+                    <td style={_td}>{p.marca || "—"}</td>
+                    <td style={_td}>{parseFloat(p.precoCusto)>0 ? fmt(parseFloat(p.precoCusto)) : <span style={{ color:"#FFC107" }}>0,00</span>}</td>
+                    <td style={{ ..._td, position:"relative", textAlign:"right", width:44 }}>
+                      <button onClick={function(){ setMenuRow(menuRow===p.id?null:p.id); }} style={{ background:"none", border:"none", color:"var(--text-3)", cursor:"pointer", fontSize:16, padding:"0 6px" }}>⋮</button>
+                      {menuRow===p.id && (
+                        <div style={{ position:"absolute", right:8, top:"100%", zIndex:50, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, boxShadow:"0 8px 24px rgba(0,0,0,.18)", padding:4, minWidth:130, display:"flex", flexDirection:"column" }}>
+                          <button onClick={function(){ setEditando(p); setMenuRow(null); }} style={menuItem}>Editar</button>
+                          <button onClick={function(){ duplicar(p); }} style={menuItem}>Duplicar</button>
+                          <button onClick={function(){ excluir(p.id); }} style={{ ...menuItem, color:"#FF5252" }}>Excluir</button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>;
+                })}
+              </tbody>
+            </table>
+            {lista.length===0 && <div style={{ padding:24, textAlign:"center", color:"var(--text-3)" }}>Nenhum produto. Use "Incluir cadastro" ou "Importar CSV".</div>}
+          </div>
+          <div style={{ fontSize:12, color:"var(--text-3)", marginTop:8 }}>{lista.length} de {total} produto(s){lista.length>500?" (mostrando 500)":""}</div>
         </div>
-      </div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12, marginBottom:14 }}>
-        {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
-      </div>
-      <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Buscar por produto ou SKU..." style={_inputBusca} />
-      <div style={_tableWrap}>
-        <table style={_table}>
-          <thead><tr>{["Foto","Produto","SKU","Custo","Preço venda","Estoque","Anúncios","Status"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
-          <tbody>
-            {lista.slice(0,400).map(function(p,i){
-              var img = (p.imagens && p.imagens[0]) || null;
-              var ativo = (p.status || "") === "Ativo";
-              return <tr key={p.id || i} onClick={function(){ setEditando(p); }} style={{ cursor:"pointer" }}>
-                <td style={_td}>{img ? <img src={img} alt="" style={{ width:36, height:36, borderRadius:6, objectFit:"cover" }} /> : <div style={{ width:36, height:36, borderRadius:6, background:"var(--surface-3)" }} />}</td>
-                <td style={{ ..._td, maxWidth:300, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)", fontWeight:500 }}>{nomeProd(p)}</td>
-                <td style={_tdMono}>{p.sku || "—"}</td>
-                <td style={_td}>{parseFloat(p.precoCusto) > 0 ? fmt(parseFloat(p.precoCusto)) : <span style={{ color:"#FFC107" }}>sem custo</span>}</td>
-                <td style={_td}>{parseFloat(p.precoVenda) > 0 ? fmt(parseFloat(p.precoVenda)) : "—"}</td>
-                <td style={_td}>{parseInt(p.estoqueAtual) || 0}</td>
-                <td style={_td}>{qtdAnuncios(p)}</td>
-                <td style={_td}><span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background: ativo ? "rgba(0,200,83,.14)" : "var(--surface-3)", color: ativo ? "#0a9d4e" : "var(--text-3)" }}>{p.status || "—"}</span></td>
-              </tr>;
-            })}
-          </tbody>
-        </table>
-        {lista.length === 0 && <div style={{ padding:24, textAlign:"center", color:"var(--text-3)" }}>Nenhum produto. Use "+ Novo produto" ou "Importar CSV".</div>}
+
+        {mostrarAcoes && (
+          <div style={{ width:236, flexShrink:0, display:"flex", flexDirection:"column", gap:8 }}>
+            <button onClick={function(){ setEditando({}); }} style={{ background:"#0a9d4e", border:"none", color:"#fff", fontWeight:600, padding:"11px", borderRadius:9, cursor:"pointer", fontSize:13.5 }}>+ Incluir cadastro</button>
+            <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"6px", display:"flex", flexDirection:"column" }}>
+              <button onClick={function(){ if(fileRef.current) fileRef.current.click(); }} style={acaoItem}>Importar CSV</button>
+              <button onClick={exportarPlanilha} style={acaoItem}>Exportar dados para planilha</button>
+              <button onClick={function(){ window.print(); }} style={acaoItem}>Imprimir etiquetas{idsSel.length?(" ("+idsSel.length+")"):""}</button>
+              <button onClick={function(){ setMaisAcoes(function(v){return !v;}); }} style={{ ...acaoItem, color:"#0a9d4e", fontWeight:600 }}>{maisAcoes?"− ":"+ "}Mais ações</button>
+              {maisAcoes && <div style={{ padding:"2px 8px 8px" }}>
+                <div style={{ fontSize:11, color:"var(--text-4)", margin:"6px 0 3px" }}>Planilhas</div>
+                <button onClick={exportarPlanilha} style={acaoSub}>Exportar dados para planilha</button>
+                <div style={{ fontSize:11, color:"var(--text-4)", margin:"8px 0 3px" }}>Edição</div>
+                <button onClick={excluirSelecionados} style={{ ...acaoSub, color: idsSel.length?"#FF5252":"var(--text-4)" }}>Excluir selecionados</button>
+                <div style={{ fontSize:10, color:"var(--text-4)", marginTop:8, lineHeight:1.4 }}>Reajuste em massa, tags, categorias, multiloja e listas de preço são recursos de ERP (Bling) — não disponíveis aqui.</div>
+              </div>}
+            </div>
+            <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"12px 14px" }}>
+              <div style={{ fontSize:12, color:"var(--text-3)" }}>Quantidade de produtos</div>
+              <div style={{ fontSize:22, fontWeight:600, color:"#0a9d4e" }}>{total}</div>
+            </div>
+          </div>
+        )}
       </div>
       {editando && <ProdutoModal produto={editando} onSave={salvarProduto} onClose={function(){ setEditando(null); }} />}
     </div>
@@ -643,7 +733,7 @@ function VincularTab({ enriched, produtos, salvar }) {
 var CHART_AXIS = "#8492a8";                       // cor dos rótulos dos eixos (legível nos 2 temas)
 var CHART_GRID = "rgba(128,140,168,.16)";         // linhas de grade
 var CORES_DINHEIRO = { custo:"#768692", taxas:"#FFC107", impostos:"#FF7043", lucro:"#0a9d4e" };
-var PALETA_ABC = ["#768692","#00A3B5","#0a9d4e","#FFC107","#FF7043","#9C6ADE","#E7515A","#5A6B86"];
+var PALETA_ABC = ["#768692","#00A3B5","#0a9d4e","#FFC107","#FF7043","#768592","#E7515A","#5A6B86"];
 
 // Tooltip padrão em R$ (respeita o tema via var(--...)).
 function TipMoeda({ active, payload, label }){
@@ -1277,7 +1367,7 @@ function DreTab({ enrichedOrders }) {
   var composicao = [
     { name:"Receita bruta", value:fat, cor:"#768692" },
     { name:"Impostos", value:impostos, cor:"#FF7043" },
-    { name:"CMV", value:custo, cor:"#9C6ADE" },
+    { name:"CMV", value:custo, cor:"#768592" },
     { name:"Taxas ML", value:taxas, cor:"#FFC107" },
     { name:"Lucro líq.", value:Math.max(0,lucro), cor:"#0a9d4e" },
   ];
@@ -1756,7 +1846,7 @@ function MargemPedidoDash({ enrichedOrders }){
             <Legend wrapperStyle={{ fontSize:12 }} />
             <Line type="monotone" dataKey="margem" name="Margem de Contribuição" stroke="#0a6b3b" strokeWidth={2.2} dot={false} />
             <Line type="monotone" dataKey="imposto" name="Impostos" stroke="#FF9800" strokeWidth={2} dot={false} />
-            <Line type="monotone" dataKey="taxa" name="Taxa Marketplace" stroke="#7c3aed" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="taxa" name="Taxa Marketplace" stroke="#768592" strokeWidth={2} dot={false} />
             <Line type="monotone" dataKey="freteMedio" name="Frete Médio" stroke="#EC4899" strokeWidth={2} dot={false} />
             <Line type="monotone" dataKey="ticketMedio" name="Ticket Médio" stroke="#38BDF8" strokeWidth={2} dot={false} />
           </LineChart>
@@ -2351,7 +2441,7 @@ function DashboardGeral({ enrichedOrders }) {
         var dinheiro = [
           { name:"Custo produto", value:Math.max(0,custo), cor:CORES_DINHEIRO.custo },
           { name:"Taxas", value:Math.max(0,taxas), cor:CORES_DINHEIRO.taxas },
-          { name:"Frete grátis", value:Math.max(0,frete), cor:"#9C6ADE" },
+          { name:"Frete grátis", value:Math.max(0,frete), cor:"#768592" },
           { name:"Impostos", value:Math.max(0,impostos), cor:CORES_DINHEIRO.impostos },
           { name:"Lucro", value:Math.max(0,lucro), cor:CORES_DINHEIRO.lucro },
         ].filter(function(d){ return d.value > 0; });
@@ -2844,7 +2934,7 @@ function getOrderStatusInfo(status, tags, fulfilled, shipmentStatus) {
   const isRefunded = tags?.some(t => t.includes("refund"));
   const isDelivered = tags?.some(t => t === "delivered") || shipmentStatus === "delivered";
   const isDevolvido = isRefunded || (status === "cancelled" && isDelivered);
-  if (isDevolvido) return { label: "Devolvido", color: "#7c3aed", bg: "rgba(139,92,246,.14)" };
+  if (isDevolvido) return { label: "Devolvido", color: "#768592", bg: "rgba(118,133,146,.14)" };
   if (isMediation) return { label: "Em disputa", color: "#FFC107", bg: "rgba(255,193,7,.12)" };
   if (status === "cancelled") return { label: "Cancelado", color: "#FF5252", bg: "rgba(255,82,82,.12)" };
   if (isDelivered) return { label: "Entregue", color: "#768692", bg: "rgba(118,134,146,.14)" };
@@ -4324,7 +4414,7 @@ function BadgeTipoEnvio({ tipo }) {
   if (!tipo) return null;
   var cfg = {
     "FULL": { bg:"rgba(118,134,146,.22)", color:"#768692", label:"FULL" },
-    "Flex": { bg:"rgba(139,92,246,.18)", color:"#7c3aed", label:"Flex" },
+    "Flex": { bg:"rgba(118,133,146,.18)", color:"#768592", label:"Flex" },
     "ME2":  { bg:"rgba(0,240,255,.25)", color:"#0e7490", label:"ME2" },
     "ME1":  { bg:"rgba(0,200,83,.18)", color:"#0a9d4e", label:"ME1" },
   }[tipo];
@@ -4414,7 +4504,7 @@ function NovoProdutoPrecForm({ onSave, onClose, marketplaceInicial, shopeeDoc })
       <div style={{ display:"flex", gap:8, marginTop:4 }}>
         <button onClick={onClose} style={{ flex:1, background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"9px", borderRadius:9, cursor:"pointer" }}>Cancelar</button>
         <button onClick={function(){ if(f.nome&&f.sku) onSave(f); }} disabled={!f.nome||!f.sku}
-          style={{ flex:2, background:f.nome&&f.sku?"#7c3aed":"var(--surface-3)", border:"none", color:f.nome&&f.sku?"#fff":"var(--text-3)", fontWeight:500, padding:"9px", borderRadius:9, cursor:f.nome&&f.sku?"pointer":"not-allowed" }}>
+          style={{ flex:2, background:f.nome&&f.sku?"#768592":"var(--surface-3)", border:"none", color:f.nome&&f.sku?"#fff":"var(--text-3)", fontWeight:500, padding:"9px", borderRadius:9, cursor:f.nome&&f.sku?"pointer":"not-allowed" }}>
           Salvar e Acompanhar
         </button>
       </div>
@@ -4691,7 +4781,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                     <span style={{ fontWeight:500, color:"#FFC107", marginRight:6 }}>SKU {skuRef}</span>
                     {listingRef && (
                       <span style={{ fontSize:9, fontWeight:500, padding:"1px 6px", borderRadius:4, marginRight:6, whiteSpace:"nowrap",
-                        background: tipoPrem?"rgba(139,92,246,.18)":"rgba(118,134,146,.18)",
+                        background: tipoPrem?"rgba(118,133,146,.18)":"rgba(118,134,146,.18)",
                         color: tipoPrem?"#a78bfa":"#768692" }}>
                         {tipoPrem?"⭐ Premium 17%":"📋 Clássico 12%"}
                       </span>
@@ -4702,7 +4792,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                     {precoBruto > p.precoNovo + 0.001 && (
                       <span style={{ fontSize:11, color:"var(--text-3)", textDecoration:"line-through" }}>R$ {precoBruto.toFixed(2).replace(".",",")}</span>
                     )}
-                    <span style={{ fontSize:12, fontWeight:500, color:"#7c3aed" }}>→ R$ {p.precoNovo.toFixed(2).replace(".",",")}</span>
+                    <span style={{ fontSize:12, fontWeight:500, color:"#768592" }}>→ R$ {p.precoNovo.toFixed(2).replace(".",",")}</span>
                     {!ehShopee && (
                       <a href={"https://www.mercadolivre.com.br/seller-admin/listing/edit?itemId="+id} target="_blank" rel="noreferrer"
                         style={{ fontSize:11, color:"#0e7490", textDecoration:"none", fontWeight:600, whiteSpace:"nowrap" }}>
@@ -4731,7 +4821,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
       {/* Botão novo produto + Busca */}
       <div style={{ display:"flex", gap:7, margin:"14px 0", alignItems:"center" }}>
         <button onClick={function(){ setShowNovoProdutoPrec(true); }}
-          style={{ background:"#7c3aed", border:"none", color:"#fff", fontWeight:500, padding:"9px 14px", borderRadius:9, cursor:"pointer", fontSize:12, whiteSpace:"nowrap", flexShrink:0 }}>
+          style={{ background:"#768592", border:"none", color:"#fff", fontWeight:500, padding:"9px 14px", borderRadius:9, cursor:"pointer", fontSize:12, whiteSpace:"nowrap", flexShrink:0 }}>
           + Precificar Novo Produto
         </button>
         <div style={{ position:"relative", flex:1 }}>
@@ -4792,7 +4882,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                 "Lucro Simulado","Margem Simulada","Ação"
               ].map(function(h){
                 var isSimul = ["💡 Vender por → Anunciar por","Lucro Simulado","Margem Simulada","Taxa ML (s/ desconto)"].includes(h);
-                return <th key={h} style={{ fontSize:10, color: isSimul?"#7c3aed":"var(--text-2)", fontWeight:600, textTransform:"none", padding:"8px 10px", borderBottom:"1px solid var(--border)", textAlign:"left", whiteSpace:"nowrap", background: isSimul?"rgba(139,92,246,.12)":"transparent" }}>{h}</th>;
+                return <th key={h} style={{ fontSize:10, color: isSimul?"#768592":"var(--text-2)", fontWeight:600, textTransform:"none", padding:"8px 10px", borderBottom:"1px solid var(--border)", textAlign:"left", whiteSpace:"nowrap", background: isSimul?"rgba(118,133,146,.12)":"transparent" }}>{h}</th>;
               })}
             </tr>
           </thead>
@@ -4874,9 +4964,9 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                       </span>
                     ) : (
                       <span style={{ fontSize:10, fontWeight:500, padding:"2px 6px", borderRadius:5, whiteSpace:"nowrap",
-                        background: isPremium?"rgba(139,92,246,.14)":"rgba(118,134,146,.14)",
-                        color: isPremium?"#7c3aed":"#768692",
-                        border:"1px solid "+(isPremium?"rgba(139,92,246,.35)":"rgba(118,134,146,.35)") }}>
+                        background: isPremium?"rgba(118,133,146,.14)":"rgba(118,134,146,.14)",
+                        color: isPremium?"#768592":"#768692",
+                        border:"1px solid "+(isPremium?"rgba(118,133,146,.35)":"rgba(118,134,146,.35)") }}>
                         {isPremium?"⭐ Premium":"📋 Clássico"}
                       </span>
                     )}
@@ -4934,7 +5024,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                   </td>
 
                   {/* 💡 Preço de Venda Desejado → Preço a Anunciar (editável) */}
-                  <td style={{ padding:"6px 8px", background:"rgba(139,92,246,.12)" }}>
+                  <td style={{ padding:"6px 8px", background:"rgba(118,133,146,.12)" }}>
                     {editingPrecoId === l.id ? (
                       <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
                         <span style={{ fontSize:9, color:"var(--text-3)" }}>Vender por (c/ desconto):</span>
@@ -4946,14 +5036,14 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                             autoFocus
                             onBlur={function(e){ var v=parseFloat(e.target.value)||0; setPrecoVenda(l.id,v); setEditingPrecoId(null); }}
                             onKeyDown={function(e){ if(e.key==="Enter"||e.key==="Escape") e.target.blur(); }}
-                            style={{ width:78, background:"var(--surface)", border:"1px solid #7c3aed", color:"var(--text-strong)", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none", textAlign:"right" }} />
+                            style={{ width:78, background:"var(--surface)", border:"1px solid #768592", color:"var(--text-strong)", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none", textAlign:"right" }} />
                         </div>
                       </div>
                     ) : (
                       <div onClick={function(){ setEditingPrecoId(l.id); }} title="Clique para definir o preço de venda que você quer receber (já com desconto) — o sistema calcula o preço a anunciar" style={{ cursor:"pointer" }}>
                         {precoVendaDesejado > 0 ? (
                           <div>
-                            <span style={{ fontSize:13, fontWeight:600, color:"#7c3aed" }}>
+                            <span style={{ fontSize:13, fontWeight:600, color:"#768592" }}>
                               📢 R$ {precoParaAnunciar.toFixed(2).replace(".",",")}
                             </span>
                             <div style={{ fontSize:10, color:"var(--text-2)" }}>
@@ -4967,7 +5057,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                             )}
                           </div>
                         ) : (
-                          <span style={{ fontSize:11, color:"var(--text-3)", background:"rgba(139,92,246,.14)", border:"1px dashed rgba(139,92,246,.35)", padding:"2px 7px", borderRadius:5 }}>
+                          <span style={{ fontSize:11, color:"var(--text-3)", background:"rgba(118,133,146,.14)", border:"1px dashed rgba(118,133,146,.35)", padding:"2px 7px", borderRadius:5 }}>
                             ✎ simular
                           </span>
                         )}
@@ -4976,7 +5066,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                   </td>
 
                   {/* 🏷 % Desconto Promoção */}
-                  <td style={{ padding:"6px 8px", background:"rgba(139,92,246,.12)" }}>
+                  <td style={{ padding:"6px 8px", background:"rgba(118,133,146,.12)" }}>
                     {editingDescId === l.id ? (
                       <div style={{ display:"flex", alignItems:"center", gap:3 }}>
                         <input type="number" min="0" max="80" step="1"
@@ -4985,17 +5075,17 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                           autoFocus
                           onBlur={function(e){ var v=Math.min(80,Math.max(0,parseFloat(e.target.value)||0)); setDesconto(l.id,v); setEditingDescId(null); }}
                           onKeyDown={function(e){ if(e.key==="Enter"||e.key==="Escape") e.target.blur(); }}
-                          style={{ width:46, background:"var(--surface)", border:"1px solid #7c3aed", color:"var(--text-strong)", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none", textAlign:"center" }} />
+                          style={{ width:46, background:"var(--surface)", border:"1px solid #768592", color:"var(--text-strong)", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none", textAlign:"center" }} />
                         <span style={{ fontSize:11, color:"var(--text-3)" }}>%</span>
                       </div>
                     ) : (
                       <div onClick={function(){ setEditingDescId(l.id); }} title="% de desconto na promoção" style={{ cursor:"pointer" }}>
                         {descPct > 0 ? (
                           <div>
-                            <span style={{ fontSize:12, fontWeight:500, color:"#7c3aed", background:"rgba(139,92,246,.14)", padding:"2px 7px", borderRadius:5 }}>
+                            <span style={{ fontSize:12, fontWeight:500, color:"#768592", background:"rgba(118,133,146,.14)", padding:"2px 7px", borderRadius:5 }}>
                               {descPct}%
                             </span>
-                            <div style={{ fontSize:10, color:"#7c3aed", marginTop:1 }}>
+                            <div style={{ fontSize:10, color:"#768592", marginTop:1 }}>
                               cliente paga R$ {precoComDesc.toFixed(2).replace(".",",")}
                             </div>
                           </div>
@@ -5009,7 +5099,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                   </td>
 
                   {/* Taxa sobre preço c/ desconto */}
-                  <td style={{ padding:"6px 8px", background:"rgba(139,92,246,.12)" }}>
+                  <td style={{ padding:"6px 8px", background:"rgba(118,133,146,.12)" }}>
                     <div style={{ fontSize:12, fontWeight:500, color:"#FF5252" }}>
                       R$ {taxaSobreDesc.toFixed(2).replace(".",",")}
                     </div>
@@ -5031,7 +5121,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                           {(feeRate*100).toFixed(0)}% s/ {descPct>0?"desc":"atual"}
                         </div>
                         <div title="Taxa padrão do Mercado Livre: Clássico 12% · Premium 17%"
-                          style={{ fontSize:9, fontWeight:500, color: isPremium?"#7c3aed":"#768692", marginTop:1 }}>
+                          style={{ fontSize:9, fontWeight:500, color: isPremium?"#768592":"#768692", marginTop:1 }}>
                           {isPremium ? "Premium 17%" : "Clássico 12%"}
                         </div>
                       </>
@@ -5039,7 +5129,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                   </td>
 
                   {/* Lucro Simulado (com desconto se houver) */}
-                  <td style={{ padding:"6px 8px", background:"rgba(139,92,246,.12)" }}>
+                  <td style={{ padding:"6px 8px", background:"rgba(118,133,146,.12)" }}>
                     {custo > 0 ? (
                       <div>
                         <span style={{ fontSize:13, fontWeight:500, color:lucroFinal>=0?"#0e7490":"#FF5252" }}>
@@ -5053,7 +5143,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                   </td>
 
                   {/* Margem Simulada */}
-                  <td style={{ padding:"6px 8px", background:"rgba(139,92,246,.12)" }}>
+                  <td style={{ padding:"6px 8px", background:"rgba(118,133,146,.12)" }}>
                     {custo > 0 ? (
                       <span style={{ fontSize:13, fontWeight:500, color:mCor, background:mCor+"18", padding:"3px 8px", borderRadius:6, display:"inline-block" }}>
                         {margemFinal.toFixed(1)}%
@@ -5078,7 +5168,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                           Editar ML ↗
                         </a>
                         <a href={"https://vendedores.mercadolivre.com.br/ferramentas/promocoes"} target="_blank" rel="noreferrer"
-                          style={{ fontSize:10, color:"#7c3aed", textDecoration:"none", fontWeight:600 }}>
+                          style={{ fontSize:10, color:"#768592", textDecoration:"none", fontWeight:600 }}>
                           Promoções ↗
                         </a>
                       </div>
@@ -7225,7 +7315,7 @@ export default function App() {
         topColor: "#0a9d4e",
         topBg: "rgba(0,200,83,.12)",
         bottomLabel: cost > 0 ? `Seu custo: ${fmt(cost)}` : "Seu custo: calculando...",
-        bottomColor: "#7c3aed",
+        bottomColor: "#768592",
       };
     }
     return {
@@ -7233,7 +7323,7 @@ export default function App() {
       topColor: "#768692",
       topBg: "rgba(118,134,146,.14)",
       bottomLabel: cost > 0 ? `Seu custo: ${fmt(cost)}` : "Seu custo: calculando...",
-      bottomColor: "#7c3aed",
+      bottomColor: "#768592",
     };
   }
 
@@ -7519,7 +7609,7 @@ export default function App() {
                     })}
                   </FiltroGrupo>
                   <FiltroGrupo titulo="Situação">
-                    {[{k:"all",l:"Todos"},{k:"sem_custo",l:"⚠️ Sem custo",cor:"#FF5252",bg:"rgba(255,82,82,.12)"},{k:"sem_atacado",l:"🏷 Sem preço atacado",cor:"#7c3aed",bg:"rgba(139,92,246,.14)"},{k:"com_promo",l:"🔥 Com promoção",cor:"#7c3aed",bg:"rgba(139,92,246,.14)"},{k:"sem_promo",l:"○ Sem promoção",cor:"var(--text-2)",bg:"var(--surface-3)"},{k:"frete_alto",l:"🚚 Frete acima do config.",cor:"#FFC107",bg:"rgba(255,193,7,.10)"}].map(function(f){
+                    {[{k:"all",l:"Todos"},{k:"sem_custo",l:"⚠️ Sem custo",cor:"#FF5252",bg:"rgba(255,82,82,.12)"},{k:"sem_atacado",l:"🏷 Sem preço atacado",cor:"#768592",bg:"rgba(118,133,146,.14)"},{k:"com_promo",l:"🔥 Com promoção",cor:"#768592",bg:"rgba(118,133,146,.14)"},{k:"sem_promo",l:"○ Sem promoção",cor:"var(--text-2)",bg:"var(--surface-3)"},{k:"frete_alto",l:"🚚 Frete acima do config.",cor:"#FFC107",bg:"rgba(255,193,7,.10)"}].map(function(f){
                       return <FiltroBotao key={f.k} label={f.l} active={filterListingExtra===f.k}
                         cor={f.cor||"var(--text-strong)"} bg={f.bg||"var(--surface-3)"}
                         onClick={function(){setFilterListingExtra(f.k);setPaginaAnuncios(1);}} />;
@@ -7772,7 +7862,7 @@ export default function App() {
                     })}
                   </FiltroGrupo>
                   <FiltroGrupo titulo="Tipo de Envio">
-                    {[{key:"todos",l:"Todos"},{key:"FULL",l:"FULL",c:"#768692",bg:"rgba(118,134,146,.14)"},{key:"Flex",l:"Flex",c:"#7c3aed",bg:"rgba(139,92,246,.14)"},{key:"ME2",l:"ME2",c:"#0e7490",bg:"rgba(0,240,255,.10)"},{key:"ME1",l:"ME1",c:"#768692",bg:"rgba(118,134,146,.2)"}].map(function(e){
+                    {[{key:"todos",l:"Todos"},{key:"FULL",l:"FULL",c:"#768692",bg:"rgba(118,134,146,.14)"},{key:"Flex",l:"Flex",c:"#768592",bg:"rgba(118,133,146,.14)"},{key:"ME2",l:"ME2",c:"#0e7490",bg:"rgba(0,240,255,.10)"},{key:"ME1",l:"ME1",c:"#768692",bg:"rgba(118,134,146,.2)"}].map(function(e){
                       return <FiltroBotao key={e.key} label={e.l} active={filterEnvio===e.key} cor={e.c||"var(--text-strong)"} bg={e.bg||"var(--surface-3)"} onClick={function(){setFilterEnvio(e.key);setPaginaPedidos(1);}} />;
                     })}
                   </FiltroGrupo>
@@ -7901,7 +7991,7 @@ export default function App() {
                         <td style={{ padding:"7px 10px", fontSize:12, fontWeight:500, color:"var(--text-strong)", textAlign:"right", whiteSpace:"nowrap" }}>{fmt(o.price)}</td>
                         <td style={{ padding:"7px 10px", fontSize:11, color:"var(--text-2)", textAlign:"center" }}>×{o.qty}</td>
                         <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#FFC107", fontWeight:600, fontSize:12 }}>{fmt(o.fee)}</span></td>
-                        <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#7c3aed", fontWeight:600, fontSize:12 }}>{o.freteSeller > 0 ? fmt(o.freteSeller) : "—"}</span></td>
+                        <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#768592", fontWeight:600, fontSize:12 }}>{o.freteSeller > 0 ? fmt(o.freteSeller) : "—"}</span></td>
                         <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#0a9d4e", fontWeight:500, fontSize:12 }}>{fmt(youReceive)}</span></td>
                         <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap", fontSize:12, color:o.profit>=0?"#0a9d4e":"#FF5252", fontWeight:500 }}>{o.cost > 0 ? fmt(o.profit) : "—"}</td>
                         <td style={{ padding:"10px 12px" }}><MarginBar value={o.margin} /></td>

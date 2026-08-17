@@ -2147,8 +2147,10 @@ function HomeTab({ enrichedOrders, currentUser, setTab }){
     { l:"Pedidos no mês", v:String(nped), c:"var(--text-strong)" },
   ];
   var grupos = [
+    { titulo:"Dashboard", itens:[
+      { key:"dashboard", label:"Dashboard", desc:"Visão geral, estados, margem, clientes, curva ABC e metas" },
+    ]},
     { titulo:"Operação", itens:[
-      { key:"dashboard", label:"Dashboard", desc:"Visão geral, gráficos e indicadores" },
       { key:"produtos", label:"Produtos", desc:"Cadastro e catálogo de produtos" },
       perm.includes("listings") && { key:"listings", label:"Anúncios", desc:"Anúncios do Mercado Livre" },
       { key:"vincular", label:"Vincular anúncios", desc:"Ligar anúncios aos produtos" },
@@ -2157,14 +2159,16 @@ function HomeTab({ enrichedOrders, currentUser, setTab }){
       { key:"expedicao", label:"Expedição", desc:"Status de envio dos pedidos" },
       { key:"compras", label:"Compras", desc:"Pedidos de compra e reposição" },
       { key:"estoque", label:"Estoque", desc:"Saldo e estoque mínimo" },
+      { key:"notas_fiscais", label:"Notas fiscais", desc:"Emissão e consulta" },
     ]},
     { titulo:"Financeiro", itens:[
       { key:"contas_pagar", label:"Contas a pagar", desc:"Despesas e vencimentos" },
       { key:"contas_receber", label:"Contas a receber", desc:"Recebíveis dos marketplaces" },
+      { key:"dre", label:"DRE e conciliação", desc:"Demonstrativo de resultado" },
+    ]},
+    { titulo:"Cadastro", itens:[
       { key:"clientes", label:"Clientes", desc:"Recorrentes e novos" },
       { key:"fornecedores", label:"Fornecedores", desc:"Cadastro de fornecedores" },
-      { key:"notas_fiscais", label:"Notas fiscais", desc:"Emissão e consulta" },
-      { key:"dre", label:"DRE e conciliação", desc:"Demonstrativo de resultado" },
     ]},
     { titulo:"Inteligência", itens:[
       { key:"relatorios", label:"Relatórios", desc:"Análises e curva ABC" },
@@ -2214,8 +2218,7 @@ function HomeTab({ enrichedOrders, currentUser, setTab }){
   );
 }
 
-function DashboardTab({ enrichedOrders, produtos, user, metas, salvarMetas }){
-  const [sub, setSub] = useState("geral");
+function DashboardTab({ enrichedOrders, produtos, user, metas, salvarMetas, sub, setSub }){
   var subs=[["geral","Visão geral"],["estados","Estados"],["margem","Margem por pedido"],["estoque","Estoque de produtos"],["clientes","Clientes"],["abc","Curva ABC"],["metas","Metas"]];
   return (
     <div style={{ padding:"2px" }}>
@@ -2653,7 +2656,7 @@ async function fetchShippingForOrders(ordersList, validTk, onBatch) {
         }
       } catch { shippingMap[String(o.id)] = 0; }
     }));
-    if (onBatch) onBatch(shippingMap, statusMap, Math.min(i + 5, withShipping.length), withShipping.length);
+    if (onBatch) onBatch(shippingMap, statusMap, addressMap, Math.min(i + 5, withShipping.length), withShipping.length);
     await new Promise(r => setTimeout(r, 100));
   }
   return { shippingMap, statusMap, addressMap };
@@ -6107,6 +6110,7 @@ export default function App() {
   // "1"/ausente = escuro; "0" = claro. Aplica data-theme na raiz p/ os tokens CSS trocarem.
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "1");
   const [menuAberto, setMenuAberto] = useState(null); // grupo do menu do topo aberto (dropdown)
+  const [dashSub, setDashSub] = useState("geral"); // sub-aba ativa do Dashboard (controlada pelo menu)
   useEffect(function(){
     try { document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light"); } catch(e) {}
   }, [darkMode]);
@@ -6654,7 +6658,7 @@ export default function App() {
           }
           setSellerShipping(shippingMap);
 
-          const { shippingMap: orderShippingMap, statusMap: shipmentStatusMap, addressMap: orderAddressMap } = await fetchShippingForOrders(orders, validTk, function(partialShipping){ setShipmentCosts({ ...partialShipping }); });
+          const { shippingMap: orderShippingMap, statusMap: shipmentStatusMap, addressMap: orderAddressMap } = await fetchShippingForOrders(orders, validTk, function(pShip, pStatus, pAddr){ setShipmentCosts({ ...pShip }); if (pStatus) setShipmentStatuses({ ...pStatus }); if (pAddr) setShipmentAddresses({ ...pAddr }); });
           setShipmentCosts({ ...orderShippingMap });
           setShipmentStatuses({ ...shipmentStatusMap });
           setShipmentAddresses({ ...orderAddressMap });
@@ -7349,8 +7353,16 @@ export default function App() {
         {/* Grupos de navegação com dropdown */}
         {(function() {
           var grupos = [
+            { titulo:"Dashboard", itens:[
+              { sub:"geral", label:"Visão geral" },
+              { sub:"estados", label:"Estados" },
+              { sub:"margem", label:"Margem por pedido" },
+              { sub:"estoque", label:"Estoque de produtos" },
+              { sub:"clientes", label:"Clientes" },
+              { sub:"abc", label:"Curva ABC" },
+              { sub:"metas", label:"Metas" },
+            ]},
             { titulo:"Operação", itens:[
-              { key:"dashboard", label:"Dashboard" },
               { key:"produtos", label:"Produtos" },
               currentUser?.permissoes?.includes("listings") && { key:"listings", label:"Anúncios" },
               { key:"vincular", label:"Vincular anúncios" },
@@ -7359,14 +7371,16 @@ export default function App() {
               { key:"expedicao", label:"Expedição" },
               { key:"compras", label:"Compras" },
               { key:"estoque", label:"Estoque" },
+              { key:"notas_fiscais", label:"Notas fiscais" },
             ]},
             { titulo:"Financeiro", itens:[
               { key:"contas_pagar", label:"Contas a pagar" },
               { key:"contas_receber", label:"Contas a receber" },
+              { key:"dre", label:"DRE e conciliação" },
+            ]},
+            { titulo:"Cadastro", itens:[
               { key:"clientes", label:"Clientes" },
               { key:"fornecedores", label:"Fornecedores" },
-              { key:"notas_fiscais", label:"Notas fiscais" },
-              { key:"dre", label:"DRE e conciliação" },
             ]},
             { titulo:"Inteligência", itens:[
               { key:"relatorios", label:"Relatórios" },
@@ -7378,18 +7392,17 @@ export default function App() {
             ]},
           ];
           function irPara(key){ setTab(key); setMenuAberto(null); }
+          function irParaSub(s){ setTab("dashboard"); setDashSub(s); setMenuAberto(null); }
           return (
             <nav style={{ display:"flex", alignItems:"center", gap:2, flexWrap:"wrap" }}>
               {grupos.map(function(g) {
                 var itens = g.itens.filter(Boolean);
                 if (!itens.length) return null;
-                var grupoAtivo = itens.some(function(t){ return t.key === tab; });
+                var grupoAtivo = itens.some(function(t){ return t.sub ? tab==="dashboard" : t.key === tab; });
                 var aberto = menuAberto === g.titulo;
                 return (
-                  <div key={g.titulo} style={{ position:"relative" }}
-                    onMouseEnter={function(){ setMenuAberto(g.titulo); }}
-                    onMouseLeave={function(){ setMenuAberto(function(m){ return m === g.titulo ? null : m; }); }}>
-                    <button onClick={function(){ setMenuAberto(g.titulo); }}
+                  <div key={g.titulo} style={{ position:"relative" }}>
+                    <button onClick={function(){ setMenuAberto(function(m){ return m === g.titulo ? null : g.titulo; }); }}
                       style={{ display:"flex", alignItems:"center", gap:5, padding:"9px 13px", borderRadius:9, border:"none", cursor:"pointer", fontFamily:"inherit",
                         fontSize:13.5, fontWeight: grupoAtivo ? 600 : 500,
                         color: (grupoAtivo || aberto) ? "var(--text-strong)" : "var(--text-2)",
@@ -7400,10 +7413,11 @@ export default function App() {
                     {aberto && (
                       <div style={{ position:"absolute", top:"calc(100% + 2px)", left:0, minWidth:212, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, boxShadow:"0 12px 34px rgba(0,0,0,.20)", padding:6, zIndex:300, display:"flex", flexDirection:"column", gap:2 }}>
                         {itens.map(function(t) {
-                          var isActive = tab === t.key;
+                          var isDash = !!t.sub;
+                          var isActive = isDash ? (tab === "dashboard" && dashSub === t.sub) : (tab === t.key);
                           return (
-                            <a key={t.key} href={"?tab=" + t.key}
-                              onClick={function(e){ if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; e.preventDefault(); irPara(t.key); }}
+                            <a key={t.key || ("sub_"+t.sub)} href={isDash ? "?tab=dashboard" : ("?tab=" + t.key)}
+                              onClick={function(e){ if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; e.preventDefault(); if (isDash) irParaSub(t.sub); else irPara(t.key); }}
                               style={{ display:"block", padding:"8px 12px", borderRadius:7, textDecoration:"none", whiteSpace:"nowrap", fontSize:13,
                                 fontWeight: isActive ? 600 : 500,
                                 color: isActive ? "var(--text-strong)" : "var(--text-2)",
@@ -7940,7 +7954,7 @@ export default function App() {
           <HomeTab enrichedOrders={enrichedOrders} currentUser={currentUser} setTab={setTab} />
         )}
         {tab === "dashboard" && (
-          <DashboardTab enrichedOrders={enrichedOrders} produtos={produtos} user={user} metas={metas} salvarMetas={salvarMetas} />
+          <DashboardTab enrichedOrders={enrichedOrders} produtos={produtos} user={user} metas={metas} salvarMetas={salvarMetas} sub={dashSub} setSub={setDashSub} />
         )}
         {tab === "produtos" && <ProdutosTab produtos={produtos} salvar={salvarProdutos} />}
         {tab === "estoque" && <EstoqueTab produtos={produtos} />}

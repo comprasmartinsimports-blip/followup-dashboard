@@ -334,9 +334,50 @@ const _tdMono = { padding:"9px 12px", borderBottom:"1px solid var(--border-soft)
 function nomeProd(p){ return p.titulo || p.nome || "—"; }
 function qtdAnuncios(p){ return (p.mlbsVinculados || []).length || (p.mlbVinculado ? 1 : 0); }
 
-// Catálogo de produtos (a partir de produtos_cadastro) com custo, SKU, estoque e vínculo.
-function ProdutosTab({ produtos }) {
+// Modal de cadastro/edição de produto.
+function ProdutoModal({ produto, onSave, onClose }) {
+  const [f, setF] = useState(function(){ return Object.assign({ nome:"", sku:"", precoCusto:"", precoVenda:"", estoqueAtual:"", estoqueMinimo:"", fornecedor:"" }, produto || {}); });
+  function set(k,v){ setF(function(s){ return Object.assign({}, s, { [k]:v }); }); }
+  var novo = !produto || !produto.id;
+  function salvar(){
+    var p = Object.assign({}, f);
+    if (!p.nome && !p.titulo) { alert("Informe o nome do produto."); return; }
+    if (!p.id) p.id = "prod_" + Date.now() + "_" + Math.floor(Math.random()*1000);
+    onSave(p);
+  }
+  var campo = { width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"10px 12px", borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box" };
+  var lbl = { fontSize:11, color:"var(--text-3)", fontWeight:600, textTransform:"uppercase", letterSpacing:.4, marginBottom:4, display:"block" };
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:600, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }} onClick={onClose}>
+      <div onClick={function(e){ e.stopPropagation(); }} style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:14, width:460, maxWidth:"100%", maxHeight:"90vh", overflowY:"auto", padding:22 }}>
+        <div style={{ fontWeight:800, fontSize:17, color:"var(--text-strong)", marginBottom:16 }}>{novo ? "Novo produto" : "Editar produto"}</div>
+        <div style={{ marginBottom:10 }}><label style={lbl}>Nome</label><input value={f.nome || f.titulo || ""} onChange={function(e){ set("nome", e.target.value); }} style={campo} /></div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
+          <div><label style={lbl}>SKU</label><input value={f.sku || ""} onChange={function(e){ set("sku", e.target.value); }} style={campo} /></div>
+          <div><label style={lbl}>Fornecedor</label><input value={f.fornecedor || ""} onChange={function(e){ set("fornecedor", e.target.value); }} style={campo} /></div>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
+          <div><label style={lbl}>Custo (R$)</label><input type="number" step="0.01" value={f.precoCusto || ""} onChange={function(e){ set("precoCusto", e.target.value); }} style={campo} /></div>
+          <div><label style={lbl}>Preço venda (R$)</label><input type="number" step="0.01" value={f.precoVenda || ""} onChange={function(e){ set("precoVenda", e.target.value); }} style={campo} /></div>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:18 }}>
+          <div><label style={lbl}>Estoque atual</label><input type="number" value={f.estoqueAtual || ""} onChange={function(e){ set("estoqueAtual", e.target.value); }} style={campo} /></div>
+          <div><label style={lbl}>Estoque mínimo</label><input type="number" value={f.estoqueMinimo || ""} onChange={function(e){ set("estoqueMinimo", e.target.value); }} style={campo} /></div>
+        </div>
+        <div style={{ display:"flex", gap:8 }}>
+          <button onClick={onClose} style={{ flex:1, background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
+          <button onClick={salvar} style={{ flex:2, background:"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:"pointer" }}>Salvar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Catálogo de produtos: importar CSV, novo produto e clicar para editar. Grava via salvar().
+function ProdutosTab({ produtos, salvar }) {
   const [busca, setBusca] = useState("");
+  const [editando, setEditando] = useState(null);
+  const fileRef = useRef(null);
   const lista = (produtos || []).filter(function(p){
     var q = busca.trim().toLowerCase();
     if (!q) return true;
@@ -350,10 +391,60 @@ function ProdutosTab({ produtos }) {
     { l:"Sem custo", v:String(semCusto), c: semCusto > 0 ? "#FFC107" : "var(--text-strong)" },
     { l:"Valor em estoque (custo)", v:fmt(valorEstoque), c:"var(--text-strong)" },
   ];
+  function salvarProduto(p){
+    var arr = (produtos || []).slice();
+    var idx = arr.findIndex(function(x){ return x.id === p.id; });
+    if (idx >= 0) arr[idx] = p; else arr.push(p);
+    salvar(arr);
+    setEditando(null);
+  }
+  function importarCSV(file){
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      try {
+        var linhas = String(ev.target.result || "").split(/\r?\n/).filter(function(l){ return l.trim(); });
+        if (linhas.length < 2) { alert("CSV vazio."); return; }
+        var headers = linhas[0].split(/[,;]/).map(function(h){ return h.trim().toLowerCase(); });
+        function col(row, nomes){ for (var i=0;i<nomes.length;i++){ var j=headers.indexOf(nomes[i]); if (j>=0 && row[j]!=null) return String(row[j]).trim(); } return ""; }
+        var novos = [];
+        for (var i=1;i<linhas.length;i++){
+          var row = linhas[i].split(/[,;]/);
+          var nome = col(row,["nome","produto","descricao","descrição","título","titulo"]);
+          var sku = col(row,["sku","codigo","código"]);
+          if (!nome && !sku) continue;
+          novos.push({ id:"prod_"+Date.now()+"_"+i, nome:nome, sku:sku,
+            precoCusto: col(row,["custo","preco custo","preço custo","precocusto"]).replace(",","."),
+            precoVenda: col(row,["preco venda","preço venda","venda","precovenda"]).replace(",","."),
+            estoqueAtual: col(row,["estoque","estoque atual","estoqueatual","saldo"]),
+            estoqueMinimo: col(row,["minimo","mínimo","estoque minimo","estoqueminimo"]),
+            fornecedor: col(row,["fornecedor"]) });
+        }
+        var arr = (produtos || []).slice(), mapaSku = {};
+        arr.forEach(function(p,idx){ if (p.sku) mapaSku[String(p.sku).toLowerCase()] = idx; });
+        novos.forEach(function(n){
+          var k = n.sku ? String(n.sku).toLowerCase() : null;
+          if (k && mapaSku[k] != null) arr[mapaSku[k]] = Object.assign({}, arr[mapaSku[k]], n, { id: arr[mapaSku[k]].id });
+          else arr.push(n);
+        });
+        salvar(arr);
+        alert(novos.length + " produto(s) importado(s) do CSV.");
+      } catch(e) { alert("Não consegui ler o CSV."); }
+    };
+    reader.readAsText(file);
+  }
   return (
     <div style={{ padding:2 }}>
-      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Produtos</div>
-      <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Catálogo com custo, SKU, estoque e vínculo aos anúncios.</div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap" }}>
+        <div>
+          <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Produtos</div>
+          <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Catálogo com custo, SKU, estoque e vínculo. Clique numa linha para editar.</div>
+        </div>
+        <div style={{ display:"flex", gap:8 }}>
+          <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display:"none" }} onChange={function(e){ if (e.target.files && e.target.files[0]) importarCSV(e.target.files[0]); e.target.value=""; }} />
+          <button onClick={function(){ if (fileRef.current) fileRef.current.click(); }} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"9px 16px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>Importar CSV</button>
+          <button onClick={function(){ setEditando({}); }} style={{ background:"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"9px 18px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>+ Novo produto</button>
+        </div>
+      </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12, marginBottom:14 }}>
         {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
       </div>
@@ -365,7 +456,7 @@ function ProdutosTab({ produtos }) {
             {lista.slice(0,400).map(function(p,i){
               var img = (p.imagens && p.imagens[0]) || null;
               var ativo = (p.status || "") === "Ativo";
-              return <tr key={p.id || i}>
+              return <tr key={p.id || i} onClick={function(){ setEditando(p); }} style={{ cursor:"pointer" }}>
                 <td style={_td}>{img ? <img src={img} alt="" style={{ width:36, height:36, borderRadius:6, objectFit:"cover" }} /> : <div style={{ width:36, height:36, borderRadius:6, background:"var(--surface-3)" }} />}</td>
                 <td style={{ ..._td, maxWidth:300, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)", fontWeight:500 }}>{nomeProd(p)}</td>
                 <td style={_tdMono}>{p.sku || "—"}</td>
@@ -378,8 +469,9 @@ function ProdutosTab({ produtos }) {
             })}
           </tbody>
         </table>
-        {lista.length === 0 && <div style={{ padding:24, textAlign:"center", color:"var(--text-3)" }}>Nenhum produto encontrado.</div>}
+        {lista.length === 0 && <div style={{ padding:24, textAlign:"center", color:"var(--text-3)" }}>Nenhum produto. Use "+ Novo produto" ou "Importar CSV".</div>}
       </div>
+      {editando && <ProdutoModal produto={editando} onSave={salvarProduto} onClose={function(){ setEditando(null); }} />}
     </div>
   );
 }
@@ -449,53 +541,85 @@ function EstoqueTab({ produtos }) {
 
 // Vincular anúncios: mostra cada anúncio e o produto do catálogo ao qual está vinculado (por SKU),
 // destacando os que estão sem SKU / sem produto.
-function VincularTab({ enriched, produtos }) {
-  const [filtro, setFiltro] = useState("todos"); // todos | vinculados | sem_sku
-  var mapaSku = {};
-  (produtos || []).forEach(function(p){ if (p.sku) mapaSku[String(p.sku).toLowerCase()] = p; });
+function VincularTab({ enriched, produtos, salvar }) {
+  const [filtro, setFiltro] = useState("todos"); // todos | vinculados | sem_produto
+  const [busca, setBusca] = useState("");
+  var opcoesProd = (produtos || []).slice().sort(function(a,b){ return nomeProd(a).localeCompare(nomeProd(b)); });
+  function produtoDoAnuncio(mlb, sku){
+    var p = (produtos || []).find(function(x){ return (x.mlbsVinculados || []).indexOf(mlb) >= 0 || x.mlbVinculado === mlb; });
+    if (p) return p;
+    if (sku){ var q = (produtos || []).find(function(x){ return x.sku && String(x.sku).toLowerCase() === String(sku).toLowerCase(); }); if (q) return q; }
+    return null;
+  }
+  function vincular(mlb, produtoId){
+    var arr = (produtos || []).map(function(p){
+      var mlbs = (p.mlbsVinculados || []).filter(function(m){ return m !== mlb; });
+      if (produtoId && p.id === produtoId) mlbs = mlbs.concat([mlb]);
+      return Object.assign({}, p, { mlbsVinculados: mlbs });
+    });
+    salvar(arr);
+  }
+  function vincularAuto(){
+    var arr = (produtos || []).map(function(p){ return Object.assign({}, p, { mlbsVinculados: (p.mlbsVinculados || []).slice() }); });
+    var mp = {}; arr.forEach(function(p){ if (p.sku) mp[String(p.sku).toLowerCase()] = p; });
+    var n = 0;
+    (enriched || []).forEach(function(l){ var sku = l.seller_sku || l.sku || ""; if (!sku) return; var p = mp[String(sku).toLowerCase()]; if (p && (p.mlbsVinculados || []).indexOf(l.id) < 0){ p.mlbsVinculados.push(l.id); n++; } });
+    salvar(arr);
+    alert(n + " anúncio(s) vinculado(s) automaticamente por SKU.");
+  }
   var linhas = (enriched || []).map(function(l){
     var sku = l.seller_sku || l.sku || "";
-    var prod = sku ? mapaSku[String(sku).toLowerCase()] : null;
-    var sit = !sku ? "sem_sku" : (prod ? "vinculado" : "sem_produto");
-    return { id:l.id, titulo:l.title, sku:sku, thumb:l.thumbnail, prod:prod, sit:sit };
+    var prod = produtoDoAnuncio(l.id, sku);
+    return { id:l.id, titulo:l.title, sku:sku, thumb:l.thumbnail, prod:prod, vinculado: !!prod };
   });
   var lista = linhas.filter(function(r){
-    if (filtro === "sem_sku") return r.sit === "sem_sku";
-    if (filtro === "vinculados") return r.sit === "vinculado";
+    if (filtro === "sem_produto" && r.vinculado) return false;
+    if (filtro === "vinculados" && !r.vinculado) return false;
+    if (busca.trim()){ var q = busca.trim().toLowerCase(); if (!((r.titulo||"").toLowerCase().indexOf(q)>=0 || (r.sku||"").toLowerCase().indexOf(q)>=0 || String(r.id).indexOf(q)>=0)) return false; }
     return true;
   });
-  var nVinc = linhas.filter(function(r){ return r.sit === "vinculado"; }).length;
-  var nSemSku = linhas.filter(function(r){ return r.sit === "sem_sku"; }).length;
+  var nVinc = linhas.filter(function(r){ return r.vinculado; }).length;
+  var nSem = linhas.length - nVinc;
   var kpis = [
     { l:"Anúncios", v:String(linhas.length), c:"var(--text-strong)" },
     { l:"Vinculados", v:String(nVinc), c:"#0a9d4e" },
-    { l:"Sem SKU", v:String(nSemSku), c: nSemSku > 0 ? "#FFC107" : "var(--text-strong)" },
+    { l:"Sem produto", v:String(nSem), c: nSem > 0 ? "#FFC107" : "var(--text-strong)" },
   ];
-  var badge = { vinculado:["#0a9d4e","rgba(0,200,83,.14)","Vinculado"], sem_sku:["#FFC107","rgba(255,193,7,.14)","Sem SKU"], sem_produto:["#FF5252","rgba(255,82,82,.14)","Sem produto"] };
-  var filtros = [["todos","Todos"],["vinculados","Vinculados"],["sem_sku","Sem SKU"]];
+  var filtros = [["todos","Todos"],["vinculados","Vinculados"],["sem_produto","Sem produto"]];
   return (
     <div style={{ padding:2 }}>
-      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Vincular anúncios</div>
-      <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Cada anúncio ligado ao produto do catálogo pelo SKU.</div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap" }}>
+        <div>
+          <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Vincular anúncios</div>
+          <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Ligue cada anúncio ao produto do catálogo — o vínculo dá baixa no estoque a cada venda.</div>
+        </div>
+        <button onClick={vincularAuto} style={{ background:"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"9px 18px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>Vincular automático</button>
+      </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12, marginBottom:14 }}>
         {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
       </div>
-      <div style={{ display:"flex", gap:6, marginBottom:12 }}>
+      <div style={{ display:"flex", gap:6, marginBottom:10, flexWrap:"wrap" }}>
         {filtros.map(function(f){ var a = filtro === f[0]; return <button key={f[0]} onClick={function(){ setFiltro(f[0]); }} style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background: a ? "#1976FF" : "var(--surface)", color: a ? "#fff" : "var(--text-3)" }}>{f[1]}</button>; })}
       </div>
+      <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Buscar por título, SKU ou MLB..." style={_inputBusca} />
+      <datalist id="dl-produtos">
+        {opcoesProd.map(function(p){ return <option key={p.id} value={nomeProd(p)} />; })}
+      </datalist>
       <div style={_tableWrap}>
         <table style={_table}>
-          <thead><tr>{["Foto","Anúncio","MLB","SKU","Produto vinculado","Situação"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+          <thead><tr>{["Foto","Anúncio","MLB","SKU","Produto do catálogo"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
           <tbody>
-            {lista.slice(0,400).map(function(r,i){
-              var b = badge[r.sit];
+            {lista.slice(0,150).map(function(r,i){
               return <tr key={r.id || i}>
                 <td style={_td}>{r.thumb ? <img src={r.thumb} alt="" style={{ width:36, height:36, borderRadius:6, objectFit:"cover" }} /> : <div style={{ width:36, height:36, borderRadius:6, background:"var(--surface-3)" }} />}</td>
-                <td style={{ ..._td, maxWidth:280, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)" }}>{r.titulo || "—"}</td>
+                <td style={{ ..._td, maxWidth:260, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)" }}>{r.titulo || "—"}</td>
                 <td style={_tdMono}>{r.id}</td>
                 <td style={_tdMono}>{r.sku || "—"}</td>
-                <td style={{ ..._td, maxWidth:240, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.prod ? nomeProd(r.prod) : "—"}</td>
-                <td style={_td}><span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
+                <td style={_td}>
+                  <input list="dl-produtos" key={r.prod ? r.prod.id : "none"} defaultValue={r.prod ? nomeProd(r.prod) : ""} placeholder="Sem vínculo"
+                    onChange={function(e){ var nome = e.target.value; var p = opcoesProd.find(function(x){ return nomeProd(x) === nome; }); if (p || nome === "") vincular(r.id, p ? p.id : ""); }}
+                    style={{ width:220, maxWidth:"100%", background:"var(--bg)", border:"1px solid " + (r.vinculado ? "rgba(10,157,78,.4)" : "var(--border)"), color:"var(--text-strong)", padding:"7px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
+                </td>
               </tr>;
             })}
           </tbody>
@@ -4728,6 +4852,12 @@ export default function App() {
   const [produtos, setProdutos] = useState(() => {
     try { var v = JSON.parse(localStorage.getItem("produtos_cadastro") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
   });
+  // Grava o catálogo: estado + localStorage + sync pro servidor (Supabase via /api/ml/_sync).
+  function salvarProdutos(lista) {
+    setProdutos(lista);
+    try { localStorage.setItem("produtos_cadastro", JSON.stringify(lista)); } catch(e) {}
+    try { kvSyncPush("produtos_cadastro", lista); } catch(e) {}
+  }
 
   // Sincroniza automaticamente o estoque mínimo definido no cadastro de Produtos
   // (campo estoqueMinimo) com a coluna "Mín" da aba Anúncios, usando o MLB vinculado.
@@ -6490,9 +6620,9 @@ export default function App() {
         {tab === "dashboard" && (
           <DashboardTab enrichedOrders={enrichedOrders} />
         )}
-        {tab === "produtos" && <ProdutosTab produtos={produtos} />}
+        {tab === "produtos" && <ProdutosTab produtos={produtos} salvar={salvarProdutos} />}
         {tab === "estoque" && <EstoqueTab produtos={produtos} />}
-        {tab === "vincular" && <VincularTab enriched={enriched} produtos={produtos} />}
+        {tab === "vincular" && <VincularTab enriched={enriched} produtos={produtos} salvar={salvarProdutos} />}
         {tab === "relatorios" && <RelatoriosTab enrichedOrders={enrichedOrders} />}
         {tab === "expedicao" && <EmConstrucao tab="expedicao" />}
         {tab === "notas_fiscais" && <EmConstrucao tab="notas_fiscais" />}

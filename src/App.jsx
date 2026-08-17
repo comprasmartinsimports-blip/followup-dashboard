@@ -955,8 +955,6 @@ function IntegracoesTab({ token, user, lastUpdate }) {
 // Telas financeiras: estrutura (KPIs + colunas) pronta, porém SEM dados por escolha do usuário
 // (não conectadas a nenhuma fonte). Ficam prontas para receber dados/integração depois.
 const TELAS_FIN = {
-  compras:        { titulo:"Compras",           desc:"Pedidos de compra e reposição de estoque.",     kpis:[["Pedidos de compra","0"],["Em aberto","0"],["Recebidos","0"]],                 colunas:["Data","Fornecedor","Itens","Valor","Status"] },
-  contas_pagar:   { titulo:"Contas a pagar",     desc:"Despesas, vencimentos e baixas.",               kpis:[["Total a pagar","R$ 0,00"],["Vencidas","R$ 0,00"],["A vencer","R$ 0,00"]],      colunas:["Vencimento","Descrição","Categoria","Valor","Status"] },
   fornecedores:   { titulo:"Fornecedores",       desc:"Cadastro de fornecedores e condições.",         kpis:[["Fornecedores","0"],["Ativos","0"]],                                          colunas:["Nome","Documento","Contato","Produtos"] },
 };
 function TelaEstruturada({ cfg }) {
@@ -1006,6 +1004,208 @@ function DreTab() {
       <div style={{ marginTop:12, fontSize:12, color:"var(--text-3)", background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 14px", maxWidth:520 }}>
         🗂 Estrutura pronta. Ainda sem dados — será conectada a uma fonte financeira depois.
       </div>
+    </div>
+  );
+}
+
+// Modal de conta a pagar.
+function ContaModal({ conta, onSave, onClose }) {
+  const [f, setF] = useState(function(){ return Object.assign({ descricao:"", categoria:"", vencimento:"", valor:"", status:"pendente" }, conta || {}); });
+  function set(k,v){ setF(function(s){ return Object.assign({}, s, { [k]:v }); }); }
+  var novo = !conta || !conta.id;
+  function salvar(){ var p = Object.assign({}, f); if (!p.descricao){ alert("Informe a descrição/fornecedor."); return; } if (!p.id) p.id = "cp_" + Date.now(); onSave(p); }
+  var campo = { width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"10px 12px", borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box" };
+  var lbl = { fontSize:11, color:"var(--text-3)", fontWeight:600, textTransform:"uppercase", letterSpacing:.4, marginBottom:4, display:"block" };
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:600, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }} onClick={onClose}>
+      <div onClick={function(e){ e.stopPropagation(); }} style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:14, width:440, maxWidth:"100%", padding:22 }}>
+        <div style={{ fontWeight:800, fontSize:17, color:"var(--text-strong)", marginBottom:16 }}>{novo ? "Nova conta a pagar" : "Editar conta"}</div>
+        <div style={{ marginBottom:10 }}><label style={lbl}>Descrição / Fornecedor</label><input value={f.descricao || ""} onChange={function(e){ set("descricao", e.target.value); }} style={campo} /></div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
+          <div><label style={lbl}>Categoria</label><input value={f.categoria || ""} onChange={function(e){ set("categoria", e.target.value); }} style={campo} /></div>
+          <div><label style={lbl}>Vencimento</label><input type="date" value={f.vencimento || ""} onChange={function(e){ set("vencimento", e.target.value); }} style={campo} /></div>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:18 }}>
+          <div><label style={lbl}>Valor (R$)</label><input type="number" step="0.01" value={f.valor || ""} onChange={function(e){ set("valor", e.target.value); }} style={campo} /></div>
+          <div><label style={lbl}>Situação</label><select value={f.status || "pendente"} onChange={function(e){ set("status", e.target.value); }} style={campo}><option value="pendente">Pendente</option><option value="paga">Paga</option><option value="cancelada">Cancelada</option></select></div>
+        </div>
+        <div style={{ display:"flex", gap:8 }}>
+          <button onClick={onClose} style={{ flex:1, background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
+          <button onClick={salvar} style={{ flex:2, background:"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:"pointer" }}>Salvar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+// Contas a pagar: KPIs, busca, filtro de situação e cadastro/baixa de contas.
+function ContasPagarTab({ contas, salvar }) {
+  const [modal, setModal] = useState(null);
+  const [busca, setBusca] = useState("");
+  const [sit, setSit] = useState("todas");
+  var hoje = new Date().toISOString().slice(0, 10);
+  function statusReal(c){ if (c.status === "paga") return "paga"; if (c.status === "cancelada") return "cancelada"; if (c.vencimento && c.vencimento < hoje) return "vencida"; return "pendente"; }
+  var lista = (contas || []).filter(function(c){
+    if (sit !== "todas" && statusReal(c) !== sit) return false;
+    if (busca.trim()){ var q = busca.trim().toLowerCase(); if (!((c.descricao||"").toLowerCase().indexOf(q)>=0 || (c.categoria||"").toLowerCase().indexOf(q)>=0)) return false; }
+    return true;
+  }).slice().sort(function(a,b){ return (a.vencimento || "").localeCompare(b.vencimento || ""); });
+  function soma(pred){ return (contas || []).filter(pred).reduce(function(s,c){ return s + (parseFloat(c.valor) || 0); }, 0); }
+  var kpis = [
+    { l:"Pendentes", v:fmt(soma(function(c){ return statusReal(c) === "pendente"; })), c:"var(--text-strong)" },
+    { l:"Vencidas", v:fmt(soma(function(c){ return statusReal(c) === "vencida"; })), c:"#FF5252" },
+    { l:"Pagas", v:fmt(soma(function(c){ return statusReal(c) === "paga"; })), c:"#0a9d4e" },
+    { l:"Canceladas", v:fmt(soma(function(c){ return statusReal(c) === "cancelada"; })), c:"var(--text-3)" },
+  ];
+  function salvarConta(c){ var arr = (contas || []).slice(); var i = arr.findIndex(function(x){ return x.id === c.id; }); if (i >= 0) arr[i] = c; else arr.push(c); salvar(arr); setModal(null); }
+  function baixar(c){ salvar((contas || []).map(function(x){ return x.id === c.id ? Object.assign({}, x, { status:"paga", pago_em:hoje }) : x; })); }
+  function excluir(c){ if (!window.confirm("Excluir esta conta?")) return; salvar((contas || []).filter(function(x){ return x.id !== c.id; })); }
+  var badge = { pendente:["var(--text-2)","var(--surface-3)","Pendente"], vencida:["#FF5252","rgba(255,82,82,.14)","Vencida"], paga:["#0a9d4e","rgba(10,157,78,.14)","Paga"], cancelada:["var(--text-3)","var(--surface-3)","Cancelada"] };
+  var sits = [["todas","Todas"],["pendente","Pendentes"],["vencida","Vencidas"],["paga","Pagas"],["cancelada","Canceladas"]];
+  return (
+    <div style={{ padding:2 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap" }}>
+        <div>
+          <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Contas a pagar</div>
+          <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Despesas com fornecedores, vencimentos e baixas.</div>
+        </div>
+        <button onClick={function(){ setModal({}); }} style={{ background:"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"9px 18px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>+ Nova conta</button>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:12, marginBottom:14 }}>
+        {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
+      </div>
+      <div style={{ display:"flex", gap:10, marginBottom:12, flexWrap:"wrap", alignItems:"center" }}>
+        <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Buscar fornecedor ou descrição..." style={{ ..._inputBusca, marginBottom:0, maxWidth:320 }} />
+        <select value={sit} onChange={function(e){ setSit(e.target.value); }} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"9px 12px", borderRadius:8, fontSize:13, cursor:"pointer" }}>
+          {sits.map(function(s){ return <option key={s[0]} value={s[0]}>{s[1]}</option>; })}
+        </select>
+      </div>
+      <div style={_tableWrap}>
+        <table style={_table}>
+          <thead><tr>{["Vencimento","Descrição","Categoria","Valor","Situação","Ações"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+          <tbody>
+            {lista.map(function(c,i){
+              var s = statusReal(c); var b = badge[s];
+              return <tr key={c.id || i}>
+                <td style={_td}>{c.vencimento || "—"}</td>
+                <td style={{ ..._td, color:"var(--text-strong)" }}>{c.descricao || "—"}</td>
+                <td style={_td}>{c.categoria || "—"}</td>
+                <td style={{ ..._td, fontWeight:700 }}>{fmt(parseFloat(c.valor) || 0)}</td>
+                <td style={_td}><span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
+                <td style={_td}>
+                  <div style={{ display:"flex", gap:8 }}>
+                    {s !== "paga" && s !== "cancelada" && <button onClick={function(){ baixar(c); }} style={{ background:"rgba(10,157,78,.12)", border:"none", color:"#0a9d4e", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Pagar</button>}
+                    <button onClick={function(){ setModal(c); }} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Editar</button>
+                    <button onClick={function(){ excluir(c); }} style={{ background:"rgba(255,82,82,.1)", border:"none", color:"#FF5252", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Excluir</button>
+                  </div>
+                </td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+        {lista.length === 0 && <div style={{ padding:24, textAlign:"center", color:"var(--text-3)" }}>Nenhum lançamento. Use "+ Nova conta".</div>}
+      </div>
+      {modal && <ContaModal conta={modal} onSave={salvarConta} onClose={function(){ setModal(null); }} />}
+    </div>
+  );
+}
+
+// Modal de pedido de compra.
+function PedidoCompraModal({ pedido, onSave, onClose }) {
+  const [f, setF] = useState(function(){ return Object.assign({ fornecedor:"", itens:"", valor:"", data: new Date().toISOString().slice(0,10), status:"aberto" }, pedido || {}); });
+  function set(k,v){ setF(function(s){ return Object.assign({}, s, { [k]:v }); }); }
+  var novo = !pedido || !pedido.id;
+  function salvar(){ var p = Object.assign({}, f); if (!p.fornecedor && !p.itens){ alert("Informe fornecedor ou itens."); return; } if (!p.id) p.id = "pc_" + Date.now(); onSave(p); }
+  var campo = { width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"10px 12px", borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box" };
+  var lbl = { fontSize:11, color:"var(--text-3)", fontWeight:600, textTransform:"uppercase", letterSpacing:.4, marginBottom:4, display:"block" };
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:600, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }} onClick={onClose}>
+      <div onClick={function(e){ e.stopPropagation(); }} style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:14, width:460, maxWidth:"100%", padding:22 }}>
+        <div style={{ fontWeight:800, fontSize:17, color:"var(--text-strong)", marginBottom:16 }}>{novo ? "Novo pedido de compra" : "Editar pedido"}</div>
+        <div style={{ marginBottom:10 }}><label style={lbl}>Fornecedor</label><input value={f.fornecedor || ""} onChange={function(e){ set("fornecedor", e.target.value); }} style={campo} /></div>
+        <div style={{ marginBottom:10 }}><label style={lbl}>Itens</label><textarea value={f.itens || ""} onChange={function(e){ set("itens", e.target.value); }} rows={3} style={{ ...campo, resize:"vertical" }} /></div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:18 }}>
+          <div><label style={lbl}>Data</label><input type="date" value={f.data || ""} onChange={function(e){ set("data", e.target.value); }} style={campo} /></div>
+          <div><label style={lbl}>Valor (R$)</label><input type="number" step="0.01" value={f.valor || ""} onChange={function(e){ set("valor", e.target.value); }} style={campo} /></div>
+          <div><label style={lbl}>Situação</label><select value={f.status || "aberto"} onChange={function(e){ set("status", e.target.value); }} style={campo}><option value="aberto">Em aberto</option><option value="recebido">Recebido</option><option value="cancelado">Cancelado</option></select></div>
+        </div>
+        <div style={{ display:"flex", gap:8 }}>
+          <button onClick={onClose} style={{ flex:1, background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
+          <button onClick={salvar} style={{ flex:2, background:"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:"pointer" }}>Salvar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+// Compras: sugestão de reposição (produtos abaixo do mínimo) + pedidos de compra.
+function ComprasTab({ produtos, pedidos, salvar }) {
+  const [modal, setModal] = useState(null);
+  const [verSug, setVerSug] = useState(false);
+  var sugestoes = (produtos || []).filter(function(p){ var a = parseInt(p.estoqueAtual) || 0, m = parseInt(p.estoqueMinimo) || 0; return m > 0 && a <= m; });
+  var abertos = (pedidos || []).filter(function(x){ return x.status !== "recebido" && x.status !== "cancelado"; });
+  var valorAberto = abertos.reduce(function(s,x){ return s + (parseFloat(x.valor) || 0); }, 0);
+  var recebidos = (pedidos || []).filter(function(x){ return x.status === "recebido"; }).length;
+  var kpis = [
+    { l:"Pedidos em aberto", v:String(abertos.length), c:"var(--text-strong)" },
+    { l:"Valor em aberto", v:fmt(valorAberto), c:"var(--text-strong)" },
+    { l:"Recebidos", v:String(recebidos), c:"#0a9d4e" },
+    { l:"Itens para repor", v:String(sugestoes.length), c: sugestoes.length > 0 ? "#FFC107" : "var(--text-strong)" },
+  ];
+  function salvarPedido(p){ var arr = (pedidos || []).slice(); var i = arr.findIndex(function(x){ return x.id === p.id; }); if (i >= 0) arr[i] = p; else arr.push(p); salvar(arr); setModal(null); }
+  function excluir(p){ if (!window.confirm("Excluir este pedido?")) return; salvar((pedidos || []).filter(function(x){ return x.id !== p.id; })); }
+  function receber(p){ salvar((pedidos || []).map(function(x){ return x.id === p.id ? Object.assign({}, x, { status:"recebido" }) : x; })); }
+  var badgeP = { aberto:["#FFC107","rgba(255,193,7,.14)","Em aberto"], recebido:["#0a9d4e","rgba(10,157,78,.14)","Recebido"], cancelado:["var(--text-3)","var(--surface-3)","Cancelado"] };
+  var pedidosOrd = (pedidos || []).slice().sort(function(a,b){ return (b.data || "").localeCompare(a.data || ""); });
+  return (
+    <div style={{ padding:2 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap" }}>
+        <div>
+          <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Compras</div>
+          <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Pedidos aos fornecedores e sugestão de reposição.</div>
+        </div>
+        <div style={{ display:"flex", gap:8 }}>
+          <button onClick={function(){ setVerSug(function(v){ return !v; }); }} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"9px 16px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>Sugerir reposição{sugestoes.length ? " (" + sugestoes.length + ")" : ""}</button>
+          <button onClick={function(){ setModal({}); }} style={{ background:"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"9px 18px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>+ Novo pedido</button>
+        </div>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:12, marginBottom:14 }}>
+        {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
+      </div>
+      {verSug && (
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 18px", marginBottom:14 }}>
+          <div style={{ fontWeight:700, fontSize:14, color:"var(--text-strong)", marginBottom:10 }}>Sugestão de reposição (abaixo do estoque mínimo)</div>
+          {sugestoes.length === 0 ? <div style={{ color:"var(--text-3)", fontSize:13 }}>Nenhum produto abaixo do mínimo.</div> :
+            sugestoes.slice(0,50).map(function(p,i){ return <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"7px 0", borderBottom: i < Math.min(sugestoes.length,50)-1 ? "1px solid var(--border-soft)" : "none", fontSize:13 }}>
+              <span style={{ color:"var(--text-2)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{nomeProd(p)}</span>
+              <span style={{ color:"#FFC107", fontWeight:600, flexShrink:0, marginLeft:12 }}>{parseInt(p.estoqueAtual)||0} / mín {parseInt(p.estoqueMinimo)||0}</span>
+            </div>; })}
+        </div>
+      )}
+      <div style={_tableWrap}>
+        <table style={_table}>
+          <thead><tr>{["Data","Fornecedor","Itens","Valor","Situação","Ações"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+          <tbody>
+            {pedidosOrd.map(function(p,i){
+              var b = badgeP[p.status] || badgeP.aberto;
+              return <tr key={p.id || i}>
+                <td style={_td}>{p.data || "—"}</td>
+                <td style={{ ..._td, color:"var(--text-strong)" }}>{p.fornecedor || "—"}</td>
+                <td style={{ ..._td, maxWidth:240, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.itens || "—"}</td>
+                <td style={{ ..._td, fontWeight:700 }}>{fmt(parseFloat(p.valor) || 0)}</td>
+                <td style={_td}><span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
+                <td style={_td}>
+                  <div style={{ display:"flex", gap:8 }}>
+                    {p.status === "aberto" && <button onClick={function(){ receber(p); }} style={{ background:"rgba(10,157,78,.12)", border:"none", color:"#0a9d4e", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Receber</button>}
+                    <button onClick={function(){ setModal(p); }} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Editar</button>
+                    <button onClick={function(){ excluir(p); }} style={{ background:"rgba(255,82,82,.1)", border:"none", color:"#FF5252", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Excluir</button>
+                  </div>
+                </td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+        {pedidosOrd.length === 0 && <div style={{ padding:24, textAlign:"center", color:"var(--text-3)" }}>Nenhum pedido de compra. Use "+ Novo pedido".</div>}
+      </div>
+      {modal && <PedidoCompraModal pedido={modal} onSave={salvarPedido} onClose={function(){ setModal(null); }} />}
     </div>
   );
 }
@@ -4838,6 +5038,19 @@ export default function App() {
   const [contasPagar, setContasPagar] = useState(() => {
     try { var v = JSON.parse(localStorage.getItem("contas_pagar") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
   });
+  function salvarContasPagar(lista) {
+    setContasPagar(lista);
+    try { localStorage.setItem("contas_pagar", JSON.stringify(lista)); } catch(e) {}
+    try { kvSyncPush("contas_pagar", lista); } catch(e) {}
+  }
+  const [pedidosCompra, setPedidosCompra] = useState(() => {
+    try { var v = JSON.parse(localStorage.getItem("pedidos_compra") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
+  });
+  function salvarPedidosCompra(lista) {
+    setPedidosCompra(lista);
+    try { localStorage.setItem("pedidos_compra", JSON.stringify(lista)); } catch(e) {}
+    try { kvSyncPush("pedidos_compra", lista); } catch(e) {}
+  }
   const [contasBancarias, setContasBancarias] = useState(() => {
     try { var v = JSON.parse(localStorage.getItem("contas_bancarias") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
   });
@@ -5085,6 +5298,7 @@ export default function App() {
     produtos_cadastro: setProdutos,
     fornecedores_cadastro: setFornecedores,
     contas_pagar: setContasPagar,
+    pedidos_compra: setPedidosCompra,
     contas_bancarias: setContasBancarias,
     categorias_pagar: setCategoriasPagar,
     custos_fixos_config: setCustosFixos,
@@ -6627,6 +6841,8 @@ export default function App() {
         {tab === "expedicao" && <EmConstrucao tab="expedicao" />}
         {tab === "notas_fiscais" && <EmConstrucao tab="notas_fiscais" />}
         {tab === "contas_receber" && <ContasReceberTab enrichedOrders={enrichedOrders} paymentData={paymentData} />}
+        {tab === "contas_pagar" && <ContasPagarTab contas={contasPagar} salvar={salvarContasPagar} />}
+        {tab === "compras" && <ComprasTab produtos={produtos} pedidos={pedidosCompra} salvar={salvarPedidosCompra} />}
         {tab === "clientes" && <ClientesTab rawOrders={rawOrders} />}
         {tab === "integracoes" && <IntegracoesTab token={token} user={user} lastUpdate={lastUpdate} />}
         {tab === "dre" && <DreTab />}

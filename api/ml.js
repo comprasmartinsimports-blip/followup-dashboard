@@ -13,7 +13,12 @@ import {
   verificarSessao,
   semSenha,
 } from "./_lib/auth.js";
-import { dbEnabled, syncGet, syncSet } from "./_lib/db.js";
+import { dbEnabled, syncGet, syncSet, upsertConexaoMl } from "./_lib/db.js";
+import { syncListings, syncOrders } from "./_lib/mlsync.js";
+
+// A sincronização do cache do ML (/_sync_ml) puxa centenas de itens — pede mais tempo que o
+// padrão de 10s. O Vercel limita ao teto do plano se este valor for maior.
+export const config = { maxDuration: 60 };
 
 // Chaves de dados de negócio que ficam sincronizadas entre TODOS os usuários (não só no
 // navegador de quem editou) — cada uma vira uma entrada no KV, prefixada para não colidir
@@ -135,6 +140,42 @@ export default async function handler(req, res) {
       }));
     }
     return res.status(200).json({ ok: true, conta: contaMig(), migrated, skipped_ja_no_postgres: skipped, vazias_no_kv: vazias, erros });
+  }
+
+  // ── Sincroniza o cache do ML (anúncios + pedidos) para o Postgres — exige ADMIN ──
+  // Puxa do ML no SERVIDOR e faz upsert em flow.ml_listing/flow.ml_order. O app depois só lê daí.
+  if (path === "/_sync_ml" || path.startsWith("/_sync_ml?")) {
+    const sessao = await verificarSessao(req);
+    if (!sessao) return res.status(401).json({ error: "Não autenticado. Faça login no sistema." });
+    if (!sessao.admin) return res.status(403).json({ error: "Apenas administradores." });
+    if (!dbEnabled()) return res.status(400).json({ error: "SUPABASE_DB_URL não configurada no servidor." });
+
+    const ck = Object.fromEntries(
+      (req.headers.cookie || "").split(";").map(function(c){ const p = c.trim().split("="); return [p[0], p.slice(1).join("=")]; })
+    );
+    const qs = new URLSearchParams(path.split("?")[1] || "");
+    const sellerId = qs.get("seller") || ck.ml_user_id;
+    if (!sellerId) return res.status(400).json({ error: "Conta ML não identificada. Conecte o Mercado Livre primeiro." });
+
+    let token = req.headers.authorization ? req.headers.authorization.replace("Bearer ", "") : (ck.ml_access_token || null);
+    if (!token) {
+      const meu = await kvGet("mlmargem_ml_token_" + sessao.uid);
+      if (meu && meu.accessToken) token = meu.accessToken;
+    }
+    if (!token) return res.status(401).json({ error: "Sem token do ML. Reconecte ao Mercado Livre e tente de novo." });
+
+    try {
+      const rl = await syncListings(sellerId, token);
+      const ro = await syncOrders(sellerId, token);
+      // Bootstrap: guarda o token na conexao_ml p/ cron/webhook sincronizarem sem o usuário logado.
+      try {
+        const expMs = parseInt(ck.ml_expires_at || "0", 10) || null;
+        await upsertConexaoMl(sellerId, token, ck.ml_refresh_token || null, expMs);
+      } catch (e) {}
+      return res.status(200).json({ ok: true, seller: String(sellerId), listings: rl, orders: ro });
+    } catch (e) {
+      return res.status(500).json({ error: (e && e.message) || "Falha ao sincronizar" });
+    }
   }
 
   // ── Rota de sincronização de dados de negócio — exige sessão do app ──

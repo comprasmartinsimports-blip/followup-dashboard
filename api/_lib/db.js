@@ -26,6 +26,29 @@ function getSql() {
   return _sql;
 }
 
+// Cliente SQL cru (postgres.js) para módulos que precisam de queries próprias (ex.: mlsync).
+// Retorna null se o Supabase não estiver configurado.
+export function sqlClient() { return getSql(); }
+
+// Guarda/atualiza o token do ML de uma conta em flow.conexao_ml, para o servidor
+// (cron/webhook) sincronizar sem o usuário estar logado. Preserva o refresh_token antigo
+// se o novo vier vazio.
+export async function upsertConexaoMl(sellerId, accessToken, refreshToken, expiraEmMs) {
+  const sql = getSql();
+  if (!sql) return false;
+  const expira = expiraEmMs ? new Date(expiraEmMs).toISOString() : null;
+  await sql`
+    insert into flow.conexao_ml (seller_id, access_token, refresh_token, expira_em, atualizado_em)
+    values (${String(sellerId)}, ${accessToken}, ${refreshToken}, ${expira}, now())
+    on conflict (seller_id) do update set
+      access_token = excluded.access_token,
+      refresh_token = coalesce(excluded.refresh_token, flow.conexao_ml.refresh_token),
+      expira_em = excluded.expira_em,
+      atualizado_em = now()
+  `;
+  return true;
+}
+
 // Lê um valor de negócio do flow.sync_store. Retorna o valor (jsonb → objeto) ou null.
 export async function syncGet(ns, chave) {
   const sql = getSql();

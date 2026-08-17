@@ -4911,7 +4911,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
         if (!bateSku(l)) return false;
         var lPrem = l.listing_type_id === "gold_pro" || l.listing_type_id === "gold_premium";
         return lPrem === pPrem;
-      }) || enriched.find(bateSku);
+      }); // sem fallback "qualquer tipo": só absorve quando SKU + tipo (Clássico/Premium) batem
       if (!match) { restantes.push(p); return; }
       absorvidos++;
       // Transfere a precificação do produto novo para o anúncio (só se o anúncio ainda não tiver).
@@ -5178,10 +5178,11 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                 var pPrem = parseFloat(p.taxaMl||12) >= 17;
                 // Se o SKU JÁ é um anúncio do ML, aplica a precificação direto no anúncio (não cria
                 // um "produto novo" que sumiria ao ser absorvido). Casa por SKU + tipo (Clássico/Premium).
+                // Só casa quando SKU E TIPO (Clássico/Premium) batem — precificar o mesmo SKU em
+                // OUTRO tipo (ex.: já existe Clássico, você quer Premium) é um item novo separado.
                 var match = null;
                 if (skuP && (p.marketplace||"ml") === "ml") {
-                  match = (enriched||[]).find(function(l){ if (l._isExtra) return false; if ((l.seller_sku||l.sku||"").trim().toLowerCase()!==skuP) return false; var lPrem=(l.listing_type_id==="gold_pro"||l.listing_type_id==="gold_premium"); return lPrem===pPrem; })
-                    || (enriched||[]).find(function(l){ return !l._isExtra && (l.seller_sku||l.sku||"").trim().toLowerCase()===skuP; });
+                  match = (enriched||[]).find(function(l){ if (l._isExtra) return false; if ((l.seller_sku||l.sku||"").trim().toLowerCase()!==skuP) return false; var lPrem=(l.listing_type_id==="gold_pro"||l.listing_type_id==="gold_premium"); return lPrem===pPrem; });
                 }
                 if (match) {
                   if (custoNum > 0) setCostsAndSave(function(c){ return Object.assign({}, c, { [match.id]: custoNum }); });

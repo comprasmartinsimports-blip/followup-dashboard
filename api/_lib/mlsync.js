@@ -58,11 +58,13 @@ export async function syncListings(sellerId, token) {
     }
     return it.seller_sku || null;
   }
+  // O multiget precisa listar EXPLICITAMENTE os campos pesados (pictures, attributes, condition),
+  // senão vêm vazios — e o app usa fotos/atributos/condição no score de qualidade.
+  const attrs = "id,title,price,base_price,available_quantity,sold_quantity,status,sub_status,listing_type_id,seller_custom_field,category_id,thumbnail,permalink,shipping,pictures,attributes,condition,health,last_updated";
   const rows = [];
   for (let i = 0; i < ids.length; i += 20) {
     const lote = ids.slice(i, i + 20);
-    // Item COMPLETO (sem filtro de campos) — raw guarda tudo (fotos, atributos) p/ o app ler do cache.
-    const multi = await mlGet(`/items?ids=${lote.join(",")}`, token);
+    const multi = await mlGet(`/items?ids=${lote.join(",")}&attributes=${attrs}`, token);
     const items = Array.isArray(multi) ? multi.map((x) => x && x.body).filter((b) => b && b.id) : [];
     for (const it of items) {
       rows.push({

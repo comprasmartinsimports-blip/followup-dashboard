@@ -1574,6 +1574,16 @@ function BotoesExport({ nome, colunas, linhas }){
   </div>;
 }
 
+// Datas De/Até correspondentes a um período nomeado (pra preencher o calendário ao clicar no botão).
+function presetRange(p){
+  var ate = new Date().toISOString().slice(0,10), de = "";
+  if (p==="hoje") de = ate;
+  else if (p==="7"||p==="30"||p==="90"){ var d=new Date(); d.setDate(d.getDate()-parseInt(p,10)); de = d.toISOString().slice(0,10); }
+  else if (p==="mesatual") de = ate.slice(0,7)+"-01";
+  else { de=""; ate=""; } // tudo / custom → sem intervalo definido
+  return { de:de, ate:ate };
+}
+
 // Filtra pedidos (não cancelados) por período. periodo: hoje|7|30|90|mesatual|tudo|custom.
 function filtrarPeriodo(orders, periodo, deData, ateData){
   var hoje = new Date().toISOString().slice(0,10);
@@ -1592,13 +1602,13 @@ function filtrarPeriodo(orders, periodo, deData, ateData){
 function BarraPeriodo({ periodo, setPeriodo, deData, setDeData, ateData, setAteData }){
   var ops=[["hoje","Hoje"],["7","7 dias"],["30","30 dias"],["mesatual","Mês atual"],["tudo","Tudo"]];
   return <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
-    {ops.map(function(p){ var a=periodo===p[0]; return <button key={p[0]} onClick={function(){ setPeriodo(p[0]); }}
+    {ops.map(function(p){ var a=periodo===p[0]; return <button key={p[0]} onClick={function(){ var r=presetRange(p[0]); setPeriodo(p[0]); setDeData(r.de); setAteData(r.ate); }}
       style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background:a?"#768692":"var(--surface)", color:a?"#fff":"var(--text-3)" }}>{p[1]}</button>; })}
     <div style={{ display:"flex", alignItems:"center", gap:5, padding:"4px 8px", borderRadius:8, border:"1px solid var(--border)", background: periodo==="custom"?"rgba(118,134,146,.10)":"var(--surface)" }}>
       <input type="date" value={deData} onChange={function(e){ setDeData(e.target.value); setPeriodo("custom"); }} style={_inpDataG} />
       <span style={{ fontSize:11, color:"var(--text-3)" }}>até</span>
       <input type="date" value={ateData} onChange={function(e){ setAteData(e.target.value); setPeriodo("custom"); }} style={_inpDataG} />
-      {(deData||ateData) && <button onClick={function(){ setDeData(""); setAteData(""); setPeriodo("30"); }} style={{ background:"none", border:"none", color:"var(--text-3)", cursor:"pointer", fontSize:14 }}>✕</button>}
+      {periodo==="custom" && <button onClick={function(){ var r=presetRange("30"); setPeriodo("30"); setDeData(r.de); setAteData(r.ate); }} style={{ background:"none", border:"none", color:"var(--text-3)", cursor:"pointer", fontSize:14 }}>✕</button>}
     </div>
   </div>;
 }
@@ -1696,7 +1706,7 @@ function _painel(titulo, extra, itens){
 }
 function MargemPedidoDash({ enrichedOrders }){
   const [periodo,setPeriodo]=useState("mesatual");
-  const [deData,setDeData]=useState(""); const [ateData,setAteData]=useState("");
+  const [deData,setDeData]=useState(function(){ return presetRange("mesatual").de; }); const [ateData,setAteData]=useState(function(){ return presetRange("mesatual").ate; });
   const [aba,setAba]=useState("todos"); const [busca,setBusca]=useState(""); const [pagina,setPagina]=useState(1);
   var base=filtrarPeriodo(enrichedOrders, periodo, deData, ateData);
   function calc(o){ var q=o.qty||1; var valorBase=(o.price||0)*q, custo=(o.cost||0)*q, taxa=(o.fee||0)*q, imp=(o.imposto||0)*q, fv=o.freteSeller||0, fc=o.buyer_shipping_cost||0;
@@ -1980,7 +1990,7 @@ function ClientesDash({ enrichedOrders, user }){
 
 // ── Sub-aba CURVA ABC ────────────────────────────────────────────────────────
 function CurvaAbcDash({ enrichedOrders }){
-  const [periodo,setPeriodo]=useState("mesatual"); const [deData,setDeData]=useState(""); const [ateData,setAteData]=useState("");
+  const [periodo,setPeriodo]=useState("mesatual"); const [deData,setDeData]=useState(function(){ return presetRange("mesatual").de; }); const [ateData,setAteData]=useState(function(){ return presetRange("mesatual").ate; });
   const [aberto,setAberto]=useState({ A:true, B:false, C:false });
   var base=filtrarPeriodo(enrichedOrders, periodo, deData, ateData);
   var abc=curvaABC(base);
@@ -2121,6 +2131,89 @@ function MetasDash({ metas, salvar, enrichedOrders }){
 }
 
 // Wrapper do Dashboard: barra de sub-abas + conteúdo.
+// Tela inicial (menu inicial): boas-vindas + resumo do mês + atalhos para todas as seções.
+function HomeTab({ enrichedOrders, currentUser, setTab }){
+  var perm = currentUser?.permissoes || [];
+  var mesAtual = new Date().toISOString().slice(0,7);
+  var fat=0, lucro=0, nped=0;
+  (enrichedOrders||[]).forEach(function(o){
+    if (o.status==="cancelled") return;
+    if ((o.date||"").slice(0,7) !== mesAtual) return;
+    var q=o.qty||1; fat+=(o.price||0)*q; lucro+=(o.profit||0)*q; nped+=1;
+  });
+  var resumo = [
+    { l:"Faturamento do mês", v:fmt(fat), c:"var(--text-strong)" },
+    { l:"Lucro do mês", v:fmt(lucro), c: lucro>=0?"#0a9d4e":"#FF5252" },
+    { l:"Pedidos no mês", v:String(nped), c:"var(--text-strong)" },
+  ];
+  var grupos = [
+    { titulo:"Operação", itens:[
+      { key:"dashboard", label:"Dashboard", desc:"Visão geral, gráficos e indicadores" },
+      { key:"produtos", label:"Produtos", desc:"Cadastro e catálogo de produtos" },
+      perm.includes("listings") && { key:"listings", label:"Anúncios", desc:"Anúncios do Mercado Livre" },
+      { key:"vincular", label:"Vincular anúncios", desc:"Ligar anúncios aos produtos" },
+      perm.includes("listings") && { key:"precificacao", label:"Precificação", desc:"Preços, taxas e margem" },
+      perm.includes("orders") && { key:"orders", label:"Vendas", desc:"Pedidos e margem por venda" },
+      { key:"expedicao", label:"Expedição", desc:"Status de envio dos pedidos" },
+      { key:"compras", label:"Compras", desc:"Pedidos de compra e reposição" },
+      { key:"estoque", label:"Estoque", desc:"Saldo e estoque mínimo" },
+    ]},
+    { titulo:"Financeiro", itens:[
+      { key:"contas_pagar", label:"Contas a pagar", desc:"Despesas e vencimentos" },
+      { key:"contas_receber", label:"Contas a receber", desc:"Recebíveis dos marketplaces" },
+      { key:"clientes", label:"Clientes", desc:"Recorrentes e novos" },
+      { key:"fornecedores", label:"Fornecedores", desc:"Cadastro de fornecedores" },
+      { key:"notas_fiscais", label:"Notas fiscais", desc:"Emissão e consulta" },
+      { key:"dre", label:"DRE e conciliação", desc:"Demonstrativo de resultado" },
+    ]},
+    { titulo:"Inteligência", itens:[
+      { key:"relatorios", label:"Relatórios", desc:"Análises e curva ABC" },
+      perm.includes("listings") && { key:"concorrencia", label:"Concorrência", desc:"Vigia de preços" },
+    ]},
+    { titulo:"Configuração", itens:[
+      perm.includes("admin") && { key:"admin", label:"Equipe", desc:"Usuários e permissões" },
+      { key:"integracoes", label:"Integrações", desc:"Conexões e marketplaces" },
+    ]},
+  ];
+  function abrir(key){ try { setTab(key); } catch(e){} }
+  return (
+    <div style={{ padding:2 }}>
+      <div style={{ marginBottom:18 }}>
+        <div style={{ fontWeight:600, fontSize:24, color:"var(--text-strong)", letterSpacing:-0.3 }}>Olá, {currentUser?.nome || "bem-vindo"}</div>
+        <div style={{ fontSize:14, color:"var(--text-3)", marginTop:2 }}>Bem-vindo ao Flow Marketplaces. Escolha por onde começar.</div>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(200px, 1fr))", gap:12, marginBottom:22 }}>
+        {resumo.map(function(k,i){ return <div key={i} className="kpi-card">
+          <div className="kpi-lbl">{k.l}</div>
+          <div style={{ fontSize:22, fontWeight:600, color:k.c, marginTop:6 }}>{k.v}</div>
+        </div>; })}
+      </div>
+      {grupos.map(function(g){
+        var itens = g.itens.filter(Boolean);
+        if (!itens.length) return null;
+        return <div key={g.titulo} style={{ marginBottom:20 }}>
+          <div style={{ fontSize:12, fontWeight:600, letterSpacing:.6, color:"var(--text-4)", marginBottom:10 }}>{g.titulo}</div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(210px, 1fr))", gap:12 }}>
+            {itens.map(function(t){
+              return <a key={t.key} href={"?tab=" + t.key}
+                onClick={function(e){ if (e.metaKey||e.ctrlKey||e.shiftKey||e.altKey) return; e.preventDefault(); abrir(t.key); }}
+                style={{ display:"block", textDecoration:"none", background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"15px 16px", transition:"border-color .15s, transform .1s" }}
+                onMouseEnter={function(e){ e.currentTarget.style.borderColor = "#768692"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+                onMouseLeave={function(e){ e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.transform = "none"; }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
+                  <span style={{ fontSize:15, fontWeight:600, color:"var(--text-strong)" }}>{t.label}</span>
+                  <span style={{ color:"#768692", fontSize:16 }}>→</span>
+                </div>
+                <div style={{ fontSize:12.5, color:"var(--text-3)", marginTop:4, lineHeight:1.4 }}>{t.desc}</div>
+              </a>;
+            })}
+          </div>
+        </div>;
+      })}
+    </div>
+  );
+}
+
 function DashboardTab({ enrichedOrders, produtos, user, metas, salvarMetas }){
   const [sub, setSub] = useState("geral");
   var subs=[["geral","Visão geral"],["estados","Estados"],["margem","Margem por pedido"],["estoque","Estoque de produtos"],["clientes","Clientes"],["abc","Curva ABC"],["metas","Metas"]];
@@ -2143,8 +2236,8 @@ function DashboardTab({ enrichedOrders, produtos, user, metas, salvarMetas }){
 
 function DashboardGeral({ enrichedOrders }) {
   const [periodo, setPeriodo] = useState("30"); // hoje | 7 | 30 | mesatual | custom
-  const [deData, setDeData] = useState("");
-  const [ateData, setAteData] = useState("");
+  const [deData, setDeData] = useState(function(){ return presetRange("30").de; });
+  const [ateData, setAteData] = useState(function(){ return presetRange("30").ate; });
   const [marketplace, setMarketplace] = useState("todos"); // todos | ml | shopee
   const hojeStr = new Date().toISOString().slice(0, 10);
   var cutoff = "0000-00-00";
@@ -2210,7 +2303,7 @@ function DashboardGeral({ enrichedOrders }) {
         <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap", justifyContent:"flex-end" }}>
           {periodos.map(function(p){
             var ativo = periodo === p[0];
-            return <button key={p[0]} onClick={function(){ setPeriodo(p[0]); }}
+            return <button key={p[0]} onClick={function(){ var r=presetRange(p[0]); setPeriodo(p[0]); setDeData(r.de); setAteData(r.ate); }}
               style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600,
                 background: ativo ? "#768692" : "var(--surface)", color: ativo ? "#fff" : "var(--text-3)" }}>{p[1]}</button>;
           })}
@@ -2223,9 +2316,9 @@ function DashboardGeral({ enrichedOrders }) {
             <input type="date" value={ateData} min={deData || undefined}
               onChange={function(e){ setAteData(e.target.value); setPeriodo("custom"); }}
               title="Data final" style={_inpData} />
-            {(deData || ateData) && (
-              <button onClick={function(){ setDeData(""); setAteData(""); setPeriodo("30"); }}
-                title="Limpar intervalo" style={{ background:"none", border:"none", color:"var(--text-3)", cursor:"pointer", fontSize:14, padding:"0 2px" }}>✕</button>
+            {periodo==="custom" && (
+              <button onClick={function(){ var r=presetRange("30"); setPeriodo("30"); setDeData(r.de); setAteData(r.ate); }}
+                title="Voltar para 30 dias" style={{ background:"none", border:"none", color:"var(--text-3)", cursor:"pointer", fontSize:14, padding:"0 2px" }}>✕</button>
             )}
           </div>
           {/* Marketplace */}
@@ -5779,7 +5872,7 @@ export default function App() {
       var urlTab = new URLSearchParams(window.location.search).get("tab");
       if (urlTab) return urlTab;
     } catch(e) {}
-    return "listings";
+    return "home";
   });
   const [abaAnuncio, setAbaAnuncio] = useState("ml");
   const [abaPedido,  setAbaPedido]  = useState("ml");
@@ -7220,7 +7313,7 @@ export default function App() {
       <header style={{ position:"sticky", top:0, zIndex:200, display:"flex", alignItems:"center", gap:8,
         padding:"8px 16px", background:"var(--bg-2)", borderBottom:"1px solid var(--border-soft)", flexWrap:"wrap" }}>
         {/* Logo */}
-        <div style={{ display:"flex", alignItems:"center", gap:9, paddingRight:12, marginRight:2, borderRight:"1px solid var(--border-soft)" }}>
+        <div onClick={function(){ setTab("home"); }} title="Tela inicial" style={{ display:"flex", alignItems:"center", gap:9, paddingRight:12, marginRight:2, borderRight:"1px solid var(--border-soft)", cursor:"pointer" }}>
           <div style={{ width:32, height:32, borderRadius:"50%", background:"rgba(118,134,146,.12)", border:"1px solid rgba(118,134,146,.45)", boxShadow:"0 0 14px rgba(118,134,146,.35)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Space Grotesk',sans-serif", fontWeight:500, fontSize:15, color:"#768692", letterSpacing:-0.5, flexShrink:0 }}>F</div>
           <div style={{ lineHeight:1.1 }}>
             <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:500, fontSize:15, color:"var(--text-strong)", letterSpacing:-0.4 }}>Flow</div>
@@ -7822,6 +7915,9 @@ export default function App() {
         )}
         {tab === "admin" && currentUser?.permissoes?.includes("admin") && (
           <AdminTab currentUser={currentUser} />
+        )}
+        {tab === "home" && (
+          <HomeTab enrichedOrders={enrichedOrders} currentUser={currentUser} setTab={setTab} />
         )}
         {tab === "dashboard" && (
           <DashboardTab enrichedOrders={enrichedOrders} produtos={produtos} user={user} metas={metas} salvarMetas={salvarMetas} />

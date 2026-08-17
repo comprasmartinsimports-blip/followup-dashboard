@@ -4944,17 +4944,18 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
   function marcarPendente(id, novoPreco) {
     // Descobre o item (anúncio do ML OU produto novo Shopee/ML) e seu marketplace.
     var listing = (enriched||[]).find(function(l){ return l.id===id; });
-    var mkt = "ml", precoAtual, titulo;
+    var mkt = "ml", precoAtual, titulo, sku = "", tipoPrem = false;
     if (listing) {
-      precoAtual = listing.price; titulo = listing.title; mkt = "ml";
+      precoAtual = listing.price; titulo = listing.title; mkt = "ml"; sku = listing.seller_sku || listing.sku || ""; tipoPrem = (listing.listing_type_id==="gold_pro"||listing.listing_type_id==="gold_premium");
     } else {
       var extra = (produtosExtras||[]).find(function(p){ return p.id===id; });
       if (!extra) return;
-      precoAtual = parseFloat(extra.precoVenda) || 0; titulo = extra.nome; mkt = extra.marketplace || "ml";
+      precoAtual = parseFloat(extra.precoVenda) || 0; titulo = extra.nome; mkt = extra.marketplace || "ml"; sku = extra.sku || ""; tipoPrem = parseFloat(extra.taxaMl||12) >= 17;
     }
     var next = Object.assign({}, pendentesAtualizacao);
     if (novoPreco > 0 && novoPreco !== precoAtual) {
-      next[id] = { precoAntigo: precoAtual, precoNovo: novoPreco, data: new Date().toISOString(), titulo: titulo, marketplace: mkt };
+      // Guarda sku/tipo NA pendência para não depender do item ainda existir (evita "SKU —").
+      next[id] = { precoAntigo: precoAtual, precoNovo: novoPreco, data: new Date().toISOString(), titulo: titulo, marketplace: mkt, sku: sku, tipoPrem: tipoPrem };
     } else {
       delete next[id];
     }
@@ -5089,7 +5090,8 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
               var listingRef = (enriched||[]).find(function(l){ return l.id===id; });
               var extraRef = (produtosExtras||[]).find(function(x){ return x.id===id; });
               var skuRef = listingRef?.sku || extraRef?.sku || p.sku || "—";
-              var tipoPrem = listingRef && (listingRef.listing_type_id==="gold_pro" || listingRef.listing_type_id==="gold_premium");
+              var tipoPrem = listingRef ? (listingRef.listing_type_id==="gold_pro" || listingRef.listing_type_id==="gold_premium") : !!p.tipoPrem;
+              var mostraTipo = !!(listingRef || p.tipoPrem !== undefined);
               var ehShopee = (p.marketplace || "ml") === "shopee";
               // Valor riscado = preço BRUTO (anunciar por): o preço de venda desejado (precoNovo)
               // acrescido do % de desconto da promoção, mesma fórmula da coluna "Anunciar por".
@@ -5099,7 +5101,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                 <div key={id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"var(--surface)", border:"1px solid rgba(255,193,7,.35)", borderRadius:8, padding:"7px 12px" }}>
                   <div style={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontSize:12, color:"var(--text-strong)" }}>
                     <span style={{ fontWeight:500, color:"#FFC107", marginRight:6 }}>SKU {skuRef}</span>
-                    {listingRef && (
+                    {mostraTipo && (
                       <span style={{ fontSize:9, fontWeight:500, padding:"1px 6px", borderRadius:4, marginRight:6, whiteSpace:"nowrap",
                         background: tipoPrem?"rgba(118,133,146,.18)":"rgba(118,134,146,.18)",
                         color: tipoPrem?"#a78bfa":"#768692" }}>
@@ -6899,6 +6901,20 @@ export default function App() {
           var tipoEsperado = SYNC_TIPO_ESPERADO[key];
           if (tipoEsperado === "array" && !Array.isArray(v)) return;
           if (tipoEsperado === "object" && (Array.isArray(v) || typeof v !== "object" || v === null)) return;
+          // Produtos precificados (extras): MESCLA por id — o pull nunca remove um extra local que
+          // o servidor DESSA conta ainda não tem. Evita perder a precificação ao trocar de conta ML
+          // (namespace por vendedor) ou quando o servidor devolve uma lista vazia/desatualizada.
+          if (key === "precificacao_extras" && Array.isArray(v)) {
+            try {
+              var localArr = JSON.parse(localStorage.getItem(key) || "[]");
+              if (Array.isArray(localArr) && localArr.length) {
+                var byId = {};
+                v.forEach(function(x){ if (x && x.id) byId[x.id] = x; });           // servidor vence em conflito
+                localArr.forEach(function(x){ if (x && x.id && !byId[x.id]) byId[x.id] = x; }); // mantém extras locais
+                v = Object.keys(byId).map(function(k){ return byId[k]; });
+              }
+            } catch(e) {}
+          }
           var raw = JSON.stringify(v);
           if (lastSyncRef.current[key] === raw) return; // já é o que temos
           lastSyncRef.current[key] = raw;

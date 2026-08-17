@@ -1345,30 +1345,72 @@ function ExpedicaoTab({ rawOrders }) {
 
 // Integrações: status das conexões do sistema.
 function IntegracoesTab({ token, user, lastUpdate }) {
+  const [blingModal, setBlingModal] = useState(false);
+  const [blingToken, setBlingToken] = useState(function(){ try { return localStorage.getItem("bling_token") || ""; } catch(e){ return ""; } });
+  const [blingInput, setBlingInput] = useState("");
   var mins = lastUpdate ? Math.round((Date.now() - parseInt(lastUpdate)) / 60000) : null;
+  var blingConectado = !!(blingToken && blingToken.trim());
+  function salvarBling(){
+    var t = (blingInput||"").trim();
+    if (!t){ alert("Cole o token/credencial da API do Bling."); return; }
+    setBlingToken(t);
+    try { localStorage.setItem("bling_token", t); } catch(e){}
+    try { kvSyncPush("bling_token", t); } catch(e){}
+    setBlingInput(""); setBlingModal(false);
+  }
+  function desconectarBling(){
+    if (!window.confirm("Desconectar o Bling? A credencial guardada será removida.")) return;
+    setBlingToken("");
+    try { localStorage.removeItem("bling_token"); } catch(e){}
+    try { kvSyncPush("bling_token", ""); } catch(e){}
+  }
   var badgeStatus = { conectado:["#0a9d4e","rgba(0,200,83,.14)","● Conectado"], disponivel:["#768692","rgba(118,134,146,.14)","Disponível"], construcao:["#FFC107","rgba(255,193,7,.14)","🚧 Em construção"] };
   var cards = [
-    { nome:"Mercado Livre", desc:"Anúncios, pedidos, taxas e repasses — sincronizados automaticamente.", status: token ? "conectado" : "disponivel", extra: token && user && user.nickname ? ("Conta: " + user.nickname + (mins != null ? " · última sync há " + mins + " min" : "")) : null },
-    { nome:"Bling", desc:"ERP: produtos, custos, estoque e notas fiscais.", status:"disponivel", extra:null },
-    { nome:"Amazon", desc:"Marketplace Amazon (anúncios e pedidos).", status:"construcao", extra:null },
-    { nome:"Shopee", desc:"Marketplace Shopee (anúncios e pedidos).", status:"construcao", extra:null },
+    { nome:"Mercado Livre", desc:"Anúncios, pedidos, taxas e repasses — sincronizados automaticamente.", status: token ? "conectado" : "disponivel", extra: token && user && user.nickname ? ("Conta: " + user.nickname + (mins != null ? " · última sync há " + mins + " min" : "")) : null,
+      acao: token ? { label:"Reconectar", onClick:function(){ window.location.href="/api/auth/login"; }, tipo:"sec" } : { label:"Conectar ML", onClick:function(){ window.location.href="/api/auth/login"; }, tipo:"pri" } },
+    { nome:"Bling", desc:"ERP: produtos, custos, estoque e notas fiscais.", status: blingConectado ? "conectado" : "disponivel", extra: blingConectado ? "Credencial da API guardada. Sincronização automática entra na próxima etapa." : null,
+      acao: blingConectado ? { label:"Desconectar", onClick:desconectarBling, tipo:"del" } : { label:"Conectar", onClick:function(){ setBlingInput(""); setBlingModal(true); }, tipo:"pri" } },
+    { nome:"Amazon", desc:"Marketplace Amazon (anúncios e pedidos).", status:"construcao", extra:null, acao:null },
+    { nome:"Shopee", desc:"Marketplace Shopee (anúncios e pedidos).", status:"construcao", extra:null, acao:null },
   ];
+  function btnEstilo(tipo){
+    if (tipo==="pri") return { background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600 };
+    if (tipo==="del") return { background:"rgba(255,82,82,.1)", border:"1px solid rgba(255,82,82,.35)", color:"#FF5252", fontWeight:600 };
+    return { background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600 };
+  }
   return (
     <div style={{ padding:2 }}>
       <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Integrações</div>
       <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Conexões do sistema com marketplaces e serviços.</div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:12 }}>
         {cards.map(function(c,i){
-          return <div key={i} style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px" }}>
+          return <div key={i} style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", display:"flex", flexDirection:"column" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
               <div style={{ fontWeight:500, fontSize:15, color:"var(--text-strong)" }}>{c.nome}</div>
               {(function(){ var b = badgeStatus[c.status]; return <span style={{ fontSize:11, fontWeight:500, padding:"3px 10px", borderRadius:20, background:b[1], color:b[0], whiteSpace:"nowrap" }}>{b[2]}</span>; })()}
             </div>
             <div style={{ fontSize:13, color:"var(--text-2)", lineHeight:1.5 }}>{c.desc}</div>
             {c.extra && <div style={{ fontSize:11, color:"var(--text-3)", marginTop:6 }}>{c.extra}</div>}
+            {c.acao && <button onClick={c.acao.onClick} style={{ ...btnEstilo(c.acao.tipo), marginTop:12, alignSelf:"flex-start", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13 }}>{c.acao.label}</button>}
           </div>;
         })}
       </div>
+
+      {blingModal && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:600, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }} onClick={function(){ setBlingModal(false); }}>
+          <div onClick={function(e){ e.stopPropagation(); }} style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:14, width:520, maxWidth:"100%", padding:22 }}>
+            <div style={{ fontWeight:600, fontSize:17, color:"var(--text-strong)", marginBottom:6 }}>Conectar ao Bling</div>
+            <div style={{ fontSize:13, color:"var(--text-2)", lineHeight:1.5, marginBottom:14 }}>Cole o <b>token de acesso da API do Bling</b> (Bling → Preferências → API/Integrações). Ele fica guardado com segurança e será usado para importar produtos, estoque, custos e notas.</div>
+            <input value={blingInput} onChange={function(e){ setBlingInput(e.target.value); }} placeholder="Token da API do Bling" autoFocus
+              style={{ width:"100%", background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"11px 12px", borderRadius:9, fontSize:13, outline:"none", boxSizing:"border-box" }} />
+            <div style={{ fontSize:11, color:"var(--text-3)", marginTop:8, lineHeight:1.5 }}>Observação: isto guarda a credencial da conexão. A <b>sincronização automática</b> dos dados do Bling é a próxima etapa (precisa dos endpoints de integração no servidor) — quando você tiver o app/credenciais do Bling, eu ativo o fluxo OAuth completo.</div>
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:18 }}>
+              <button onClick={function(){ setBlingModal(false); }} style={{ background:"none", border:"none", color:"var(--text-3)", fontWeight:600, padding:"10px 16px", cursor:"pointer", fontSize:13 }}>Cancelar</button>
+              <button onClick={salvarBling} style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"10px 22px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Salvar conexão</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

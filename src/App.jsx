@@ -1072,6 +1072,69 @@ function VendasTab({ enrichedOrders }) {
   );
 }
 
+// Título de seção usado dentro do drawer de detalhes do pedido.
+var _secTit = { fontSize:11, fontWeight:700, color:"var(--text-3)", textTransform:"uppercase", letterSpacing:.5, margin:"16px 0 2px" };
+
+// Drawer lateral com o detalhamento de uma venda (aberto ao clicar numa linha da aba Vendas).
+function PedidoDetalheDrawer({ pedido, onClose }) {
+  if (!pedido) return null;
+  var o = pedido;
+  var q = o.qty || 1;
+  var fat = (o.price || 0) * q, taxas = (o.fee || 0) * q, frete = o.freteSeller || 0;
+  var custo = (o.cost || 0) * q, imposto = (o.imposto || 0) * q;
+  var repasse = fat - taxas - frete, lucro = repasse - custo - imposto;
+  var margem = fat ? lucro / fat * 100 : 0;
+  function Linha(label, valor, opts){
+    opts = opts || {};
+    return <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, padding:"9px 0", borderBottom: opts.forte ? "none" : "1px solid var(--border-soft)" }}>
+      <span style={{ fontSize: opts.forte ? 14 : 13, fontWeight: opts.forte ? 800 : 500, color: opts.forte ? "var(--text-strong)" : "var(--text-3)" }}>{label}</span>
+      <span style={{ fontSize: opts.forte ? 15 : 13, fontWeight: opts.forte ? 800 : 600, color: opts.cor || "var(--text-2)", fontVariantNumeric:"tabular-nums", textAlign:"right", wordBreak:"break-word" }}>{valor}</span>
+    </div>;
+  }
+  var temCliente = o.buyerName || o.buyerDoc || o.buyerEmail || o.buyerCity;
+  return <>
+    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.4)", zIndex:400 }} />
+    <div style={{ position:"fixed", top:0, right:0, bottom:0, width:460, maxWidth:"100vw", background:"var(--bg-2)", borderLeft:"1px solid var(--border)", boxShadow:"-8px 0 32px rgba(0,0,0,.28)", zIndex:401, overflowY:"auto", padding:"22px 24px" }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, marginBottom:4 }}>
+        <div style={{ fontWeight:800, fontSize:17, color:"var(--text-strong)", lineHeight:1.3 }}>{o.title || "Venda"}</div>
+        <button onClick={onClose} style={{ background:"none", border:"none", color:"var(--text-3)", fontSize:22, cursor:"pointer", lineHeight:1, flexShrink:0 }}>×</button>
+      </div>
+      <div style={{ fontSize:12, color:"var(--text-3)", marginBottom:16 }}>Pedido #{o.id} · {fmtDate(o.date) || o.date || "—"} · Mercado Livre</div>
+
+      <div style={_secTit}>Identificação</div>
+      {Linha("Código MLB", o.listing_id || o.id)}
+      {Linha("SKU", o.sku || "—")}
+      {Linha("Quantidade", String(q))}
+      {Linha("Faturamento", fmt(fat), { cor:"var(--text-strong)" })}
+      {Linha("Situação", o.status === "cancelled" ? "Cancelada" : "Ativa", { cor: o.status === "cancelled" ? "#FF5252" : "#0a9d4e" })}
+
+      {temCliente && <>
+        <div style={_secTit}>Cliente</div>
+        {o.buyerName && Linha("Nome", o.buyerName, { cor:"var(--text-strong)" })}
+        {o.buyerDoc && Linha(o.buyerDocType || "Documento", o.buyerDoc)}
+        {o.buyerEmail && Linha("E-mail", o.buyerEmail)}
+        {o.buyerPhone && Linha("Telefone", o.buyerPhone)}
+        {(o.buyerCity || o.buyerUF) && Linha("Cidade/UF", (o.buyerCity || "") + (o.buyerUF ? " - " + o.buyerUF : ""))}
+      </>}
+
+      <div style={_secTit}>Descontos do marketplace</div>
+      {Linha("Taxas do marketplace", "- " + fmt(taxas), { cor:"#FFC107" })}
+      {Linha("Frete pago por você", "- " + fmt(frete), { cor:"#FFC107" })}
+      <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 14px", margin:"10px 0" }}>
+        {Linha("Repasse do marketplace", fmt(repasse), { forte:true, cor:"var(--text-strong)" })}
+      </div>
+
+      <div style={_secTit}>Seus custos</div>
+      {Linha("Custo do produto", "- " + fmt(custo), { cor:"#FFC107" })}
+      {Linha("Imposto", "- " + fmt(imposto), { cor:"#FFC107" })}
+      <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"12px 14px", marginTop:12 }}>
+        {Linha("Lucro líquido", fmt(lucro) + "  (" + margem.toFixed(1) + "%)", { forte:true, cor: lucro >= 0 ? "#0a9d4e" : "#FF5252" })}
+      </div>
+      {custo === 0 && <div style={{ marginTop:12, fontSize:12, color:"var(--text-3)", background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 12px" }}>Sem custo cadastrado para este produto — o lucro considera custo R$ 0,00.</div>}
+    </div>
+  </>;
+}
+
 // Expedição: pedidos com o status de envio do ML (a enviar / enviado / entregue), com filtro.
 function ExpedicaoTab({ rawOrders }) {
   const [filtro, setFiltro] = useState("todos");
@@ -5226,6 +5289,7 @@ export default function App() {
   const [filterSku, setFilterSku] = useState("");
   const [filterUF, setFilterUF] = useState("");
   const [showClienteDetalhe, setShowClienteDetalhe] = useState(null);
+  const [pedidoDetalhe, setPedidoDetalhe] = useState(null); // venda selecionada p/ ver detalhes (drawer)
   const [statusFilter, setStatusFilter] = useState("all");
   const [filterListingExtra, setFilterListingExtra] = useState("all");
   // Anúncio cujo campo de custo está sendo editado agora: fica isento do filtro "Sem custo"
@@ -6892,9 +6956,6 @@ export default function App() {
         )}
 
         {tab === "orders" && currentUser?.permissoes?.includes("orders") && (
-          <VendasTab enrichedOrders={enrichedOrders} />
-        )}
-        {false && (
           <>
             {/* Sub-abas de Pedidos */}
             <div style={{ display:"flex", gap:2, borderBottom:"2px solid var(--border)", marginBottom:10 }}>
@@ -7009,7 +7070,8 @@ export default function App() {
                     var sInfo = getOrderStatusInfo(o.status, o.tags, o.fulfilled, o.shipment_status);
                     var envLabel = detectTipoEnvio(o, shipmentStatuses) || "";
                     return (
-                      <tr key={o.id} style={{ borderBottom:"1px solid var(--border-soft)" }}>
+                      <tr key={o.id} onClick={function(){ setPedidoDetalhe(o); }} title="Clique para ver os detalhes desta venda"
+                        style={{ borderBottom:"1px solid var(--border-soft)", cursor:"pointer" }}>
                         <td style={{ padding:"6px 9px", fontSize:11, color:"var(--text-2)", fontFamily:"monospace", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>#{o.id}</td>
                         <td style={{ padding:"10px 12px" }}>
                           <span style={{ fontSize:11, fontWeight:600, color:sInfo.color, background:sInfo.bg, padding:"3px 8px", borderRadius:6, whiteSpace:"nowrap" }}>{sInfo.label}</span>
@@ -7020,7 +7082,7 @@ export default function App() {
                         <td style={{ padding:"10px 12px", overflow:"hidden" }}>
                           {o.buyerName ? (
                             <div style={{ position:"relative" }}>
-                              <button onClick={function(){ setShowClienteDetalhe(showClienteDetalhe===o.id ? null : o.id); }}
+                              <button onClick={function(e){ e.stopPropagation(); setShowClienteDetalhe(showClienteDetalhe===o.id ? null : o.id); }}
                                 style={{ background:"none", border:"none", color:"#0e7490", cursor:"pointer", fontSize:11, fontWeight:600, padding:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"100%", display:"block" }}>
                                 {o.buyerName}
                               </button>
@@ -7028,7 +7090,7 @@ export default function App() {
                                 <div style={{ position:"fixed", zIndex:900, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", boxShadow:"0 8px 32px rgba(0,0,0,.15)", minWidth:260, marginTop:4 }}>
                                   <div style={{ fontWeight:700, fontSize:14, color:"var(--text-strong)", marginBottom:10, display:"flex", justifyContent:"space-between" }}>
                                     👤 {o.buyerName}
-                                    <button onClick={function(){ setShowClienteDetalhe(null); }} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--text-3)", fontSize:14 }}>✕</button>
+                                    <button onClick={function(e){ e.stopPropagation(); setShowClienteDetalhe(null); }} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--text-3)", fontSize:14 }}>✕</button>
                                   </div>
                                   {o.buyerDoc && <div style={{ fontSize:12, color:"var(--text-2)", marginBottom:4 }}>{o.buyerDocType||"Doc"}: {o.buyerDoc}</div>}
                                   {o.buyerEmail && <div style={{ fontSize:12, color:"var(--text-2)", marginBottom:4 }}>✉️ {o.buyerEmail}</div>}
@@ -7059,7 +7121,7 @@ export default function App() {
                               }
                               if (!title) return <span style={{ color:"var(--text-3)", fontSize:12 }}>—</span>;
                               return link
-                                ? <a href={link} target="_blank" rel="noreferrer" className="title-link" style={{ fontSize:12 }}>{title}</a>
+                                ? <a href={link} target="_blank" rel="noreferrer" onClick={function(e){ e.stopPropagation(); }} className="title-link" style={{ fontSize:12 }}>{title}</a>
                                 : <span style={{ fontSize:12 }}>{title}</span>;
                             })()}
                           </div>
@@ -7086,6 +7148,7 @@ export default function App() {
               </div>
             </LayoutFiltros>
             )} {/* fecha condicional ml pedidos */}
+            {pedidoDetalhe && <PedidoDetalheDrawer pedido={pedidoDetalhe} onClose={function(){ setPedidoDetalhe(null); }} />}
           </>
         )}
       </main>

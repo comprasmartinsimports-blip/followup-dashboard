@@ -4405,6 +4405,9 @@ export default function App() {
     var lu = localStorage.getItem("ml_last_update");
     if (lu) setLastUpdate(lu);
     setLoading(false); setLoadingMsg("");
+    // Em segundo plano, relê os anúncios do cache do servidor — traz mudanças (preço/estoque/
+    // status via webhook) que o snapshot local ainda não tinha, sem travar a tela.
+    setTimeout(function(){ refrescarAnunciosDoCacheRef.current(); }, 400);
   }
 
   async function handleConnect(tk, userId) {
@@ -4663,6 +4666,18 @@ export default function App() {
   const refreshOrdersIncrementalRef = useRef(refreshOrdersIncremental);
   refreshOrdersIncrementalRef.current = refreshOrdersIncremental;
 
+  // Relê os ANÚNCIOS do cache do servidor (mantido fresco por webhook + cron) e atualiza a tela.
+  // Assim, mudanças de preço/estoque/status feitas no ML aparecem numa reabertura ou dentro do
+  // intervalo, sem precisar de uma recarga "fria" (Reconectar). Pedidos já têm o refresh próprio.
+  async function refrescarAnunciosDoCache() {
+    try {
+      var rl = await carregarAnunciosDoCache();
+      if (rl.cache && Array.isArray(rl.items) && rl.items.length) setRealListings(rl.items);
+    } catch (e) {}
+  }
+  const refrescarAnunciosDoCacheRef = useRef(refrescarAnunciosDoCache);
+  refrescarAnunciosDoCacheRef.current = refrescarAnunciosDoCache;
+
   // Estado (não ref) para o botão "Atualizar" manual, pra dar retorno visível de verdade —
   // antes, ele usava só uma ref, que não atualiza a tela, então clicar parecia não fazer nada.
   const [refreshingManual, setRefreshingManual] = useState(false);
@@ -4695,7 +4710,10 @@ export default function App() {
       hidratouDoCacheRef.current = false;
       setTimeout(function(){ refreshOrdersIncrementalRef.current(); }, 600);
     }
-    var intervalId = setInterval(function(){ refreshOrdersIncrementalRef.current(); }, 180000); // 3 minutos
+    var intervalId = setInterval(function(){
+      refreshOrdersIncrementalRef.current();
+      refrescarAnunciosDoCacheRef.current(); // relê anúncios do cache (mudanças via webhook/cron)
+    }, 180000); // 3 minutos
     return function(){ clearInterval(intervalId); };
   }, [token]);
 

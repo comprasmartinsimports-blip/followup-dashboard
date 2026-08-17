@@ -25,7 +25,11 @@
         --app-bg-image:none;
         color-scheme:light;
       }
-      body{ background:var(--bg); background-image:var(--app-bg-image); }
+      body{ background:var(--bg); background-image:var(--app-bg-image);
+        -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+        letter-spacing:-0.006em; text-rendering:optimizeLegibility; }
+      /* Tipografia mais delicada: números tabulares finos e fontes suavizadas em todo o app */
+      *{ font-variant-numeric:lining-nums tabular-nums; }
       /* Remove as setinhas (spinner) dos campos numéricos em todo o sistema */
       input[type="number"]::-webkit-outer-spin-button,
       input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }

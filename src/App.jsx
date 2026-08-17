@@ -320,21 +320,21 @@ function EmConstrucao({ tab }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:"62vh", textAlign:"center", padding:24 }}>
       <div style={{ fontSize:60, marginBottom:16, opacity:.9 }}>{info[0]}</div>
-      <div style={{ fontSize:24, fontWeight:800, color:"var(--text-strong)", marginBottom:8, letterSpacing:-0.4 }}>{info[1]}</div>
+      <div style={{ fontSize:24, fontWeight:600, color:"var(--text-strong)", marginBottom:8, letterSpacing:-0.4 }}>{info[1]}</div>
       <div style={{ fontSize:14, color:"var(--text-3)", maxWidth:440, lineHeight:1.6 }}>{info[2]}</div>
-      <div style={{ marginTop:18, fontSize:12, fontWeight:700, color:"#FFC107", background:"rgba(255,193,7,.12)", border:"1px solid rgba(255,193,7,.35)", borderRadius:20, padding:"5px 14px" }}>🚧 Em construção</div>
+      <div style={{ marginTop:18, fontSize:12, fontWeight:500, color:"#FFC107", background:"rgba(255,193,7,.12)", border:"1px solid rgba(255,193,7,.35)", borderRadius:20, padding:"5px 14px" }}>🚧 Em construção</div>
     </div>
   );
 }
 
 // Estilos compartilhados das telas de tabela (Produtos, Estoque).
 const _kpiCard = { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 16px" };
-const _kpiLbl = { fontSize:11, color:"var(--text-3)", textTransform:"uppercase", letterSpacing:.5, fontWeight:600 };
-const _kpiVal = { fontSize:20, fontWeight:800, marginTop:5 };
+const _kpiLbl = { fontSize:11, color:"var(--text-3)", textTransform:"none", letterSpacing:.5, fontWeight:600 };
+const _kpiVal = { fontSize:20, fontWeight:600, marginTop:5 };
 const _inputBusca = { width:"100%", background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"10px 14px", borderRadius:10, fontSize:13, outline:"none", marginBottom:12, boxSizing:"border-box" };
 const _tableWrap = { overflowX:"auto", border:"1px solid var(--border)", borderRadius:12, background:"var(--surface)" };
 const _table = { borderCollapse:"collapse", width:"100%", fontSize:13, minWidth:640 };
-const _th = { textAlign:"left", padding:"10px 12px", fontSize:11, textTransform:"uppercase", letterSpacing:.4, color:"var(--text-3)", fontWeight:600, borderBottom:"1px solid var(--border)", whiteSpace:"nowrap", background:"var(--surface-3)" };
+const _th = { textAlign:"left", padding:"10px 12px", fontSize:11, textTransform:"none", letterSpacing:.4, color:"var(--text-3)", fontWeight:600, borderBottom:"1px solid var(--border)", whiteSpace:"nowrap", background:"var(--surface-3)" };
 const _td = { padding:"9px 12px", borderBottom:"1px solid var(--border-soft)", color:"var(--text-2)", verticalAlign:"middle" };
 const _tdMono = { padding:"9px 12px", borderBottom:"1px solid var(--border-soft)", color:"var(--text-2)", fontFamily:"'JetBrains Mono',monospace", fontSize:12 };
 function nomeProd(p){ return p.titulo || p.nome || "—"; }
@@ -352,11 +352,11 @@ function ProdutoModal({ produto, onSave, onClose }) {
     onSave(p);
   }
   var campo = { width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"10px 12px", borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box" };
-  var lbl = { fontSize:11, color:"var(--text-3)", fontWeight:600, textTransform:"uppercase", letterSpacing:.4, marginBottom:4, display:"block" };
+  var lbl = { fontSize:11, color:"var(--text-3)", fontWeight:600, textTransform:"none", letterSpacing:.4, marginBottom:4, display:"block" };
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:600, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }} onClick={onClose}>
       <div onClick={function(e){ e.stopPropagation(); }} style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:14, width:460, maxWidth:"100%", maxHeight:"90vh", overflowY:"auto", padding:22 }}>
-        <div style={{ fontWeight:800, fontSize:17, color:"var(--text-strong)", marginBottom:16 }}>{novo ? "Novo produto" : "Editar produto"}</div>
+        <div style={{ fontWeight:600, fontSize:17, color:"var(--text-strong)", marginBottom:16 }}>{novo ? "Novo produto" : "Editar produto"}</div>
         <div style={{ marginBottom:10 }}><label style={lbl}>Nome</label><input value={f.nome || f.titulo || ""} onChange={function(e){ set("nome", e.target.value); }} style={campo} /></div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
           <div><label style={lbl}>SKU</label><input value={f.sku || ""} onChange={function(e){ set("sku", e.target.value); }} style={campo} /></div>
@@ -372,7 +372,7 @@ function ProdutoModal({ produto, onSave, onClose }) {
         </div>
         <div style={{ display:"flex", gap:8 }}>
           <button onClick={onClose} style={{ flex:1, background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
-          <button onClick={salvar} style={{ flex:2, background:"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:"pointer" }}>Salvar</button>
+          <button onClick={salvar} style={{ flex:2, background:"#1976FF", border:"none", color:"#fff", fontWeight:500, padding:"11px", borderRadius:10, cursor:"pointer" }}>Salvar</button>
         </div>
       </div>
     </div>
@@ -442,13 +442,13 @@ function ProdutosTab({ produtos, salvar }) {
     <div style={{ padding:2 }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Produtos</div>
+          <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Produtos</div>
           <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Catálogo com custo, SKU, estoque e vínculo. Clique numa linha para editar.</div>
         </div>
         <div style={{ display:"flex", gap:8 }}>
           <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display:"none" }} onChange={function(e){ if (e.target.files && e.target.files[0]) importarCSV(e.target.files[0]); e.target.value=""; }} />
           <button onClick={function(){ if (fileRef.current) fileRef.current.click(); }} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"9px 16px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>Importar CSV</button>
-          <button onClick={function(){ setEditando({}); }} style={{ background:"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"9px 18px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>+ Novo produto</button>
+          <button onClick={function(){ setEditando({}); }} style={{ background:"#1976FF", border:"none", color:"#fff", fontWeight:500, padding:"9px 18px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>+ Novo produto</button>
         </div>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12, marginBottom:14 }}>
@@ -470,7 +470,7 @@ function ProdutosTab({ produtos, salvar }) {
                 <td style={_td}>{parseFloat(p.precoVenda) > 0 ? fmt(parseFloat(p.precoVenda)) : "—"}</td>
                 <td style={_td}>{parseInt(p.estoqueAtual) || 0}</td>
                 <td style={_td}>{qtdAnuncios(p)}</td>
-                <td style={_td}><span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background: ativo ? "rgba(0,200,83,.14)" : "var(--surface-3)", color: ativo ? "#0a9d4e" : "var(--text-3)" }}>{p.status || "—"}</span></td>
+                <td style={_td}><span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background: ativo ? "rgba(0,200,83,.14)" : "var(--surface-3)", color: ativo ? "#0a9d4e" : "var(--text-3)" }}>{p.status || "—"}</span></td>
               </tr>;
             })}
           </tbody>
@@ -512,7 +512,7 @@ function EstoqueTab({ produtos }) {
   const filtros = [["todos","Todos"],["baixo","Abaixo do mínimo"],["zerado","Zerados"]];
   return (
     <div style={{ padding:2 }}>
-      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Estoque</div>
+      <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Estoque</div>
       <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Saldo atual x mínimo, com alerta de reposição.</div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12, marginBottom:14 }}>
         {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
@@ -531,9 +531,9 @@ function EstoqueTab({ produtos }) {
                 <td style={_td}>{img ? <img src={img} alt="" style={{ width:36, height:36, borderRadius:6, objectFit:"cover" }} /> : <div style={{ width:36, height:36, borderRadius:6, background:"var(--surface-3)" }} />}</td>
                 <td style={{ ..._td, maxWidth:300, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)", fontWeight:500 }}>{nomeProd(p)}</td>
                 <td style={_tdMono}>{p.sku || "—"}</td>
-                <td style={{ ..._td, fontWeight:700, color: s === "zerado" ? "#FF5252" : "var(--text-strong)" }}>{parseInt(p.estoqueAtual) || 0}</td>
+                <td style={{ ..._td, fontWeight:500, color: s === "zerado" ? "#FF5252" : "var(--text-strong)" }}>{parseInt(p.estoqueAtual) || 0}</td>
                 <td style={_td}>{parseInt(p.estoqueMinimo) || 0}</td>
-                <td style={_td}><span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
+                <td style={_td}><span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
                 <td style={_td}>{qtdAnuncios(p)}</td>
               </tr>;
             })}
@@ -596,10 +596,10 @@ function VincularTab({ enriched, produtos, salvar }) {
     <div style={{ padding:2 }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Vincular anúncios</div>
+          <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Vincular anúncios</div>
           <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Ligue cada anúncio ao produto do catálogo — o vínculo dá baixa no estoque a cada venda.</div>
         </div>
-        <button onClick={vincularAuto} style={{ background:"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"9px 18px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>Vincular automático</button>
+        <button onClick={vincularAuto} style={{ background:"#1976FF", border:"none", color:"#fff", fontWeight:500, padding:"9px 18px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>Vincular automático</button>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12, marginBottom:14 }}>
         {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
@@ -650,7 +650,7 @@ function TipMoeda({ active, payload, label }){
   if(!active || !payload || !payload.length) return null;
   return (
     <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, padding:"8px 11px", fontSize:12, boxShadow:"0 6px 20px rgba(0,0,0,.28)" }}>
-      {label != null && label !== "" && <div style={{ color:"var(--text-strong)", fontWeight:700, marginBottom:5 }}>{label}</div>}
+      {label != null && label !== "" && <div style={{ color:"var(--text-strong)", fontWeight:500, marginBottom:5 }}>{label}</div>}
       {payload.map(function(p,i){ return (
         <div key={i} style={{ display:"flex", alignItems:"center", gap:6, color:"var(--text-2)", padding:"1px 0" }}>
           <span style={{ width:9, height:9, borderRadius:2, background:(p.color || (p.payload && p.payload.cor) || "#888"), display:"inline-block" }} />
@@ -668,7 +668,7 @@ function ChartCard({ titulo, sub, right, children, minW, flex }){
     <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", flex:(flex==null?1:flex), minWidth:(minW||280) }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12, gap:10 }}>
         <div>
-          <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)" }}>{titulo}</div>
+          <div style={{ fontWeight:500, fontSize:15, color:"var(--text-strong)" }}>{titulo}</div>
           {sub && <div style={{ fontSize:12, color:"var(--text-3)", marginTop:2 }}>{sub}</div>}
         </div>
         {right || null}
@@ -708,7 +708,7 @@ function curvaABC(orders){
 
 // Botão "Exportar PDF": usa a impressão do navegador (Salvar como PDF).
 function exportarPDF(){ try { window.print(); } catch(e){} }
-var _btnPdf = { display:"inline-flex", alignItems:"center", gap:7, padding:"9px 15px", borderRadius:9, border:"1px solid var(--border)", background:"var(--surface)", color:"var(--text-strong)", fontSize:12.5, fontWeight:700, cursor:"pointer" };
+var _btnPdf = { display:"inline-flex", alignItems:"center", gap:7, padding:"9px 15px", borderRadius:9, border:"1px solid var(--border)", background:"var(--surface)", color:"var(--text-strong)", fontSize:12.5, fontWeight:500, cursor:"pointer" };
 
 // Filtro de período reutilizável (Dashboard/Relatórios). Retorna [botões JSX].
 var PERIODOS_REL = [["7","7 dias"],["30","30 dias"],["90","90 dias"],["tudo","Tudo"]];
@@ -762,7 +762,7 @@ function RelatoriosTab({ enrichedOrders }) {
     <div style={{ padding:2 }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:16 }}>
         <div>
-          <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Relatórios</div>
+          <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Relatórios</div>
           <div style={{ fontSize:13, color:"var(--text-3)" }}>Desempenho de vendas, lucro e curva ABC de produtos.</div>
         </div>
         <div style={{ display:"flex", gap:6, alignItems:"center" }}>
@@ -776,8 +776,8 @@ function RelatoriosTab({ enrichedOrders }) {
 
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(150px, 1fr))", gap:12, marginBottom:16 }}>
         {kpis.map(function(k,i){ return <div key={i} style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 16px" }}>
-          <div style={{ fontSize:11, color:"var(--text-3)", textTransform:"uppercase", letterSpacing:.5, fontWeight:600 }}>{k.l}</div>
-          <div style={{ fontSize:21, fontWeight:800, color:k.c, marginTop:6 }}>{k.v}</div>
+          <div style={{ fontSize:11, color:"var(--text-3)", textTransform:"none", letterSpacing:.5, fontWeight:600 }}>{k.l}</div>
+          <div style={{ fontSize:21, fontWeight:600, color:k.c, marginTop:6 }}>{k.v}</div>
         </div>; })}
       </div>
 
@@ -839,11 +839,11 @@ function RelatoriosTab({ enrichedOrders }) {
               abc.slice(0, 40).map(function(x,i){
                 var cor = x.classe==="A" ? "#0a9d4e" : (x.classe==="B" ? "#FFC107" : "#8492a8");
                 return <tr key={i}>
-                  <td style={_td}><span style={{ display:"inline-block", minWidth:22, textAlign:"center", padding:"2px 6px", borderRadius:6, background:cor, color:"#fff", fontWeight:800, fontSize:11 }}>{x.classe}</span></td>
+                  <td style={_td}><span style={{ display:"inline-block", minWidth:22, textAlign:"center", padding:"2px 6px", borderRadius:6, background:cor, color:"#fff", fontWeight:600, fontSize:11 }}>{x.classe}</span></td>
                   <td style={{ ..._td, maxWidth:320, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)" }}>{x.titulo}</td>
                   <td style={_td}>{x.qtd}</td>
                   <td style={_tdMono}>{fmt(x.fat)}</td>
-                  <td style={{ ..._tdMono, color: x.lucro>=0?"#0a9d4e":"#FF5252", fontWeight:700 }}>{fmt(x.lucro)}</td>
+                  <td style={{ ..._tdMono, color: x.lucro>=0?"#0a9d4e":"#FF5252", fontWeight:500 }}>{fmt(x.lucro)}</td>
                   <td style={_td}>{x.pctAcc.toFixed(1)}%</td>
                 </tr>;
               })}
@@ -864,7 +864,7 @@ function RelatoriosTab({ enrichedOrders }) {
                     <td style={{ ..._td, fontWeight:600, color:"var(--text-strong)" }}>{rotuloMes(m.mes)}</td>
                     <td style={_td}>{m.ped}</td>
                     <td style={_tdMono}>{fmt(m.fat)}</td>
-                    <td style={{ ..._tdMono, fontWeight:700, color: m.lucro>=0?"#0a9d4e":"#FF5252" }}>{fmt(m.lucro)}</td>
+                    <td style={{ ..._tdMono, fontWeight:500, color: m.lucro>=0?"#0a9d4e":"#FF5252" }}>{fmt(m.lucro)}</td>
                     <td style={{ ..._td, color: mg>=0?"#0a9d4e":"#FF5252" }}>{mg.toFixed(1)}%</td>
                   </tr>;
                 })}
@@ -897,7 +897,7 @@ function ContasReceberTab({ enrichedOrders, paymentData }) {
   ];
   return (
     <div style={{ padding:2 }}>
-      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Contas a receber</div>
+      <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Contas a receber</div>
       <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Recebíveis criados automaticamente dos pedidos do Mercado Livre.</div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12, marginBottom:14 }}>
         {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
@@ -912,8 +912,8 @@ function ContasReceberTab({ enrichedOrders, paymentData }) {
                 <td style={{ ..._td, color:"var(--text-strong)" }}>{r.cliente}</td>
                 <td style={_td}>{r.origem}</td>
                 <td style={_td}>{r.previsao || "—"}</td>
-                <td style={{ ..._td, fontWeight:700 }}>{fmt(r.valor)}</td>
-                <td style={_td}><span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background: r.recebido ? "rgba(0,200,83,.14)" : "rgba(255,193,7,.14)", color: r.recebido ? "#0a9d4e" : "#FFC107" }}>{r.recebido ? "Recebido" : "A receber"}</span></td>
+                <td style={{ ..._td, fontWeight:500 }}>{fmt(r.valor)}</td>
+                <td style={_td}><span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background: r.recebido ? "rgba(0,200,83,.14)" : "rgba(255,193,7,.14)", color: r.recebido ? "#0a9d4e" : "#FFC107" }}>{r.recebido ? "Recebido" : "A receber"}</span></td>
               </tr>;
             })}
           </tbody>
@@ -951,7 +951,7 @@ function ClientesTab({ rawOrders }) {
   var filtros = [["todos","Todos"],["recorrentes","Recorrentes"]];
   return (
     <div style={{ padding:2 }}>
-      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Clientes</div>
+      <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Clientes</div>
       <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Cadastrados automaticamente dos compradores do Mercado Livre.</div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12, marginBottom:14 }}>
         {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
@@ -970,9 +970,9 @@ function ClientesTab({ rawOrders }) {
                 <td style={_tdMono}>{c.doc}</td>
                 <td style={_td}>{c.local}</td>
                 <td style={_td}>{c.pedidos}</td>
-                <td style={{ ..._td, fontWeight:700 }}>{fmt(c.total)}</td>
+                <td style={{ ..._td, fontWeight:500 }}>{fmt(c.total)}</td>
                 <td style={_td}>{c.ultima || "—"}</td>
-                <td style={_td}><span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background: c.recorrente ? "rgba(0,200,83,.14)" : "var(--surface-3)", color: c.recorrente ? "#0a9d4e" : "var(--text-3)" }}>{c.recorrente ? "Recorrente" : "Único"}</span></td>
+                <td style={_td}><span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background: c.recorrente ? "rgba(0,200,83,.14)" : "var(--surface-3)", color: c.recorrente ? "#0a9d4e" : "var(--text-3)" }}>{c.recorrente ? "Recorrente" : "Único"}</span></td>
               </tr>;
             })}
           </tbody>
@@ -1009,7 +1009,7 @@ function VendasTab({ enrichedOrders }) {
   }
   return (
     <div style={{ padding:2 }}>
-      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Vendas</div>
+      <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Vendas</div>
       <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Cada venda guarda os custos e taxas do momento. Clique para ver o detalhamento.</div>
       <div style={{ display:"flex", gap:6, marginBottom:12 }}>
         {filtros.map(function(f){ var a = situacao === f[0]; return <button key={f[0]} onClick={function(){ setSituacao(f[0]); }} style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background: a ? "#1976FF" : "var(--surface)", color: a ? "#fff" : "var(--text-3)" }}>{f[1]}</button>; })}
@@ -1027,7 +1027,7 @@ function VendasTab({ enrichedOrders }) {
                 <td style={{ ..._td, maxWidth:240, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)" }}>{o.title || "—"}</td>
                 <td style={_td}>{c.q}</td>
                 <td style={_td}>{fmt(c.fat)}</td>
-                <td style={{ ..._td, fontWeight:700, color: c.lucro >= 0 ? "#0a9d4e" : "#FF5252" }}>{fmt(c.lucro)}</td>
+                <td style={{ ..._td, fontWeight:500, color: c.lucro >= 0 ? "#0a9d4e" : "#FF5252" }}>{fmt(c.lucro)}</td>
                 <td style={{ ..._td, color: c.margem >= 0 ? "#0a9d4e" : "#FF5252" }}>{c.margem.toFixed(1)}%</td>
               </tr>;
             })}
@@ -1042,25 +1042,25 @@ function VendasTab({ enrichedOrders }) {
           <div onClick={function(){ setSel(null); }} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.4)", zIndex:400 }} />
           <div style={{ position:"fixed", top:0, right:0, bottom:0, width:440, maxWidth:"100vw", background:"var(--bg-2)", borderLeft:"1px solid var(--border)", boxShadow:"-8px 0 32px rgba(0,0,0,.28)", zIndex:401, overflowY:"auto", padding:"22px 24px" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, marginBottom:4 }}>
-              <div style={{ fontWeight:800, fontSize:17, color:"var(--text-strong)", lineHeight:1.3 }}>{sel.title || "Venda"}</div>
+              <div style={{ fontWeight:600, fontSize:17, color:"var(--text-strong)", lineHeight:1.3 }}>{sel.title || "Venda"}</div>
               <button onClick={function(){ setSel(null); }} style={{ background:"none", border:"none", color:"var(--text-3)", fontSize:22, cursor:"pointer", lineHeight:1, flexShrink:0 }}>×</button>
             </div>
             <div style={{ fontSize:12, color:"var(--text-3)", marginBottom:16 }}>Venda de {sel.date || "—"} · Mercado Livre</div>
 
-            <div style={{ fontSize:11, fontWeight:700, color:"var(--text-3)", textTransform:"uppercase", letterSpacing:.5, margin:"6px 0 2px" }}>Identificação</div>
+            <div style={{ fontSize:11, fontWeight:500, color:"var(--text-3)", textTransform:"none", letterSpacing:.5, margin:"6px 0 2px" }}>Identificação</div>
             {Linha("Código MLB", sel.listing_id || sel.id)}
             {Linha("SKU", sel.sku || "—")}
             {Linha("Quantidade", String(c.q))}
             {Linha("Situação", sel.status === "cancelled" ? "Cancelada" : "Ativa", { cor: sel.status === "cancelled" ? "#FF5252" : "#0a9d4e" })}
 
-            <div style={{ fontSize:11, fontWeight:700, color:"var(--text-3)", textTransform:"uppercase", letterSpacing:.5, margin:"16px 0 2px" }}>Descontos do marketplace</div>
+            <div style={{ fontSize:11, fontWeight:500, color:"var(--text-3)", textTransform:"none", letterSpacing:.5, margin:"16px 0 2px" }}>Descontos do marketplace</div>
             {Linha("Taxas do marketplace", "- " + fmt(c.taxas), { cor:"#FFC107" })}
             {Linha("Frete pago por você", "- " + fmt(c.frete), { cor:"#FFC107" })}
             <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 14px", margin:"10px 0" }}>
               {Linha("Repasse do marketplace", fmt(c.repasse), { forte:true, cor:"var(--text-strong)" })}
             </div>
 
-            <div style={{ fontSize:11, fontWeight:700, color:"var(--text-3)", textTransform:"uppercase", letterSpacing:.5, margin:"6px 0 2px" }}>Seus custos</div>
+            <div style={{ fontSize:11, fontWeight:500, color:"var(--text-3)", textTransform:"none", letterSpacing:.5, margin:"6px 0 2px" }}>Seus custos</div>
             {Linha("Custo do produto", "- " + fmt(c.custo), { cor:"#FFC107" })}
             {Linha("Imposto", "- " + fmt(c.imposto), { cor:"#FFC107" })}
             <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"12px 14px", marginTop:12 }}>
@@ -1074,7 +1074,7 @@ function VendasTab({ enrichedOrders }) {
 }
 
 // Título de seção usado dentro do drawer de detalhes do pedido.
-var _secTit = { fontSize:11, fontWeight:700, color:"var(--text-3)", textTransform:"uppercase", letterSpacing:.5, margin:"16px 0 2px" };
+var _secTit = { fontSize:11, fontWeight:500, color:"var(--text-3)", textTransform:"none", letterSpacing:.5, margin:"16px 0 2px" };
 
 // Drawer lateral com o detalhamento de uma venda (aberto ao clicar numa linha da aba Vendas).
 function PedidoDetalheDrawer({ pedido, onClose }) {
@@ -1097,7 +1097,7 @@ function PedidoDetalheDrawer({ pedido, onClose }) {
     <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.4)", zIndex:400 }} />
     <div style={{ position:"fixed", top:0, right:0, bottom:0, width:460, maxWidth:"100vw", background:"var(--bg-2)", borderLeft:"1px solid var(--border)", boxShadow:"-8px 0 32px rgba(0,0,0,.28)", zIndex:401, overflowY:"auto", padding:"22px 24px" }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, marginBottom:4 }}>
-        <div style={{ fontWeight:800, fontSize:17, color:"var(--text-strong)", lineHeight:1.3 }}>{o.title || "Venda"}</div>
+        <div style={{ fontWeight:600, fontSize:17, color:"var(--text-strong)", lineHeight:1.3 }}>{o.title || "Venda"}</div>
         <button onClick={onClose} style={{ background:"none", border:"none", color:"var(--text-3)", fontSize:22, cursor:"pointer", lineHeight:1, flexShrink:0 }}>×</button>
       </div>
       <div style={{ fontSize:12, color:"var(--text-3)", marginBottom:16 }}>Pedido #{o.id} · {fmtDate(o.date) || o.date || "—"} · Mercado Livre</div>
@@ -1161,7 +1161,7 @@ function ExpedicaoTab({ rawOrders }) {
   var filtros = [["todos","Todos"],["aenviar","A enviar"],["enviado","Enviados"],["entregue","Entregues"]];
   return (
     <div style={{ padding:2 }}>
-      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Expedição</div>
+      <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Expedição</div>
       <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Status de envio dos pedidos.</div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:14 }}>
         {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
@@ -1183,7 +1183,7 @@ function ExpedicaoTab({ rawOrders }) {
                 <td style={_td}>{o.qty || 1}</td>
                 <td style={_td}>{o.buyerUF || "—"}</td>
                 <td style={_td}>{o.seller_shipping_cost > 0 ? fmt(o.seller_shipping_cost) : "—"}</td>
-                <td style={_td}><span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
+                <td style={_td}><span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
               </tr>;
             })}
           </tbody>
@@ -1206,14 +1206,14 @@ function IntegracoesTab({ token, user, lastUpdate }) {
   ];
   return (
     <div style={{ padding:2 }}>
-      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Integrações</div>
+      <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Integrações</div>
       <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Conexões do sistema com marketplaces e serviços.</div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:12 }}>
         {cards.map(function(c,i){
           return <div key={i} style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
-              <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)" }}>{c.nome}</div>
-              {(function(){ var b = badgeStatus[c.status]; return <span style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:20, background:b[1], color:b[0], whiteSpace:"nowrap" }}>{b[2]}</span>; })()}
+              <div style={{ fontWeight:500, fontSize:15, color:"var(--text-strong)" }}>{c.nome}</div>
+              {(function(){ var b = badgeStatus[c.status]; return <span style={{ fontSize:11, fontWeight:500, padding:"3px 10px", borderRadius:20, background:b[1], color:b[0], whiteSpace:"nowrap" }}>{b[2]}</span>; })()}
             </div>
             <div style={{ fontSize:13, color:"var(--text-2)", lineHeight:1.5 }}>{c.desc}</div>
             {c.extra && <div style={{ fontSize:11, color:"var(--text-3)", marginTop:6 }}>{c.extra}</div>}
@@ -1232,7 +1232,7 @@ const TELAS_FIN = {
 function TelaEstruturada({ cfg }) {
   return (
     <div style={{ padding:2 }}>
-      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>{cfg.titulo}</div>
+      <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>{cfg.titulo}</div>
       <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>{cfg.desc}</div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12, marginBottom:14 }}>
         {cfg.kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k[0]}</div><div style={{ ..._kpiVal, color:"var(--text-strong)" }}>{k[1]}</div></div>; })}
@@ -1286,7 +1286,7 @@ function DreTab({ enrichedOrders }) {
     <div style={{ padding:2 }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:16 }}>
         <div>
-          <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>DRE — Demonstrativo de resultado</div>
+          <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>DRE — Demonstrativo de resultado</div>
           <div style={{ fontSize:13, color:"var(--text-3)" }}>Resultado do período, calculado a partir dos pedidos do Mercado Livre.</div>
         </div>
         <div style={{ display:"flex", gap:6, alignItems:"center" }}>
@@ -1308,8 +1308,8 @@ function DreTab({ enrichedOrders }) {
             </div>;
           })}
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 0", marginTop:2, borderTop:"1px solid var(--border)" }}>
-            <span style={{ fontSize:13, fontWeight:700, color:"var(--text-3)" }}>Margem líquida</span>
-            <span style={{ fontSize:15, fontWeight:800, color: margemLiq>=0?"#0a9d4e":"#FF5252" }}>{margemLiq.toFixed(1)}%</span>
+            <span style={{ fontSize:13, fontWeight:500, color:"var(--text-3)" }}>Margem líquida</span>
+            <span style={{ fontSize:15, fontWeight:600, color: margemLiq>=0?"#0a9d4e":"#FF5252" }}>{margemLiq.toFixed(1)}%</span>
           </div>
         </div>
 
@@ -1343,11 +1343,11 @@ function ContaModal({ conta, onSave, onClose }) {
   var novo = !conta || !conta.id;
   function salvar(){ var p = Object.assign({}, f); if (!p.descricao){ alert("Informe a descrição/fornecedor."); return; } if (!p.id) p.id = "cp_" + Date.now(); onSave(p); }
   var campo = { width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"10px 12px", borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box" };
-  var lbl = { fontSize:11, color:"var(--text-3)", fontWeight:600, textTransform:"uppercase", letterSpacing:.4, marginBottom:4, display:"block" };
+  var lbl = { fontSize:11, color:"var(--text-3)", fontWeight:600, textTransform:"none", letterSpacing:.4, marginBottom:4, display:"block" };
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:600, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }} onClick={onClose}>
       <div onClick={function(e){ e.stopPropagation(); }} style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:14, width:440, maxWidth:"100%", padding:22 }}>
-        <div style={{ fontWeight:800, fontSize:17, color:"var(--text-strong)", marginBottom:16 }}>{novo ? "Nova conta a pagar" : "Editar conta"}</div>
+        <div style={{ fontWeight:600, fontSize:17, color:"var(--text-strong)", marginBottom:16 }}>{novo ? "Nova conta a pagar" : "Editar conta"}</div>
         <div style={{ marginBottom:10 }}><label style={lbl}>Descrição / Fornecedor</label><input value={f.descricao || ""} onChange={function(e){ set("descricao", e.target.value); }} style={campo} /></div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
           <div><label style={lbl}>Categoria</label><input value={f.categoria || ""} onChange={function(e){ set("categoria", e.target.value); }} style={campo} /></div>
@@ -1359,7 +1359,7 @@ function ContaModal({ conta, onSave, onClose }) {
         </div>
         <div style={{ display:"flex", gap:8 }}>
           <button onClick={onClose} style={{ flex:1, background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
-          <button onClick={salvar} style={{ flex:2, background:"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:"pointer" }}>Salvar</button>
+          <button onClick={salvar} style={{ flex:2, background:"#1976FF", border:"none", color:"#fff", fontWeight:500, padding:"11px", borderRadius:10, cursor:"pointer" }}>Salvar</button>
         </div>
       </div>
     </div>
@@ -1393,10 +1393,10 @@ function ContasPagarTab({ contas, salvar }) {
     <div style={{ padding:2 }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Contas a pagar</div>
+          <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Contas a pagar</div>
           <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Despesas com fornecedores, vencimentos e baixas.</div>
         </div>
-        <button onClick={function(){ setModal({}); }} style={{ background:"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"9px 18px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>+ Nova conta</button>
+        <button onClick={function(){ setModal({}); }} style={{ background:"#1976FF", border:"none", color:"#fff", fontWeight:500, padding:"9px 18px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>+ Nova conta</button>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:12, marginBottom:14 }}>
         {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
@@ -1417,8 +1417,8 @@ function ContasPagarTab({ contas, salvar }) {
                 <td style={_td}>{c.vencimento || "—"}</td>
                 <td style={{ ..._td, color:"var(--text-strong)" }}>{c.descricao || "—"}</td>
                 <td style={_td}>{c.categoria || "—"}</td>
-                <td style={{ ..._td, fontWeight:700 }}>{fmt(parseFloat(c.valor) || 0)}</td>
-                <td style={_td}><span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
+                <td style={{ ..._td, fontWeight:500 }}>{fmt(parseFloat(c.valor) || 0)}</td>
+                <td style={_td}><span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
                 <td style={_td}>
                   <div style={{ display:"flex", gap:8 }}>
                     {s !== "paga" && s !== "cancelada" && <button onClick={function(){ baixar(c); }} style={{ background:"rgba(10,157,78,.12)", border:"none", color:"#0a9d4e", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Pagar</button>}
@@ -1444,11 +1444,11 @@ function PedidoCompraModal({ pedido, onSave, onClose }) {
   var novo = !pedido || !pedido.id;
   function salvar(){ var p = Object.assign({}, f); if (!p.fornecedor && !p.itens){ alert("Informe fornecedor ou itens."); return; } if (!p.id) p.id = "pc_" + Date.now(); onSave(p); }
   var campo = { width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"10px 12px", borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box" };
-  var lbl = { fontSize:11, color:"var(--text-3)", fontWeight:600, textTransform:"uppercase", letterSpacing:.4, marginBottom:4, display:"block" };
+  var lbl = { fontSize:11, color:"var(--text-3)", fontWeight:600, textTransform:"none", letterSpacing:.4, marginBottom:4, display:"block" };
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:600, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }} onClick={onClose}>
       <div onClick={function(e){ e.stopPropagation(); }} style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:14, width:460, maxWidth:"100%", padding:22 }}>
-        <div style={{ fontWeight:800, fontSize:17, color:"var(--text-strong)", marginBottom:16 }}>{novo ? "Novo pedido de compra" : "Editar pedido"}</div>
+        <div style={{ fontWeight:600, fontSize:17, color:"var(--text-strong)", marginBottom:16 }}>{novo ? "Novo pedido de compra" : "Editar pedido"}</div>
         <div style={{ marginBottom:10 }}><label style={lbl}>Fornecedor</label><input value={f.fornecedor || ""} onChange={function(e){ set("fornecedor", e.target.value); }} style={campo} /></div>
         <div style={{ marginBottom:10 }}><label style={lbl}>Itens</label><textarea value={f.itens || ""} onChange={function(e){ set("itens", e.target.value); }} rows={3} style={{ ...campo, resize:"vertical" }} /></div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:18 }}>
@@ -1458,7 +1458,7 @@ function PedidoCompraModal({ pedido, onSave, onClose }) {
         </div>
         <div style={{ display:"flex", gap:8 }}>
           <button onClick={onClose} style={{ flex:1, background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
-          <button onClick={salvar} style={{ flex:2, background:"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:"pointer" }}>Salvar</button>
+          <button onClick={salvar} style={{ flex:2, background:"#1976FF", border:"none", color:"#fff", fontWeight:500, padding:"11px", borderRadius:10, cursor:"pointer" }}>Salvar</button>
         </div>
       </div>
     </div>
@@ -1487,12 +1487,12 @@ function ComprasTab({ produtos, pedidos, salvar }) {
     <div style={{ padding:2 }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap" }}>
         <div>
-          <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Compras</div>
+          <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Compras</div>
           <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Pedidos aos fornecedores e sugestão de reposição.</div>
         </div>
         <div style={{ display:"flex", gap:8 }}>
           <button onClick={function(){ setVerSug(function(v){ return !v; }); }} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"9px 16px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>Sugerir reposição{sugestoes.length ? " (" + sugestoes.length + ")" : ""}</button>
-          <button onClick={function(){ setModal({}); }} style={{ background:"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"9px 18px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>+ Novo pedido</button>
+          <button onClick={function(){ setModal({}); }} style={{ background:"#1976FF", border:"none", color:"#fff", fontWeight:500, padding:"9px 18px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>+ Novo pedido</button>
         </div>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:12, marginBottom:14 }}>
@@ -1500,7 +1500,7 @@ function ComprasTab({ produtos, pedidos, salvar }) {
       </div>
       {verSug && (
         <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 18px", marginBottom:14 }}>
-          <div style={{ fontWeight:700, fontSize:14, color:"var(--text-strong)", marginBottom:10 }}>Sugestão de reposição (abaixo do estoque mínimo)</div>
+          <div style={{ fontWeight:500, fontSize:14, color:"var(--text-strong)", marginBottom:10 }}>Sugestão de reposição (abaixo do estoque mínimo)</div>
           {sugestoes.length === 0 ? <div style={{ color:"var(--text-3)", fontSize:13 }}>Nenhum produto abaixo do mínimo.</div> :
             sugestoes.slice(0,50).map(function(p,i){ return <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"7px 0", borderBottom: i < Math.min(sugestoes.length,50)-1 ? "1px solid var(--border-soft)" : "none", fontSize:13 }}>
               <span style={{ color:"var(--text-2)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{nomeProd(p)}</span>
@@ -1518,8 +1518,8 @@ function ComprasTab({ produtos, pedidos, salvar }) {
                 <td style={_td}>{p.data || "—"}</td>
                 <td style={{ ..._td, color:"var(--text-strong)" }}>{p.fornecedor || "—"}</td>
                 <td style={{ ..._td, maxWidth:240, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.itens || "—"}</td>
-                <td style={{ ..._td, fontWeight:700 }}>{fmt(parseFloat(p.valor) || 0)}</td>
-                <td style={_td}><span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
+                <td style={{ ..._td, fontWeight:500 }}>{fmt(parseFloat(p.valor) || 0)}</td>
+                <td style={_td}><span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
                 <td style={_td}>
                   <div style={{ display:"flex", gap:8 }}>
                     {p.status === "aberto" && <button onClick={function(){ receber(p); }} style={{ background:"rgba(10,157,78,.12)", border:"none", color:"#0a9d4e", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Receber</button>}
@@ -1547,7 +1547,7 @@ function ComprasTab({ produtos, pedidos, salvar }) {
 function pct1(n){ n = isFinite(n) ? n : 0; return n.toFixed(1).replace(".", ",") + "%"; }
 var _inpDataG = { background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"6px 8px", borderRadius:8, fontSize:12 };
 var _wideWrap = { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, overflowX:"auto" };
-var _btnExp = { display:"inline-flex", alignItems:"center", gap:6, padding:"7px 13px", borderRadius:8, border:"1px solid var(--border)", background:"var(--surface)", color:"var(--text-2)", fontSize:12, fontWeight:700, cursor:"pointer" };
+var _btnExp = { display:"inline-flex", alignItems:"center", gap:6, padding:"7px 13px", borderRadius:8, border:"1px solid var(--border)", background:"var(--surface)", color:"var(--text-2)", fontSize:12, fontWeight:500, cursor:"pointer" };
 
 // Downloads iniciados pelo usuário (clique nos botões Excel/CSV) — dados do próprio usuário.
 function _dispararDownload(blob, nome){
@@ -1620,7 +1620,7 @@ function EstadosDash({ enrichedOrders }){
   function fillUF(uf){ var a=agg[uf]; if(!a||!a.fat) return { f:"var(--surface-3)", o:1 }; return { f:"#1976FF", o:0.22+0.78*Math.pow(a.fat/max,.5) }; }
   return (
     <div style={{ padding:2 }}>
-      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Vendas por estado</div>
+      <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Vendas por estado</div>
       <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Mapa do Brasil por faturamento. Clique num estado para ver os detalhes.</div>
       <div style={{ display:"flex", gap:14, flexWrap:"wrap", alignItems:"stretch" }}>
         <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 16px", flex:"1 1 360px", minWidth:320 }}>
@@ -1640,18 +1640,18 @@ function EstadosDash({ enrichedOrders }){
         </div>
         <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", flex:"1 1 320px", minWidth:300 }}>
           {!sel ? <div style={{ color:"var(--text-3)", fontSize:13 }}>Sem vendas para exibir.</div> : <>
-            <div style={{ fontWeight:800, fontSize:17, color:"var(--text-strong)" }}>{NOMES[sel.uf]||sel.uf} <span style={{ color:"var(--text-3)", fontWeight:600, fontSize:13 }}>({sel.uf})</span></div>
+            <div style={{ fontWeight:600, fontSize:17, color:"var(--text-strong)" }}>{NOMES[sel.uf]||sel.uf} <span style={{ color:"var(--text-3)", fontWeight:600, fontSize:13 }}>({sel.uf})</span></div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:10, margin:"12px 0" }}>
               <div style={_kpiCard}><div style={_kpiLbl}>Faturamento</div><div style={{ ..._kpiVal, color:"var(--text-strong)" }}>{fmt(sel.fat)}</div></div>
               <div style={_kpiCard}><div style={_kpiLbl}>Peças vendidas</div><div style={{ ..._kpiVal, color:"var(--text-strong)" }}>{sel.pecas}</div></div>
               <div style={_kpiCard}><div style={_kpiLbl}>Pedidos</div><div style={{ ..._kpiVal, color:"var(--text-strong)" }}>{sel.pedidos}</div></div>
               <div style={_kpiCard}><div style={_kpiLbl}>Ticket médio</div><div style={{ ..._kpiVal, color:"var(--text-strong)" }}>{fmt(sel.ticket)}</div></div>
             </div>
-            <div style={{ fontSize:12, fontWeight:700, color:"var(--text-3)", textTransform:"uppercase", letterSpacing:.5, margin:"4px 0 6px" }}>Produtos vendidos</div>
+            <div style={{ fontSize:12, fontWeight:500, color:"var(--text-3)", textTransform:"none", letterSpacing:.5, margin:"4px 0 6px" }}>Produtos vendidos</div>
             <div style={{ maxHeight:220, overflowY:"auto" }}>
               {sel.produtos.map(function(p,i){ return <div key={i} style={{ display:"flex", justifyContent:"space-between", gap:10, padding:"7px 0", borderBottom: i<sel.produtos.length-1?"1px solid var(--border-soft)":"none" }}>
                 <span style={{ fontSize:12.5, color:"var(--text-2)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.titulo}</span>
-                <span style={{ fontSize:12.5, color:"var(--text-strong)", fontWeight:700, whiteSpace:"nowrap" }}>{p.qtd}× · {fmt(p.fat)}</span>
+                <span style={{ fontSize:12.5, color:"var(--text-strong)", fontWeight:500, whiteSpace:"nowrap" }}>{p.qtd}× · {fmt(p.fat)}</span>
               </div>; })}
             </div>
           </>}
@@ -1683,13 +1683,13 @@ function EstadosDash({ enrichedOrders }){
 function _painel(titulo, extra, itens){
   return <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px" }}>
     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:12, gap:8 }}>
-      <div style={{ fontWeight:700, fontSize:14, color:"var(--text-strong)" }}>{titulo}</div>
+      <div style={{ fontWeight:500, fontSize:14, color:"var(--text-strong)" }}>{titulo}</div>
       {extra ? <div style={{ fontSize:11, color:"var(--text-3)" }}>{extra}</div> : null}
     </div>
     <div style={{ display:"flex", gap:20, flexWrap:"wrap" }}>
       {itens.map(function(m,i){ return <div key={i} style={{ minWidth:88 }}>
         <div style={{ fontSize:11, color:"var(--text-3)", marginBottom:4 }}>{m.l}</div>
-        <div style={{ fontSize:18, fontWeight:800, color:m.c||"var(--text-strong)" }}>{m.v}</div>
+        <div style={{ fontSize:18, fontWeight:600, color:m.c||"var(--text-strong)" }}>{m.v}</div>
       </div>; })}
     </div>
   </div>;
@@ -1717,7 +1717,7 @@ function MargemPedidoDash({ enrichedOrders }){
   return (
     <div style={{ padding:2 }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:14 }}>
-        <div><div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Margem por pedido</div>
+        <div><div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Margem por pedido</div>
           <div style={{ fontSize:13, color:"var(--text-3)" }}>Margem de contribuição de cada pedido e indicadores do período.</div></div>
         <BarraPeriodo periodo={periodo} setPeriodo={setPeriodo} deData={deData} setDeData={setDeData} ateData={ateData} setAteData={setAteData} />
       </div>
@@ -1754,7 +1754,7 @@ function MargemPedidoDash({ enrichedOrders }){
       </ChartCard>
       <div style={{ marginTop:14, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:10 }}>
-          <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)" }}>Margem de contribuição por pedido</div>
+          <div style={{ fontWeight:500, fontSize:15, color:"var(--text-strong)" }}>Margem de contribuição por pedido</div>
           <BotoesExport nome="margem-por-pedido" colunas={cols} linhas={rowsExport} />
         </div>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:10 }}>
@@ -1784,8 +1784,8 @@ function MargemPedidoDash({ enrichedOrders }){
                   <td style={_tdMono}>{fmt(r.imp)}</td>
                   <td style={_tdMono}>{fmt(r.fv)}</td>
                   <td style={_tdMono}>{fmt(r.fc)}</td>
-                  <td style={{ ..._tdMono, fontWeight:700, color:neg?"#FF5252":"#0a9d4e" }}>{fmt(r.contrib)}</td>
-                  <td style={{ ..._td, fontWeight:700, color:neg?"#FF5252":"#0a9d4e" }}>{pct1(r.contribPct)}</td>
+                  <td style={{ ..._tdMono, fontWeight:500, color:neg?"#FF5252":"#0a9d4e" }}>{fmt(r.contrib)}</td>
+                  <td style={{ ..._td, fontWeight:500, color:neg?"#FF5252":"#0a9d4e" }}>{pct1(r.contribPct)}</td>
                 </tr>;
               })}
             </tbody>
@@ -1819,9 +1819,9 @@ function EstoqueDash({ produtos }){
       <div style={{ display:"flex", gap:14, flexWrap:"wrap", alignItems:"flex-start" }}>
         <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", flex:"1 1 520px", minWidth:340 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:12 }}>
-            <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)" }}>Tabela de Estoques — Todos</div>
+            <div style={{ fontWeight:500, fontSize:15, color:"var(--text-strong)" }}>Tabela de Estoques — Todos</div>
             <div style={{ display:"flex", gap:4, background:"var(--surface-3)", borderRadius:8, padding:2 }}>
-              {[["todos","Variações + Simples + Composições"],["produtos","Produtos"]].map(function(t){ var a=modo===t[0]; return <button key={t[0]} onClick={function(){ setModo(t[0]); }} style={{ padding:"6px 12px", borderRadius:7, border:"none", cursor:"pointer", fontSize:11.5, fontWeight:700, background:a?"var(--surface)":"transparent", color:a?"#0a9d4e":"var(--text-3)" }}>{t[1]}</button>; })}
+              {[["todos","Variações + Simples + Composições"],["produtos","Produtos"]].map(function(t){ var a=modo===t[0]; return <button key={t[0]} onClick={function(){ setModo(t[0]); }} style={{ padding:"6px 12px", borderRadius:7, border:"none", cursor:"pointer", fontSize:11.5, fontWeight:500, background:a?"var(--surface)":"transparent", color:a?"#0a9d4e":"var(--text-3)" }}>{t[1]}</button>; })}
             </div>
           </div>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:10 }}>
@@ -1837,7 +1837,7 @@ function EstoqueDash({ produtos }){
                 slice.map(function(x,i){ return <tr key={i}>
                   <td style={_tdMono}>{x.codigo}</td>
                   <td style={{ ..._td, maxWidth:360, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)", fontWeight:500 }}>{x.desc}</td>
-                  <td style={{ ..._td, fontWeight:700 }}>{x.est}</td>
+                  <td style={{ ..._td, fontWeight:500 }}>{x.est}</td>
                   <td style={_tdMono}>{fmt(x.custo)}</td>
                   <td style={_tdMono}>{fmt(x.valor)}</td>
                 </tr>; })}
@@ -1854,13 +1854,13 @@ function EstoqueDash({ produtos }){
           </div>
         </div>
         <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", flex:"1 1 280px", minWidth:260 }}>
-          <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)", marginBottom:12 }}>Estoque consolidado</div>
+          <div style={{ fontWeight:500, fontSize:15, color:"var(--text-strong)", marginBottom:12 }}>Estoque consolidado</div>
           <table style={_table}>
             <thead><tr>{["Depósito","Estoque","Custo","Valor"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
             <tbody>
               <tr>
-                <td style={{ ..._td, fontWeight:700, color:"var(--text-strong)" }}>Estoque geral</td>
-                <td style={{ ..._td, fontWeight:700 }}>{totEst}</td>
+                <td style={{ ..._td, fontWeight:500, color:"var(--text-strong)" }}>Estoque geral</td>
+                <td style={{ ..._td, fontWeight:500 }}>{totEst}</td>
                 <td style={_tdMono}>{fmt(totCusto)}</td>
                 <td style={_tdMono}>{fmt(totValor)}</td>
               </tr>
@@ -1897,24 +1897,24 @@ function ClientesDash({ enrichedOrders, user }){
   var cols=["Nome","Loja","Produtos","Valor","Margem Bruta %","Lucro Venda","%","Celular"];
   function rowsExport(){ return alvo.map(function(c){ return [c.nome, loja, c.produtos, c.valor.toFixed(2), c.margBruta.toFixed(2)+"%", c.lucro.toFixed(2), c.pctLucro.toFixed(2)+"%", c.fone||"—"]; }); }
   function CardSeg(titulo, s, cor){ return <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", flex:"1 1 260px", minWidth:240 }}>
-    <div style={{ textAlign:"center", fontWeight:800, fontSize:16, color:"var(--text-strong)" }}>{titulo}</div>
-    <div style={{ textAlign:"center", fontWeight:800, fontSize:22, color:cor, margin:"4px 0 12px" }}>{fmt(s.valor)}</div>
+    <div style={{ textAlign:"center", fontWeight:600, fontSize:16, color:"var(--text-strong)" }}>{titulo}</div>
+    <div style={{ textAlign:"center", fontWeight:600, fontSize:22, color:cor, margin:"4px 0 12px" }}>{fmt(s.valor)}</div>
     <div style={{ display:"flex", justifyContent:"space-around", textAlign:"center", gap:8 }}>
-      <div><div style={{ fontWeight:800, color:"var(--text-strong)", fontSize:15 }}>{fmt(s.ticket)}</div><div style={{ fontSize:10, color:"var(--text-3)", textTransform:"uppercase" }}>Ticket médio</div></div>
-      <div><div style={{ fontWeight:800, color:"var(--text-strong)", fontSize:15 }}>{s.produtos.toFixed(2).replace(".",",")}</div><div style={{ fontSize:10, color:"var(--text-3)", textTransform:"uppercase" }}>Produtos</div></div>
-      <div><div style={{ fontWeight:800, color:"var(--text-strong)", fontSize:15 }}>{pct1(s.share)}</div><div style={{ fontSize:10, color:"var(--text-3)", textTransform:"uppercase" }}>Share</div></div>
+      <div><div style={{ fontWeight:600, color:"var(--text-strong)", fontSize:15 }}>{fmt(s.ticket)}</div><div style={{ fontSize:10, color:"var(--text-3)", textTransform:"none" }}>Ticket médio</div></div>
+      <div><div style={{ fontWeight:600, color:"var(--text-strong)", fontSize:15 }}>{s.produtos.toFixed(2).replace(".",",")}</div><div style={{ fontSize:10, color:"var(--text-3)", textTransform:"none" }}>Produtos</div></div>
+      <div><div style={{ fontWeight:600, color:"var(--text-strong)", fontSize:15 }}>{pct1(s.share)}</div><div style={{ fontSize:10, color:"var(--text-3)", textTransform:"none" }}>Share</div></div>
     </div>
     <div style={{ textAlign:"center", fontSize:11, color:"var(--text-3)", marginTop:8 }}>{s.n} cliente(s)</div>
   </div>; }
   return (
     <div style={{ padding:2 }}>
-      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Clientes</div>
+      <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Clientes</div>
       <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Recorrentes (2+ pedidos) e novos (1 pedido), com faturamento e margem.</div>
       <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:16 }}>
         {CardSeg("Clientes Recorrentes", sRec, "#2E8B57")}
         {CardSeg("Clientes Novos", sNov, "#0a9d4e")}
         <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", flex:"1 1 300px", minWidth:280 }}>
-          <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)", marginBottom:6 }}>Recorrentes × Novos</div>
+          <div style={{ fontWeight:500, fontSize:15, color:"var(--text-strong)", marginBottom:6 }}>Recorrentes × Novos</div>
           {donut.length===0 ? <div style={{ color:"var(--text-3)", fontSize:13 }}>Sem clientes.</div> :
           <ResponsiveContainer width="100%" height={190}>
             <PieChart>
@@ -1948,7 +1948,7 @@ function ClientesDash({ enrichedOrders, user }){
                 <td style={_td}>{c.produtos}</td>
                 <td style={_tdMono}>{fmt(c.valor)}</td>
                 <td style={_td}>{pct1(c.margBruta)}</td>
-                <td style={{ ..._tdMono, fontWeight:700, color:c.lucro>=0?"#0a9d4e":"#FF5252" }}>{fmt(c.lucro)}</td>
+                <td style={{ ..._tdMono, fontWeight:500, color:c.lucro>=0?"#0a9d4e":"#FF5252" }}>{fmt(c.lucro)}</td>
                 <td style={{ ..._td, color:c.pctLucro>=0?"#0a9d4e":"#FF5252" }}>{pct1(c.pctLucro)}</td>
                 <td style={_td}>{c.fone||"—"}</td>
                 <td style={_td}><button onClick={function(){ setCliSel(c); }} style={{ ..._btnExp, padding:"5px 10px" }}>Ver Pedidos</button></td>
@@ -1961,7 +1961,7 @@ function ClientesDash({ enrichedOrders, user }){
         <div onClick={function(){ setCliSel(null); }} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.4)", zIndex:400 }} />
         <div style={{ position:"fixed", top:0, right:0, bottom:0, width:440, maxWidth:"100vw", background:"var(--bg-2)", borderLeft:"1px solid var(--border)", boxShadow:"-8px 0 32px rgba(0,0,0,.28)", zIndex:401, overflowY:"auto", padding:"22px 24px" }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, marginBottom:4 }}>
-            <div style={{ fontWeight:800, fontSize:17, color:"var(--text-strong)" }}>{cliSel.nome}</div>
+            <div style={{ fontWeight:600, fontSize:17, color:"var(--text-strong)" }}>{cliSel.nome}</div>
             <button onClick={function(){ setCliSel(null); }} style={{ background:"none", border:"none", color:"var(--text-3)", fontSize:22, cursor:"pointer" }}>×</button>
           </div>
           <div style={{ fontSize:12, color:"var(--text-3)", marginBottom:14 }}>{cliSel.pedidos} pedido(s) · {fmt(cliSel.valor)} · {cliSel.fone||"sem telefone"}</div>
@@ -1969,7 +1969,7 @@ function ClientesDash({ enrichedOrders, user }){
             <div style={{ fontSize:12, color:"var(--text-2)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{od.titulo}</div>
             <div style={{ display:"flex", justifyContent:"space-between", marginTop:3, fontSize:12 }}>
               <span style={{ color:"var(--text-3)" }}>{fmtDate(od.data)||od.data} · {od.qtd}×</span>
-              <span style={{ color:"var(--text-strong)", fontWeight:700 }}>{fmt(od.valor)} <span style={{ color:od.lucro>=0?"#0a9d4e":"#FF5252" }}>({fmt(od.lucro)})</span></span>
+              <span style={{ color:"var(--text-strong)", fontWeight:500 }}>{fmt(od.valor)} <span style={{ color:od.lucro>=0?"#0a9d4e":"#FF5252" }}>({fmt(od.lucro)})</span></span>
             </div>
           </div>; })}
         </div>
@@ -1994,7 +1994,7 @@ function CurvaAbcDash({ enrichedOrders }){
     return <div style={{ borderBottom:"1px solid var(--border-soft)" }}>
       <button onClick={function(){ setAberto(function(s){ var n=Object.assign({},s); n[classe]=!n[classe]; return n; }); }}
         style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 4px", background:"none", border:"none", cursor:"pointer" }}>
-        <span style={{ fontWeight:800, fontSize:15, color:cor[classe] }}>Curva {classe} <span style={{ color:"var(--text-3)", fontWeight:600, fontSize:12 }}>· {arr.length} SKU(s) · {fmt(soma(arr))}</span></span>
+        <span style={{ fontWeight:600, fontSize:15, color:cor[classe] }}>Curva {classe} <span style={{ color:"var(--text-3)", fontWeight:600, fontSize:12 }}>· {arr.length} SKU(s) · {fmt(soma(arr))}</span></span>
         <span style={{ color:cor[classe], fontSize:14 }}>{ab?"▲":"▼"}</span>
       </button>
       {ab && <div style={{ overflowX:"auto", paddingBottom:8 }}>
@@ -2016,7 +2016,7 @@ function CurvaAbcDash({ enrichedOrders }){
   return (
     <div style={{ padding:2 }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:14 }}>
-        <div><div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Curva ABC</div>
+        <div><div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Curva ABC</div>
           <div style={{ fontSize:13, color:"var(--text-3)" }}>A = 80% do faturamento · B = próximos 15% · C = os 5% restantes.</div></div>
         <BarraPeriodo periodo={periodo} setPeriodo={setPeriodo} deData={deData} setDeData={setDeData} ateData={ateData} setAteData={setAteData} />
       </div>
@@ -2036,13 +2036,13 @@ function CurvaAbcDash({ enrichedOrders }){
         </ChartCard>
         <div style={{ display:"flex", flexDirection:"column", gap:12, flex:"1 1 220px", minWidth:200 }}>
           {["A","B","C"].map(function(cl){ return <div key={cl} style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", display:"flex", alignItems:"center", gap:12 }}>
-            <div style={{ width:34, height:34, borderRadius:9, background:cor[cl], display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:800 }}>{cl}</div>
-            <div><div style={{ fontSize:12, color:"var(--text-3)" }}>Curva {cl}</div><div style={{ fontSize:18, fontWeight:800, color:"var(--text-strong)" }}>{grupos[cl].length} SKUs</div></div>
+            <div style={{ width:34, height:34, borderRadius:9, background:cor[cl], display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:600 }}>{cl}</div>
+            <div><div style={{ fontSize:12, color:"var(--text-3)" }}>Curva {cl}</div><div style={{ fontSize:18, fontWeight:600, color:"var(--text-strong)" }}>{grupos[cl].length} SKUs</div></div>
           </div>; })}
         </div>
       </div>
       <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"8px 18px" }}>
-        <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)", padding:"10px 4px 4px" }}>Curva ABC — produtos</div>
+        <div style={{ fontWeight:500, fontSize:15, color:"var(--text-strong)", padding:"10px 4px 4px" }}>Curva ABC — produtos</div>
         {Accordion("A")}{Accordion("B")}{Accordion("C")}
       </div>
     </div>
@@ -2067,14 +2067,14 @@ function MetasDash({ metas, salvar, enrichedOrders }){
     return (enrichedOrders||[]).filter(function(o){ if(o.status==="cancelled") return false; var dt=(o.date||"").slice(0,10); return dt>=ini && dt<=fim; })
       .reduce(function(s,o){ return s+(o.price||0)*(o.qty||1); }, 0);
   }
-  var lbl={ display:"block", fontSize:11, color:"var(--text-3)", fontWeight:600, marginBottom:4, textTransform:"uppercase", letterSpacing:.4 };
+  var lbl={ display:"block", fontSize:11, color:"var(--text-3)", fontWeight:600, marginBottom:4, textTransform:"none", letterSpacing:.4 };
   var campo={ width:"100%", background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 10px", borderRadius:8, fontSize:13 };
   return (
     <div style={{ padding:2 }}>
-      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Metas</div>
+      <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Metas</div>
       <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Defina metas de faturamento e acompanhe o realizado do período.</div>
       <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", marginBottom:16 }}>
-        <div style={{ fontWeight:700, fontSize:14, color:"var(--text-strong)", marginBottom:12 }}>Nova meta</div>
+        <div style={{ fontWeight:500, fontSize:14, color:"var(--text-strong)", marginBottom:12 }}>Nova meta</div>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))", gap:12, alignItems:"end" }}>
           <div style={{ gridColumn:"span 2", minWidth:200 }}><label style={lbl}>Nome da meta</label><input value={f.nome} onChange={function(e){ set("nome", e.target.value); }} placeholder="Ex.: Faturamento agosto" style={campo} /></div>
           <div><label style={lbl}>Data de início</label><input type="date" value={f.inicio} onChange={function(e){ set("inicio", e.target.value); }} style={campo} /></div>
@@ -2084,7 +2084,7 @@ function MetasDash({ metas, salvar, enrichedOrders }){
             <datalist id="dl-seg"><option value="Geral" /><option value="Mercado Livre" /><option value="Shopee" /><option value="Por estado" /><option value="Por produto" /></datalist>
           </div>
           <div><label style={lbl}>Valor da meta (R$)</label><input type="number" step="0.01" value={f.valor} onChange={function(e){ set("valor", e.target.value); }} placeholder="0,00" style={campo} /></div>
-          <div><button onClick={add} style={{ width:"100%", background:"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"10px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Adicionar meta</button></div>
+          <div><button onClick={add} style={{ width:"100%", background:"#1976FF", border:"none", color:"#fff", fontWeight:500, padding:"10px", borderRadius:8, cursor:"pointer", fontSize:13 }}>+ Adicionar meta</button></div>
         </div>
       </div>
       {(metas||[]).length===0 ? (
@@ -2095,21 +2095,21 @@ function MetasDash({ metas, salvar, enrichedOrders }){
             var real=realizado(m), pctv=m.valor?Math.min(100, real/m.valor*100):0, bateu=real>=m.valor && m.valor>0;
             return <div key={m.id} style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10 }}>
-                <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)" }}>{m.nome}</div>
+                <div style={{ fontWeight:500, fontSize:15, color:"var(--text-strong)" }}>{m.nome}</div>
                 <button onClick={function(){ excluir(m.id); }} title="Excluir" style={{ background:"none", border:"none", color:"var(--text-3)", cursor:"pointer", fontSize:14 }}>✕</button>
               </div>
               <div style={{ fontSize:12, color:"var(--text-3)", marginTop:2 }}>
                 {(m.inicio? (fmtDate(m.inicio)||m.inicio) : "—")} até {(m.conclusao? (fmtDate(m.conclusao)||m.conclusao) : "—")}{m.segmentacao ? " · "+m.segmentacao : ""}
               </div>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", margin:"12px 0 6px" }}>
-                <span style={{ fontSize:20, fontWeight:800, color:"var(--text-strong)" }}>{fmt(real)}</span>
+                <span style={{ fontSize:20, fontWeight:600, color:"var(--text-strong)" }}>{fmt(real)}</span>
                 <span style={{ fontSize:12, color:"var(--text-3)" }}>de {fmt(m.valor)}</span>
               </div>
               <div style={{ height:10, borderRadius:6, background:"var(--surface-3)", overflow:"hidden" }}>
                 <div style={{ width:pctv+"%", height:"100%", background: bateu?"#0a9d4e":"#1976FF", transition:"width .3s" }} />
               </div>
               <div style={{ display:"flex", justifyContent:"space-between", marginTop:6, fontSize:12 }}>
-                <span style={{ color: bateu?"#0a9d4e":"var(--text-2)", fontWeight:700 }}>{pct1(m.valor?real/m.valor*100:0)}</span>
+                <span style={{ color: bateu?"#0a9d4e":"var(--text-2)", fontWeight:500 }}>{pct1(m.valor?real/m.valor*100:0)}</span>
                 <span style={{ color:"var(--text-3)" }}>{bateu ? "🎯 Meta batida!" : "Faltam "+fmt(Math.max(0, m.valor-real))}</span>
               </div>
             </div>;
@@ -2204,7 +2204,7 @@ function DashboardGeral({ enrichedOrders }) {
     <div style={{ padding:"2px" }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:16 }}>
         <div>
-          <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Dashboard</div>
+          <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Dashboard</div>
           <div style={{ fontSize:13, color:"var(--text-3)" }}>Faturamento bruto e líquido, taxas, frete, impostos e lucro real do período.</div>
         </div>
         <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap", justifyContent:"flex-end" }}>
@@ -2241,8 +2241,8 @@ function DashboardGeral({ enrichedOrders }) {
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))", gap:12, marginBottom:20 }}>
         {kpis.map(function(k,i){
           return <div key={i} style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px" }}>
-            <div style={{ fontSize:11, color:"var(--text-3)", textTransform:"uppercase", letterSpacing:.5, fontWeight:600 }}>{k.l}</div>
-            <div style={{ fontSize:22, fontWeight:800, color:k.c, marginTop:6 }}>{k.v}</div>
+            <div style={{ fontSize:11, color:"var(--text-3)", textTransform:"none", letterSpacing:.5, fontWeight:600 }}>{k.l}</div>
+            <div style={{ fontSize:22, fontWeight:600, color:k.c, marginTop:6 }}>{k.v}</div>
             {k.sub && <div style={{ fontSize:10, color:"var(--text-4)", marginTop:3, fontWeight:500 }}>{k.sub}</div>}
           </div>;
         })}
@@ -2261,11 +2261,11 @@ function DashboardGeral({ enrichedOrders }) {
         ].filter(function(d){ return d.value > 0; });
         function listaProd(titulo, itens){
           return <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", flex:1, minWidth:280 }}>
-            <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)", marginBottom:12 }}>{titulo}</div>
+            <div style={{ fontWeight:500, fontSize:15, color:"var(--text-strong)", marginBottom:12 }}>{titulo}</div>
             {itens.length === 0 ? <div style={{ color:"var(--text-3)", fontSize:13 }}>Sem vendas no período.</div> :
               itens.map(function(p,i){ return <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom: i < itens.length-1 ? "1px solid var(--border-soft)" : "none" }}>
                 <div style={{ minWidth:0, flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontSize:13, color:"var(--text-2)" }}>{p.titulo}</div>
-                <span style={{ fontSize:13, fontWeight:700, color: p.lucro >= 0 ? "#0a9d4e" : "#FF5252", flexShrink:0, marginLeft:12 }}>{fmt(p.lucro)}</span>
+                <span style={{ fontSize:13, fontWeight:500, color: p.lucro >= 0 ? "#0a9d4e" : "#FF5252", flexShrink:0, marginLeft:12 }}>{fmt(p.lucro)}</span>
               </div>; })}
           </div>;
         }
@@ -2831,7 +2831,7 @@ function CaixaCopiar({ texto, cor }) {
     <div style={{ position:"relative", marginTop:8 }}>
       <div style={{ background:"var(--bg)", border:"1px solid var(--border)", borderRadius:8, padding:"10px 12px", fontSize:13, color:"#E6EDF7", lineHeight:1.55, whiteSpace:"pre-wrap", maxHeight:220, overflowY:"auto" }}>{texto}</div>
       <button onClick={copiar}
-        style={{ position:"absolute", top:6, right:6, background: copiado?cf:"var(--surface-3)", border:"1px solid "+(copiado?cf:"rgba(255,255,255,.14)"), color: copiado?"var(--bg)":"var(--text-2)", fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:6, cursor:"pointer" }}>
+        style={{ position:"absolute", top:6, right:6, background: copiado?cf:"var(--surface-3)", border:"1px solid "+(copiado?cf:"rgba(255,255,255,.14)"), color: copiado?"var(--bg)":"var(--text-2)", fontSize:11, fontWeight:500, padding:"3px 10px", borderRadius:6, cursor:"pointer" }}>
         {copiado ? "✓ Copiado" : "Copiar"}
       </button>
     </div>
@@ -2853,7 +2853,7 @@ function AIPanel({ listing, onClose }) {
       <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 760, maxHeight: "88vh", overflowY: "auto", padding: "28px 32px 40px", boxShadow: "0 -4px 40px rgba(0,0,0,.12)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 18, color: "var(--text-strong)", marginBottom: 4 }}>Qualidade do Anúncio</div>
+            <div style={{ fontWeight: 500, fontSize: 18, color: "var(--text-strong)", marginBottom: 4 }}>Qualidade do Anúncio</div>
             <div style={{ color: "var(--text-2)", fontSize: 13, maxWidth: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{listing.title}</div>
           </div>
           <button onClick={onClose} style={{ background: "var(--surface-3)", border: "none", color: "var(--text-2)", width: 32, height: 32, borderRadius: 8, cursor: "pointer", fontSize: 16 }}>✕</button>
@@ -2861,39 +2861,39 @@ function AIPanel({ listing, onClose }) {
         <div style={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 12, padding: "16px 20px", marginBottom: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 14 }}>
             <div style={{ width: 52, height: 52, borderRadius: 12, background: scoreBg(score), display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-              <span style={{ fontSize: 18, fontWeight: 800, color: scoreColor(score) }}>{score}</span>
+              <span style={{ fontSize: 18, fontWeight: 600, color: scoreColor(score) }}>{score}</span>
               <span style={{ fontSize: 9, color: scoreColor(score), fontWeight: 600 }}>/100</span>
             </div>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 16, color: scoreColor(score) }}>{scoreLabel(score)}</div>
+              <div style={{ fontWeight: 500, fontSize: 16, color: scoreColor(score) }}>{scoreLabel(score)}</div>
               <div style={{ color: "var(--text-3)", fontSize: 12 }}>Score de qualidade do anúncio</div>
             </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {checks.map(c => (
               <div key={c.key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 7px", background: c.pass ? "rgba(0,200,83,.12)" : "rgba(255,82,82,.12)", borderRadius: 8 }}>
-                <span style={{ color: c.pass ? "#0a9d4e" : "#FF5252", fontSize: 13, fontWeight: 700 }}>{c.pass ? "✓" : "✗"}</span>
+                <span style={{ color: c.pass ? "#0a9d4e" : "#FF5252", fontSize: 13, fontWeight: 500 }}>{c.pass ? "✓" : "✗"}</span>
                 <span style={{ fontSize: 12, color: c.pass ? "#0a9d4e" : "#FF5252" }}>{c.label}</span>
               </div>
             ))}
           </div>
         </div>
-        {state === "idle" && <div style={{ textAlign: "center", padding: "28px 0" }}><div style={{ color: "var(--text-3)", fontSize: 13, marginBottom: 16 }}>Analise com IA para receber sugestões personalizadas</div><button onClick={runAnalysis} style={{ background: "#1976FF", border: "none", color: "#fff", fontWeight: 700, padding: "11px 32px", borderRadius: 10, cursor: "pointer", fontSize: 14 }}>✦ Analisar com IA</button></div>}
+        {state === "idle" && <div style={{ textAlign: "center", padding: "28px 0" }}><div style={{ color: "var(--text-3)", fontSize: 13, marginBottom: 16 }}>Analise com IA para receber sugestões personalizadas</div><button onClick={runAnalysis} style={{ background: "#1976FF", border: "none", color: "#fff", fontWeight: 500, padding: "11px 32px", borderRadius: 10, cursor: "pointer", fontSize: 14 }}>✦ Analisar com IA</button></div>}
         {state === "loading" && <div style={{ textAlign: "center", padding: "32px 0", color: "var(--text-3)" }}><div style={{ fontSize: 28, marginBottom: 12, animation: "spin 1.2s linear infinite", display: "inline-block" }}>⟳</div><style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style><div style={{ fontSize: 13 }}>Analisando...</div></div>}
         {state === "error" && <div style={{ textAlign: "center", padding: "24px 0" }}><div style={{ color: "#FF5252", fontSize: 13, marginBottom: 12 }}>Erro: {errorMsg}</div><button onClick={runAnalysis} style={{ background: "var(--surface-3)", border: "1px solid var(--border)", color: "var(--text-2)", padding: "8px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>Tentar novamente</button></div>}
         {state === "done" && result && (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ background: "rgba(255,193,7,.12)", border: "1px solid rgba(255,193,7,.35)", borderRadius: 10, padding: "14px 18px" }}>
-              <div style={{ fontSize: 11, color: "#FFC107", marginBottom: 6, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Avaliação Geral</div>
+              <div style={{ fontSize: 11, color: "#FFC107", marginBottom: 6, fontWeight: 500, textTransform: "none", letterSpacing: 1 }}>Avaliação Geral</div>
               <div style={{ fontSize: 14, color: "var(--text-strong)", lineHeight: 1.6 }}>{result.score_commentary}</div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {result.strengths?.length > 0 && <div style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#0a9d4e", marginBottom: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>✓ Pontos Fortes</div>{result.strengths.map((s, i) => <div key={i} style={{ fontSize: 13, color: "#0a9d4e", marginBottom: 6, paddingLeft: 10, borderLeft: "2px solid rgba(0,200,83,.45)" }}>{s}</div>)}</div>}
-              {result.keywords?.length > 0 && <div style={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "var(--text-2)", marginBottom: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Palavras-chave</div><div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{result.keywords.map((k, i) => <span key={i} style={{ background: "var(--surface-3)", color: "var(--text-2)", fontSize: 12, padding: "3px 10px", borderRadius: 20 }}>{k}</span>)}</div></div>}
+              {result.strengths?.length > 0 && <div style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#0a9d4e", marginBottom: 10, fontWeight: 500, textTransform: "none", letterSpacing: 1 }}>✓ Pontos Fortes</div>{result.strengths.map((s, i) => <div key={i} style={{ fontSize: 13, color: "#0a9d4e", marginBottom: 6, paddingLeft: 10, borderLeft: "2px solid rgba(0,200,83,.45)" }}>{s}</div>)}</div>}
+              {result.keywords?.length > 0 && <div style={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "var(--text-2)", marginBottom: 10, fontWeight: 500, textTransform: "none", letterSpacing: 1 }}>Palavras-chave</div><div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{result.keywords.map((k, i) => <span key={i} style={{ background: "var(--surface-3)", color: "var(--text-2)", fontSize: 12, padding: "3px 10px", borderRadius: 20 }}>{k}</span>)}</div></div>}
             </div>
-            {result.improvements?.length > 0 && <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#FFC107", marginBottom: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>⚡ O que Melhorar — com sugestão pronta</div>{result.improvements.map((imp, i) => <div key={i} style={{ display: "flex", gap: 12, marginBottom: 14, paddingBottom: 14, borderBottom: i < result.improvements.length - 1 ? "1px solid var(--border)" : "none" }}><div style={{ minWidth: 26, height: 26, borderRadius: 7, background: "rgba(255,193,7,.12)", border: "1px solid rgba(255,193,7,.35)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#FFC107", fontWeight: 700 }}>{i + 1}</div><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12, color: "#FFC107", marginBottom: 3, fontWeight: 600 }}>{imp.field}</div><div style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.5 }}>{imp.why || imp.suggestion}</div>{imp.ready && String(imp.ready).trim() && <CaixaCopiar texto={imp.ready} cor="#FFC107" />}</div></div>)}</div>}
-            {result.description_suggestion && String(result.description_suggestion).trim() && <div style={{ background: "rgba(0,240,255,.08)", border: "1px solid rgba(0,240,255,.25)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#0e7490", marginBottom: 4, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>📄 Descrição pronta para colar</div><div style={{ fontSize: 12, color: "var(--text-3)" }}>Copie e cole na descrição do seu anúncio</div><CaixaCopiar texto={result.description_suggestion} cor="#0e7490" /></div>}
-            {result.title_suggestion && <div style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#0a9d4e", marginBottom: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>✦ Título pronto para colar</div><div style={{ fontSize: 14, color: "var(--text-strong)", fontWeight: 600 }}>{result.title_suggestion}</div><div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 4 }}>{result.title_suggestion.length} caracteres</div><CaixaCopiar texto={result.title_suggestion} cor="#0a9d4e" /></div>}
+            {result.improvements?.length > 0 && <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#FFC107", marginBottom: 12, fontWeight: 500, textTransform: "none", letterSpacing: 1 }}>⚡ O que Melhorar — com sugestão pronta</div>{result.improvements.map((imp, i) => <div key={i} style={{ display: "flex", gap: 12, marginBottom: 14, paddingBottom: 14, borderBottom: i < result.improvements.length - 1 ? "1px solid var(--border)" : "none" }}><div style={{ minWidth: 26, height: 26, borderRadius: 7, background: "rgba(255,193,7,.12)", border: "1px solid rgba(255,193,7,.35)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#FFC107", fontWeight: 500 }}>{i + 1}</div><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12, color: "#FFC107", marginBottom: 3, fontWeight: 600 }}>{imp.field}</div><div style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.5 }}>{imp.why || imp.suggestion}</div>{imp.ready && String(imp.ready).trim() && <CaixaCopiar texto={imp.ready} cor="#FFC107" />}</div></div>)}</div>}
+            {result.description_suggestion && String(result.description_suggestion).trim() && <div style={{ background: "rgba(0,240,255,.08)", border: "1px solid rgba(0,240,255,.25)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#0e7490", marginBottom: 4, fontWeight: 500, textTransform: "none", letterSpacing: 1 }}>📄 Descrição pronta para colar</div><div style={{ fontSize: 12, color: "var(--text-3)" }}>Copie e cole na descrição do seu anúncio</div><CaixaCopiar texto={result.description_suggestion} cor="#0e7490" /></div>}
+            {result.title_suggestion && <div style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#0a9d4e", marginBottom: 8, fontWeight: 500, textTransform: "none", letterSpacing: 1 }}>✦ Título pronto para colar</div><div style={{ fontSize: 14, color: "var(--text-strong)", fontWeight: 600 }}>{result.title_suggestion}</div><div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 4 }}>{result.title_suggestion.length} caracteres</div><CaixaCopiar texto={result.title_suggestion} cor="#0a9d4e" /></div>}
           </div>
         )}
       </div>
@@ -3050,20 +3050,20 @@ function MLConnectModal({ onConnect, onClose }) {
     <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 24 }}>
       <div style={{ background: "var(--surface)", borderRadius: 16, width: "100%", maxWidth: 480, padding: "32px 36px", boxShadow: "0 20px 60px rgba(0,0,0,.15)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <div style={{ fontWeight: 800, fontSize: 18, color: "var(--text-strong)" }}>Conectar Mercado Livre</div>
+          <div style={{ fontWeight: 600, fontSize: 18, color: "var(--text-strong)" }}>Conectar Mercado Livre</div>
           <button onClick={onClose} style={{ background: "var(--surface-3)", border: "none", color: "var(--text-2)", width: 32, height: 32, borderRadius: 8, cursor: "pointer", fontSize: 16 }}>✕</button>
         </div>
         <p style={{ color: "var(--text-2)", fontSize: 13, lineHeight: 1.7, marginBottom: 20 }}>
           Cole o token de acesso do Mercado Livre. O token fica salvo no navegador e você só precisa reconectar quando ele expirar (a cada 6 horas).
         </p>
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>Token de acesso</div>
+          <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: "none" }}>Token de acesso</div>
           <textarea value={tokenInput} onChange={e => setTokenInput(e.target.value)} placeholder="APP_USR-..." rows={3}
             style={{ width: "100%", background: "var(--bg-2)", border: `1px solid ${errorMsg ? "#fca5a5" : "var(--border)"}`, color: "var(--text-strong)", padding: "10px 14px", borderRadius: 10, fontFamily: "monospace", fontSize: 12, resize: "none", outline: "none" }} />
         </div>
         {errorMsg && <div style={{ background: "rgba(255,82,82,.12)", border: "1px solid rgba(255,82,82,.35)", color: "#FF5252", fontSize: 13, padding: "10px 14px", borderRadius: 8, marginBottom: 16 }}>⚠ {errorMsg}</div>}
         <button onClick={handleConnect} disabled={loading || !tokenInput.trim()}
-          style={{ width: "100%", background: loading || !tokenInput.trim() ? "var(--surface-3)" : "#1976FF", border: "none", color: loading || !tokenInput.trim() ? "var(--text-3)" : "#fff", fontWeight: 700, padding: "12px", borderRadius: 10, cursor: loading || !tokenInput.trim() ? "not-allowed" : "pointer", fontSize: 14 }}>
+          style={{ width: "100%", background: loading || !tokenInput.trim() ? "var(--surface-3)" : "#1976FF", border: "none", color: loading || !tokenInput.trim() ? "var(--text-3)" : "#fff", fontWeight: 500, padding: "12px", borderRadius: 10, cursor: loading || !tokenInput.trim() ? "not-allowed" : "pointer", fontSize: 14 }}>
           {loading ? "Verificando..." : "Conectar"}
         </button>
       </div>
@@ -3113,7 +3113,7 @@ function SinoNotificacoes({ notificacoes, setNotificacoes, darkMode }) {
         style={{ position: "relative", background: naoLidas > 0 ? "rgba(255,193,7,.18)" : darkMode ? "var(--bg-2)" : "var(--surface-3)", border: `1px solid ${naoLidas > 0 ? "rgba(255,193,7,.35)" : border}`, color: naoLidas > 0 ? "#FFC107" : darkMode ? "var(--text-3)" : "var(--text-2)", width: 38, height: 38, borderRadius: 10, cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>
         🔔
         {naoLidas > 0 && (
-          <div style={{ position: "absolute", top: -4, right: -4, background: "#FF5252", color: "#fff", width: 18, height: 18, borderRadius: "50%", fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
+          <div style={{ position: "absolute", top: -4, right: -4, background: "#FF5252", color: "#fff", width: 18, height: 18, borderRadius: "50%", fontSize: 10, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
             {naoLidas > 9 ? "9+" : naoLidas}
           </div>
         )}
@@ -3125,7 +3125,7 @@ function SinoNotificacoes({ notificacoes, setNotificacoes, darkMode }) {
           <div style={{ position: "fixed", left: 14, bottom: 14, width: 360, maxWidth: "calc(100vw - 28px)", maxHeight: "78vh", background: bg, border: `1px solid ${border}`, borderRadius: 14, boxShadow: "0 8px 32px rgba(0,0,0,.28)", zIndex: 201, overflow: "hidden", display: "flex", flexDirection: "column" }}>
             {/* Header */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", borderBottom: `1px solid ${border}` }}>
-              <div style={{ fontWeight: 700, fontSize: 14, color: darkMode ? "var(--text-2)" : "var(--text-strong)" }}>
+              <div style={{ fontWeight: 500, fontSize: 14, color: darkMode ? "var(--text-2)" : "var(--text-strong)" }}>
                 🔔 Notificações {naoLidas > 0 && <span style={{ fontSize: 11, background: "#FF5252", color: "#fff", padding: "1px 7px", borderRadius: 20, marginLeft: 6 }}>{naoLidas} novas</span>}
               </div>
               <div style={{ display: "flex", gap: 8 }}>
@@ -3155,7 +3155,7 @@ function SinoNotificacoes({ notificacoes, setNotificacoes, darkMode }) {
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                        <div style={{ fontWeight: 700, fontSize: 13, color: darkMode ? "var(--text-2)" : "var(--text-strong)" }}>{n.titulo}</div>
+                        <div style={{ fontWeight: 500, fontSize: 13, color: darkMode ? "var(--text-2)" : "var(--text-strong)" }}>{n.titulo}</div>
                         {!n.lido && <div style={{ width: 8, height: 8, background: "#0e7490", borderRadius: "50%", flexShrink: 0, marginTop: 4 }} />}
                       </div>
                       <div style={{ fontSize: 12, color: darkMode ? "var(--text-3)" : "var(--text-2)", marginTop: 2, lineHeight: 1.4 }}>{n.msg}</div>
@@ -3299,7 +3299,7 @@ function PainelBackup({ onClose }) {
         {/* Header */}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", borderBottom:"1px solid var(--border)" }}>
           <div>
-            <div style={{ fontWeight:800, fontSize:18, color:"var(--text-strong)" }}>💾 Backup e Restauração</div>
+            <div style={{ fontWeight:600, fontSize:18, color:"var(--text-strong)" }}>💾 Backup e Restauração</div>
             <div style={{ fontSize:12, color:"var(--text-3)", marginTop:2 }}>Exporte seus dados para um arquivo seguro ou restaure de um backup anterior</div>
           </div>
           <button onClick={onClose} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
@@ -3317,7 +3317,7 @@ function PainelBackup({ onClose }) {
           {/* Preview de importação */}
           {preview && (
             <div style={{ background:"rgba(255,193,7,.12)", border:"1px solid rgba(255,193,7,.35)", borderRadius:12, padding:"16px 18px", marginBottom:8 }}>
-              <div style={{ fontWeight:700, fontSize:14, color:"#FFC107", marginBottom:8 }}>⚠️ Confirmar Restauração</div>
+              <div style={{ fontWeight:500, fontSize:14, color:"#FFC107", marginBottom:8 }}>⚠️ Confirmar Restauração</div>
               <div style={{ fontSize:12, color:"#FFC107", marginBottom:12 }}>
                 Backup de: <strong>{preview.dataBackup}</strong><br/>
                 <strong>Atenção:</strong> os dados atuais serão substituídos pelos dados do backup!
@@ -3334,7 +3334,7 @@ function PainelBackup({ onClose }) {
                 <button onClick={() => setPreview(null)}
                   style={{ flex:1, background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"10px", borderRadius:8, cursor:"pointer" }}>Cancelar</button>
                 <button onClick={confirmarImport}
-                  style={{ flex:2, background:"#FFC107", border:"none", color:"#fff", fontWeight:700, padding:"10px", borderRadius:8, cursor:"pointer" }}>
+                  style={{ flex:2, background:"#FFC107", border:"none", color:"#fff", fontWeight:500, padding:"10px", borderRadius:8, cursor:"pointer" }}>
                   ✓ Sim, restaurar dados
                 </button>
               </div>
@@ -3343,7 +3343,7 @@ function PainelBackup({ onClose }) {
 
           {/* Resumo dos dados atuais */}
           <div style={{ marginBottom:10 }}>
-            <div style={{ fontWeight:700, fontSize:14, color:"var(--text-strong)", marginBottom:12 }}>📊 Dados Armazenados Atualmente</div>
+            <div style={{ fontWeight:500, fontSize:14, color:"var(--text-strong)", marginBottom:12 }}>📊 Dados Armazenados Atualmente</div>
             <div style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:12, overflow:"hidden" }}>
               {resumo.map((r, i) => (
                 <div key={r.key} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 16px", borderBottom:i<resumo.length-1?"1px solid var(--border)":"none", background:i%2===0?"var(--bg-2)":"var(--surface)" }}>
@@ -3364,8 +3364,8 @@ function PainelBackup({ onClose }) {
                 </div>
               ))}
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", background:"var(--surface-3)", borderTop:"2px solid var(--border)" }}>
-                <span style={{ fontSize:13, fontWeight:700, color:"var(--text-strong)" }}>Total</span>
-                <span style={{ fontSize:13, fontWeight:700, color:"var(--text-strong)" }}>{formatSize(totalSize)}</span>
+                <span style={{ fontSize:13, fontWeight:500, color:"var(--text-strong)" }}>Total</span>
+                <span style={{ fontSize:13, fontWeight:500, color:"var(--text-strong)" }}>{formatSize(totalSize)}</span>
               </div>
             </div>
           </div>
@@ -3375,12 +3375,12 @@ function PainelBackup({ onClose }) {
             {/* Exportar */}
             <div style={{ background:"rgba(0,200,83,.12)", border:"1px solid rgba(0,200,83,.35)", borderRadius:12, padding:"18px 20px" }}>
               <div style={{ fontSize:28, marginBottom:8 }}>⬇️</div>
-              <div style={{ fontWeight:700, fontSize:14, color:"#0a9d4e", marginBottom:4 }}>Exportar Backup</div>
+              <div style={{ fontWeight:500, fontSize:14, color:"#0a9d4e", marginBottom:4 }}>Exportar Backup</div>
               <div style={{ fontSize:12, color:"var(--text-2)", marginBottom:8, lineHeight:1.5 }}>
                 Baixa um arquivo JSON com todos os seus dados. Guarde em local seguro.
               </div>
               <button onClick={exportarBackup}
-                style={{ width:"100%", background:"#0a9d4e", border:"none", color:"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
+                style={{ width:"100%", background:"#0a9d4e", border:"none", color:"#fff", fontWeight:500, padding:"11px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
                 ⬇️ Exportar Backup Agora
               </button>
             </div>
@@ -3388,11 +3388,11 @@ function PainelBackup({ onClose }) {
             {/* Importar */}
             <div style={{ background:"rgba(59,140,255,.14)", border:"1px solid rgba(77,179,255,.35)", borderRadius:12, padding:"18px 20px" }}>
               <div style={{ fontSize:28, marginBottom:8 }}>⬆️</div>
-              <div style={{ fontWeight:700, fontSize:14, color:"#1976FF", marginBottom:4 }}>Restaurar Backup</div>
+              <div style={{ fontWeight:500, fontSize:14, color:"#1976FF", marginBottom:4 }}>Restaurar Backup</div>
               <div style={{ fontSize:12, color:"var(--text-2)", marginBottom:8, lineHeight:1.5 }}>
                 Selecione um arquivo de backup (.json) para restaurar seus dados.
               </div>
-              <label style={{ display:"block", width:"100%", background:"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:"pointer", fontSize:13, textAlign:"center" }}>
+              <label style={{ display:"block", width:"100%", background:"#1976FF", border:"none", color:"#fff", fontWeight:500, padding:"11px", borderRadius:10, cursor:"pointer", fontSize:13, textAlign:"center" }}>
                 {importing ? "Lendo arquivo..." : "⬆️ Selecionar Arquivo"}
                 <input type="file" accept=".json" style={{ display:"none" }} onChange={e => { if(e.target.files[0]) handleImportFile(e.target.files[0]); e.target.value=""; }} />
               </label>
@@ -3524,17 +3524,17 @@ function LoginScreen({ onLogin }) {
       <div style={{ width:"100%", maxWidth:420 }}>
         {/* Logo */}
         <div style={{ textAlign:"center", marginBottom:32 }}>
-          <div style={{ width:64, height:64, borderRadius:"50%", background:"rgba(77,179,255,.12)", border:"1px solid rgba(77,179,255,.45)", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"'Space Grotesk',sans-serif", fontSize:30, fontWeight:700, color:"#1976FF", marginBottom:12, boxShadow:"0 0 32px rgba(77,179,255,.4)" }}>F</div>
-          <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:24, color:"var(--text-strong)", letterSpacing:-0.5 }}>Flow Marketplaces</div>
-          <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:11, color:"var(--text-3)", marginTop:6, letterSpacing:".24em", textTransform:"uppercase" }}>Gestão de Anúncios</div>
+          <div style={{ width:64, height:64, borderRadius:"50%", background:"rgba(77,179,255,.12)", border:"1px solid rgba(77,179,255,.45)", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"'Space Grotesk',sans-serif", fontSize:30, fontWeight:500, color:"#1976FF", marginBottom:12, boxShadow:"0 0 32px rgba(77,179,255,.4)" }}>F</div>
+          <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:500, fontSize:24, color:"var(--text-strong)", letterSpacing:-0.5 }}>Flow Marketplaces</div>
+          <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:11, color:"var(--text-3)", marginTop:6, letterSpacing:".24em", textTransform:"none" }}>Gestão de Anúncios</div>
         </div>
 
         {/* Card */}
         <div style={{ background:"var(--bg-2)", borderRadius:20, padding:"32px 36px", boxShadow:"0 20px 60px rgba(0,0,0,.4)", border:"1px solid var(--text-2)" }}>
-          <div style={{ fontWeight:700, fontSize:18, color:"var(--text-2)", marginBottom:10 }}>Entrar no sistema</div>
+          <div style={{ fontWeight:500, fontSize:18, color:"var(--text-2)", marginBottom:10 }}>Entrar no sistema</div>
 
           <div style={{ marginBottom:8 }}>
-            <div style={{ fontSize:11, color:"var(--text-2)", marginBottom:8, fontWeight:600, letterSpacing:1, textTransform:"uppercase" }}>Usuário</div>
+            <div style={{ fontSize:11, color:"var(--text-2)", marginBottom:8, fontWeight:600, letterSpacing:1, textTransform:"none" }}>Usuário</div>
             <input value={usuario} onChange={e => { setUsuario(e.target.value); setErro(""); }}
               onKeyDown={e => e.key==="Enter" && handleLogin()}
               placeholder="Digite seu usuário"
@@ -3542,7 +3542,7 @@ function LoginScreen({ onLogin }) {
           </div>
 
           <div style={{ marginBottom:10 }}>
-            <div style={{ fontSize:11, color:"var(--text-2)", marginBottom:8, fontWeight:600, letterSpacing:1, textTransform:"uppercase" }}>Senha</div>
+            <div style={{ fontSize:11, color:"var(--text-2)", marginBottom:8, fontWeight:600, letterSpacing:1, textTransform:"none" }}>Senha</div>
             <div style={{ position:"relative" }}>
               <input type={showSenha?"text":"password"} value={senha}
                 onChange={e => { setSenha(e.target.value); setErro(""); }}
@@ -3563,7 +3563,7 @@ function LoginScreen({ onLogin }) {
           )}
 
           <button onClick={handleLogin} disabled={loading||!usuario||!senha}
-            style={{ width:"100%", background:loading||!usuario||!senha?"var(--surface-3)":"var(--bg)", border:`1px solid ${loading||!usuario||!senha?"var(--border-soft)":"rgba(255,255,255,.18)"}`, color:loading||!usuario||!senha?"var(--text-3)":"var(--text-strong)", fontWeight:800, padding:"14px", borderRadius:12, cursor:loading||!usuario||!senha?"not-allowed":"pointer", fontSize:15, transition:"all .15s" }}>
+            style={{ width:"100%", background:loading||!usuario||!senha?"var(--surface-3)":"var(--bg)", border:`1px solid ${loading||!usuario||!senha?"var(--border-soft)":"rgba(255,255,255,.18)"}`, color:loading||!usuario||!senha?"var(--text-3)":"var(--text-strong)", fontWeight:600, padding:"14px", borderRadius:12, cursor:loading||!usuario||!senha?"not-allowed":"pointer", fontSize:15, transition:"all .15s" }}>
             {loading ? "Verificando..." : "Entrar"}
           </button>
 
@@ -3614,32 +3614,32 @@ function ModalUsuario({ usuario, onSave, onClose }) {
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.7)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:24 }}>
       <div style={{ background:"var(--surface)", borderRadius:16, width:"100%", maxWidth:520, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.3)", maxHeight:"90vh", overflowY:"auto" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-          <div style={{ fontWeight:800, fontSize:17, color:"var(--text-strong)" }}>{usuario ? "Editar Usuário" : "Novo Usuário"}</div>
+          <div style={{ fontWeight:600, fontSize:17, color:"var(--text-strong)" }}>{usuario ? "Editar Usuário" : "Novo Usuário"}</div>
           <button onClick={onClose} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
         </div>
 
         <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:10 }}>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
             <div>
-              <div style={{ fontSize:11, color:"var(--text-3)", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Nome completo *</div>
+              <div style={{ fontSize:11, color:"var(--text-3)", marginBottom:5, fontWeight:600, textTransform:"none" }}>Nome completo *</div>
               <input value={form.nome} onChange={e=>set("nome",e.target.value)} placeholder="Ex: João Silva"
                 style={{ width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
             </div>
             <div>
-              <div style={{ fontSize:11, color:"var(--text-3)", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Usuário (login) *</div>
+              <div style={{ fontSize:11, color:"var(--text-3)", marginBottom:5, fontWeight:600, textTransform:"none" }}>Usuário (login) *</div>
               <input value={form.usuario} onChange={e=>set("usuario",e.target.value.toLowerCase().replace(/\s/g,""))} placeholder="Ex: joao"
                 style={{ width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none", fontFamily:"monospace" }} />
             </div>
           </div>
 
           <div>
-            <div style={{ fontSize:11, color:"var(--text-3)", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Email (para notificações de tarefas)</div>
+            <div style={{ fontSize:11, color:"var(--text-3)", marginBottom:5, fontWeight:600, textTransform:"none" }}>Email (para notificações de tarefas)</div>
             <input type="email" value={form.email||""} onChange={e=>set("email",e.target.value)} placeholder="usuario@empresa.com"
               style={{ width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
           </div>
 
           <div>
-            <div style={{ fontSize:11, color:"var(--text-3)", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>
+            <div style={{ fontSize:11, color:"var(--text-3)", marginBottom:5, fontWeight:600, textTransform:"none" }}>
               {usuario ? "Nova senha (deixe vazio para manter)" : "Senha *"}
             </div>
             <div style={{ position:"relative" }}>
@@ -3656,7 +3656,7 @@ function ModalUsuario({ usuario, onSave, onClose }) {
           {/* Permissões */}
           <div style={{ background:"var(--bg-2)", borderRadius:12, padding:"14px 16px" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-              <div style={{ fontWeight:700, fontSize:13, color:"var(--text-strong)" }}>Permissões de Acesso</div>
+              <div style={{ fontWeight:500, fontSize:13, color:"var(--text-strong)" }}>Permissões de Acesso</div>
               <button onClick={function(){
                   var todasKeys = [];
                   PERMISSOES_DISPONIVEIS.forEach(function(p){ todasKeys.push(p.key); if(p.sub) p.sub.forEach(function(s){ todasKeys.push(s.key); }); });
@@ -3758,7 +3758,7 @@ function ModalUsuario({ usuario, onSave, onClose }) {
         <div style={{ display:"flex", gap:8 }}>
           <button onClick={onClose} style={{ flex:1, background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
           <button onClick={handleSave} disabled={!form.nome||!form.usuario}
-            style={{ flex:2, background:!form.nome||!form.usuario?"var(--surface-3)":"#1976FF", border:"none", color:!form.nome||!form.usuario?"var(--text-3)":"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:!form.nome||!form.usuario?"not-allowed":"pointer" }}>
+            style={{ flex:2, background:!form.nome||!form.usuario?"var(--surface-3)":"#1976FF", border:"none", color:!form.nome||!form.usuario?"var(--text-3)":"#fff", fontWeight:500, padding:"11px", borderRadius:10, cursor:!form.nome||!form.usuario?"not-allowed":"pointer" }}>
             Salvar Usuário
           </button>
         </div>
@@ -3803,11 +3803,11 @@ function AdminTab({ currentUser }) {
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
         <div>
-          <div style={{ fontWeight:800, fontSize:18, color:"var(--text-strong)" }}>Equipe</div>
+          <div style={{ fontWeight:600, fontSize:18, color:"var(--text-strong)" }}>Equipe</div>
           <div style={{ fontSize:13, color:"var(--text-3)", marginTop:2 }}>Gerencie quem pode acessar o dashboard e o que cada um pode ver</div>
         </div>
         <button onClick={()=>{ setEditingUser(null); setShowModal(true); }}
-          style={{ background:"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"10px 22px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
+          style={{ background:"#1976FF", border:"none", color:"#fff", fontWeight:500, padding:"10px 22px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
           + Novo Usuário
         </button>
       </div>
@@ -3817,20 +3817,20 @@ function AdminTab({ currentUser }) {
           var eu = u.id === currentUser.id;
           return (
             <div key={u.id} style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 18px", borderBottom: idx < usuarios.length-1 ? "1px solid var(--border-soft)" : "none", opacity: u.ativo ? 1 : 0.55 }}>
-              <div style={{ width:40, height:40, borderRadius:10, background: u.admin ? "#1976FF" : "var(--surface-3)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:15, fontWeight:800, color: u.admin ? "#fff" : "var(--text-2)", flexShrink:0 }}>
+              <div style={{ width:40, height:40, borderRadius:10, background: u.admin ? "#1976FF" : "var(--surface-3)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:15, fontWeight:600, color: u.admin ? "#fff" : "var(--text-2)", flexShrink:0 }}>
                 {(u.nome || "?").charAt(0).toUpperCase()}
               </div>
               <div style={{ width:190, flexShrink:0, minWidth:0 }}>
-                <div style={{ fontWeight:700, fontSize:14, color:"var(--text-strong)", display:"flex", alignItems:"center", gap:8 }}>
+                <div style={{ fontWeight:500, fontSize:14, color:"var(--text-strong)", display:"flex", alignItems:"center", gap:8 }}>
                   <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{u.nome}</span>
-                  {eu && <span style={{ fontSize:10, fontWeight:700, color:"#1976FF", background:"rgba(25,118,255,.12)", padding:"1px 7px", borderRadius:20, flexShrink:0 }}>Você</span>}
+                  {eu && <span style={{ fontSize:10, fontWeight:500, color:"#1976FF", background:"rgba(25,118,255,.12)", padding:"1px 7px", borderRadius:20, flexShrink:0 }}>Você</span>}
                 </div>
                 <div style={{ fontSize:12, color:"var(--text-3)", fontFamily:"'JetBrains Mono',monospace" }}>@{u.usuario}{u.admin ? " · admin" : ""}</div>
               </div>
               <div style={{ flex:1, display:"flex", flexWrap:"wrap", gap:4, minWidth:0 }}>
                 {PERMISSOES_DISPONIVEIS.map(function(p){ var on = u.permissoes && u.permissoes.includes(p.key); return <span key={p.key} style={{ fontSize:11, padding:"2px 8px", borderRadius:20, background: on ? "rgba(25,118,255,.12)" : "var(--bg-2)", color: on ? "#1976FF" : "var(--text-4)", border:"1px solid " + (on ? "rgba(25,118,255,.3)" : "var(--border)"), fontWeight: on ? 600 : 400 }}>{p.label}</span>; })}
               </div>
-              <button onClick={function(){ toggleAtivo(u.id); }} style={{ fontSize:11, fontWeight:700, padding:"4px 10px", borderRadius:20, cursor:"pointer", flexShrink:0, background: u.ativo ? "rgba(10,157,78,.12)" : "var(--bg-2)", border:"1px solid " + (u.ativo ? "rgba(10,157,78,.35)" : "var(--border)"), color: u.ativo ? "#0a9d4e" : "var(--text-3)" }}>{u.ativo ? "Ativo" : "Inativo"}</button>
+              <button onClick={function(){ toggleAtivo(u.id); }} style={{ fontSize:11, fontWeight:500, padding:"4px 10px", borderRadius:20, cursor:"pointer", flexShrink:0, background: u.ativo ? "rgba(10,157,78,.12)" : "var(--bg-2)", border:"1px solid " + (u.ativo ? "rgba(10,157,78,.35)" : "var(--border)"), color: u.ativo ? "#0a9d4e" : "var(--text-3)" }}>{u.ativo ? "Ativo" : "Inativo"}</button>
               <button onClick={function(){ setEditingUser(u); setShowModal(true); }} style={{ fontSize:12, fontWeight:600, padding:"5px 12px", borderRadius:8, cursor:"pointer", flexShrink:0, background:"var(--surface-3)", border:"none", color:"var(--text-2)" }}>Editar</button>
               {!eu && <button onClick={function(){ deleteUser(u.id); }} style={{ fontSize:12, fontWeight:600, padding:"5px 12px", borderRadius:8, cursor:"pointer", flexShrink:0, background:"rgba(255,82,82,.1)", border:"none", color:"#FF5252" }}>Excluir</button>}
             </div>
@@ -3905,7 +3905,7 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
     return (
       <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 0", borderBottom:"1px solid var(--border-soft)" }}>
         <div style={{ flex:1, fontSize:13, color:"var(--text-strong)", fontWeight:500 }}>{item.nome}</div>
-        <div style={{ fontSize:13, fontWeight:700, color:"var(--text-2)" }}>{item.tipo==="%" ? item.valor+"%" : "R$ "+parseFloat(item.valor).toFixed(2).replace(".",",")}</div>
+        <div style={{ fontSize:13, fontWeight:500, color:"var(--text-2)" }}>{item.tipo==="%" ? item.valor+"%" : "R$ "+parseFloat(item.valor).toFixed(2).replace(".",",")}</div>
         <div style={{ fontSize:12, color:"var(--text-3)" }}>= R$ {calcValor(item, faturamentoMes).toFixed(2).replace(".",",")}</div>
         <button onClick={function(){ onRemove(item.id); }} style={{ background:"rgba(255,82,82,.12)", border:"none", color:"#FF5252", width:24, height:24, borderRadius:6, cursor:"pointer", fontSize:11, flexShrink:0 }}>✕</button>
       </div>
@@ -3919,18 +3919,18 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
       <div style={{ background:"var(--surface)", border:"1px solid rgba(255,82,82,.35)", borderRadius:14, overflow:"hidden" }}>
         <div style={{ background:"rgba(255,82,82,.12)", padding:"10px 14px", borderBottom:"1px solid rgba(255,82,82,.35)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
-            <div style={{ fontWeight:700, fontSize:14, color:"#FF5252" }}>📋 Impostos — Regime Lucro Real</div>
+            <div style={{ fontWeight:500, fontSize:14, color:"#FF5252" }}>📋 Impostos — Regime Lucro Real</div>
             <div style={{ fontSize:11, color:"var(--text-3)", marginTop:1 }}>ICMS por estado, IRPJ e CSLL</div>
           </div>
           <div style={{ textAlign:"right" }}>
             <div style={{ fontSize:11, color:"var(--text-3)" }}>IRPJ+CSLL s/ faturamento</div>
-            <div style={{ fontSize:17, fontWeight:800, color:"#FF5252" }}>R$ {totalImpFixo.toFixed(2).replace(".",",")}</div>
+            <div style={{ fontSize:17, fontWeight:600, color:"#FF5252" }}>R$ {totalImpFixo.toFixed(2).replace(".",",")}</div>
           </div>
         </div>
 
         <div style={{ padding:"14px 18px" }}>
           {/* IRPJ e CSLL */}
-          <div style={{ fontSize:11, color:"var(--text-3)", fontWeight:700, textTransform:"uppercase", marginBottom:8 }}>IRPJ e CSLL (sobre o Lucro Real apurado)</div>
+          <div style={{ fontSize:11, color:"var(--text-3)", fontWeight:500, textTransform:"none", marginBottom:8 }}>IRPJ e CSLL (sobre o Lucro Real apurado)</div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:14 }}>
             <div>
               <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:4 }}>IRPJ base (%)</div>
@@ -3964,7 +3964,7 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
 
           {/* ICMS por estado */}
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-            <div style={{ fontSize:11, color:"var(--text-3)", fontWeight:700, textTransform:"uppercase" }}>
+            <div style={{ fontSize:11, color:"var(--text-3)", fontWeight:500, textTransform:"none" }}>
               ICMS por Estado (alíquota interna de venda)
             </div>
             <div style={{ display:"flex", gap:6 }}>
@@ -3983,12 +3983,12 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
             <div style={{ display:"flex", alignItems:"center", gap:14, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 14px" }}>
               <div>
                 <div style={{ fontSize:10, color:"var(--text-3)" }}>Estados configurados</div>
-                <div style={{ fontSize:16, fontWeight:800, color:"var(--text-strong)" }}>{ufsConfigurados.length}/27</div>
+                <div style={{ fontSize:16, fontWeight:600, color:"var(--text-strong)" }}>{ufsConfigurados.length}/27</div>
               </div>
               <div style={{ width:1, height:28, background:"var(--surface-3)" }} />
               <div>
                 <div style={{ fontSize:10, color:"var(--text-3)" }}>Alíquota média configurada</div>
-                <div style={{ fontSize:16, fontWeight:800, color:"#FF5252" }}>{icmsMedioRef.toFixed(2)}%</div>
+                <div style={{ fontSize:16, fontWeight:600, color:"#FF5252" }}>{icmsMedioRef.toFixed(2)}%</div>
               </div>
               {ufsConfigurados.length===0 && (
                 <div style={{ fontSize:11, color:"#FFC107", marginLeft:"auto" }}>⚠️ Clique em "Usar alíquotas padrão" para começar</div>
@@ -4001,7 +4001,7 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
                 var valorAtual = icmsConfig[uf] !== undefined ? icmsConfig[uf] : "";
                 return (
                   <div key={uf} style={{ display:"flex", alignItems:"center", gap:6, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:"6px 10px" }}>
-                    <span style={{ fontSize:11, fontWeight:700, color:"var(--text-strong)", width:26, flexShrink:0 }}>{uf}</span>
+                    <span style={{ fontSize:11, fontWeight:500, color:"var(--text-strong)", width:26, flexShrink:0 }}>{uf}</span>
                     <span style={{ fontSize:10, color:"var(--text-3)", flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{nome}</span>
                     <input type="number" step="0.1" placeholder={String(padrao)} value={valorAtual}
                       onChange={function(ev){ setIcmsEstado(uf, ev.target.value); }}
@@ -4019,12 +4019,12 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
       <div style={{ background:"var(--surface)", border:"1px solid rgba(255,193,7,.35)", borderRadius:14, overflow:"hidden" }}>
         <div style={{ background:"rgba(255,193,7,.12)", padding:"10px 14px", borderBottom:"1px solid rgba(255,193,7,.35)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
-            <div style={{ fontWeight:700, fontSize:14, color:"#FFC107" }}>🏢 Custos Fixos Detalhados</div>
+            <div style={{ fontWeight:500, fontSize:14, color:"#FFC107" }}>🏢 Custos Fixos Detalhados</div>
             <div style={{ fontSize:11, color:"var(--text-3)", marginTop:1 }}>Aluguel, salários, assinaturas, sistemas...</div>
           </div>
           <div style={{ textAlign:"right" }}>
             <div style={{ fontSize:11, color:"var(--text-3)" }}>Total mensal</div>
-            <div style={{ fontSize:17, fontWeight:800, color:"#FFC107" }}>R$ {totalFix.toFixed(2).replace(".",",")}</div>
+            <div style={{ fontSize:17, fontWeight:600, color:"#FFC107" }}>R$ {totalFix.toFixed(2).replace(".",",")}</div>
           </div>
         </div>
         <div style={{ padding:"12px 18px" }}>
@@ -4032,7 +4032,7 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
             ? <div style={{ fontSize:12, color:"var(--text-3)", padding:"8px 0", textAlign:"center" }}>Nenhum custo fixo cadastrado — adicione abaixo com o valor real (R$) de cada item</div>
             : (
               <div>
-                <div style={{ display:"flex", gap:8, padding:"4px 0 8px", borderBottom:"1px solid var(--border)", fontSize:10, color:"var(--text-3)", fontWeight:700, textTransform:"uppercase" }}>
+                <div style={{ display:"flex", gap:8, padding:"4px 0 8px", borderBottom:"1px solid var(--border)", fontSize:10, color:"var(--text-3)", fontWeight:500, textTransform:"none" }}>
                   <div style={{ flex:1 }}>Custo</div>
                   <div>Valor</div>
                   <div>= R$ mensal</div>
@@ -4049,7 +4049,7 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
             <div style={{ display:"flex", border:"1px solid var(--border)", borderRadius:8, overflow:"hidden", flexShrink:0 }}>
               {["R$","%"].map(function(t){
                 return <button key={t} onClick={function(){setNovoCusto(function(s){return Object.assign({},s,{tipo:t});});}}
-                  style={{ padding:"7px 10px", border:"none", cursor:"pointer", fontSize:12, fontWeight:700,
+                  style={{ padding:"7px 10px", border:"none", cursor:"pointer", fontSize:12, fontWeight:500,
                     background: novoCusto.tipo===t?"#1976FF":"var(--surface)", color: novoCusto.tipo===t?"#fff":"var(--text-2)" }}>{t}</button>;
               })}
             </div>
@@ -4058,7 +4058,7 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
               style={{ width:90, background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"7px 10px", borderRadius:8, fontSize:12, outline:"none", flexShrink:0 }} />
             <button onClick={addCusto} disabled={!novoCusto.nome||!novoCusto.valor}
               style={{ background: (novoCusto.nome&&novoCusto.valor)?"#1976FF":"var(--surface-3)", border:"none", color:(novoCusto.nome&&novoCusto.valor)?"#fff":"var(--text-3)",
-                fontWeight:700, padding:"7px 16px", borderRadius:8, cursor:(novoCusto.nome&&novoCusto.valor)?"pointer":"not-allowed", fontSize:12, flexShrink:0 }}>+ Adicionar</button>
+                fontWeight:500, padding:"7px 16px", borderRadius:8, cursor:(novoCusto.nome&&novoCusto.valor)?"pointer":"not-allowed", fontSize:12, flexShrink:0 }}>+ Adicionar</button>
           </div>
         </div>
       </div>
@@ -4104,7 +4104,7 @@ function FiltroGrupo({ titulo, children }) {
   return (
     <div style={{ position:"relative" }}>
       {titulo && (
-        <div style={{ fontSize:9, color:"#b0b8c4", fontWeight:700, textTransform:"uppercase", letterSpacing:0.7, marginBottom:4 }}>{titulo}</div>
+        <div style={{ fontSize:9, color:"#b0b8c4", fontWeight:500, textTransform:"none", letterSpacing:0.7, marginBottom:4 }}>{titulo}</div>
       )}
       <button
         onClick={function(){ setOpen(function(v){return !v;}); }}
@@ -4216,7 +4216,7 @@ function BadgeTipoEnvio({ tipo }) {
   }[tipo];
   if (!cfg) return null;
   return (
-    <span style={{ fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:5,
+    <span style={{ fontSize:10, fontWeight:500, padding:"2px 7px", borderRadius:5,
       background:cfg.bg, color:cfg.color, whiteSpace:"nowrap" }}>{cfg.label}</span>
   );
 }
@@ -4240,45 +4240,45 @@ function NovoProdutoPrecForm({ onSave, onClose, marketplaceInicial, shopeeDoc })
     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
       {/* Marketplace do produto */}
       <div>
-        <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:4, fontWeight:600, textTransform:"uppercase" }}>Marketplace</div>
+        <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:4, fontWeight:600, textTransform:"none" }}>Marketplace</div>
         <div style={{ display:"flex", gap:6 }}>
           {[{k:"ml",l:"🟡 Mercado Livre",c:"#FFC107"},{k:"shopee",l:"🛒 Shopee",c:"#EE4D2D"}].map(function(m){
             var a=f.marketplace===m.k;
             return <button key={m.k} onClick={function(){ set("marketplace",m.k); }}
-              style={{ flex:1, background:a?m.c:"var(--surface)", color:a?"#fff":"var(--text-2)", border:"1px solid "+(a?m.c:"var(--border)"), borderRadius:8, padding:"8px", fontSize:12, fontWeight:700, cursor:"pointer" }}>{m.l}</button>;
+              style={{ flex:1, background:a?m.c:"var(--surface)", color:a?"#fff":"var(--text-2)", border:"1px solid "+(a?m.c:"var(--border)"), borderRadius:8, padding:"8px", fontSize:12, fontWeight:500, cursor:"pointer" }}>{m.l}</button>;
           })}
         </div>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
         <div>
-          <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Nome do Produto *</div>
+          <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:3, fontWeight:600, textTransform:"none" }}>Nome do Produto *</div>
           <input value={f.nome} onChange={function(e){set("nome",e.target.value);}} placeholder="Ex: Lanterna Traseira Uno"
             style={{ width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
         </div>
         <div>
-          <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>SKU *</div>
+          <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:3, fontWeight:600, textTransform:"none" }}>SKU *</div>
           <input value={f.sku} onChange={function(e){set("sku",e.target.value);}} placeholder="Ex: 1234"
             style={{ width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none", fontFamily:"monospace" }} />
         </div>
         <div>
-          <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Custo (R$)</div>
+          <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:3, fontWeight:600, textTransform:"none" }}>Custo (R$)</div>
           <input type="number" step="0.01" value={f.custo} onChange={function(e){set("custo",e.target.value);}} placeholder="0,00"
             style={{ width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
         </div>
         <div>
-          <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Preço de Venda (R$)</div>
+          <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:3, fontWeight:600, textTransform:"none" }}>Preço de Venda (R$)</div>
           <input type="number" step="0.01" value={f.precoVenda} onChange={function(e){set("precoVenda",e.target.value);}} placeholder="0,00"
             style={{ width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
         </div>
         <div>
-          <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Frete (R$)</div>
+          <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:3, fontWeight:600, textTransform:"none" }}>Frete (R$)</div>
           <input type="number" step="0.01" value={f.frete} onChange={function(e){set("frete",e.target.value);}} placeholder="0,00"
             style={{ width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
         </div>
         <div>
-          <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>{ehShopee ? "Taxa Shopee" : "Taxa ML (%)"}</div>
+          <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:3, fontWeight:600, textTransform:"none" }}>{ehShopee ? "Taxa Shopee" : "Taxa ML (%)"}</div>
           {ehShopee ? (
-            <div style={{ background:"var(--bg-2)", border:"1px solid rgba(238,77,45,.35)", color:"#EE4D2D", padding:"8px 10px", borderRadius:8, fontSize:12, fontWeight:700 }}>
+            <div style={{ background:"var(--bg-2)", border:"1px solid rgba(238,77,45,.35)", color:"#EE4D2D", padding:"8px 10px", borderRadius:8, fontSize:12, fontWeight:500 }}>
               {bruto>0 ? (function(){ var fx=taxaShopeeFaixa(bruto); return (fx.pct*100).toFixed(0)+"% + R$"+fx.fixo+(shopeeDoc==="CPF"?" + R$3":""); })() : "automática por preço"}
             </div>
           ) : (
@@ -4292,15 +4292,15 @@ function NovoProdutoPrecForm({ onSave, onClose, marketplaceInicial, shopeeDoc })
       </div>
       {bruto > 0 && custo > 0 && (
         <div style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:"10px 14px", display:"flex", gap:16 }}>
-          <div><div style={{ fontSize:10, color:"var(--text-3)" }}>Lucro</div><div style={{ fontWeight:700, color:lucro>=0?"#0e7490":"#FF5252" }}>R$ {lucro.toFixed(2).replace(".",",")}</div></div>
-          <div><div style={{ fontSize:10, color:"var(--text-3)" }}>Margem</div><div style={{ fontWeight:700, color:mCor }}>{margem.toFixed(1)}%</div></div>
-          <div><div style={{ fontSize:10, color:"var(--text-3)" }}>Taxa {ehShopee?"Shopee":"ML"}</div><div style={{ fontWeight:700, color:"#FF5252" }}>R$ {taxa.toFixed(2).replace(".",",")}</div></div>
+          <div><div style={{ fontSize:10, color:"var(--text-3)" }}>Lucro</div><div style={{ fontWeight:500, color:lucro>=0?"#0e7490":"#FF5252" }}>R$ {lucro.toFixed(2).replace(".",",")}</div></div>
+          <div><div style={{ fontSize:10, color:"var(--text-3)" }}>Margem</div><div style={{ fontWeight:500, color:mCor }}>{margem.toFixed(1)}%</div></div>
+          <div><div style={{ fontSize:10, color:"var(--text-3)" }}>Taxa {ehShopee?"Shopee":"ML"}</div><div style={{ fontWeight:500, color:"#FF5252" }}>R$ {taxa.toFixed(2).replace(".",",")}</div></div>
         </div>
       )}
       <div style={{ display:"flex", gap:8, marginTop:4 }}>
         <button onClick={onClose} style={{ flex:1, background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"9px", borderRadius:9, cursor:"pointer" }}>Cancelar</button>
         <button onClick={function(){ if(f.nome&&f.sku) onSave(f); }} disabled={!f.nome||!f.sku}
-          style={{ flex:2, background:f.nome&&f.sku?"#7c3aed":"var(--surface-3)", border:"none", color:f.nome&&f.sku?"#fff":"var(--text-3)", fontWeight:700, padding:"9px", borderRadius:9, cursor:f.nome&&f.sku?"pointer":"not-allowed" }}>
+          style={{ flex:2, background:f.nome&&f.sku?"#7c3aed":"var(--surface-3)", border:"none", color:f.nome&&f.sku?"#fff":"var(--text-3)", fontWeight:500, padding:"9px", borderRadius:9, cursor:f.nome&&f.sku?"pointer":"not-allowed" }}>
           Salvar e Acompanhar
         </button>
       </div>
@@ -4504,14 +4504,14 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
     <div style={{ padding:"0 20px" }}>
       <div style={{ padding:"12px 0 8px", borderBottom:"1px solid var(--border)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         <div>
-          <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)", marginBottom:4 }}>💲 Precificação</div>
+          <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)", marginBottom:4 }}>💲 Precificação</div>
           <div style={{ fontSize:13, color:"var(--text-2)" }}>Calcule o preço ideal para cada anúncio com base na margem desejada</div>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:7, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 16px" }}>
           <span style={{ fontSize:13, color:"var(--text-2)", fontWeight:600 }}>Margem alvo:</span>
           <input type="number" min="1" max="99" value={margemAlvo} onChange={function(e){setMargemAlvo(parseFloat(e.target.value)||20);}}
-            style={{ width:60, background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"6px 10px", borderRadius:8, fontSize:15, fontWeight:700, outline:"none", textAlign:"center" }} />
-          <span style={{ fontSize:15, fontWeight:700, color:"var(--text-strong)" }}>%</span>
+            style={{ width:60, background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"6px 10px", borderRadius:8, fontSize:15, fontWeight:500, outline:"none", textAlign:"center" }} />
+          <span style={{ fontSize:15, fontWeight:500, color:"var(--text-strong)" }}>%</span>
         </div>
       </div>
 
@@ -4541,7 +4541,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                 <button key={d} onClick={function(){ setShopeeDocSave(d); }}
                   style={{ background: ativo?"#EE4D2D":"var(--surface)", color: ativo?"#fff":"var(--text-2)",
                     border:"1px solid "+(ativo?"#EE4D2D":"var(--border)"), borderRadius:16,
-                    padding:"3px 12px", fontSize:11, fontWeight:700, cursor:"pointer" }}>{d}</button>
+                    padding:"3px 12px", fontSize:11, fontWeight:500, cursor:"pointer" }}>{d}</button>
               );
             })}
           </div>
@@ -4556,7 +4556,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
         return (
         <div style={{ background:"rgba(255,193,7,.12)", border:"1px solid rgba(255,193,7,.35)", borderRadius:10, padding:"12px 16px", margin:"12px 0" }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-            <div style={{ fontSize:13, fontWeight:700, color:"#FFC107" }}>
+            <div style={{ fontSize:13, fontWeight:500, color:"#FFC107" }}>
               ⚠️ {pendentesDoMkt.length} anúncio(s) com preço pendente de atualização {nomeMkt}
             </div>
           </div>
@@ -4574,9 +4574,9 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
               return (
                 <div key={id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"var(--surface)", border:"1px solid rgba(255,193,7,.35)", borderRadius:8, padding:"7px 12px" }}>
                   <div style={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontSize:12, color:"var(--text-strong)" }}>
-                    <span style={{ fontWeight:700, color:"#FFC107", marginRight:6 }}>SKU {skuRef}</span>
+                    <span style={{ fontWeight:500, color:"#FFC107", marginRight:6 }}>SKU {skuRef}</span>
                     {listingRef && (
-                      <span style={{ fontSize:9, fontWeight:700, padding:"1px 6px", borderRadius:4, marginRight:6, whiteSpace:"nowrap",
+                      <span style={{ fontSize:9, fontWeight:500, padding:"1px 6px", borderRadius:4, marginRight:6, whiteSpace:"nowrap",
                         background: tipoPrem?"rgba(139,92,246,.18)":"rgba(59,140,255,.18)",
                         color: tipoPrem?"#a78bfa":"#1976FF" }}>
                         {tipoPrem?"⭐ Premium 17%":"📋 Clássico 12%"}
@@ -4588,7 +4588,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                     {precoBruto > p.precoNovo + 0.001 && (
                       <span style={{ fontSize:11, color:"var(--text-3)", textDecoration:"line-through" }}>R$ {precoBruto.toFixed(2).replace(".",",")}</span>
                     )}
-                    <span style={{ fontSize:12, fontWeight:700, color:"#7c3aed" }}>→ R$ {p.precoNovo.toFixed(2).replace(".",",")}</span>
+                    <span style={{ fontSize:12, fontWeight:500, color:"#7c3aed" }}>→ R$ {p.precoNovo.toFixed(2).replace(".",",")}</span>
                     {!ehShopee && (
                       <a href={"https://www.mercadolivre.com.br/seller-admin/listing/edit?itemId="+id} target="_blank" rel="noreferrer"
                         style={{ fontSize:11, color:"#0e7490", textDecoration:"none", fontWeight:600, whiteSpace:"nowrap" }}>
@@ -4602,7 +4602,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                       </a>
                     )}
                     <button onClick={function(){ confirmarAtualizado(id); }}
-                      style={{ background:"#0a9d4e", border:"none", color:"#fff", fontWeight:700, padding:"4px 10px", borderRadius:6, cursor:"pointer", fontSize:11, whiteSpace:"nowrap" }}>
+                      style={{ background:"#0a9d4e", border:"none", color:"#fff", fontWeight:500, padding:"4px 10px", borderRadius:6, cursor:"pointer", fontSize:11, whiteSpace:"nowrap" }}>
                       ✓ Já atualizei
                     </button>
                   </div>
@@ -4617,7 +4617,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
       {/* Botão novo produto + Busca */}
       <div style={{ display:"flex", gap:7, margin:"14px 0", alignItems:"center" }}>
         <button onClick={function(){ setShowNovoProdutoPrec(true); }}
-          style={{ background:"#7c3aed", border:"none", color:"#fff", fontWeight:700, padding:"9px 14px", borderRadius:9, cursor:"pointer", fontSize:12, whiteSpace:"nowrap", flexShrink:0 }}>
+          style={{ background:"#7c3aed", border:"none", color:"#fff", fontWeight:500, padding:"9px 14px", borderRadius:9, cursor:"pointer", fontSize:12, whiteSpace:"nowrap", flexShrink:0 }}>
           + Precificar Novo Produto
         </button>
         <div style={{ position:"relative", flex:1 }}>
@@ -4644,7 +4644,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
       {showNovoProdutoPrec && (
         <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.5)", zIndex:600, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
           <div style={{ background:"var(--surface)", borderRadius:14, width:480, padding:20 }}>
-            <div style={{ fontWeight:700, fontSize:15, marginBottom:14 }}>+ Precificar Novo Produto</div>
+            <div style={{ fontWeight:500, fontSize:15, marginBottom:14 }}>+ Precificar Novo Produto</div>
             <NovoProdutoPrecForm
               marketplaceInicial={mktSel}
               shopeeDoc={shopeeDoc}
@@ -4678,7 +4678,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                 "Lucro Simulado","Margem Simulada","Ação"
               ].map(function(h){
                 var isSimul = ["💡 Vender por → Anunciar por","Lucro Simulado","Margem Simulada","Taxa ML (s/ desconto)"].includes(h);
-                return <th key={h} style={{ fontSize:10, color: isSimul?"#7c3aed":"var(--text-2)", fontWeight:600, textTransform:"uppercase", padding:"8px 10px", borderBottom:"1px solid var(--border)", textAlign:"left", whiteSpace:"nowrap", background: isSimul?"rgba(139,92,246,.12)":"transparent" }}>{h}</th>;
+                return <th key={h} style={{ fontSize:10, color: isSimul?"#7c3aed":"var(--text-2)", fontWeight:600, textTransform:"none", padding:"8px 10px", borderBottom:"1px solid var(--border)", textAlign:"left", whiteSpace:"nowrap", background: isSimul?"rgba(139,92,246,.12)":"transparent" }}>{h}</th>;
               })}
             </tr>
           </thead>
@@ -4737,7 +4737,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                         style={{ width:80, background:"var(--surface)", border:"1px solid #0e7490", color:"var(--text-strong)", padding:"2px 6px", borderRadius:4, fontSize:11, fontFamily:"monospace", outline:"none" }} />
                     ) : (
                       <span onClick={function(){ setEditingSkuId(l.id); }} title="Clique para editar o SKU"
-                        style={{ cursor:"pointer", fontSize:11, fontFamily:"monospace", fontWeight:700, color:"var(--text-2)", background:"var(--surface-3)", padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap", display:"inline-flex", alignItems:"center", gap:4 }}>
+                        style={{ cursor:"pointer", fontSize:11, fontFamily:"monospace", fontWeight:500, color:"var(--text-2)", background:"var(--surface-3)", padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap", display:"inline-flex", alignItems:"center", gap:4 }}>
                         {l.seller_sku||l.sku||"—"}
                         <span style={{ color:"#0e7490", fontSize:9 }}>✎</span>
                       </span>
@@ -4747,19 +4747,19 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                   {/* MLB */}
                   <td style={{ padding:"6px 8px", fontSize:11, color:"#0e7490", fontFamily:"monospace" }}>
                     {l._isExtra
-                      ? <span style={{ fontSize:10, fontWeight:700, color:"#FFC107", background:"rgba(255,193,7,.12)", border:"1px solid rgba(255,193,7,.35)", padding:"2px 7px", borderRadius:5, whiteSpace:"nowrap" }}>🆕 Novo</span>
+                      ? <span style={{ fontSize:10, fontWeight:500, color:"#FFC107", background:"rgba(255,193,7,.12)", border:"1px solid rgba(255,193,7,.35)", padding:"2px 7px", borderRadius:5, whiteSpace:"nowrap" }}>🆕 Novo</span>
                       : l.id}
                   </td>
 
                   {/* Tipo */}
                   <td style={{ padding:"6px 8px" }}>
                     {ehShopee ? (
-                      <span style={{ fontSize:10, fontWeight:700, padding:"2px 6px", borderRadius:5, whiteSpace:"nowrap",
+                      <span style={{ fontSize:10, fontWeight:500, padding:"2px 6px", borderRadius:5, whiteSpace:"nowrap",
                         background:"rgba(238,77,45,.14)", color:"#EE4D2D", border:"1px solid rgba(238,77,45,.4)" }}>
                         🛒 Shopee
                       </span>
                     ) : (
-                      <span style={{ fontSize:10, fontWeight:700, padding:"2px 6px", borderRadius:5, whiteSpace:"nowrap",
+                      <span style={{ fontSize:10, fontWeight:500, padding:"2px 6px", borderRadius:5, whiteSpace:"nowrap",
                         background: isPremium?"rgba(139,92,246,.14)":"rgba(59,140,255,.14)",
                         color: isPremium?"#7c3aed":"#1976FF",
                         border:"1px solid "+(isPremium?"rgba(139,92,246,.35)":"rgba(77,179,255,.35)") }}>
@@ -4792,7 +4792,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                   </td>
 
                   {/* Preço Atual */}
-                  <td style={{ padding:"6px 8px", fontSize:12, fontWeight:700, color:"var(--text-strong)", whiteSpace:"nowrap" }}>
+                  <td style={{ padding:"6px 8px", fontSize:12, fontWeight:500, color:"var(--text-strong)", whiteSpace:"nowrap" }}>
                     R$ {bruto.toFixed(2).replace(".",",")}
                   </td>
 
@@ -4839,7 +4839,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                       <div onClick={function(){ setEditingPrecoId(l.id); }} title="Clique para definir o preço de venda que você quer receber (já com desconto) — o sistema calcula o preço a anunciar" style={{ cursor:"pointer" }}>
                         {precoVendaDesejado > 0 ? (
                           <div>
-                            <span style={{ fontSize:13, fontWeight:800, color:"#7c3aed" }}>
+                            <span style={{ fontSize:13, fontWeight:600, color:"#7c3aed" }}>
                               📢 R$ {precoParaAnunciar.toFixed(2).replace(".",",")}
                             </span>
                             <div style={{ fontSize:10, color:"var(--text-2)" }}>
@@ -4847,7 +4847,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                               {descPct > 0 && <span style={{ color:"var(--text-3)" }}> (-{descPct}%)</span>}
                             </div>
                             {pendentesAtualizacao[l.id] && (
-                              <div style={{ fontSize:9, fontWeight:700, color:"#FFC107", background:"rgba(255,193,7,.12)", border:"1px solid rgba(255,193,7,.35)", padding:"1px 5px", borderRadius:4, marginTop:2, display:"inline-block" }}>
+                              <div style={{ fontSize:9, fontWeight:500, color:"#FFC107", background:"rgba(255,193,7,.12)", border:"1px solid rgba(255,193,7,.35)", padding:"1px 5px", borderRadius:4, marginTop:2, display:"inline-block" }}>
                                 ⏳ pendente {(pendentesAtualizacao[l.id].marketplace || "ml") === "shopee" ? "Shopee" : "ML"}
                               </div>
                             )}
@@ -4878,7 +4878,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                       <div onClick={function(){ setEditingDescId(l.id); }} title="% de desconto na promoção" style={{ cursor:"pointer" }}>
                         {descPct > 0 ? (
                           <div>
-                            <span style={{ fontSize:12, fontWeight:700, color:"#7c3aed", background:"rgba(139,92,246,.14)", padding:"2px 7px", borderRadius:5 }}>
+                            <span style={{ fontSize:12, fontWeight:500, color:"#7c3aed", background:"rgba(139,92,246,.14)", padding:"2px 7px", borderRadius:5 }}>
                               {descPct}%
                             </span>
                             <div style={{ fontSize:10, color:"#7c3aed", marginTop:1 }}>
@@ -4896,7 +4896,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
 
                   {/* Taxa sobre preço c/ desconto */}
                   <td style={{ padding:"6px 8px", background:"rgba(139,92,246,.12)" }}>
-                    <div style={{ fontSize:12, fontWeight:700, color:"#FF5252" }}>
+                    <div style={{ fontSize:12, fontWeight:500, color:"#FF5252" }}>
                       R$ {taxaSobreDesc.toFixed(2).replace(".",",")}
                     </div>
                     {ehShopee ? (() => {
@@ -4906,7 +4906,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                           <div style={{ fontSize:10, color:"var(--text-3)" }}>
                             {(f.pct*100).toFixed(0)}% + R$ {f.fixo}{shopeeDoc==="CPF" ? " + R$3" : ""}
                           </div>
-                          <div title="Taxa da Shopee 2026 por faixa de preço" style={{ fontSize:9, fontWeight:700, color:"#EE4D2D", marginTop:1 }}>
+                          <div title="Taxa da Shopee 2026 por faixa de preço" style={{ fontSize:9, fontWeight:500, color:"#EE4D2D", marginTop:1 }}>
                             Shopee {shopeeDoc}
                           </div>
                         </>
@@ -4917,7 +4917,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                           {(feeRate*100).toFixed(0)}% s/ {descPct>0?"desc":"atual"}
                         </div>
                         <div title="Taxa padrão do Mercado Livre: Clássico 12% · Premium 17%"
-                          style={{ fontSize:9, fontWeight:700, color: isPremium?"#7c3aed":"#1976FF", marginTop:1 }}>
+                          style={{ fontSize:9, fontWeight:500, color: isPremium?"#7c3aed":"#1976FF", marginTop:1 }}>
                           {isPremium ? "Premium 17%" : "Clássico 12%"}
                         </div>
                       </>
@@ -4928,7 +4928,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                   <td style={{ padding:"6px 8px", background:"rgba(139,92,246,.12)" }}>
                     {custo > 0 ? (
                       <div>
-                        <span style={{ fontSize:13, fontWeight:700, color:lucroFinal>=0?"#0e7490":"#FF5252" }}>
+                        <span style={{ fontSize:13, fontWeight:500, color:lucroFinal>=0?"#0e7490":"#FF5252" }}>
                           R$ {lucroFinal.toFixed(2).replace(".",",")}
                         </span>
                         {descPct > 0 && (
@@ -4941,7 +4941,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                   {/* Margem Simulada */}
                   <td style={{ padding:"6px 8px", background:"rgba(139,92,246,.12)" }}>
                     {custo > 0 ? (
-                      <span style={{ fontSize:13, fontWeight:700, color:mCor, background:mCor+"18", padding:"3px 8px", borderRadius:6, display:"inline-block" }}>
+                      <span style={{ fontSize:13, fontWeight:500, color:mCor, background:mCor+"18", padding:"3px 8px", borderRadius:6, display:"inline-block" }}>
                         {margemFinal.toFixed(1)}%
                         {margemFinal >= margemAlvo ? " ✓" : " ↓"}
                       </span>
@@ -5152,7 +5152,7 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
     <div style={{ padding: "0 12px" }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12, marginBottom:16 }}>
         <div>
-          <div style={{ fontWeight:800, fontSize:18, color:"var(--text-strong)" }}>🔎 Concorrência — melhorias do anúncio</div>
+          <div style={{ fontWeight:600, fontSize:18, color:"var(--text-strong)" }}>🔎 Concorrência — melhorias do anúncio</div>
           <div style={{ fontSize:12, color:"var(--text-3)", maxWidth:680 }}>Compara cada anúncio ativo com os <strong>mais vendidos da mesma categoria</strong> e mostra o que os líderes têm e o seu não (clipe, fotos em alta, Premium, atacado, garantia), além das boas práticas do ML.</div>
         </div>
         <div style={{ display:"flex", gap:8, alignItems:"center" }}>
@@ -5164,7 +5164,7 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
             </>
           )}
           <button onClick={analisarTodos} disabled={analisando || !categoriasUnicas.length}
-            style={{ background: analisando?"var(--surface-3)":"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"9px 18px", borderRadius:8, cursor:analisando?"wait":"pointer", fontSize:13 }}>
+            style={{ background: analisando?"var(--surface-3)":"#1976FF", border:"none", color:"#fff", fontWeight:500, padding:"9px 18px", borderRadius:8, cursor:analisando?"wait":"pointer", fontSize:13 }}>
             {analisando ? "Analisando..." : "🔍 Analisar (" + categoriasUnicas.length + " categorias)"}
           </button>
         </div>
@@ -5178,8 +5178,8 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
         ].map(function(c){
           return (
             <div key={c.label} style={{ background:"var(--surface)", border:"1px solid var(--border-soft)", borderRadius:12, padding:"14px 16px" }}>
-              <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:10, color:"var(--text-3)", fontWeight:700, textTransform:"uppercase", letterSpacing:".12em" }}>{c.label}</div>
-              <div style={{ fontSize:24, fontWeight:800, color:c.cor, marginTop:4 }}>{c.valor}</div>
+              <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:10, color:"var(--text-3)", fontWeight:500, textTransform:"none", letterSpacing:".12em" }}>{c.label}</div>
+              <div style={{ fontSize:24, fontWeight:600, color:c.cor, marginTop:4 }}>{c.valor}</div>
             </div>
           );
         })}
@@ -5228,8 +5228,8 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
                   {qtd === null
                     ? <span style={{ fontSize:12, color:"var(--text-3)" }}>não analisado</span>
                     : qtd === 0
-                      ? <span style={{ fontSize:12, fontWeight:700, color:"#0a9d4e" }}>✓ otimizado</span>
-                      : <span style={{ fontSize:13, fontWeight:800, color:corQtd }}>{qtd} melhoria{qtd>1?"s":""} {aberto ? "▲" : "▼"}</span>}
+                      ? <span style={{ fontSize:12, fontWeight:500, color:"#0a9d4e" }}>✓ otimizado</span>
+                      : <span style={{ fontSize:13, fontWeight:600, color:corQtd }}>{qtd} melhoria{qtd>1?"s":""} {aberto ? "▲" : "▼"}</span>}
                 </div>
               </div>
               {aberto && qtd > 0 && (
@@ -5240,7 +5240,7 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
                         <span style={{ fontSize:15, lineHeight:1.2 }}>{p.ico}</span>
                         <div style={{ minWidth:0 }}>
                           <div style={{ fontSize:13, fontWeight:600, color:"var(--text-strong)" }}>{p.t}
-                            {p.tipo==="lider" && <span style={{ marginLeft:8, fontSize:9, fontFamily:"'JetBrains Mono',monospace", color:"#FFC107", border:"1px solid rgba(255,193,7,.35)", borderRadius:6, padding:"1px 5px", textTransform:"uppercase", letterSpacing:".08em" }}>concorrente</span>}
+                            {p.tipo==="lider" && <span style={{ marginLeft:8, fontSize:9, fontFamily:"'JetBrains Mono',monospace", color:"#FFC107", border:"1px solid rgba(255,193,7,.35)", borderRadius:6, padding:"1px 5px", textTransform:"none", letterSpacing:".08em" }}>concorrente</span>}
                           </div>
                           <div style={{ fontSize:12, color:"var(--text-3)", marginTop:1 }}>{p.d}</div>
                         </div>
@@ -5465,7 +5465,7 @@ function ChatInternoWidget({ currentUser }) {
         💬
         {(naoLidas>0||tarefasMinhas>0) && (
           <span style={{ position:"absolute", top:-4, right:-4, background:"#FF5252", color:"#fff",
-            fontSize:11, fontWeight:700, borderRadius:10, minWidth:20, height:20, display:"flex",
+            fontSize:11, fontWeight:500, borderRadius:10, minWidth:20, height:20, display:"flex",
             alignItems:"center", justifyContent:"center", padding:"0 5px" }}>
             {naoLidas+tarefasMinhas}
           </span>
@@ -5480,7 +5480,7 @@ function ChatInternoWidget({ currentUser }) {
 
           {/* Header */}
           <div style={{ background:"#1976FF", padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-            <div style={{ color:"#fff", fontWeight:700, fontSize:14 }}>💬 Chat da Equipe</div>
+            <div style={{ color:"#fff", fontWeight:500, fontSize:14 }}>💬 Chat da Equipe</div>
             <button onClick={function(){setOpen(false);}} style={{ background:"transparent", border:"none", color:"var(--text-3)", fontSize:18, cursor:"pointer" }}>✕</button>
           </div>
 
@@ -5564,7 +5564,7 @@ function ChatInternoWidget({ currentUser }) {
               {/* Tarefas */}
               <div style={{ flex:1, overflowY:"auto", padding:"12px 14px" }}>
                 <button onClick={function(){setShowNovaTarefa(true);}}
-                  style={{ width:"100%", background:"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"9px", borderRadius:9, cursor:"pointer", fontSize:12, marginBottom:12 }}>
+                  style={{ width:"100%", background:"#1976FF", border:"none", color:"#fff", fontWeight:500, padding:"9px", borderRadius:9, cursor:"pointer", fontSize:12, marginBottom:12 }}>
                   + Nova Tarefa
                 </button>
                 {tarefas.length===0 && <div style={{ textAlign:"center", color:"var(--text-3)", fontSize:12, padding:20 }}>Nenhuma tarefa criada</div>}
@@ -5574,8 +5574,8 @@ function ChatInternoWidget({ currentUser }) {
                   return (
                     <div key={t.id} style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 12px", marginBottom:8, opacity:concluida?0.6:1 }}>
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:6 }}>
-                        <div style={{ fontSize:13, fontWeight:700, color:"var(--text-strong)", textDecoration:concluida?"line-through":"none" }}>{t.titulo}</div>
-                        <span style={{ fontSize:9, fontWeight:700, color:corPrior, background:corPrior+"18", padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
+                        <div style={{ fontSize:13, fontWeight:500, color:"var(--text-strong)", textDecoration:concluida?"line-through":"none" }}>{t.titulo}</div>
+                        <span style={{ fontSize:9, fontWeight:500, color:corPrior, background:corPrior+"18", padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
                           {t.prioridade}
                         </span>
                       </div>
@@ -5618,7 +5618,7 @@ function ModalNovaTarefa({ usuarios, onSave, onClose }) {
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:700, padding:16 }}>
       <div style={{ background:"var(--surface)", borderRadius:14, width:"100%", maxWidth:420, padding:20 }}>
-        <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)", marginBottom:14 }}>+ Nova Tarefa</div>
+        <div style={{ fontWeight:500, fontSize:15, color:"var(--text-strong)", marginBottom:14 }}>+ Nova Tarefa</div>
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           <input value={titulo} onChange={function(e){setTitulo(e.target.value);}} placeholder="Título da tarefa"
             style={{ background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
@@ -5643,7 +5643,7 @@ function ModalNovaTarefa({ usuarios, onSave, onClose }) {
           <button onClick={onClose} style={{ flex:1, background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"10px", borderRadius:9, cursor:"pointer" }}>Cancelar</button>
           <button onClick={function(){ if(titulo.trim()) onSave({titulo,descricao,responsavelId,prazo,prioridade}); }}
             disabled={!titulo.trim()}
-            style={{ flex:2, background:titulo.trim()?"#1976FF":"var(--surface-3)", border:"none", color:titulo.trim()?"#fff":"var(--text-3)", fontWeight:700, padding:"10px", borderRadius:9, cursor:titulo.trim()?"pointer":"not-allowed" }}>
+            style={{ flex:2, background:titulo.trim()?"#1976FF":"var(--surface-3)", border:"none", color:titulo.trim()?"#fff":"var(--text-3)", fontWeight:500, padding:"10px", borderRadius:9, cursor:titulo.trim()?"pointer":"not-allowed" }}>
             Criar Tarefa
           </button>
         </div>
@@ -5700,7 +5700,7 @@ function PainelConfiguracoesGlobal(props) {
     React.createElement("div", {style:{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",backdropFilter:"blur(4px)",zIndex:800,display:"flex",alignItems:"flex-start",justifyContent:"flex-end",padding:"56px 8px 8px"}},
       React.createElement("div", {style:{background:"var(--surface)",borderRadius:14,width:700,maxHeight:"calc(100vh - 68px)",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,.22)",overflow:"hidden"}},
         React.createElement("div", {style:{background:"#1976FF",padding:"13px 18px",display:"flex",justifyContent:"space-between",alignItems:"center"}},
-          React.createElement("div", {style:{color:"var(--text-strong)",fontWeight:700,fontSize:15}}, "Configuracoes do Sistema"),
+          React.createElement("div", {style:{color:"var(--text-strong)",fontWeight:500,fontSize:15}}, "Configuracoes do Sistema"),
           React.createElement("button", {onClick:onClose, style:{background:"transparent",border:"none",color:"var(--text-3)",fontSize:20,cursor:"pointer",lineHeight:1}}, "x")
         ),
         React.createElement("div", {style:{display:"flex",borderBottom:"2px solid var(--border)"}},
@@ -5713,12 +5713,12 @@ function PainelConfiguracoesGlobal(props) {
           aba==="config" ? React.createElement(ImpostosCompacto, {impostos:impostos,setImpostos:setImpostos,custosFixos:custosFixos,setCustosFixos:setCustosFixos,faturamentoMes:faturamentoMes,irpjCsllConfig:irpjCsllConfig,setIrpjCsllConfig:setIrpjCsllConfig}) :
           aba==="aparencia" ? React.createElement("div", {style:{display:"flex",gap:10}},
             [{v:false,l:"Claro"},{v:true,l:"Escuro"}].map(function(t){
-              return React.createElement("button",{key:String(t.v),onClick:function(){setDarkMode(t.v);localStorage.setItem("darkMode",t.v?"1":"0");},style:{flex:1,padding:14,borderRadius:10,border:"2px solid "+(darkMode===t.v?"#1976FF":"var(--border)"),background:darkMode===t.v?"#1976FF":"var(--surface)",color:darkMode===t.v?"#fff":"var(--text-2)",fontWeight:700,fontSize:14,cursor:"pointer"}}, t.v?"Escuro":"Claro");
+              return React.createElement("button",{key:String(t.v),onClick:function(){setDarkMode(t.v);localStorage.setItem("darkMode",t.v?"1":"0");},style:{flex:1,padding:14,borderRadius:10,border:"2px solid "+(darkMode===t.v?"#1976FF":"var(--border)"),background:darkMode===t.v?"#1976FF":"var(--surface)",color:darkMode===t.v?"#fff":"var(--text-2)",fontWeight:500,fontSize:14,cursor:"pointer"}}, t.v?"Escuro":"Claro");
             })
           ) :
           aba==="backup" ? React.createElement("div", {style:{display:"flex",flexDirection:"column",gap:14}},
             React.createElement("div", {style:{background:"var(--bg-2)",border:"1px solid var(--border)",borderRadius:12,padding:16}},
-              React.createElement("div", {style:{fontWeight:700,fontSize:14,marginBottom:12}}, "Exportar Backup"),
+              React.createElement("div", {style:{fontWeight:500,fontSize:14,marginBottom:12}}, "Exportar Backup"),
               React.createElement("button", {
                 onClick:function(){
                   var chaves=["produtos_cadastro","mov_estoque","vendas_estoque_baixadas","ml_orders_cache","contas_pagar","contas_bancarias","lancamentos","nfe_entrada","nfe_saida","costs_config","fretes_config","descontos_config","precos_venda_config","precos_pendentes_ml","icms_por_estado","irpj_csll_config","fornecedores_db","chat_interno_mensagens","chat_interno_tarefas","min_stock_anuncios","depositos_estoque"];
@@ -5727,11 +5727,11 @@ function PainelConfiguracoesGlobal(props) {
                   var blob=new Blob([JSON.stringify(bk,null,2)],{type:"application/json"});
                   var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="mlmargem_backup_"+new Date().toLocaleDateString("sv-SE")+".json";a.click();
                 },
-                style:{background:"#1976FF",border:"none",color:"#fff",fontWeight:700,padding:"10px 20px",borderRadius:9,cursor:"pointer",fontSize:13}
+                style:{background:"#1976FF",border:"none",color:"#fff",fontWeight:500,padding:"10px 20px",borderRadius:9,cursor:"pointer",fontSize:13}
               }, "Exportar Backup")
             ),
             React.createElement("div", {style:{background:"var(--bg-2)",border:"1px solid var(--border)",borderRadius:12,padding:16}},
-              React.createElement("div", {style:{fontWeight:700,fontSize:14,marginBottom:4}}, "Restaurar Backup"),
+              React.createElement("div", {style:{fontWeight:500,fontSize:14,marginBottom:4}}, "Restaurar Backup"),
               React.createElement("label", {style:{background:"var(--surface)",border:"2px dashed var(--border)",borderRadius:9,padding:14,display:"block",textAlign:"center",cursor:"pointer",fontSize:13,color:"var(--text-2)"}},
                 "Clique para selecionar arquivo de backup (.json)",
                 React.createElement("input", {type:"file",accept:".json",style:{display:"none"},onChange:function(e){
@@ -5748,9 +5748,9 @@ function PainelConfiguracoesGlobal(props) {
             usuarios.map(function(u){
               var isMe=u.id===currentUser.id;
               return React.createElement("div",{key:u.id,style:{background:"var(--bg-2)",border:"1px solid var(--border)",borderRadius:10,padding:"10px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:10}},
-                React.createElement("div",{style:{width:36,height:36,borderRadius:9,background:"#1976FF",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:"#FFC107",flexShrink:0}}, u.nome&&u.nome.charAt(0).toUpperCase()),
+                React.createElement("div",{style:{width:36,height:36,borderRadius:9,background:"#1976FF",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:600,color:"#FFC107",flexShrink:0}}, u.nome&&u.nome.charAt(0).toUpperCase()),
                 React.createElement("div",{style:{flex:1,minWidth:0}},
-                  React.createElement("div",{style:{fontWeight:700,fontSize:13,color:"var(--text-strong)"}}, u.nome, isMe&&React.createElement("span",{style:{fontSize:10,color:"#0e7490",background:"rgba(59,140,255,.14)",padding:"1px 5px",borderRadius:4,marginLeft:6}},"voce")),
+                  React.createElement("div",{style:{fontWeight:500,fontSize:13,color:"var(--text-strong)"}}, u.nome, isMe&&React.createElement("span",{style:{fontSize:10,color:"#0e7490",background:"rgba(59,140,255,.14)",padding:"1px 5px",borderRadius:4,marginLeft:6}},"voce")),
                   React.createElement("div",{style:{fontSize:11,color:"var(--text-2)"}}, "@"+u.usuario+" - "+(u.admin?"Admin":"Usuario")+" - ",React.createElement("span",{style:{color:u.ativo?"#0a9d4e":"#FF5252",fontWeight:600}},u.ativo?"Ativo":"Inativo")),
                   u.email&&React.createElement("div",{style:{fontSize:10,color:"var(--text-3)",marginTop:1}}, u.email)
                 ),
@@ -5760,7 +5760,7 @@ function PainelConfiguracoesGlobal(props) {
                 )
               );
             }),
-            React.createElement("button",{onClick:function(){setEditingUser(null);setShowModalUser(true);},style:{width:"100%",background:"#1976FF",border:"none",color:"#fff",fontWeight:700,padding:10,borderRadius:9,cursor:"pointer",fontSize:13,marginTop:8}},
+            React.createElement("button",{onClick:function(){setEditingUser(null);setShowModalUser(true);},style:{width:"100%",background:"#1976FF",border:"none",color:"#fff",fontWeight:500,padding:10,borderRadius:9,cursor:"pointer",fontSize:13,marginTop:8}},
               "+ Novo Usuario"
             )
           )
@@ -7158,7 +7158,7 @@ export default function App() {
 
         /* ── TABELAS ── */
         table{border-collapse:collapse;width:100%}
-        th{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.12em;padding:10px 14px;border-bottom:1px solid var(--border);text-align:left;font-weight:700;background:var(--bg-2);white-space:nowrap}
+        th{font-family:inherit;font-size:11px;color:var(--text-3);text-transform:none;letter-spacing:0.01em;padding:11px 14px;border-bottom:1px solid var(--border);text-align:left;font-weight:500;background:var(--bg-2);white-space:nowrap}
         td{padding:10px 14px;font-size:13px;border-bottom:1px solid var(--border);vertical-align:middle;color:var(--text-2)}
         tr:last-child td{border-bottom:none}
         tbody tr:hover td{background:var(--bg-2);transition:background .1s}
@@ -7208,10 +7208,10 @@ export default function App() {
         display:"flex", flexDirection:"column", padding:"14px 12px", zIndex:100 }}>
         {/* Logo */}
         <div style={{ display:"flex", alignItems:"center", gap:9, padding:"2px 6px 14px", borderBottom:"1px solid var(--border-soft)", marginBottom:10 }}>
-          <div style={{ width:34, height:34, borderRadius:"50%", background:"rgba(77,179,255,.12)", border:"1px solid rgba(77,179,255,.45)", boxShadow:"0 0 14px rgba(77,179,255,.35)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:15, color:"#1976FF", letterSpacing:-0.5, flexShrink:0 }}>F</div>
+          <div style={{ width:34, height:34, borderRadius:"50%", background:"rgba(77,179,255,.12)", border:"1px solid rgba(77,179,255,.45)", boxShadow:"0 0 14px rgba(77,179,255,.35)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Space Grotesk',sans-serif", fontWeight:500, fontSize:15, color:"#1976FF", letterSpacing:-0.5, flexShrink:0 }}>F</div>
           <div>
-            <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:15, color:"var(--text-strong)", letterSpacing:-0.4, lineHeight:1.2 }}>Flow</div>
-            <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:8, color:"var(--text-3)", letterSpacing:2, textTransform:"uppercase", lineHeight:1, marginTop:2 }}>Marketplaces</div>
+            <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:500, fontSize:15, color:"var(--text-strong)", letterSpacing:-0.4, lineHeight:1.2 }}>Flow</div>
+            <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:8, color:"var(--text-3)", letterSpacing:2, textTransform:"none", lineHeight:1, marginTop:2 }}>Marketplaces</div>
           </div>
         </div>
         {/* Abas de navegação — verticais */}
@@ -7261,7 +7261,7 @@ export default function App() {
               var conteudo = [
                 <span key="l" style={{ whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{t.label}</span>,
                 t.badge != null ? (
-                  <span key="b" style={{ fontSize:10, fontWeight:700, padding:"1px 7px", borderRadius:10, flexShrink:0,
+                  <span key="b" style={{ fontSize:10, fontWeight:500, padding:"1px 7px", borderRadius:10, flexShrink:0,
                     background: isActive ? "#1976FF" : "var(--surface-3)",
                     color: isActive ? "#fff" : "var(--text-3)", lineHeight:1.6 }}>
                     {t.badge}
@@ -7292,7 +7292,7 @@ export default function App() {
               if (!itens.length) return null;
               return (
                 <div key={g.titulo} style={{ marginBottom:4 }}>
-                  <div style={{ fontSize:9, fontWeight:700, letterSpacing:1.4, textTransform:"uppercase", color:"var(--text-4)", padding:"12px 12px 5px" }}>{g.titulo}</div>
+                  <div style={{ fontSize:9, fontWeight:500, letterSpacing:1.4, textTransform:"none", color:"var(--text-4)", padding:"12px 12px 5px" }}>{g.titulo}</div>
                   {itens.map(renderItem)}
                 </div>
               );
@@ -7307,7 +7307,7 @@ export default function App() {
         <div style={{ borderTop:"1px solid var(--border-soft)", paddingTop:10, display:"flex", flexDirection:"column", gap:8 }}>
           <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
             {!token && <span style={{ background: "var(--surface-3)", border: "1px solid var(--border)", color: "var(--text-3)", fontSize: 10, padding: "3px 9px", borderRadius: 20, fontWeight: 600 }}>● Não conectado</span>}
-            {token && <span style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", color: "#0a9d4e", fontSize: 10, padding: "3px 9px", borderRadius: 20, fontWeight: 700, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"100%" }}>● {user?.nickname}</span>}
+            {token && <span style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", color: "#0a9d4e", fontSize: 10, padding: "3px 9px", borderRadius: 20, fontWeight: 500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"100%" }}>● {user?.nickname}</span>}
             <SinoNotificacoes notificacoes={notificacoes} setNotificacoes={setNotificacoes} darkMode={darkMode} />
           </div>
           {loading && <span style={{ color: "var(--text-3)", fontSize: 11 }}>⏳ {loadingMsg}</span>}
@@ -7331,11 +7331,11 @@ export default function App() {
             </button>
           )}
           <button onClick={function(){ window.location.href = "/api/auth/login"; }}
-            style={{ background: "#1976FF", border: "none", color: "#fff", fontWeight: 700, padding: "9px", borderRadius: 8, cursor: "pointer", fontSize: 12, width:"100%" }}>
+            style={{ background: "#1976FF", border: "none", color: "#fff", fontWeight: 500, padding: "9px", borderRadius: 8, cursor: "pointer", fontSize: 12, width:"100%" }}>
             {token ? "Reconectar" : "Conectar ML"}
           </button>
           <div style={{ display:"flex", alignItems:"center", gap:6, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, padding:"6px 8px" }}>
-            <div style={{ width:26, height:26, borderRadius:8, background:"#1976FF", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:800, color:"#FFC107", flexShrink:0 }}>
+            <div style={{ width:26, height:26, borderRadius:8, background:"#1976FF", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:600, color:"#FFC107", flexShrink:0 }}>
               {currentUser?.nome?.charAt(0).toUpperCase()}
             </div>
             <div style={{ fontSize:12, lineHeight:1.3, minWidth:0 }}>
@@ -7380,7 +7380,7 @@ export default function App() {
                     {t.label}
                     {t.badge != null && (
                       <span style={{ background:active?"#1976FF":"var(--surface-3)", color:active?"#fff":"var(--text-2)",
-                        fontSize:11, fontWeight:700, padding:"1px 7px", borderRadius:20 }}>{t.badge}</span>
+                        fontSize:11, fontWeight:500, padding:"1px 7px", borderRadius:20 }}>{t.badge}</span>
                     )}
                   </button>
                 );
@@ -7390,7 +7390,7 @@ export default function App() {
             {(abaAnuncio) === "outros" ? (
               <div style={{ textAlign:"center", padding:"60px 20px", color:"var(--text-3)" }}>
                 <div style={{ fontSize:48, marginBottom:12 }}>🔌</div>
-                <div style={{ fontWeight:700, fontSize:16, color:"var(--text-strong)", marginBottom:8 }}>Em breve: outros marketplaces</div>
+                <div style={{ fontWeight:500, fontSize:16, color:"var(--text-strong)", marginBottom:8 }}>Em breve: outros marketplaces</div>
                 <div style={{ fontSize:13 }}>Integração com Shopee, Shein, Amazon e outros em desenvolvimento</div>
               </div>
             ) : (
@@ -7517,7 +7517,7 @@ export default function App() {
                             const bg = abaixo ? "rgba(255,82,82,.12)" : qty === 0 ? "rgba(255,82,82,.12)" : qty <= 5 ? "rgba(255,193,7,.12)" : "rgba(0,200,83,.12)";
                             return (
                               <div>
-                                <span style={{ fontWeight: 700, fontSize: 13, color, background: bg, padding: "3px 10px", borderRadius: 6, display: "inline-block", marginBottom: 4 }}>
+                                <span style={{ fontWeight: 500, fontSize: 13, color, background: bg, padding: "3px 10px", borderRadius: 6, display: "inline-block", marginBottom: 4 }}>
                                   {qty} un. {abaixo ? "⚠" : ""}
                                 </span>
                                 <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -7532,7 +7532,7 @@ export default function App() {
                         </td>
                         <td>
                           <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 8, background: scoreBg(l.score) }}>
-                            <span style={{ fontSize: 13, fontWeight: 800, color: scoreColor(l.score) }}>{l.score}</span>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: scoreColor(l.score) }}>{l.score}</span>
                             <span style={{ fontSize: 11, color: scoreColor(l.score), fontWeight: 600 }}>{scoreLabel(l.score)}</span>
                           </div>
                         </td>
@@ -7541,26 +7541,26 @@ export default function App() {
                           {l.hasPromo ? (
                             <span style={{ fontSize: 13, color: "var(--text-3)", textDecoration: "line-through" }}>{fmt(l.originalPrice)}</span>
                           ) : (
-                            <span style={{ fontWeight: 700, color: "var(--text-strong)", fontSize: 13 }}>{fmt(l.originalPrice)}</span>
+                            <span style={{ fontWeight: 500, color: "var(--text-strong)", fontSize: 13 }}>{fmt(l.originalPrice)}</span>
                           )}
                         </td>
                         <td>
                           {l.hasPromo ? (
                             <div>
-                              <span style={{ fontWeight: 700, color: "#FF5252", fontSize: 13 }}>{fmt(l.salePrice)}</span>
+                              <span style={{ fontWeight: 500, color: "#FF5252", fontSize: 13 }}>{fmt(l.salePrice)}</span>
                               <span style={{ fontSize: 10, color: "#FF5252", background: "rgba(255,82,82,.12)", padding: "1px 6px", borderRadius: 4, fontWeight: 600, marginLeft: 4 }}>Promo</span>
                             </div>
                           ) : (
-                            <span style={{ fontWeight: 700, color: "var(--text-strong)" }}>{fmt(l.salePrice)}</span>
+                            <span style={{ fontWeight: 500, color: "var(--text-strong)" }}>{fmt(l.salePrice)}</span>
                           )}
                         </td>
                         <td>
-                          <span style={{ color: "#FFC107", fontWeight: 700 }}>{fmt(l.fee)}</span>
+                          <span style={{ color: "#FFC107", fontWeight: 500 }}>{fmt(l.fee)}</span>
                           <div style={{ fontSize: 10, color: "var(--text-3)" }}>{fmtPct(l.feeRate)}</div>
                         </td>
                         <td>
                           <div style={{ fontSize: 11, color: frete.topColor, background: frete.topBg, padding: "2px 7px", borderRadius: 5, fontWeight: 600, display: "inline-block", marginBottom: 3 }}>{frete.topLabel}</div>
-                          <div style={{ fontSize: 11, color: frete.bottomColor, fontWeight: 700 }}>{frete.bottomLabel}</div>
+                          <div style={{ fontSize: 11, color: frete.bottomColor, fontWeight: 500 }}>{frete.bottomLabel}</div>
                           {(function(){
                             try {
                               var fretesConf = JSON.parse(localStorage.getItem("fretes_config")||"{}");
@@ -7568,7 +7568,7 @@ export default function App() {
                               var fr = l.freteSeller||0;
                               if (fc>0 && fr>fc) return (
                                 <div style={{ marginTop:2 }}>
-                                  <span style={{ fontSize:9, fontWeight:700, background:"rgba(255,193,7,.10)", color:"#FFC107", border:"1px solid rgba(255,193,7,.35)", padding:"1px 5px", borderRadius:3, whiteSpace:"nowrap" }}>
+                                  <span style={{ fontSize:9, fontWeight:500, background:"rgba(255,193,7,.10)", color:"#FFC107", border:"1px solid rgba(255,193,7,.35)", padding:"1px 5px", borderRadius:3, whiteSpace:"nowrap" }}>
                                     🚚 frete +R${(fr-fc).toFixed(2).replace(".",",")}
                                   </span>
                                 </div>
@@ -7578,7 +7578,7 @@ export default function App() {
                           })()}
                         </td>
                         <td>
-                          <span style={{ fontWeight: 700, color: "#0a9d4e", fontSize: 13 }}>{fmt(l.youReceive)}</span>
+                          <span style={{ fontWeight: 500, color: "#0a9d4e", fontSize: 13 }}>{fmt(l.youReceive)}</span>
                           <div style={{ fontSize: 10, color: "var(--text-3)" }}>após tarifa e frete</div>
                         </td>
                         <td>
@@ -7587,10 +7587,10 @@ export default function App() {
                             onBlur={function(){ setEditandoCustoId(function(cur){ return cur === l.id ? null : cur; }); }}
                             style={{ background: "var(--bg-2)", border: "1px solid var(--border)", color: "var(--text-strong)", padding: "5px 8px", borderRadius: 6, width: 80, fontSize: 12, textAlign: "right" }} />
                         </td>
-                        <td style={{ color: l.profit >= 0 ? "#0a9d4e" : "#FF5252", fontWeight: 700 }}>{fmt(l.profit)}</td>
+                        <td style={{ color: l.profit >= 0 ? "#0a9d4e" : "#FF5252", fontWeight: 500 }}>{fmt(l.profit)}</td>
                         <td style={{ minWidth: 130 }}><MarginBar value={l.margin} /></td>
                         <td>
-                          <span style={{ color: l.totalProfit >= 0 ? "#0a9d4e" : "#FF5252", fontWeight: 700 }}>{l.cost > 0 ? fmt(l.totalProfit) : "—"}</span>
+                          <span style={{ color: l.totalProfit >= 0 ? "#0a9d4e" : "#FF5252", fontWeight: 500 }}>{l.cost > 0 ? fmt(l.totalProfit) : "—"}</span>
                           <div style={{ fontSize: 10, color: "var(--text-3)" }}>{l.sold_quantity} vendidos</div>
                         </td>
                         <td>
@@ -7632,7 +7632,7 @@ export default function App() {
                     {t.label}
                     {t.badge != null && (
                       <span style={{ background:active?"#1976FF":"var(--surface-3)", color:active?"#fff":"var(--text-2)",
-                        fontSize:11, fontWeight:700, padding:"1px 7px", borderRadius:20 }}>{t.badge}</span>
+                        fontSize:11, fontWeight:500, padding:"1px 7px", borderRadius:20 }}>{t.badge}</span>
                     )}
                   </button>
                 );
@@ -7641,7 +7641,7 @@ export default function App() {
             {(abaPedido) === "outros" ? (
               <div style={{ textAlign:"center", padding:"60px 20px", color:"var(--text-3)" }}>
                 <div style={{ fontSize:48, marginBottom:12 }}>🔌</div>
-                <div style={{ fontWeight:700, fontSize:16, color:"var(--text-strong)", marginBottom:8 }}>Em breve: outros marketplaces</div>
+                <div style={{ fontWeight:500, fontSize:16, color:"var(--text-strong)", marginBottom:8 }}>Em breve: outros marketplaces</div>
                 <div style={{ fontSize:13 }}>Integração com Shopee, Shein, Amazon e outros em desenvolvimento</div>
               </div>
             ) : (
@@ -7716,7 +7716,7 @@ export default function App() {
                   <tr>
                     {["Pedido","Status","Envio","Cliente","Produto","Data","Preço","Qtd","Tarifa ML","Frete","Você recebe","Lucro","Margem"].map(function(h,i){
                       var align = [6,7,8,9,10,11].includes(i) ? "right" : i===7 ? "center" : "left";
-                      return <th key={h} style={{ fontSize:11, color:"var(--text-3)", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 12px", borderBottom:"1px solid var(--border)", textAlign:align, fontWeight:600, background:"var(--bg-2)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{h}</th>;
+                      return <th key={h} style={{ fontSize:11, color:"var(--text-3)", textTransform:"none", letterSpacing:0.8, padding:"10px 12px", borderBottom:"1px solid var(--border)", textAlign:align, fontWeight:600, background:"var(--bg-2)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{h}</th>;
                     })}
                   </tr>
                 </thead>
@@ -7746,7 +7746,7 @@ export default function App() {
                               </button>
                               {showClienteDetalhe === o.id && (
                                 <div style={{ position:"fixed", zIndex:900, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", boxShadow:"0 8px 32px rgba(0,0,0,.15)", minWidth:260, marginTop:4 }}>
-                                  <div style={{ fontWeight:700, fontSize:14, color:"var(--text-strong)", marginBottom:10, display:"flex", justifyContent:"space-between" }}>
+                                  <div style={{ fontWeight:500, fontSize:14, color:"var(--text-strong)", marginBottom:10, display:"flex", justifyContent:"space-between" }}>
                                     👤 {o.buyerName}
                                     <button onClick={function(e){ e.stopPropagation(); setShowClienteDetalhe(null); }} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--text-3)", fontSize:14 }}>✕</button>
                                   </div>
@@ -7785,12 +7785,12 @@ export default function App() {
                           </div>
                         </td>
                         <td style={{ padding:"7px 10px", fontSize:11, color:"var(--text-2)", whiteSpace:"nowrap" }}>{fmtDate(o.date)}</td>
-                        <td style={{ padding:"7px 10px", fontSize:12, fontWeight:700, color:"var(--text-strong)", textAlign:"right", whiteSpace:"nowrap" }}>{fmt(o.price)}</td>
+                        <td style={{ padding:"7px 10px", fontSize:12, fontWeight:500, color:"var(--text-strong)", textAlign:"right", whiteSpace:"nowrap" }}>{fmt(o.price)}</td>
                         <td style={{ padding:"7px 10px", fontSize:11, color:"var(--text-2)", textAlign:"center" }}>×{o.qty}</td>
                         <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#FFC107", fontWeight:600, fontSize:12 }}>{fmt(o.fee)}</span></td>
                         <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#7c3aed", fontWeight:600, fontSize:12 }}>{o.freteSeller > 0 ? fmt(o.freteSeller) : "—"}</span></td>
-                        <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#0a9d4e", fontWeight:700, fontSize:12 }}>{fmt(youReceive)}</span></td>
-                        <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap", fontSize:12, color:o.profit>=0?"#0a9d4e":"#FF5252", fontWeight:700 }}>{o.cost > 0 ? fmt(o.profit) : "—"}</td>
+                        <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#0a9d4e", fontWeight:500, fontSize:12 }}>{fmt(youReceive)}</span></td>
+                        <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap", fontSize:12, color:o.profit>=0?"#0a9d4e":"#FF5252", fontWeight:500 }}>{o.cost > 0 ? fmt(o.profit) : "—"}</td>
                         <td style={{ padding:"10px 12px" }}><MarginBar value={o.margin} /></td>
                       </tr>
                     );

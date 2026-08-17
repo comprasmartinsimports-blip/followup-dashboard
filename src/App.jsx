@@ -3996,20 +3996,22 @@ export default function App() {
   const [loadingMsg, setLoadingMsg] = useState("");
   // ── Auth ──────────────────────────────────────────────────
   const [currentUser, setCurrentUser] = useState(() => getSession());
+  // true enquanto validamos o cookie no servidor ao abrir — evita piscar o login numa guia nova.
+  const [authChecking, setAuthChecking] = useState(true);
 
-  // Valida o cookie de sessão no servidor ao iniciar — se expirou/foi revogado,
-  // volta para a tela de login em vez de operar com uma sessão local órfã.
+  // Ao abrir (INCLUSIVE em nova guia), valida o cookie de sessão no servidor. O cookie app_session
+  // é compartilhado entre guias, mas o sessionStorage NÃO — então a guia nova restaura a sessão
+  // pelo servidor, sem pedir login de novo. Se não estiver autenticado, cai na tela de login.
   useEffect(function(){
-    if (!getSession()) return;
     fetch("/api/auth/app-login").then(function(r){ return r.json(); }).then(function(d){
-      if (d && d.authenticated) {
-        if (d.user) { setSession(d.user); setCurrentUser(d.user); }
+      if (d && d.authenticated && d.user) {
+        setSession(d.user); setCurrentUser(d.user);
         sincronizarUsuariosDoServidor();
-      } else {
-        clearSession();
-        setCurrentUser(null);
+      } else if (getSession()) {
+        // sessão local órfã (cookie expirou/revogado) → limpa e volta ao login
+        clearSession(); setCurrentUser(null);
       }
-    }).catch(function(){});
+    }).catch(function(){}).finally(function(){ setAuthChecking(false); });
   }, []);
   const [lastUpdate, setLastUpdate] = useState(() => localStorage.getItem("ml_last_update"));
   const [minutesTick, setMinutesTick] = useState(0);
@@ -5118,7 +5120,15 @@ export default function App() {
     if (stored) setLastUpdate(stored);
   }, [token]);
 
-  if (!currentUser) return <LoginScreen onLogin={(user) => { setCurrentUser(user); }} />;
+  if (!currentUser) {
+    // Enquanto valida o cookie (ex.: guia recém-aberta), não pisca o login: mostra um loading.
+    if (authChecking) return (
+      <div style={{ minHeight:"100vh", backgroundColor:"var(--bg)", display:"flex", alignItems:"center", justifyContent:"center", color:"var(--text-3)", fontFamily:"'Inter',system-ui,sans-serif", fontSize:14 }}>
+        Carregando…
+      </div>
+    );
+    return <LoginScreen onLogin={(user) => { setCurrentUser(user); }} />;
+  }
 
   return (
     <div className={darkMode?"dark":""} style={{ minHeight:"100vh", background:"transparent", color:"var(--text-strong)", fontFamily:"'Inter',system-ui,sans-serif", transition:"background .2s,color .2s", display:"flex", alignItems:"flex-start" }}>

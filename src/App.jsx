@@ -1540,57 +1540,100 @@ function ComprasTab({ produtos, pedidos, salvar }) {
 // Dashboard com os dados REAIS da empresa (a partir dos pedidos já sincronizados): faturamento,
 // lucro líquido, margem, taxas, impostos, custo e top produtos — com filtro por período.
 function DashboardTab({ enrichedOrders }) {
-  const [periodo, setPeriodo] = useState("30"); // hoje | 7 | 30 | tudo
+  const [periodo, setPeriodo] = useState("30"); // hoje | 7 | 30 | mesatual | custom
+  const [deData, setDeData] = useState("");
+  const [ateData, setAteData] = useState("");
+  const [marketplace, setMarketplace] = useState("todos"); // todos | ml | shopee
   const hojeStr = new Date().toISOString().slice(0, 10);
   var cutoff = "0000-00-00";
-  if (periodo !== "tudo") {
-    var d = new Date(); d.setDate(d.getDate() - (periodo === "hoje" ? 0 : parseInt(periodo, 10)));
+  if (periodo === "7" || periodo === "30") {
+    var d = new Date(); d.setDate(d.getDate() - parseInt(periodo, 10));
     cutoff = d.toISOString().slice(0, 10);
   }
+  function noPeriodo(dt){
+    if (!dt) return false;
+    if (periodo === "hoje") return dt === hojeStr;
+    if (periodo === "mesatual") return dt.slice(0, 7) === hojeStr.slice(0, 7);
+    if (periodo === "custom") {
+      if (deData && dt < deData) return false;
+      if (ateData && dt > ateData) return false;
+      return true;
+    }
+    return dt >= cutoff; // 7 | 30 dias
+  }
+  function noCanal(o){
+    if (marketplace === "todos") return true;
+    var mk = o.marketplace || "ml"; // hoje todos os pedidos são do Mercado Livre
+    return mk === marketplace;
+  }
   var validos = (enrichedOrders || []).filter(function(o){
-    if (o.status === "cancelled") return false;
-    if (periodo === "hoje") return (o.date || "") === hojeStr;
-    return (o.date || "") >= cutoff;
+    return o.status !== "cancelled" && noPeriodo((o.date || "").slice(0, 10)) && noCanal(o);
   });
-  var fat = 0, taxas = 0, impostos = 0, custo = 0, lucro = 0, porProduto = {};
+  var fat = 0, taxas = 0, impostos = 0, custo = 0, lucro = 0, frete = 0, totalQtd = 0, porProduto = {};
   validos.forEach(function(o){
     var q = o.qty || 1;
     var lucroPed = (o.profit || 0) * q;
     fat += (o.price || 0) * q; taxas += (o.fee || 0) * q; impostos += (o.imposto || 0) * q;
-    custo += (o.cost || 0) * q; lucro += lucroPed;
+    custo += (o.cost || 0) * q; lucro += lucroPed; frete += (o.freteSeller || 0); totalQtd += q;
     var k = o.listing_id || o.title || "?";
     if (!porProduto[k]) porProduto[k] = { titulo: o.title || k, lucro: 0, qtd: 0 };
     porProduto[k].lucro += lucroPed; porProduto[k].qtd += q;
   });
   var nPed = validos.length;
+  var fatLiq = fat - taxas - frete;              // faturamento líquido = bruto − taxas de venda − frete grátis pago pelo vendedor
   var ticket = nPed ? fat / nPed : 0;
   var margem = fat ? (lucro / fat * 100) : 0;
-  var top = Object.keys(porProduto).map(function(k){ return porProduto[k]; }).sort(function(a,b){ return b.lucro - a.lucro; }).slice(0, 8);
   var kpis = [
-    { l:"Faturamento", v:fmt(fat), c:"var(--text-strong)" },
+    { l:"Faturamento bruto", v:fmt(fat), c:"var(--text-strong)" },
+    { l:"Faturamento líquido", v:fmt(fatLiq), c:"var(--text-strong)", sub:"após taxas de venda e frete grátis" },
     { l:"Lucro líquido", v:fmt(lucro), c: lucro >= 0 ? "#0a9d4e" : "#FF5252" },
     { l:"Margem", v:margem.toFixed(1) + "%", c: margem >= 0 ? "#0a9d4e" : "#FF5252" },
     { l:"Pedidos", v:String(nPed), c:"var(--text-strong)" },
+    { l:"Produtos vendidos", v:String(totalQtd), c:"var(--text-strong)" },
     { l:"Ticket médio", v:fmt(ticket), c:"var(--text-strong)" },
     { l:"Taxas do marketplace", v:"- " + fmt(taxas), c:"#FFC107" },
+    { l:"Frete grátis (seu custo)", v:"- " + fmt(frete), c:"#FFC107" },
     { l:"Impostos", v:"- " + fmt(impostos), c:"#FFC107" },
     { l:"Custo dos produtos", v:"- " + fmt(custo), c:"#FFC107" },
   ];
-  var periodos = [["hoje","Hoje"],["7","7 dias"],["30","30 dias"],["tudo","Tudo"]];
+  var periodos = [["hoje","Hoje"],["7","7 dias"],["30","30 dias"],["mesatual","Mês atual"]];
+  var _inpData = { background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"6px 8px", borderRadius:8, fontSize:12, colorScheme:"inherit" };
   return (
     <div style={{ padding:"2px" }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:16 }}>
         <div>
           <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Dashboard</div>
-          <div style={{ fontSize:13, color:"var(--text-3)" }}>Faturamento, taxas, impostos e lucro real do período.</div>
+          <div style={{ fontSize:13, color:"var(--text-3)" }}>Faturamento bruto e líquido, taxas, frete, impostos e lucro real do período.</div>
         </div>
-        <div style={{ display:"flex", gap:6 }}>
+        <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap", justifyContent:"flex-end" }}>
           {periodos.map(function(p){
             var ativo = periodo === p[0];
             return <button key={p[0]} onClick={function(){ setPeriodo(p[0]); }}
               style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600,
                 background: ativo ? "#1976FF" : "var(--surface)", color: ativo ? "#fff" : "var(--text-3)" }}>{p[1]}</button>;
           })}
+          {/* Intervalo personalizado De/Até */}
+          <div style={{ display:"flex", alignItems:"center", gap:5, padding:"4px 8px", borderRadius:8, border:"1px solid var(--border)", background: periodo==="custom" ? "rgba(25,118,255,.10)" : "var(--surface)" }}>
+            <input type="date" value={deData} max={ateData || undefined}
+              onChange={function(e){ setDeData(e.target.value); setPeriodo("custom"); }}
+              title="Data inicial" style={_inpData} />
+            <span style={{ fontSize:11, color:"var(--text-3)" }}>até</span>
+            <input type="date" value={ateData} min={deData || undefined}
+              onChange={function(e){ setAteData(e.target.value); setPeriodo("custom"); }}
+              title="Data final" style={_inpData} />
+            {(deData || ateData) && (
+              <button onClick={function(){ setDeData(""); setAteData(""); setPeriodo("30"); }}
+                title="Limpar intervalo" style={{ background:"none", border:"none", color:"var(--text-3)", cursor:"pointer", fontSize:14, padding:"0 2px" }}>✕</button>
+            )}
+          </div>
+          {/* Marketplace */}
+          <select value={marketplace} onChange={function(e){ setMarketplace(e.target.value); }}
+            title="Filtrar por marketplace"
+            style={{ padding:"7px 10px", borderRadius:8, border:"1px solid var(--border)", background:"var(--surface)", color:"var(--text-2)", fontSize:12, fontWeight:600, cursor:"pointer" }}>
+            <option value="todos">Todos os canais</option>
+            <option value="ml">Mercado Livre</option>
+            <option value="shopee">Shopee</option>
+          </select>
         </div>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))", gap:12, marginBottom:20 }}>
@@ -1598,6 +1641,7 @@ function DashboardTab({ enrichedOrders }) {
           return <div key={i} style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px" }}>
             <div style={{ fontSize:11, color:"var(--text-3)", textTransform:"uppercase", letterSpacing:.5, fontWeight:600 }}>{k.l}</div>
             <div style={{ fontSize:22, fontWeight:800, color:k.c, marginTop:6 }}>{k.v}</div>
+            {k.sub && <div style={{ fontSize:10, color:"var(--text-4)", marginTop:3, fontWeight:500 }}>{k.sub}</div>}
           </div>;
         })}
       </div>
@@ -1609,6 +1653,7 @@ function DashboardTab({ enrichedOrders }) {
         var dinheiro = [
           { name:"Custo produto", value:Math.max(0,custo), cor:CORES_DINHEIRO.custo },
           { name:"Taxas", value:Math.max(0,taxas), cor:CORES_DINHEIRO.taxas },
+          { name:"Frete grátis", value:Math.max(0,frete), cor:"#9C6ADE" },
           { name:"Impostos", value:Math.max(0,impostos), cor:CORES_DINHEIRO.impostos },
           { name:"Lucro", value:Math.max(0,lucro), cor:CORES_DINHEIRO.lucro },
         ].filter(function(d){ return d.value > 0; });

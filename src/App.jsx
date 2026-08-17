@@ -2616,6 +2616,7 @@ async function fetchRealFeesForListings(listingsList, validTk, onBatch) {
 async function fetchShippingForOrders(ordersList, validTk, onBatch) {
   const shippingMap = {};
   const statusMap = {};
+  const addressMap = {}; // endereço do comprador (cidade/UF) vindo do /shipments/{id}
   const withShipping = ordersList.filter(o => o.shipping?.id);
   for (let i = 0; i < withShipping.length; i += 5) {
     const batch = withShipping.slice(i, i + 5);
@@ -2643,12 +2644,19 @@ async function fetchShippingForOrders(ordersList, validTk, onBatch) {
         if (shipData?.type) statusMap[String(o.id) + "_type"] = shipData.type;
         if (shipData?.service_id) statusMap[String(o.id) + "_service"] = String(shipData.service_id);
         if (shipData?.substatus) statusMap[String(o.id) + "_substatus"] = shipData.substatus;
+        // Endereço do comprador (cidade/UF). O ML devolve state.id como "BR-SP" → normaliza para "SP".
+        var addr = shipData?.receiver_address || null;
+        if (addr) {
+          var stId = (addr.state && (addr.state.id || addr.state)) ? String(addr.state.id || addr.state).toUpperCase() : "";
+          var ufm = stId.match(/([A-Z]{2})$/);
+          addressMap[String(o.id)] = { uf: ufm ? ufm[1] : null, city: (addr.city && (addr.city.name || addr.city)) || null, zip: addr.zip_code || null };
+        }
       } catch { shippingMap[String(o.id)] = 0; }
     }));
     if (onBatch) onBatch(shippingMap, statusMap, Math.min(i + 5, withShipping.length), withShipping.length);
     await new Promise(r => setTimeout(r, 100));
   }
-  return { shippingMap, statusMap };
+  return { shippingMap, statusMap, addressMap };
 }
 
 // ── Busca dados de pagamento (valor líquido, data de liberação) para uma lista de pedidos pagos ──
@@ -3086,6 +3094,7 @@ function salvarMLSnapshot(dados) {
     sellerShipping: dados.sellerShipping || {},
     shipmentCosts: dados.shipmentCosts || {},
     shipmentStatuses: dados.shipmentStatuses || {},
+    shipmentAddresses: dados.shipmentAddresses || {},
     paymentData: dados.paymentData || {},
     promos: dados.promos || {},
   };
@@ -3203,7 +3212,7 @@ function SinoNotificacoes({ notificacoes, setNotificacoes, darkMode }) {
   return (
     <div style={{ position: "relative" }}>
       <button onClick={() => { setAberto(a => !a); pedirPermissao(); }}
-        style={{ position: "relative", background: naoLidas > 0 ? "rgba(255,193,7,.18)" : darkMode ? "var(--bg-2)" : "var(--surface-3)", border: `1px solid ${naoLidas > 0 ? "rgba(255,193,7,.35)" : border}`, color: naoLidas > 0 ? "#FFC107" : darkMode ? "var(--text-3)" : "var(--text-2)", width: 38, height: 38, borderRadius: 10, cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        style={{ position: "relative", background: "transparent", border: "none", color: "var(--text-3)", width: 32, height: 32, borderRadius: 8, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>
         🔔
         {naoLidas > 0 && (
           <div style={{ position: "absolute", top: -4, right: -4, background: "#FF5252", color: "#fff", width: 18, height: 18, borderRadius: "50%", fontSize: 10, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
@@ -4163,14 +4172,23 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
 //  LAYOUT PADRÃO: Filtros lateral esquerda | Conteúdo | Ação direita
 // ════════════════════════════════════════════════════════════
 function LayoutFiltros({ filtros, busca, acoes, children }) {
+  const [colapsado, setColapsado] = useState(false);
   return (
     <div style={{ display:"flex", gap:0, minHeight:"calc(100vh - 180px)" }}>
-      {/* Painel lateral — mais estreito e delicado */}
-      {filtros && (
+      {/* Painel lateral de filtros — retrátil */}
+      {filtros && (colapsado ? (
+        <div style={{ width:36, flexShrink:0, background:"var(--bg-2)", borderRight:"1px solid var(--border-soft)", padding:"8px 4px", display:"flex", flexDirection:"column", alignItems:"center", gap:8 }}>
+          <button onClick={function(){ setColapsado(false); }} title="Mostrar filtros"
+            style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-2)", cursor:"pointer", padding:"6px 5px", fontSize:14, lineHeight:1 }}>›</button>
+          <div style={{ writingMode:"vertical-rl", transform:"rotate(180deg)", fontSize:11, color:"var(--text-3)", fontWeight:600, letterSpacing:.6 }}>Filtros</div>
+        </div>
+      ) : (
         <div style={{ width:168, flexShrink:0, background:"var(--bg-2)", borderRight:"1px solid var(--border-soft)", padding:"8px 8px", display:"flex", flexDirection:"column", gap:10 }}>
+          <button onClick={function(){ setColapsado(true); }} title="Recolher filtros"
+            style={{ alignSelf:"flex-end", background:"none", border:"none", color:"var(--text-3)", cursor:"pointer", fontSize:15, padding:"0 4px", lineHeight:1 }}>‹</button>
           {filtros}
         </div>
-      )}
+      ))}
       {/* Área principal */}
       <div style={{ flex:1, minWidth:0, padding:"10px 14px", display:"flex", flexDirection:"column", gap:10 }}>
         {(busca || acoes) && (
@@ -6059,6 +6077,7 @@ export default function App() {
     });
   }
   const [shipmentStatuses, setShipmentStatuses] = useState({});
+  const [shipmentAddresses, setShipmentAddresses] = useState({}); // {orderId: {uf, city, zip}} vindo do /shipments
   const [promos, setPromos] = useState({});
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
@@ -6536,6 +6555,7 @@ export default function App() {
     setSellerShipping(snap.sellerShipping || {});
     setShipmentCosts(snap.shipmentCosts || {});
     setShipmentStatuses(snap.shipmentStatuses || {});
+    setShipmentAddresses(snap.shipmentAddresses || {});
     setPaymentData(snap.paymentData || {});
     setPromos(snap.promos || {});
     var lu = localStorage.getItem("ml_last_update");
@@ -6634,9 +6654,10 @@ export default function App() {
           }
           setSellerShipping(shippingMap);
 
-          const { shippingMap: orderShippingMap, statusMap: shipmentStatusMap } = await fetchShippingForOrders(orders, validTk, function(partialShipping){ setShipmentCosts({ ...partialShipping }); });
+          const { shippingMap: orderShippingMap, statusMap: shipmentStatusMap, addressMap: orderAddressMap } = await fetchShippingForOrders(orders, validTk, function(partialShipping){ setShipmentCosts({ ...partialShipping }); });
           setShipmentCosts({ ...orderShippingMap });
           setShipmentStatuses({ ...shipmentStatusMap });
+          setShipmentAddresses({ ...orderAddressMap });
 
           const paymentMap = await fetchPaymentForOrders(orders, validTk, function(partial){ setPaymentData({ ...partial }); });
           setPaymentData({ ...paymentMap });
@@ -6653,7 +6674,7 @@ export default function App() {
             user: { nickname: me.nickname ?? "Minha Conta ML", id: me.id },
             listings: listings, orders: orders,
             sellerShipping: shippingMap, shipmentCosts: orderShippingMap,
-            shipmentStatuses: shipmentStatusMap, paymentData: paymentMap, promos: promoMap,
+            shipmentStatuses: shipmentStatusMap, shipmentAddresses: orderAddressMap, paymentData: paymentMap, promos: promoMap,
           });
         } catch (e) { console.warn("[enriquecimento bg] falhou:", e && e.message); }
       })();
@@ -6747,9 +6768,10 @@ export default function App() {
       // Enriquecer só os pedidos que ainda não têm frete/pagamento calculados (novos desde a última sync)
       const ordersNovos = orders.filter(o => shipmentCosts[String(o.id)] === undefined);
       if (ordersNovos.length > 0) {
-        const { shippingMap, statusMap } = await fetchShippingForOrders(ordersNovos, validTk);
+        const { shippingMap, statusMap, addressMap } = await fetchShippingForOrders(ordersNovos, validTk);
         setShipmentCosts(prev => ({ ...prev, ...shippingMap }));
         setShipmentStatuses(prev => ({ ...prev, ...statusMap }));
+        setShipmentAddresses(prev => ({ ...prev, ...addressMap }));
 
         const pagosNovos = ordersNovos.filter(o => o.status === "paid" && paymentData[String(o.id)] === undefined);
         if (pagosNovos.length > 0) {
@@ -6864,6 +6886,9 @@ export default function App() {
     const shipmentCost = shipmentCosts[String(o.id)] ?? 0;
     var buyer = o.buyer || {};
     var buyerAddr = o.shipping?.receiver_address || {};
+    var shipAddr = shipmentAddresses[String(o.id)] || {}; // cidade/UF do /shipments (fonte principal)
+    // Normaliza state.id ("BR-SP" → "SP") caso venha direto no pedido.
+    var ufDireto = buyerAddr.state?.id ? String(buyerAddr.state.id).toUpperCase().match(/([A-Z]{2})$/)?.[1] : null;
     return {
       id: String(o.id),
       listing_id: item?.item?.id,
@@ -6887,9 +6912,9 @@ export default function App() {
       buyerEmail: buyer.email || null,
       buyerPhone: buyer.phone?.number || null,
       // Endereço de entrega
-      buyerUF: buyerAddr.state?.id || buyerAddr.address_line?.match(/[A-Z]{2}/)?.[0] || null,
-      buyerCity: buyerAddr.city?.name || null,
-      buyerZip: buyerAddr.zip_code || null,
+      buyerUF: shipAddr.uf || ufDireto || null,
+      buyerCity: shipAddr.city || buyerAddr.city?.name || null,
+      buyerZip: shipAddr.zip || buyerAddr.zip_code || null,
       shipping: o.shipping || null,
       fulfilled: o.fulfilled || false,
       orderTags: o.tags || [],
@@ -7415,19 +7440,14 @@ export default function App() {
             style={{ background:"#768692", border:"none", color:"#fff", fontWeight:500, padding:"7px 12px", borderRadius:8, cursor:"pointer", fontSize:12, whiteSpace:"nowrap" }}>
             {token ? "Reconectar" : "Conectar ML"}
           </button>
-          <div style={{ display:"flex", alignItems:"center", gap:7, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, padding:"5px 9px" }}>
-            <div style={{ width:24, height:24, borderRadius:7, background:"#768692", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:600, color:"#FFC107", flexShrink:0 }}>{currentUser?.nome?.charAt(0).toUpperCase()}</div>
-            <div style={{ fontSize:12, lineHeight:1.2, minWidth:0 }}>
-              <div style={{ fontWeight:600, color:"var(--text-strong)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:120 }}>{currentUser?.nome}</div>
-              <div style={{ color:"var(--text-3)", fontSize:10 }}>{currentUser?.admin ? "Admin" : "Usuário"}</div>
-            </div>
-          </div>
           <button onClick={function(){ setDarkMode(function(d){ var nd = !d; try { localStorage.setItem("darkMode", nd ? "1" : "0"); } catch(e){} return nd; }); }}
-            style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"7px 11px", borderRadius:8, cursor:"pointer", fontSize:12, whiteSpace:"nowrap" }}>
-            {darkMode ? "Tema claro" : "Tema escuro"}
+            title={darkMode ? "Mudar para tema claro" : "Mudar para tema escuro"} aria-label="Alternar tema"
+            style={{ background:"transparent", border:"none", color:"var(--text-3)", cursor:"pointer", fontSize:16, padding:"6px 7px", borderRadius:8, lineHeight:1 }}>
+            {darkMode ? "☾" : "☀"}
           </button>
           <button onClick={function(){ fetch("/api/auth/app-logout", { method:"POST" }).catch(function(){}); clearSession(); clearSavedTokens(); setCurrentUser(null); setToken(null); setUser(null); }}
-            style={{ background:"rgba(255,82,82,.12)", border:"1px solid rgba(255,82,82,.35)", color:"#FF5252", fontWeight:600, padding:"7px 12px", borderRadius:8, cursor:"pointer", fontSize:12, whiteSpace:"nowrap" }}>
+            title="Sair"
+            style={{ background:"transparent", border:"none", color:"var(--text-3)", fontWeight:500, padding:"7px 9px", borderRadius:8, cursor:"pointer", fontSize:12, whiteSpace:"nowrap" }}>
             Sair
           </button>
         </div>

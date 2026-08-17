@@ -2193,10 +2193,10 @@ function DashboardGeral({ enrichedOrders }) {
     { l:"Pedidos", v:String(nPed), c:"var(--text-strong)" },
     { l:"Produtos vendidos", v:String(totalQtd), c:"var(--text-strong)" },
     { l:"Ticket médio", v:fmt(ticket), c:"var(--text-strong)" },
-    { l:"Taxas do marketplace", v:"- " + fmt(taxas), c:"#FFC107" },
-    { l:"Frete grátis (seu custo)", v:"- " + fmt(frete), c:"#FFC107" },
-    { l:"Impostos", v:"- " + fmt(impostos), c:"#FFC107" },
-    { l:"Custo dos produtos", v:"- " + fmt(custo), c:"#FFC107" },
+    { l:"Taxas do marketplace", v:"- " + fmt(taxas), c:"var(--kpi-neg)" },
+    { l:"Frete grátis (seu custo)", v:"- " + fmt(frete), c:"var(--kpi-neg)" },
+    { l:"Impostos", v:"- " + fmt(impostos), c:"var(--kpi-neg)" },
+    { l:"Custo dos produtos", v:"- " + fmt(custo), c:"var(--kpi-neg)" },
   ];
   var periodos = [["hoje","Hoje"],["7","7 dias"],["30","30 dias"],["mesatual","Mês atual"]];
   var _inpData = { background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"6px 8px", borderRadius:8, fontSize:12, colorScheme:"inherit" };
@@ -2240,10 +2240,10 @@ function DashboardGeral({ enrichedOrders }) {
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))", gap:12, marginBottom:20 }}>
         {kpis.map(function(k,i){
-          return <div key={i} style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px" }}>
-            <div style={{ fontSize:11, color:"var(--text-3)", textTransform:"none", letterSpacing:.5, fontWeight:600 }}>{k.l}</div>
+          return <div key={i} className="kpi-card">
+            <div className="kpi-lbl">{k.l}</div>
             <div style={{ fontSize:22, fontWeight:600, color:k.c, marginTop:6 }}>{k.v}</div>
-            {k.sub && <div style={{ fontSize:10, color:"var(--text-4)", marginTop:3, fontWeight:500 }}>{k.sub}</div>}
+            {k.sub && <div style={{ fontSize:10, color:"var(--kpi-sub)", marginTop:3, fontWeight:500 }}>{k.sub}</div>}
           </div>;
         })}
       </div>
@@ -7195,6 +7195,19 @@ export default function App() {
 
         /* ── CARDS ── */
         .sl-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 3px rgba(15,23,42,.04)}
+
+        /* ── CARDS DE KPI (faturamento, lucro, etc.) — grafite no escuro, plaqueta metálica no claro ── */
+        .kpi-card{position:relative;padding:16px 18px;border-radius:12px;
+          background:linear-gradient(180deg,#333c46 0%,#28303a 100%);
+          border:1px solid rgba(255,255,255,.08);
+          box-shadow:inset 0 1px 0 rgba(255,255,255,.06), 0 2px 8px rgba(0,0,0,.35)}
+        .kpi-lbl{font-size:11px;color:var(--text-3);letter-spacing:.4px;font-weight:600}
+        :root[data-theme="light"] .kpi-card{
+          border:1px solid #b3aa9c;
+          background:radial-gradient(130% 90% at 28% -12%, rgba(255,255,255,.65), transparent 55%),
+                     linear-gradient(180deg,#ece7de 0%,#d6cfc2 47%,#c7bfb1 53%,#e1dbd0 100%);
+          box-shadow:inset 0 1px 1px rgba(255,255,255,.85), inset 0 -3px 6px rgba(0,0,0,.10), inset 0 0 0 1px rgba(255,255,255,.35), 0 3px 7px rgba(0,0,0,.20)}
+        :root[data-theme="light"] .kpi-lbl{color:#6b6053}
 
         /* ── ANIMAÇÕES ── */
         @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}

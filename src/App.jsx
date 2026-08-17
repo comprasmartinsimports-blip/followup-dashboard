@@ -1,4 +1,9 @@
 import React, { useState, useMemo, useEffect, useRef, Children, cloneElement } from "react";
+import {
+  ResponsiveContainer, LineChart, Line, AreaChart, Area,
+  PieChart, Pie, Cell, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, Legend,
+} from "recharts";
 
 const ML = (path) => `/api/ml${path}`;
 const fmt = (n) => `R$ ${Number(n).toFixed(2).replace(".", ",")}`;
@@ -631,38 +636,241 @@ function VincularTab({ enriched, produtos, salvar }) {
 }
 
 // Relatórios: faturamento, lucro e margem por MÊS (a partir dos pedidos sincronizados).
+// ─────────────────────────────────────────────────────────────────────────
+// Helpers de gráficos (Recharts) usados no Dashboard, Relatórios e DRE.
+// ─────────────────────────────────────────────────────────────────────────
+var CHART_AXIS = "#8492a8";                       // cor dos rótulos dos eixos (legível nos 2 temas)
+var CHART_GRID = "rgba(128,140,168,.16)";         // linhas de grade
+var CORES_DINHEIRO = { custo:"#1976FF", taxas:"#FFC107", impostos:"#FF7043", lucro:"#0a9d4e" };
+var PALETA_ABC = ["#1976FF","#00A3B5","#0a9d4e","#FFC107","#FF7043","#9C6ADE","#E7515A","#5A6B86"];
+
+// Tooltip padrão em R$ (respeita o tema via var(--...)).
+function TipMoeda({ active, payload, label }){
+  if(!active || !payload || !payload.length) return null;
+  return (
+    <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, padding:"8px 11px", fontSize:12, boxShadow:"0 6px 20px rgba(0,0,0,.28)" }}>
+      {label != null && label !== "" && <div style={{ color:"var(--text-strong)", fontWeight:700, marginBottom:5 }}>{label}</div>}
+      {payload.map(function(p,i){ return (
+        <div key={i} style={{ display:"flex", alignItems:"center", gap:6, color:"var(--text-2)", padding:"1px 0" }}>
+          <span style={{ width:9, height:9, borderRadius:2, background:(p.color || (p.payload && p.payload.cor) || "#888"), display:"inline-block" }} />
+          <span>{p.name}:</span>
+          <b style={{ color:"var(--text-strong)" }}>{fmt(p.value)}</b>
+        </div>
+      ); })}
+    </div>
+  );
+}
+
+// Cartão-moldura para um gráfico (título + subtítulo + ação à direita).
+function ChartCard({ titulo, sub, right, children, minW, flex }){
+  return (
+    <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", flex:(flex==null?1:flex), minWidth:(minW||280) }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12, gap:10 }}>
+        <div>
+          <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)" }}>{titulo}</div>
+          {sub && <div style={{ fontSize:12, color:"var(--text-3)", marginTop:2 }}>{sub}</div>}
+        </div>
+        {right || null}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// Agrega pedidos por dia -> [{ ord:"yyyy-mm-dd", dia:"dd/mm", fat, lucro }] (ordem crescente).
+function agrupaPorDia(orders){
+  var m = {};
+  (orders||[]).forEach(function(o){
+    var dia = (o.date||"").slice(0,10); if(!dia) return;
+    var q = o.qty||1;
+    if(!m[dia]) m[dia] = { ord:dia, dia: dia.slice(8,10)+"/"+dia.slice(5,7), fat:0, lucro:0 };
+    m[dia].fat += (o.price||0)*q; m[dia].lucro += (o.profit||0)*q;
+  });
+  return Object.keys(m).sort().map(function(k){ return m[k]; });
+}
+
+// Curva ABC por produto (classificada por faturamento acumulado): A ≤80%, B ≤95%, C o resto.
+function curvaABC(orders){
+  var m = {};
+  (orders||[]).forEach(function(o){
+    var q = o.qty||1;
+    var k = o.listing_id || o.title || "?";
+    if(!m[k]) m[k] = { titulo:o.title||k, fat:0, lucro:0, qtd:0 };
+    m[k].fat += (o.price||0)*q; m[k].lucro += (o.profit||0)*q; m[k].qtd += q;
+  });
+  var arr = Object.keys(m).map(function(k){ return m[k]; }).sort(function(a,b){ return b.fat - a.fat; });
+  var total = arr.reduce(function(s,x){ return s+x.fat; }, 0) || 1;
+  var acc = 0;
+  arr.forEach(function(x){ acc += x.fat; x.pctAcc = acc/total*100; x.classe = x.pctAcc <= 80 ? "A" : (x.pctAcc <= 95 ? "B" : "C"); });
+  return arr;
+}
+
+// Botão "Exportar PDF": usa a impressão do navegador (Salvar como PDF).
+function exportarPDF(){ try { window.print(); } catch(e){} }
+var _btnPdf = { display:"inline-flex", alignItems:"center", gap:7, padding:"9px 15px", borderRadius:9, border:"1px solid var(--border)", background:"var(--surface)", color:"var(--text-strong)", fontSize:12.5, fontWeight:700, cursor:"pointer" };
+
+// Filtro de período reutilizável (Dashboard/Relatórios). Retorna [botões JSX].
+var PERIODOS_REL = [["7","7 dias"],["30","30 dias"],["90","90 dias"],["tudo","Tudo"]];
+function cutoffPeriodo(periodo){
+  if (periodo === "tudo") return "0000-00-00";
+  var d = new Date(); d.setDate(d.getDate() - parseInt(periodo, 10));
+  return d.toISOString().slice(0, 10);
+}
+
 function RelatoriosTab({ enrichedOrders }) {
+  const [periodo, setPeriodo] = useState("30");
+  var cutoff = cutoffPeriodo(periodo);
+  var validos = (enrichedOrders || []).filter(function(o){ return o.status !== "cancelled" && (o.date || "") >= cutoff; });
+
+  // Agregados do período
+  var fat=0, lucro=0, custo=0, taxas=0, impostos=0;
+  validos.forEach(function(o){ var q=o.qty||1;
+    fat += (o.price||0)*q; lucro += (o.profit||0)*q; custo += (o.cost||0)*q; taxas += (o.fee||0)*q; impostos += (o.imposto||0)*q; });
+  var nPed = validos.length, ticket = nPed ? fat/nPed : 0, margem = fat ? lucro/fat*100 : 0;
+
+  var serieDia = agrupaPorDia(validos);
+  var dinheiro = [
+    { name:"Custo produto", value:Math.max(0,custo), cor:CORES_DINHEIRO.custo },
+    { name:"Taxas ML",      value:Math.max(0,taxas), cor:CORES_DINHEIRO.taxas },
+    { name:"Impostos",      value:Math.max(0,impostos), cor:CORES_DINHEIRO.impostos },
+    { name:"Lucro",         value:Math.max(0,lucro), cor:CORES_DINHEIRO.lucro },
+  ].filter(function(d){ return d.value > 0; });
+  // Faturamento por canal (a empresa vende hoje só no Mercado Livre; Shopee entra quando integrar).
+  var canais = [ { canal:"Mercado Livre", fat:fat, cor:"#FFE600" }, { canal:"Shopee", fat:0, cor:"#EE4D2D" } ];
+  var abc = curvaABC(validos);
+
+  // Resumo mensal (tabela histórica completa, ignora o filtro de período)
   var porMes = {};
   (enrichedOrders || []).filter(function(o){ return o.status !== "cancelled"; }).forEach(function(o){
-    var mes = (o.date || "").slice(0, 7); if (!mes) return;
-    var q = o.qty || 1;
+    var mes = (o.date || "").slice(0, 7); if (!mes) return; var q = o.qty || 1;
     if (!porMes[mes]) porMes[mes] = { mes:mes, fat:0, lucro:0, ped:0 };
     porMes[mes].fat += (o.price || 0) * q; porMes[mes].lucro += (o.profit || 0) * q; porMes[mes].ped += 1;
   });
   var meses = Object.keys(porMes).sort().reverse().map(function(k){ return porMes[k]; });
-  function rotulo(m){ return m.slice(5) + "/" + m.slice(0, 4); }
+  function rotuloMes(m){ return m.slice(5) + "/" + m.slice(0, 4); }
+
+  var kpis = [
+    { l:"Faturamento", v:fmt(fat), c:"var(--text-strong)" },
+    { l:"Lucro líquido", v:fmt(lucro), c: lucro>=0?"#0a9d4e":"#FF5252" },
+    { l:"Margem", v:margem.toFixed(1)+"%", c: margem>=0?"#0a9d4e":"#FF5252" },
+    { l:"Pedidos", v:String(nPed), c:"var(--text-strong)" },
+    { l:"Ticket médio", v:fmt(ticket), c:"var(--text-strong)" },
+  ];
+
   return (
     <div style={{ padding:2 }}>
-      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Relatórios</div>
-      <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Faturamento, lucro e margem por mês.</div>
-      <div style={_tableWrap}>
-        <table style={_table}>
-          <thead><tr>{["Mês","Pedidos","Faturamento","Lucro líquido","Margem"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
-          <tbody>
-            {meses.length === 0 ? (
-              <tr><td style={_td} colSpan={5}>Sem vendas registradas.</td></tr>
-            ) : meses.map(function(m,i){
-              var mg = m.fat ? (m.lucro / m.fat * 100) : 0;
-              return <tr key={i}>
-                <td style={{ ..._td, fontWeight:600, color:"var(--text-strong)" }}>{rotulo(m.mes)}</td>
-                <td style={_td}>{m.ped}</td>
-                <td style={_td}>{fmt(m.fat)}</td>
-                <td style={{ ..._td, fontWeight:700, color: m.lucro >= 0 ? "#0a9d4e" : "#FF5252" }}>{fmt(m.lucro)}</td>
-                <td style={{ ..._td, color: mg >= 0 ? "#0a9d4e" : "#FF5252" }}>{mg.toFixed(1)}%</td>
-              </tr>;
-            })}
-          </tbody>
-        </table>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:16 }}>
+        <div>
+          <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Relatórios</div>
+          <div style={{ fontSize:13, color:"var(--text-3)" }}>Desempenho de vendas, lucro e curva ABC de produtos.</div>
+        </div>
+        <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+          {PERIODOS_REL.map(function(p){ var ativo = periodo===p[0];
+            return <button key={p[0]} onClick={function(){ setPeriodo(p[0]); }}
+              style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600,
+                background: ativo ? "#1976FF" : "var(--surface)", color: ativo ? "#fff" : "var(--text-3)" }}>{p[1]}</button>; })}
+          <button onClick={exportarPDF} style={{ ..._btnPdf, marginLeft:4 }} title="Salvar/Imprimir como PDF">⬇ Exportar PDF</button>
+        </div>
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(150px, 1fr))", gap:12, marginBottom:16 }}>
+        {kpis.map(function(k,i){ return <div key={i} style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 16px" }}>
+          <div style={{ fontSize:11, color:"var(--text-3)", textTransform:"uppercase", letterSpacing:.5, fontWeight:600 }}>{k.l}</div>
+          <div style={{ fontSize:21, fontWeight:800, color:k.c, marginTop:6 }}>{k.v}</div>
+        </div>; })}
+      </div>
+
+      <div style={{ marginBottom:14 }}>
+        <ChartCard titulo="Faturamento × lucro por dia" sub="Evolução diária no período selecionado">
+          {serieDia.length === 0 ? <div style={{ color:"var(--text-3)", fontSize:13, padding:"30px 0", textAlign:"center" }}>Sem vendas no período.</div> :
+          <ResponsiveContainer width="100%" height={260}>
+            <AreaChart data={serieDia} margin={{ top:6, right:10, left:0, bottom:0 }}>
+              <defs>
+                <linearGradient id="gFat" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#1976FF" stopOpacity={.35}/><stop offset="100%" stopColor="#1976FF" stopOpacity={0}/></linearGradient>
+                <linearGradient id="gLucro" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#0a9d4e" stopOpacity={.35}/><stop offset="100%" stopColor="#0a9d4e" stopOpacity={0}/></linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} vertical={false} />
+              <XAxis dataKey="dia" tick={{ fill:CHART_AXIS, fontSize:11 }} tickLine={false} axisLine={{ stroke:CHART_GRID }} minTickGap={16} />
+              <YAxis tick={{ fill:CHART_AXIS, fontSize:11 }} tickLine={false} axisLine={false} width={54} tickFormatter={function(v){ return "R$"+(v>=1000?(v/1000).toFixed(0)+"k":v); }} />
+              <RTooltip content={<TipMoeda />} />
+              <Legend wrapperStyle={{ fontSize:12 }} />
+              <Area type="monotone" dataKey="fat" name="Faturamento" stroke="#1976FF" strokeWidth={2} fill="url(#gFat)" />
+              <Area type="monotone" dataKey="lucro" name="Lucro" stroke="#0a9d4e" strokeWidth={2} fill="url(#gLucro)" />
+            </AreaChart>
+          </ResponsiveContainer>}
+        </ChartCard>
+      </div>
+
+      <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:14 }}>
+        <ChartCard titulo="Para onde foi o dinheiro" sub="Composição do faturamento" minW={300}>
+          {dinheiro.length === 0 ? <div style={{ color:"var(--text-3)", fontSize:13, padding:"30px 0", textAlign:"center" }}>Sem dados no período.</div> :
+          <ResponsiveContainer width="100%" height={230}>
+            <PieChart>
+              <Pie data={dinheiro} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={58} outerRadius={88} paddingAngle={2} stroke="none">
+                {dinheiro.map(function(d,i){ return <Cell key={i} fill={d.cor} />; })}
+              </Pie>
+              <RTooltip content={<TipMoeda />} />
+              <Legend wrapperStyle={{ fontSize:12 }} />
+            </PieChart>
+          </ResponsiveContainer>}
+        </ChartCard>
+        <ChartCard titulo="Faturamento por canal" sub="Shopee entra quando a integração for ativada" minW={300}>
+          <ResponsiveContainer width="100%" height={230}>
+            <BarChart data={canais} margin={{ top:6, right:10, left:0, bottom:0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} vertical={false} />
+              <XAxis dataKey="canal" tick={{ fill:CHART_AXIS, fontSize:11 }} tickLine={false} axisLine={{ stroke:CHART_GRID }} />
+              <YAxis tick={{ fill:CHART_AXIS, fontSize:11 }} tickLine={false} axisLine={false} width={54} tickFormatter={function(v){ return "R$"+(v>=1000?(v/1000).toFixed(0)+"k":v); }} />
+              <RTooltip content={<TipMoeda />} cursor={{ fill:"rgba(128,140,168,.08)" }} />
+              <Bar dataKey="fat" name="Faturamento" radius={[6,6,0,0]} maxBarSize={90}>
+                {canais.map(function(c,i){ return <Cell key={i} fill={c.cor} />; })}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+      </div>
+
+      <ChartCard titulo="Curva ABC de produtos" sub="A = 80% do faturamento · B = próximos 15% · C = cauda" flex={null}>
+        <div style={_tableWrap}>
+          <table style={_table}>
+            <thead><tr>{["Classe","Produto","Qtd","Faturamento","Lucro","% acumulado"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+            <tbody>
+              {abc.length === 0 ? <tr><td style={_td} colSpan={6}>Sem vendas no período.</td></tr> :
+              abc.slice(0, 40).map(function(x,i){
+                var cor = x.classe==="A" ? "#0a9d4e" : (x.classe==="B" ? "#FFC107" : "#8492a8");
+                return <tr key={i}>
+                  <td style={_td}><span style={{ display:"inline-block", minWidth:22, textAlign:"center", padding:"2px 6px", borderRadius:6, background:cor, color:"#fff", fontWeight:800, fontSize:11 }}>{x.classe}</span></td>
+                  <td style={{ ..._td, maxWidth:320, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)" }}>{x.titulo}</td>
+                  <td style={_td}>{x.qtd}</td>
+                  <td style={_tdMono}>{fmt(x.fat)}</td>
+                  <td style={{ ..._tdMono, color: x.lucro>=0?"#0a9d4e":"#FF5252", fontWeight:700 }}>{fmt(x.lucro)}</td>
+                  <td style={_td}>{x.pctAcc.toFixed(1)}%</td>
+                </tr>;
+              })}
+            </tbody>
+          </table>
+        </div>
+      </ChartCard>
+
+      <div style={{ marginTop:14 }}>
+        <ChartCard titulo="Resumo mensal" sub="Histórico completo (todos os meses)" flex={null}>
+          <div style={_tableWrap}>
+            <table style={_table}>
+              <thead><tr>{["Mês","Pedidos","Faturamento","Lucro líquido","Margem"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+              <tbody>
+                {meses.length === 0 ? <tr><td style={_td} colSpan={5}>Sem vendas registradas.</td></tr> :
+                meses.map(function(m,i){ var mg = m.fat ? (m.lucro/m.fat*100) : 0;
+                  return <tr key={i}>
+                    <td style={{ ..._td, fontWeight:600, color:"var(--text-strong)" }}>{rotuloMes(m.mes)}</td>
+                    <td style={_td}>{m.ped}</td>
+                    <td style={_tdMono}>{fmt(m.fat)}</td>
+                    <td style={{ ..._tdMono, fontWeight:700, color: m.lucro>=0?"#0a9d4e":"#FF5252" }}>{fmt(m.lucro)}</td>
+                    <td style={{ ..._td, color: mg>=0?"#0a9d4e":"#FF5252" }}>{mg.toFixed(1)}%</td>
+                  </tr>;
+                })}
+              </tbody>
+            </table>
+          </div>
+        </ChartCard>
       </div>
     </div>
   );
@@ -978,31 +1186,87 @@ function TelaEstruturada({ cfg }) {
   );
 }
 // DRE (Demonstrativo de Resultado): estrutura zerada, sem dados por enquanto.
-function DreTab() {
+function DreTab({ enrichedOrders }) {
+  const [periodo, setPeriodo] = useState("30");
+  var cutoff = cutoffPeriodo(periodo);
+  var validos = (enrichedOrders || []).filter(function(o){ return o.status !== "cancelled" && (o.date || "") >= cutoff; });
+
+  var fat=0, impostos=0, custo=0, taxas=0, lucro=0;
+  validos.forEach(function(o){ var q=o.qty||1;
+    fat += (o.price||0)*q; impostos += (o.imposto||0)*q; custo += (o.cost||0)*q; taxas += (o.fee||0)*q; lucro += (o.profit||0)*q; });
+  var recLiq = fat - impostos;
+  var lucroBruto = recLiq - custo;
+  var despesasFixas = 0; // ainda sem lançamento de despesas fixas
+  var margemLiq = fat ? lucro/fat*100 : 0;
+
   var linhas = [
-    ["Receita bruta", "R$ 0,00", false],
-    ["(-) Impostos e deduções", "R$ 0,00", false],
-    ["= Receita líquida", "R$ 0,00", true],
-    ["(-) Custo dos produtos (CMV)", "R$ 0,00", false],
-    ["= Lucro bruto", "R$ 0,00", true],
-    ["(-) Taxas dos marketplaces", "R$ 0,00", false],
-    ["(-) Despesas e custos fixos", "R$ 0,00", false],
-    ["= Lucro líquido", "R$ 0,00", true],
+    ["Receita bruta", fat, false, "var(--text-strong)"],
+    ["(-) Impostos e deduções", -impostos, false, "#FF7043"],
+    ["= Receita líquida", recLiq, true, "var(--text-strong)"],
+    ["(-) Custo dos produtos (CMV)", -custo, false, "#1976FF"],
+    ["= Lucro bruto", lucroBruto, true, "var(--text-strong)"],
+    ["(-) Taxas dos marketplaces", -taxas, false, "#FFC107"],
+    ["(-) Despesas e custos fixos", -despesasFixas, false, "#8492a8"],
+    ["= Lucro líquido", lucro, true, lucro>=0?"#0a9d4e":"#FF5252"],
   ];
+  // Composição do resultado (barras) — quanto de cada peça sai do faturamento.
+  var composicao = [
+    { name:"Receita bruta", value:fat, cor:"#1976FF" },
+    { name:"Impostos", value:impostos, cor:"#FF7043" },
+    { name:"CMV", value:custo, cor:"#9C6ADE" },
+    { name:"Taxas ML", value:taxas, cor:"#FFC107" },
+    { name:"Lucro líq.", value:Math.max(0,lucro), cor:"#0a9d4e" },
+  ];
+
   return (
     <div style={{ padding:2 }}>
-      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>DRE e conciliação</div>
-      <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Demonstrativo de resultado do período.</div>
-      <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"8px 18px", maxWidth:520 }}>
-        {linhas.map(function(l,i){
-          return <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 0", borderBottom: i < linhas.length-1 ? "1px solid var(--border-soft)" : "none" }}>
-            <span style={{ fontSize:14, fontWeight: l[2] ? 800 : 500, color: l[2] ? "var(--text-strong)" : "var(--text-2)" }}>{l[0]}</span>
-            <span style={{ fontSize:14, fontWeight: l[2] ? 800 : 600, color: l[2] ? "var(--text-strong)" : "var(--text-3)", fontVariantNumeric:"tabular-nums" }}>{l[1]}</span>
-          </div>;
-        })}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:16 }}>
+        <div>
+          <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>DRE — Demonstrativo de resultado</div>
+          <div style={{ fontSize:13, color:"var(--text-3)" }}>Resultado do período, calculado a partir dos pedidos do Mercado Livre.</div>
+        </div>
+        <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+          {PERIODOS_REL.map(function(p){ var ativo = periodo===p[0];
+            return <button key={p[0]} onClick={function(){ setPeriodo(p[0]); }}
+              style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600,
+                background: ativo ? "#1976FF" : "var(--surface)", color: ativo ? "#fff" : "var(--text-3)" }}>{p[1]}</button>; })}
+          <button onClick={exportarPDF} style={{ ..._btnPdf, marginLeft:4 }} title="Salvar/Imprimir como PDF">⬇ Exportar PDF</button>
+        </div>
       </div>
-      <div style={{ marginTop:12, fontSize:12, color:"var(--text-3)", background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 14px", maxWidth:520 }}>
-        🗂 Estrutura pronta. Ainda sem dados — será conectada a uma fonte financeira depois.
+
+      <div style={{ display:"flex", gap:14, flexWrap:"wrap", alignItems:"flex-start" }}>
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"8px 18px", flex:1, minWidth:340, maxWidth:560 }}>
+          {linhas.map(function(l,i){
+            var isTot = l[2];
+            return <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 0", borderBottom: i < linhas.length-1 ? "1px solid var(--border-soft)" : "none", background: isTot ? "linear-gradient(90deg, rgba(128,140,168,.06), transparent)" : "none" }}>
+              <span style={{ fontSize:14, fontWeight: isTot ? 800 : 500, color: isTot ? "var(--text-strong)" : "var(--text-2)" }}>{l[0]}</span>
+              <span style={{ fontSize:14, fontWeight: isTot ? 800 : 600, color: l[3], fontVariantNumeric:"tabular-nums" }}>{fmt(l[1])}</span>
+            </div>;
+          })}
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 0", marginTop:2, borderTop:"1px solid var(--border)" }}>
+            <span style={{ fontSize:13, fontWeight:700, color:"var(--text-3)" }}>Margem líquida</span>
+            <span style={{ fontSize:15, fontWeight:800, color: margemLiq>=0?"#0a9d4e":"#FF5252" }}>{margemLiq.toFixed(1)}%</span>
+          </div>
+        </div>
+
+        <ChartCard titulo="Composição do resultado" sub="Do faturamento ao lucro líquido" minW={320} flex={1}>
+          {fat === 0 ? <div style={{ color:"var(--text-3)", fontSize:13, padding:"30px 0", textAlign:"center" }}>Sem vendas no período.</div> :
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={composicao} layout="vertical" margin={{ top:4, right:16, left:10, bottom:0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} horizontal={false} />
+              <XAxis type="number" tick={{ fill:CHART_AXIS, fontSize:11 }} tickLine={false} axisLine={false} tickFormatter={function(v){ return "R$"+(v>=1000?(v/1000).toFixed(0)+"k":v); }} />
+              <YAxis type="category" dataKey="name" tick={{ fill:CHART_AXIS, fontSize:11 }} tickLine={false} axisLine={false} width={92} />
+              <RTooltip content={<TipMoeda />} cursor={{ fill:"rgba(128,140,168,.08)" }} />
+              <Bar dataKey="value" name="Valor" radius={[0,6,6,0]} maxBarSize={26}>
+                {composicao.map(function(c,i){ return <Cell key={i} fill={c.cor} />; })}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>}
+        </ChartCard>
+      </div>
+
+      <div style={{ marginTop:12, fontSize:12, color:"var(--text-3)", background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 14px" }}>
+        As <b>despesas e custos fixos</b> (aluguel, salários, etc.) ainda não estão lançados — entram no cálculo assim que você registrar em Contas a pagar. O lucro acima já desconta impostos, CMV e taxas do marketplace.
       </div>
     </div>
   );
@@ -1278,13 +1542,13 @@ function DashboardTab({ enrichedOrders }) {
         var arr = Object.keys(porProduto).map(function(k){ return porProduto[k]; });
         var topP = arr.slice().sort(function(a,b){ return b.lucro - a.lucro; }).slice(0, 8);
         var piores = arr.slice().sort(function(a,b){ return a.lucro - b.lucro; }).slice(0, 8);
-        var segs = [
-          { l:"Custo produto", v:custo, cor:"#1976FF" },
-          { l:"Taxas", v:taxas, cor:"#FFC107" },
-          { l:"Impostos", v:impostos, cor:"#FF9800" },
-          { l:"Lucro", v:Math.max(0, lucro), cor:"#0a9d4e" },
-        ];
-        var somaSeg = segs.reduce(function(s,x){ return s + x.v; }, 0) || 1;
+        var serieDia = agrupaPorDia(validos);
+        var dinheiro = [
+          { name:"Custo produto", value:Math.max(0,custo), cor:CORES_DINHEIRO.custo },
+          { name:"Taxas", value:Math.max(0,taxas), cor:CORES_DINHEIRO.taxas },
+          { name:"Impostos", value:Math.max(0,impostos), cor:CORES_DINHEIRO.impostos },
+          { name:"Lucro", value:Math.max(0,lucro), cor:CORES_DINHEIRO.lucro },
+        ].filter(function(d){ return d.value > 0; });
         function listaProd(titulo, itens){
           return <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", flex:1, minWidth:280 }}>
             <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)", marginBottom:12 }}>{titulo}</div>
@@ -1296,16 +1560,37 @@ function DashboardTab({ enrichedOrders }) {
           </div>;
         }
         return <>
-          <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", marginBottom:14 }}>
-            <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)", marginBottom:12 }}>Para onde foi o dinheiro</div>
-            <div style={{ display:"flex", height:16, borderRadius:8, overflow:"hidden", marginBottom:10, background:"var(--surface-3)" }}>
-              {segs.map(function(s,i){ return <div key={i} title={s.l} style={{ width:(s.v/somaSeg*100)+"%", background:s.cor }} />; })}
-            </div>
-            <div style={{ display:"flex", flexWrap:"wrap", gap:16 }}>
-              {segs.map(function(s,i){ return <div key={i} style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, color:"var(--text-2)" }}>
-                <span style={{ width:10, height:10, borderRadius:2, background:s.cor, display:"inline-block" }} /> {s.l}: <b style={{ color:"var(--text-strong)" }}>{fmt(s.v)}</b>
-              </div>; })}
-            </div>
+          <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:14 }}>
+            <ChartCard titulo="Faturamento × lucro por dia" sub="Evolução diária no período" minW={360} flex={1.7}>
+              {serieDia.length === 0 ? <div style={{ color:"var(--text-3)", fontSize:13, padding:"30px 0", textAlign:"center" }}>Sem vendas no período.</div> :
+              <ResponsiveContainer width="100%" height={240}>
+                <AreaChart data={serieDia} margin={{ top:6, right:10, left:0, bottom:0 }}>
+                  <defs>
+                    <linearGradient id="dFat" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#1976FF" stopOpacity={.35}/><stop offset="100%" stopColor="#1976FF" stopOpacity={0}/></linearGradient>
+                    <linearGradient id="dLucro" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#0a9d4e" stopOpacity={.35}/><stop offset="100%" stopColor="#0a9d4e" stopOpacity={0}/></linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} vertical={false} />
+                  <XAxis dataKey="dia" tick={{ fill:CHART_AXIS, fontSize:11 }} tickLine={false} axisLine={{ stroke:CHART_GRID }} minTickGap={16} />
+                  <YAxis tick={{ fill:CHART_AXIS, fontSize:11 }} tickLine={false} axisLine={false} width={54} tickFormatter={function(v){ return "R$"+(v>=1000?(v/1000).toFixed(0)+"k":v); }} />
+                  <RTooltip content={<TipMoeda />} />
+                  <Legend wrapperStyle={{ fontSize:12 }} />
+                  <Area type="monotone" dataKey="fat" name="Faturamento" stroke="#1976FF" strokeWidth={2} fill="url(#dFat)" />
+                  <Area type="monotone" dataKey="lucro" name="Lucro" stroke="#0a9d4e" strokeWidth={2} fill="url(#dLucro)" />
+                </AreaChart>
+              </ResponsiveContainer>}
+            </ChartCard>
+            <ChartCard titulo="Para onde foi o dinheiro" sub="Composição do faturamento" minW={280} flex={1}>
+              {dinheiro.length === 0 ? <div style={{ color:"var(--text-3)", fontSize:13, padding:"30px 0", textAlign:"center" }}>Sem dados no período.</div> :
+              <ResponsiveContainer width="100%" height={240}>
+                <PieChart>
+                  <Pie data={dinheiro} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={56} outerRadius={86} paddingAngle={2} stroke="none">
+                    {dinheiro.map(function(d,i){ return <Cell key={i} fill={d.cor} />; })}
+                  </Pie>
+                  <RTooltip content={<TipMoeda />} />
+                  <Legend wrapperStyle={{ fontSize:11 }} />
+                </PieChart>
+              </ResponsiveContainer>}
+            </ChartCard>
           </div>
           <div style={{ display:"flex", gap:14, flexWrap:"wrap" }}>
             {listaProd("Top produtos por lucro", topP)}
@@ -6845,7 +7130,7 @@ export default function App() {
         {tab === "compras" && <ComprasTab produtos={produtos} pedidos={pedidosCompra} salvar={salvarPedidosCompra} />}
         {tab === "clientes" && <ClientesTab rawOrders={rawOrders} />}
         {tab === "integracoes" && <IntegracoesTab token={token} user={user} lastUpdate={lastUpdate} />}
-        {tab === "dre" && <DreTab />}
+        {tab === "dre" && <DreTab enrichedOrders={enrichedOrders} />}
         {TELAS_FIN[tab] && <TelaEstruturada cfg={TELAS_FIN[tab]} />}
       </div>{/* fecha a coluna do conteúdo */}
 

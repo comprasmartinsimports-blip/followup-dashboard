@@ -30,6 +30,11 @@
       input[type="number"]::-webkit-outer-spin-button,
       input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
       input[type="number"]{ -moz-appearance:textfield; appearance:textfield; }
+      /* Exportar PDF (window.print): fundo branco e cores preservadas para leitura/impressão */
+      @media print {
+        body{ background:#fff !important; background-image:none !important; }
+        *{ -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
+      }
     </style>
   </head>
   <body>

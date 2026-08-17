@@ -321,6 +321,132 @@ function EmConstrucao({ tab }) {
   );
 }
 
+// Estilos compartilhados das telas de tabela (Produtos, Estoque).
+const _kpiCard = { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 16px" };
+const _kpiLbl = { fontSize:11, color:"var(--text-3)", textTransform:"uppercase", letterSpacing:.5, fontWeight:600 };
+const _kpiVal = { fontSize:20, fontWeight:800, marginTop:5 };
+const _inputBusca = { width:"100%", background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"10px 14px", borderRadius:10, fontSize:13, outline:"none", marginBottom:12, boxSizing:"border-box" };
+const _tableWrap = { overflowX:"auto", border:"1px solid var(--border)", borderRadius:12, background:"var(--surface)" };
+const _table = { borderCollapse:"collapse", width:"100%", fontSize:13, minWidth:640 };
+const _th = { textAlign:"left", padding:"10px 12px", fontSize:11, textTransform:"uppercase", letterSpacing:.4, color:"var(--text-3)", fontWeight:600, borderBottom:"1px solid var(--border)", whiteSpace:"nowrap", background:"var(--surface-3)" };
+const _td = { padding:"9px 12px", borderBottom:"1px solid var(--border-soft)", color:"var(--text-2)", verticalAlign:"middle" };
+const _tdMono = { padding:"9px 12px", borderBottom:"1px solid var(--border-soft)", color:"var(--text-2)", fontFamily:"'JetBrains Mono',monospace", fontSize:12 };
+function nomeProd(p){ return p.titulo || p.nome || "—"; }
+function qtdAnuncios(p){ return (p.mlbsVinculados || []).length || (p.mlbVinculado ? 1 : 0); }
+
+// Catálogo de produtos (a partir de produtos_cadastro) com custo, SKU, estoque e vínculo.
+function ProdutosTab({ produtos }) {
+  const [busca, setBusca] = useState("");
+  const lista = (produtos || []).filter(function(p){
+    var q = busca.trim().toLowerCase();
+    if (!q) return true;
+    return nomeProd(p).toLowerCase().indexOf(q) >= 0 || (p.sku || "").toLowerCase().indexOf(q) >= 0;
+  });
+  const total = (produtos || []).length;
+  const semCusto = (produtos || []).filter(function(p){ return !(parseFloat(p.precoCusto) > 0); }).length;
+  const valorEstoque = (produtos || []).reduce(function(s,p){ return s + (parseFloat(p.precoCusto) || 0) * (parseInt(p.estoqueAtual) || 0); }, 0);
+  const kpis = [
+    { l:"Produtos", v:String(total), c:"var(--text-strong)" },
+    { l:"Sem custo", v:String(semCusto), c: semCusto > 0 ? "#FFC107" : "var(--text-strong)" },
+    { l:"Valor em estoque (custo)", v:fmt(valorEstoque), c:"var(--text-strong)" },
+  ];
+  return (
+    <div style={{ padding:2 }}>
+      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Produtos</div>
+      <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Catálogo com custo, SKU, estoque e vínculo aos anúncios.</div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12, marginBottom:14 }}>
+        {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
+      </div>
+      <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Buscar por produto ou SKU..." style={_inputBusca} />
+      <div style={_tableWrap}>
+        <table style={_table}>
+          <thead><tr>{["Foto","Produto","SKU","Custo","Preço venda","Estoque","Anúncios","Status"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+          <tbody>
+            {lista.slice(0,400).map(function(p,i){
+              var img = (p.imagens && p.imagens[0]) || null;
+              var ativo = (p.status || "") === "Ativo";
+              return <tr key={p.id || i}>
+                <td style={_td}>{img ? <img src={img} alt="" style={{ width:36, height:36, borderRadius:6, objectFit:"cover" }} /> : <div style={{ width:36, height:36, borderRadius:6, background:"var(--surface-3)" }} />}</td>
+                <td style={{ ..._td, maxWidth:300, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)", fontWeight:500 }}>{nomeProd(p)}</td>
+                <td style={_tdMono}>{p.sku || "—"}</td>
+                <td style={_td}>{parseFloat(p.precoCusto) > 0 ? fmt(parseFloat(p.precoCusto)) : <span style={{ color:"#FFC107" }}>sem custo</span>}</td>
+                <td style={_td}>{parseFloat(p.precoVenda) > 0 ? fmt(parseFloat(p.precoVenda)) : "—"}</td>
+                <td style={_td}>{parseInt(p.estoqueAtual) || 0}</td>
+                <td style={_td}>{qtdAnuncios(p)}</td>
+                <td style={_td}><span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background: ativo ? "rgba(0,200,83,.14)" : "var(--surface-3)", color: ativo ? "#00C853" : "var(--text-3)" }}>{p.status || "—"}</span></td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+        {lista.length === 0 && <div style={{ padding:24, textAlign:"center", color:"var(--text-3)" }}>Nenhum produto encontrado.</div>}
+      </div>
+    </div>
+  );
+}
+
+// Estoque: saldo atual x mínimo, com situação (OK/baixo/zerado) e filtro.
+function EstoqueTab({ produtos }) {
+  const [filtro, setFiltro] = useState("todos"); // todos | baixo | zerado
+  function situacao(p){
+    var atual = parseInt(p.estoqueAtual) || 0, min = parseInt(p.estoqueMinimo) || 0;
+    if (atual <= 0) return "zerado";
+    if (min > 0 && atual <= min) return "baixo";
+    return "ok";
+  }
+  const todos = produtos || [];
+  const lista = todos.filter(function(p){
+    var s = situacao(p);
+    if (filtro === "baixo") return s === "baixo";
+    if (filtro === "zerado") return s === "zerado";
+    return true;
+  });
+  const nZerado = todos.filter(function(p){ return situacao(p) === "zerado"; }).length;
+  const nBaixo = todos.filter(function(p){ return situacao(p) === "baixo"; }).length;
+  const itens = todos.reduce(function(s,p){ return s + (parseInt(p.estoqueAtual) || 0); }, 0);
+  const valor = todos.reduce(function(s,p){ return s + (parseFloat(p.precoCusto) || 0) * (parseInt(p.estoqueAtual) || 0); }, 0);
+  const kpis = [
+    { l:"Itens em estoque", v:String(itens), c:"var(--text-strong)" },
+    { l:"Abaixo do mínimo", v:String(nBaixo), c: nBaixo > 0 ? "#FFC107" : "var(--text-strong)" },
+    { l:"Zerados", v:String(nZerado), c: nZerado > 0 ? "#FF5252" : "var(--text-strong)" },
+    { l:"Valor do estoque (custo)", v:fmt(valor), c:"var(--text-strong)" },
+  ];
+  const badge = { ok:["#00C853","rgba(0,200,83,.14)","OK"], baixo:["#FFC107","rgba(255,193,7,.14)","Baixo"], zerado:["#FF5252","rgba(255,82,82,.14)","Zerado"] };
+  const filtros = [["todos","Todos"],["baixo","Abaixo do mínimo"],["zerado","Zerados"]];
+  return (
+    <div style={{ padding:2 }}>
+      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Estoque</div>
+      <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Saldo atual x mínimo, com alerta de reposição.</div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12, marginBottom:14 }}>
+        {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
+      </div>
+      <div style={{ display:"flex", gap:6, marginBottom:12 }}>
+        {filtros.map(function(f){ var a = filtro === f[0]; return <button key={f[0]} onClick={function(){ setFiltro(f[0]); }} style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background: a ? "#1976FF" : "var(--surface)", color: a ? "#fff" : "var(--text-3)" }}>{f[1]}</button>; })}
+      </div>
+      <div style={_tableWrap}>
+        <table style={_table}>
+          <thead><tr>{["Foto","Produto","SKU","Estoque","Mínimo","Situação","Anúncios"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+          <tbody>
+            {lista.slice(0,400).map(function(p,i){
+              var img = (p.imagens && p.imagens[0]) || null;
+              var s = situacao(p); var b = badge[s];
+              return <tr key={p.id || i}>
+                <td style={_td}>{img ? <img src={img} alt="" style={{ width:36, height:36, borderRadius:6, objectFit:"cover" }} /> : <div style={{ width:36, height:36, borderRadius:6, background:"var(--surface-3)" }} />}</td>
+                <td style={{ ..._td, maxWidth:300, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)", fontWeight:500 }}>{nomeProd(p)}</td>
+                <td style={_tdMono}>{p.sku || "—"}</td>
+                <td style={{ ..._td, fontWeight:700, color: s === "zerado" ? "#FF5252" : "var(--text-strong)" }}>{parseInt(p.estoqueAtual) || 0}</td>
+                <td style={_td}>{parseInt(p.estoqueMinimo) || 0}</td>
+                <td style={_td}><span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
+                <td style={_td}>{qtdAnuncios(p)}</td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+        {lista.length === 0 && <div style={{ padding:24, textAlign:"center", color:"var(--text-3)" }}>Nenhum produto neste filtro.</div>}
+      </div>
+    </div>
+  );
+}
+
 // Dashboard com os dados REAIS da empresa (a partir dos pedidos já sincronizados): faturamento,
 // lucro líquido, margem, taxas, impostos, custo e top produtos — com filtro por período.
 function DashboardTab({ enrichedOrders }) {
@@ -5915,7 +6041,9 @@ export default function App() {
         {tab === "dashboard" && (
           <DashboardTab enrichedOrders={enrichedOrders} />
         )}
-        {["produtos","vincular","expedicao","compras","estoque","contas_pagar","contas_receber","clientes","fornecedores","notas_fiscais","dre","relatorios","integracoes"].indexOf(tab) >= 0 && (
+        {tab === "produtos" && <ProdutosTab produtos={produtos} />}
+        {tab === "estoque" && <EstoqueTab produtos={produtos} />}
+        {["vincular","expedicao","compras","contas_pagar","contas_receber","clientes","fornecedores","notas_fiscais","dre","relatorios","integracoes"].indexOf(tab) >= 0 && (
           <EmConstrucao tab={tab} />
         )}
       </div>{/* fecha a coluna do conteúdo */}

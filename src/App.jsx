@@ -292,6 +292,35 @@ async function carregarCachePaginado(rota) {
 function carregarAnunciosDoCache() { return carregarCachePaginado("/api/ml/cache_listings"); }
 function carregarPedidosDoCache() { return carregarCachePaginado("/api/ml/cache_orders"); }
 
+// Tela "em construção" para as abas novas cuja funcionalidade ainda será desenvolvida.
+const ABA_INFO = {
+  dashboard:["📊","Dashboard","Visão geral do negócio: faturamento, lucro e margem por período."],
+  produtos:["📦","Produtos","Catálogo de produtos com custo, SKU e vínculo aos anúncios."],
+  vincular:["🔗","Vincular anúncios","Relacione cada anúncio ao produto do catálogo."],
+  expedicao:["🚚","Expedição","Acompanhamento de envios e prazos."],
+  compras:["🛒","Compras","Pedidos de compra e reposição de estoque."],
+  estoque:["📦","Estoque","Saldo por depósito, baixa automática e estoque mínimo."],
+  contas_pagar:["⬇️","Contas a pagar","Despesas, vencimentos e baixas."],
+  contas_receber:["⬆️","Contas a receber","Recebíveis criados a partir do repasse dos marketplaces."],
+  clientes:["👥","Clientes","Cadastro de clientes e histórico."],
+  fornecedores:["🏭","Fornecedores","Cadastro de fornecedores e condições."],
+  notas_fiscais:["📄","Notas fiscais","Emissão e gestão de NF-e a partir das vendas."],
+  dre:["⚖️","DRE e conciliação","Demonstrativo de resultado e conciliação financeira."],
+  relatorios:["📈","Relatórios","Relatórios e análises do negócio."],
+  integracoes:["🔌","Integrações","Conexões com marketplaces, Bling, e outros sistemas."],
+};
+function EmConstrucao({ tab }) {
+  var info = ABA_INFO[tab] || ["🚧", tab, ""];
+  return (
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:"62vh", textAlign:"center", padding:24 }}>
+      <div style={{ fontSize:60, marginBottom:16, opacity:.9 }}>{info[0]}</div>
+      <div style={{ fontSize:24, fontWeight:800, color:"#FFFFFF", marginBottom:8, letterSpacing:-0.4 }}>{info[1]}</div>
+      <div style={{ fontSize:14, color:"#8593AE", maxWidth:440, lineHeight:1.6 }}>{info[2]}</div>
+      <div style={{ marginTop:18, fontSize:12, fontWeight:700, color:"#FFC107", background:"rgba(255,193,7,.12)", border:"1px solid rgba(255,193,7,.35)", borderRadius:20, padding:"5px 14px" }}>🚧 Em construção</div>
+    </div>
+  );
+}
+
 // Importa/sincroniza anúncios ML para o cadastro de produtos
 function syncListingsToProdutos(listings, produtosExistentes) {
   var hoje = new Date().toLocaleDateString("sv-SE");
@@ -5167,43 +5196,82 @@ export default function App() {
         {/* Abas de navegação — verticais */}
         <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
           {(function() {
-            var navTabs = [
-              currentUser?.permissoes?.includes("listings")   && { key:"listings",     label:"📢 Anúncios",     badge:enriched.length },
-              currentUser?.permissoes?.includes("orders")     && { key:"orders",       label:"📦 Pedidos",      badge:enrichedOrders.length },
-              currentUser?.permissoes?.includes("listings")   && { key:"precificacao", label:"💲 Precificação", badge:null },
-              currentUser?.permissoes?.includes("listings")   && { key:"concorrencia", label:"🔎 Concorrência", badge:null },
-            ].filter(Boolean);
-            return navTabs.map(function(t) {
+            var grupos = [
+              { titulo:"Operação", itens:[
+                { key:"dashboard", label:"📊 Dashboard" },
+                { key:"produtos", label:"📦 Produtos" },
+                currentUser?.permissoes?.includes("listings") && { key:"listings", label:"📢 Anúncios", badge:enriched.length },
+                { key:"vincular", label:"🔗 Vincular anúncios" },
+                currentUser?.permissoes?.includes("listings") && { key:"precificacao", label:"💲 Precificação" },
+                currentUser?.permissoes?.includes("orders") && { key:"orders", label:"🧾 Vendas", badge:enrichedOrders.length },
+                { key:"expedicao", label:"🚚 Expedição" },
+                { key:"compras", label:"🛒 Compras" },
+                { key:"estoque", label:"📦 Estoque" },
+              ]},
+              { titulo:"Financeiro", itens:[
+                { key:"contas_pagar", label:"⬇️ Contas a pagar" },
+                { key:"contas_receber", label:"⬆️ Contas a receber" },
+                { key:"clientes", label:"👥 Clientes" },
+                { key:"fornecedores", label:"🏭 Fornecedores" },
+                { key:"notas_fiscais", label:"📄 Notas fiscais" },
+                { key:"dre", label:"⚖️ DRE e conciliação" },
+              ]},
+              { titulo:"Inteligência", itens:[
+                { key:"relatorios", label:"📈 Relatórios" },
+                currentUser?.permissoes?.includes("listings") && { key:"concorrencia", label:"🔎 Concorrência" },
+              ]},
+              { titulo:"Configuração", itens:[
+                currentUser?.permissoes?.includes("admin") && { key:"admin", label:"👥 Equipe" },
+                { key:"integracoes", label:"🔌 Integrações" },
+                { key:"__config", label:"⚙️ Configurações", acao:"config" },
+              ]},
+            ];
+            function renderItem(t) {
               var isActive = tab === t.key;
+              var abrir = t.acao === "config"
+                ? function(){ setShowConfigPanel(true); setConfigPanelTab("aparencia"); }
+                : function(){ setTab(t.key); };
               return (
                 <div key={t.key} style={{ display:"flex", alignItems:"center", gap:2 }}>
-                  <button onClick={function(){ setTab(t.key); }}
+                  <button onClick={abrir}
                     style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:6, flex:1, minWidth:0,
-                      padding:"10px 12px", borderRadius:9, border:"none", cursor:"pointer", fontFamily:"inherit",
+                      padding:"9px 12px", borderRadius:9, border:"none", cursor:"pointer", fontFamily:"inherit",
                       fontSize:13, textAlign:"left",
                       background: isActive ? "rgba(25,118,255,.16)" : "transparent",
                       color: isActive ? "#FFFFFF" : "#8593AE",
                       fontWeight: isActive ? 700 : 500,
                       borderLeft: "3px solid "+(isActive ? "#4DB3FF" : "transparent"),
                       transition:"background .15s,color .15s" }}>
-                    <span style={{ whiteSpace:"nowrap" }}>{t.label}</span>
-                    {t.badge !== null && (
-                      <span style={{ fontSize:10, fontWeight:700, padding:"1px 7px", borderRadius:10,
+                    <span style={{ whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{t.label}</span>
+                    {t.badge != null && (
+                      <span style={{ fontSize:10, fontWeight:700, padding:"1px 7px", borderRadius:10, flexShrink:0,
                         background: isActive ? "#1976FF" : "#223048",
                         color: isActive ? "#fff" : "#67759B", lineHeight:1.6 }}>
                         {t.badge}
                       </span>
                     )}
                   </button>
-                  <button title={"Abrir " + t.label + " em nova aba"}
-                    onClick={function(){ window.open(window.location.pathname + "?tab=" + t.key, "_blank"); }}
-                    style={{ flexShrink:0, width:26, height:26, display:"flex", alignItems:"center", justifyContent:"center",
-                      background:"transparent", border:"none", borderRadius:7, cursor:"pointer", color:"#67759B", fontSize:13,
-                      transition:"background .15s,color .15s" }}
-                    onMouseEnter={function(e){ e.currentTarget.style.background="#223048"; e.currentTarget.style.color="#4DB3FF"; }}
-                    onMouseLeave={function(e){ e.currentTarget.style.background="transparent"; e.currentTarget.style.color="#67759B"; }}>
-                    ↗
-                  </button>
+                  {t.acao !== "config" && (
+                    <button title={"Abrir " + t.label + " em nova aba"}
+                      onClick={function(){ window.open(window.location.pathname + "?tab=" + t.key, "_blank"); }}
+                      style={{ flexShrink:0, width:24, height:24, display:"flex", alignItems:"center", justifyContent:"center",
+                        background:"transparent", border:"none", borderRadius:7, cursor:"pointer", color:"#4A5878", fontSize:12,
+                        transition:"background .15s,color .15s" }}
+                      onMouseEnter={function(e){ e.currentTarget.style.background="#223048"; e.currentTarget.style.color="#4DB3FF"; }}
+                      onMouseLeave={function(e){ e.currentTarget.style.background="transparent"; e.currentTarget.style.color="#4A5878"; }}>
+                      ↗
+                    </button>
+                  )}
+                </div>
+              );
+            }
+            return grupos.map(function(g){
+              var itens = g.itens.filter(Boolean);
+              if (!itens.length) return null;
+              return (
+                <div key={g.titulo} style={{ marginBottom:4 }}>
+                  <div style={{ fontSize:9, fontWeight:700, letterSpacing:1.4, textTransform:"uppercase", color:"#4A5878", padding:"12px 12px 5px" }}>{g.titulo}</div>
+                  {itens.map(renderItem)}
                 </div>
               );
             });
@@ -5741,6 +5809,12 @@ export default function App() {
 
         {tab === "concorrencia" && currentUser?.permissoes?.includes("listings") && (
           <ConcorrenciaTab enriched={enriched} token={token} sellerId={user?.id} />
+        )}
+        {tab === "admin" && currentUser?.permissoes?.includes("admin") && (
+          <AdminTab currentUser={currentUser} />
+        )}
+        {["dashboard","produtos","vincular","expedicao","compras","estoque","contas_pagar","contas_receber","clientes","fornecedores","notas_fiscais","dre","relatorios","integracoes"].indexOf(tab) >= 0 && (
+          <EmConstrucao tab={tab} />
         )}
       </div>{/* fecha a coluna do conteúdo */}
 

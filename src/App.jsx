@@ -87,10 +87,10 @@ function getListingTypeLabel(type) {
   // ML Brasil: gold_premium e gold_pro = Premium (17%)
   // gold_special, gold_extra, demais = Clássico (12%)
   if (type === "gold_premium" || type === "gold_pro") return { label: "Premium · 17%", color: "#7c3aed" };
-  if (type === "gold_special" || type === "gold_extra") return { label: "Clássico · 12%", color: "#3B8CFF" };
+  if (type === "gold_special" || type === "gold_extra") return { label: "Clássico · 12%", color: "#1976FF" };
   if (type === "silver") return { label: "Gratuito", color: "var(--text-3)" };
   if (type === "free") return { label: "Gratuito", color: "var(--text-3)" };
-  return { label: type ? "Clássico" : "—", color: "#3B8CFF" };
+  return { label: type ? "Clássico" : "—", color: "#1976FF" };
 }
 
 function getPrices(listing) {
@@ -174,7 +174,7 @@ function calcQualityScore(listing) {
   return { score: Math.round((total / max) * 100), checks };
 }
 
-function scoreColor(s) { return s >= 80 ? "#00C853" : s >= 50 ? "#FFC107" : "#FF5252"; }
+function scoreColor(s) { return s >= 80 ? "#0a9d4e" : s >= 50 ? "#FFC107" : "#FF5252"; }
 function scoreBg(s) { return s >= 80 ? "rgba(0,200,83,.12)" : s >= 50 ? "rgba(255,193,7,.12)" : "rgba(255,82,82,.12)"; }
 function scoreLabel(s) { return s >= 80 ? "Ótimo" : s >= 50 ? "Regular" : "Fraco"; }
 
@@ -373,7 +373,7 @@ function ProdutosTab({ produtos }) {
                 <td style={_td}>{parseFloat(p.precoVenda) > 0 ? fmt(parseFloat(p.precoVenda)) : "—"}</td>
                 <td style={_td}>{parseInt(p.estoqueAtual) || 0}</td>
                 <td style={_td}>{qtdAnuncios(p)}</td>
-                <td style={_td}><span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background: ativo ? "rgba(0,200,83,.14)" : "var(--surface-3)", color: ativo ? "#00C853" : "var(--text-3)" }}>{p.status || "—"}</span></td>
+                <td style={_td}><span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background: ativo ? "rgba(0,200,83,.14)" : "var(--surface-3)", color: ativo ? "#0a9d4e" : "var(--text-3)" }}>{p.status || "—"}</span></td>
               </tr>;
             })}
           </tbody>
@@ -410,7 +410,7 @@ function EstoqueTab({ produtos }) {
     { l:"Zerados", v:String(nZerado), c: nZerado > 0 ? "#FF5252" : "var(--text-strong)" },
     { l:"Valor do estoque (custo)", v:fmt(valor), c:"var(--text-strong)" },
   ];
-  const badge = { ok:["#00C853","rgba(0,200,83,.14)","OK"], baixo:["#FFC107","rgba(255,193,7,.14)","Baixo"], zerado:["#FF5252","rgba(255,82,82,.14)","Zerado"] };
+  const badge = { ok:["#0a9d4e","rgba(0,200,83,.14)","OK"], baixo:["#FFC107","rgba(255,193,7,.14)","Baixo"], zerado:["#FF5252","rgba(255,82,82,.14)","Zerado"] };
   const filtros = [["todos","Todos"],["baixo","Abaixo do mínimo"],["zerado","Zerados"]];
   return (
     <div style={{ padding:2 }}>
@@ -468,10 +468,10 @@ function VincularTab({ enriched, produtos }) {
   var nSemSku = linhas.filter(function(r){ return r.sit === "sem_sku"; }).length;
   var kpis = [
     { l:"Anúncios", v:String(linhas.length), c:"var(--text-strong)" },
-    { l:"Vinculados", v:String(nVinc), c:"#00C853" },
+    { l:"Vinculados", v:String(nVinc), c:"#0a9d4e" },
     { l:"Sem SKU", v:String(nSemSku), c: nSemSku > 0 ? "#FFC107" : "var(--text-strong)" },
   ];
-  var badge = { vinculado:["#00C853","rgba(0,200,83,.14)","Vinculado"], sem_sku:["#FFC107","rgba(255,193,7,.14)","Sem SKU"], sem_produto:["#FF5252","rgba(255,82,82,.14)","Sem produto"] };
+  var badge = { vinculado:["#0a9d4e","rgba(0,200,83,.14)","Vinculado"], sem_sku:["#FFC107","rgba(255,193,7,.14)","Sem SKU"], sem_produto:["#FF5252","rgba(255,82,82,.14)","Sem produto"] };
   var filtros = [["todos","Todos"],["vinculados","Vinculados"],["sem_sku","Sem SKU"]];
   return (
     <div style={{ padding:2 }}>
@@ -533,12 +533,118 @@ function RelatoriosTab({ enrichedOrders }) {
                 <td style={{ ..._td, fontWeight:600, color:"var(--text-strong)" }}>{rotulo(m.mes)}</td>
                 <td style={_td}>{m.ped}</td>
                 <td style={_td}>{fmt(m.fat)}</td>
-                <td style={{ ..._td, fontWeight:700, color: m.lucro >= 0 ? "#00C853" : "#FF5252" }}>{fmt(m.lucro)}</td>
-                <td style={{ ..._td, color: mg >= 0 ? "#00C853" : "#FF5252" }}>{mg.toFixed(1)}%</td>
+                <td style={{ ..._td, fontWeight:700, color: m.lucro >= 0 ? "#0a9d4e" : "#FF5252" }}>{fmt(m.lucro)}</td>
+                <td style={{ ..._td, color: mg >= 0 ? "#0a9d4e" : "#FF5252" }}>{mg.toFixed(1)}%</td>
               </tr>;
             })}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+// Contas a receber: recebíveis gerados automaticamente dos pedidos do Mercado Livre.
+function ContasReceberTab({ enrichedOrders, paymentData }) {
+  const [busca, setBusca] = useState("");
+  var linhas = (enrichedOrders || []).filter(function(o){ return o.status !== "cancelled"; }).map(function(o){
+    var pay = paymentData && paymentData[String(o.id)];
+    var valor = pay && pay.netAmount ? pay.netAmount : (o.price || 0) * (o.qty || 1);
+    var previsao = pay && pay.releaseDate ? pay.releaseDate : (o.date || "");
+    var recebido = pay ? !!pay.isReleased : false;
+    return { id:o.id, cliente:o.buyerName || "Cliente ML", origem:"Mercado Livre", previsao:previsao, valor:valor, recebido:recebido };
+  });
+  var lista = linhas.filter(function(r){ var q = busca.trim().toLowerCase(); return !q || (r.cliente||"").toLowerCase().indexOf(q) >= 0 || String(r.id).indexOf(q) >= 0; });
+  var aReceber = linhas.filter(function(r){ return !r.recebido; }).reduce(function(s,r){ return s + r.valor; }, 0);
+  var recebido = linhas.filter(function(r){ return r.recebido; }).reduce(function(s,r){ return s + r.valor; }, 0);
+  var kpis = [
+    { l:"A receber", v:fmt(aReceber), c:"var(--text-strong)" },
+    { l:"Recebido", v:fmt(recebido), c:"#0a9d4e" },
+    { l:"Total", v:fmt(aReceber + recebido), c:"var(--text-strong)" },
+  ];
+  return (
+    <div style={{ padding:2 }}>
+      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Contas a receber</div>
+      <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Recebíveis criados automaticamente dos pedidos do Mercado Livre.</div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12, marginBottom:14 }}>
+        {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
+      </div>
+      <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Buscar por cliente ou pedido..." style={_inputBusca} />
+      <div style={_tableWrap}>
+        <table style={_table}>
+          <thead><tr>{["Cliente","Origem","Previsão","Valor","Situação"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+          <tbody>
+            {lista.slice(0,400).map(function(r,i){
+              return <tr key={r.id || i}>
+                <td style={{ ..._td, color:"var(--text-strong)" }}>{r.cliente}</td>
+                <td style={_td}>{r.origem}</td>
+                <td style={_td}>{r.previsao || "—"}</td>
+                <td style={{ ..._td, fontWeight:700 }}>{fmt(r.valor)}</td>
+                <td style={_td}><span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background: r.recebido ? "rgba(0,200,83,.14)" : "rgba(255,193,7,.14)", color: r.recebido ? "#0a9d4e" : "#FFC107" }}>{r.recebido ? "Recebido" : "A receber"}</span></td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+        {lista.length === 0 && <div style={{ padding:24, textAlign:"center", color:"var(--text-3)" }}>Nenhum recebível.</div>}
+      </div>
+    </div>
+  );
+}
+
+// Clientes: cadastrados automaticamente dos compradores do Mercado Livre, com recorrência.
+function ClientesTab({ rawOrders }) {
+  const [filtro, setFiltro] = useState("todos"); // todos | recorrentes
+  const [busca, setBusca] = useState("");
+  var mapa = {};
+  (rawOrders || []).filter(function(o){ return o.status !== "cancelled"; }).forEach(function(o){
+    var chave = o.buyerDoc || o.buyerName || o.buyerEmail || o.id;
+    if (!mapa[chave]) mapa[chave] = { nome:o.buyerName || "Cliente ML", doc:o.buyerDoc || "—", local:[o.buyerCity, o.buyerUF].filter(Boolean).join("/") || "—", pedidos:0, total:0, ultima:"" };
+    var c = mapa[chave];
+    c.pedidos += 1; c.total += (o.price || 0) * (o.qty || 1);
+    if ((o.date || "") > c.ultima) c.ultima = o.date || "";
+  });
+  var todos = Object.keys(mapa).map(function(k){ var c = mapa[k]; c.recorrente = c.pedidos >= 2; return c; });
+  var lista = todos.filter(function(c){
+    if (filtro === "recorrentes" && !c.recorrente) return false;
+    var q = busca.trim().toLowerCase();
+    return !q || (c.nome || "").toLowerCase().indexOf(q) >= 0 || (c.doc || "").toLowerCase().indexOf(q) >= 0;
+  }).sort(function(a,b){ return b.pedidos - a.pedidos; });
+  var recorrentes = todos.filter(function(c){ return c.recorrente; }).length;
+  var kpis = [
+    { l:"Clientes", v:String(todos.length), c:"var(--text-strong)" },
+    { l:"Recorrentes", v:String(recorrentes), c: recorrentes > 0 ? "#0a9d4e" : "var(--text-strong)" },
+    { l:"Compra única", v:String(todos.length - recorrentes), c:"var(--text-strong)" },
+  ];
+  var filtros = [["todos","Todos"],["recorrentes","Recorrentes"]];
+  return (
+    <div style={{ padding:2 }}>
+      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Clientes</div>
+      <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Cadastrados automaticamente dos compradores do Mercado Livre.</div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12, marginBottom:14 }}>
+        {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
+      </div>
+      <div style={{ display:"flex", gap:6, marginBottom:10, flexWrap:"wrap" }}>
+        {filtros.map(function(f){ var a = filtro === f[0]; return <button key={f[0]} onClick={function(){ setFiltro(f[0]); }} style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background: a ? "#1976FF" : "var(--surface)", color: a ? "#fff" : "var(--text-3)" }}>{f[1]}</button>; })}
+      </div>
+      <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Buscar por nome ou documento..." style={_inputBusca} />
+      <div style={_tableWrap}>
+        <table style={_table}>
+          <thead><tr>{["Cliente","Documento","Cidade/UF","Pedidos","Total gasto","Última compra","Perfil"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+          <tbody>
+            {lista.slice(0,400).map(function(c,i){
+              return <tr key={i}>
+                <td style={{ ..._td, color:"var(--text-strong)", fontWeight:500 }}>{c.nome}</td>
+                <td style={_tdMono}>{c.doc}</td>
+                <td style={_td}>{c.local}</td>
+                <td style={_td}>{c.pedidos}</td>
+                <td style={{ ..._td, fontWeight:700 }}>{fmt(c.total)}</td>
+                <td style={_td}>{c.ultima || "—"}</td>
+                <td style={_td}><span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background: c.recorrente ? "rgba(0,200,83,.14)" : "var(--surface-3)", color: c.recorrente ? "#0a9d4e" : "var(--text-3)" }}>{c.recorrente ? "Recorrente" : "Único"}</span></td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+        {lista.length === 0 && <div style={{ padding:24, textAlign:"center", color:"var(--text-3)" }}>Nenhum cliente.</div>}
       </div>
     </div>
   );
@@ -562,10 +668,10 @@ function ExpedicaoTab({ rawOrders }) {
   var kpis = [
     { l:"Pedidos", v:String(base.length), c:"var(--text-strong)" },
     { l:"A enviar", v:String(cont.aenviar), c: cont.aenviar > 0 ? "#FFC107" : "var(--text-strong)" },
-    { l:"Enviados", v:String(cont.enviado), c:"#3B8CFF" },
-    { l:"Entregues", v:String(cont.entregue), c:"#00C853" },
+    { l:"Enviados", v:String(cont.enviado), c:"#1976FF" },
+    { l:"Entregues", v:String(cont.entregue), c:"#0a9d4e" },
   ];
-  var badge = { aenviar:["#FFC107","rgba(255,193,7,.14)","A enviar"], enviado:["#3B8CFF","rgba(59,140,255,.14)","Enviado"], entregue:["#00C853","rgba(0,200,83,.14)","Entregue"], problema:["#FF5252","rgba(255,82,82,.14)","Problema"], sem:["var(--text-3)","var(--surface-3)","—"] };
+  var badge = { aenviar:["#FFC107","rgba(255,193,7,.14)","A enviar"], enviado:["#1976FF","rgba(59,140,255,.14)","Enviado"], entregue:["#0a9d4e","rgba(0,200,83,.14)","Entregue"], problema:["#FF5252","rgba(255,82,82,.14)","Problema"], sem:["var(--text-3)","var(--surface-3)","—"] };
   var filtros = [["todos","Todos"],["aenviar","A enviar"],["enviado","Enviados"],["entregue","Entregues"]];
   return (
     <div style={{ padding:2 }}>
@@ -605,11 +711,12 @@ function ExpedicaoTab({ rawOrders }) {
 // Integrações: status das conexões do sistema.
 function IntegracoesTab({ token, user, lastUpdate }) {
   var mins = lastUpdate ? Math.round((Date.now() - parseInt(lastUpdate)) / 60000) : null;
+  var badgeStatus = { conectado:["#0a9d4e","rgba(0,200,83,.14)","● Conectado"], disponivel:["#1976FF","rgba(59,140,255,.14)","Disponível"], construcao:["#FFC107","rgba(255,193,7,.14)","🚧 Em construção"] };
   var cards = [
-    { nome:"Mercado Livre", desc: token ? ("Conectado" + (user && user.nickname ? " — " + user.nickname : "")) : "Não conectado", ativo: !!token, extra: mins != null ? ("Última sincronização: " + mins + " min atrás") : null },
-    { nome:"Banco de dados (Supabase)", desc:"Dados de negócio e cache de anúncios/pedidos no servidor (Postgres).", ativo:true },
-    { nome:"Sincronização automática", desc:"Atualização a cada 15 min (cron) + webhook do ML em tempo real.", ativo:true },
-    { nome:"Shopee", desc:"Precificação com as taxas 2026. Integração de vendas em breve.", ativo:false },
+    { nome:"Mercado Livre", desc:"Anúncios, pedidos, taxas e repasses — sincronizados automaticamente.", status: token ? "conectado" : "disponivel", extra: token && user && user.nickname ? ("Conta: " + user.nickname + (mins != null ? " · última sync há " + mins + " min" : "")) : null },
+    { nome:"Bling", desc:"ERP: produtos, custos, estoque e notas fiscais.", status:"disponivel", extra:null },
+    { nome:"Amazon", desc:"Marketplace Amazon (anúncios e pedidos).", status:"construcao", extra:null },
+    { nome:"Shopee", desc:"Marketplace Shopee (anúncios e pedidos).", status:"construcao", extra:null },
   ];
   return (
     <div style={{ padding:2 }}>
@@ -620,9 +727,7 @@ function IntegracoesTab({ token, user, lastUpdate }) {
           return <div key={i} style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
               <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)" }}>{c.nome}</div>
-              <span style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:20, background: c.ativo ? "rgba(0,200,83,.14)" : "var(--surface-3)", color: c.ativo ? "#00C853" : "var(--text-3)" }}>
-                {c.ativo ? "● Ativo" : "○ Inativo"}
-              </span>
+              {(function(){ var b = badgeStatus[c.status]; return <span style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:20, background:b[1], color:b[0], whiteSpace:"nowrap" }}>{b[2]}</span>; })()}
             </div>
             <div style={{ fontSize:13, color:"var(--text-2)", lineHeight:1.5 }}>{c.desc}</div>
             {c.extra && <div style={{ fontSize:11, color:"var(--text-3)", marginTop:6 }}>{c.extra}</div>}
@@ -638,10 +743,7 @@ function IntegracoesTab({ token, user, lastUpdate }) {
 const TELAS_FIN = {
   compras:        { titulo:"Compras",           desc:"Pedidos de compra e reposição de estoque.",     kpis:[["Pedidos de compra","0"],["Em aberto","0"],["Recebidos","0"]],                 colunas:["Data","Fornecedor","Itens","Valor","Status"] },
   contas_pagar:   { titulo:"Contas a pagar",     desc:"Despesas, vencimentos e baixas.",               kpis:[["Total a pagar","R$ 0,00"],["Vencidas","R$ 0,00"],["A vencer","R$ 0,00"]],      colunas:["Vencimento","Descrição","Categoria","Valor","Status"] },
-  contas_receber: { titulo:"Contas a receber",   desc:"Recebíveis a partir do repasse dos marketplaces.", kpis:[["Total a receber","R$ 0,00"],["Recebido","R$ 0,00"],["A receber","R$ 0,00"]], colunas:["Previsão","Origem","Cliente","Valor","Status"] },
-  clientes:       { titulo:"Clientes",           desc:"Cadastro de clientes e histórico.",             kpis:[["Clientes","0"],["Ativos","0"],["Novos no mês","0"]],                          colunas:["Nome","Documento","Cidade/UF","Pedidos","Total"] },
   fornecedores:   { titulo:"Fornecedores",       desc:"Cadastro de fornecedores e condições.",         kpis:[["Fornecedores","0"],["Ativos","0"]],                                          colunas:["Nome","Documento","Contato","Produtos"] },
-  notas_fiscais:  { titulo:"Notas fiscais",      desc:"Emissão e gestão de NF-e a partir das vendas.", kpis:[["Emitidas","0"],["Pendentes","0"],["Valor total","R$ 0,00"]],                  colunas:["Data","Número","Cliente","Valor","Status"] },
 };
 function TelaEstruturada({ cfg }) {
   return (
@@ -725,8 +827,8 @@ function DashboardTab({ enrichedOrders }) {
   var top = Object.keys(porProduto).map(function(k){ return porProduto[k]; }).sort(function(a,b){ return b.lucro - a.lucro; }).slice(0, 8);
   var kpis = [
     { l:"Faturamento", v:fmt(fat), c:"var(--text-strong)" },
-    { l:"Lucro líquido", v:fmt(lucro), c: lucro >= 0 ? "#00C853" : "#FF5252" },
-    { l:"Margem", v:margem.toFixed(1) + "%", c: margem >= 0 ? "#00C853" : "#FF5252" },
+    { l:"Lucro líquido", v:fmt(lucro), c: lucro >= 0 ? "#0a9d4e" : "#FF5252" },
+    { l:"Margem", v:margem.toFixed(1) + "%", c: margem >= 0 ? "#0a9d4e" : "#FF5252" },
     { l:"Pedidos", v:String(nPed), c:"var(--text-strong)" },
     { l:"Ticket médio", v:fmt(ticket), c:"var(--text-strong)" },
     { l:"Taxas do marketplace", v:"- " + fmt(taxas), c:"#FFC107" },
@@ -763,10 +865,10 @@ function DashboardTab({ enrichedOrders }) {
         var topP = arr.slice().sort(function(a,b){ return b.lucro - a.lucro; }).slice(0, 8);
         var piores = arr.slice().sort(function(a,b){ return a.lucro - b.lucro; }).slice(0, 8);
         var segs = [
-          { l:"Custo produto", v:custo, cor:"#3B8CFF" },
+          { l:"Custo produto", v:custo, cor:"#1976FF" },
           { l:"Taxas", v:taxas, cor:"#FFC107" },
           { l:"Impostos", v:impostos, cor:"#FF9800" },
-          { l:"Lucro", v:Math.max(0, lucro), cor:"#00C853" },
+          { l:"Lucro", v:Math.max(0, lucro), cor:"#0a9d4e" },
         ];
         var somaSeg = segs.reduce(function(s,x){ return s + x.v; }, 0) || 1;
         function listaProd(titulo, itens){
@@ -775,7 +877,7 @@ function DashboardTab({ enrichedOrders }) {
             {itens.length === 0 ? <div style={{ color:"var(--text-3)", fontSize:13 }}>Sem vendas no período.</div> :
               itens.map(function(p,i){ return <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom: i < itens.length-1 ? "1px solid var(--border-soft)" : "none" }}>
                 <div style={{ minWidth:0, flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontSize:13, color:"var(--text-2)" }}>{p.titulo}</div>
-                <span style={{ fontSize:13, fontWeight:700, color: p.lucro >= 0 ? "#00C853" : "#FF5252", flexShrink:0, marginLeft:12 }}>{fmt(p.lucro)}</span>
+                <span style={{ fontSize:13, fontWeight:700, color: p.lucro >= 0 ? "#0a9d4e" : "#FF5252", flexShrink:0, marginLeft:12 }}>{fmt(p.lucro)}</span>
               </div>; })}
           </div>;
         }
@@ -1232,11 +1334,11 @@ function getOrderStatusInfo(status, tags, fulfilled, shipmentStatus) {
   if (isDevolvido) return { label: "Devolvido", color: "#7c3aed", bg: "rgba(139,92,246,.14)" };
   if (isMediation) return { label: "Em disputa", color: "#FFC107", bg: "rgba(255,193,7,.12)" };
   if (status === "cancelled") return { label: "Cancelado", color: "#FF5252", bg: "rgba(255,82,82,.12)" };
-  if (isDelivered) return { label: "Entregue", color: "#4DB3FF", bg: "rgba(59,140,255,.14)" };
+  if (isDelivered) return { label: "Entregue", color: "#1976FF", bg: "rgba(59,140,255,.14)" };
   // Enviado = apenas postado na transportadora
   // ready_to_ship = etiqueta gerada mas NÃO postado → Ag. Envio
   if (["shipped", "in_transit"].includes(shipmentStatus))
-    return { label: "Enviado", color: "#00F0FF", bg: "rgba(0,240,255,.10)" };
+    return { label: "Enviado", color: "#0e7490", bg: "rgba(0,240,255,.10)" };
   if (status === "paid") return { label: "Ag. Envio", color: "#FFC107", bg: "rgba(255,193,7,.12)" };
   return { label: status ?? "—", color: "var(--text-2)", bg: "var(--text-2)" };
 }
@@ -1265,7 +1367,7 @@ function Paginacao({ total, porPagina, paginaAtual, onMudar }) {
   }
 
   var btnStyle = function(ativo) { return {
-    padding:"6px 11px", borderRadius:7, border: ativo ? "2px solid #4DB3FF" : "1px solid var(--border)",
+    padding:"6px 11px", borderRadius:7, border: ativo ? "2px solid #1976FF" : "1px solid var(--border)",
     background: ativo ? "#1976FF" : "var(--surface)", color: ativo ? "#fff" : "var(--text-2)",
     fontWeight: ativo ? 700 : 400, fontSize:13, cursor:"pointer", fontFamily:"inherit", minWidth:34
   }; };
@@ -1296,7 +1398,7 @@ function Paginacao({ total, porPagina, paginaAtual, onMudar }) {
 function MarginBar({ value }) {
   if (value === null) return <span style={{ fontSize: 12, color: "var(--text-3)" }}>— insira custo</span>;
   const pct = Math.max(0, Math.min(1, value));
-  const color = pct >= 0.25 ? "#00C853" : pct >= 0.15 ? "#FFC107" : "#FF5252";
+  const color = pct >= 0.25 ? "#0a9d4e" : pct >= 0.15 ? "#FFC107" : "#FF5252";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <div style={{ flex: 1, height: 4, background: "var(--surface-3)", borderRadius: 99, overflow: "hidden", minWidth: 60 }}>
@@ -1310,7 +1412,7 @@ function MarginBar({ value }) {
 // Caixa de conteúdo pronto para copiar (descrição, título, atributos gerados pela IA)
 function CaixaCopiar({ texto, cor }) {
   const [copiado, setCopiado] = useState(false);
-  const cf = cor || "#00C853";
+  const cf = cor || "#0a9d4e";
   function copiar() {
     try {
       navigator.clipboard.writeText(texto).then(function(){ setCopiado(true); setTimeout(function(){ setCopiado(false); }, 1800); });
@@ -1361,8 +1463,8 @@ function AIPanel({ listing, onClose }) {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {checks.map(c => (
               <div key={c.key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 7px", background: c.pass ? "rgba(0,200,83,.12)" : "rgba(255,82,82,.12)", borderRadius: 8 }}>
-                <span style={{ color: c.pass ? "#00C853" : "#FF5252", fontSize: 13, fontWeight: 700 }}>{c.pass ? "✓" : "✗"}</span>
-                <span style={{ fontSize: 12, color: c.pass ? "#00C853" : "#FF5252" }}>{c.label}</span>
+                <span style={{ color: c.pass ? "#0a9d4e" : "#FF5252", fontSize: 13, fontWeight: 700 }}>{c.pass ? "✓" : "✗"}</span>
+                <span style={{ fontSize: 12, color: c.pass ? "#0a9d4e" : "#FF5252" }}>{c.label}</span>
               </div>
             ))}
           </div>
@@ -1377,12 +1479,12 @@ function AIPanel({ listing, onClose }) {
               <div style={{ fontSize: 14, color: "var(--text-strong)", lineHeight: 1.6 }}>{result.score_commentary}</div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {result.strengths?.length > 0 && <div style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#00C853", marginBottom: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>✓ Pontos Fortes</div>{result.strengths.map((s, i) => <div key={i} style={{ fontSize: 13, color: "#00C853", marginBottom: 6, paddingLeft: 10, borderLeft: "2px solid rgba(0,200,83,.45)" }}>{s}</div>)}</div>}
+              {result.strengths?.length > 0 && <div style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#0a9d4e", marginBottom: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>✓ Pontos Fortes</div>{result.strengths.map((s, i) => <div key={i} style={{ fontSize: 13, color: "#0a9d4e", marginBottom: 6, paddingLeft: 10, borderLeft: "2px solid rgba(0,200,83,.45)" }}>{s}</div>)}</div>}
               {result.keywords?.length > 0 && <div style={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "var(--text-2)", marginBottom: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Palavras-chave</div><div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{result.keywords.map((k, i) => <span key={i} style={{ background: "var(--surface-3)", color: "var(--text-2)", fontSize: 12, padding: "3px 10px", borderRadius: 20 }}>{k}</span>)}</div></div>}
             </div>
             {result.improvements?.length > 0 && <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#FFC107", marginBottom: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>⚡ O que Melhorar — com sugestão pronta</div>{result.improvements.map((imp, i) => <div key={i} style={{ display: "flex", gap: 12, marginBottom: 14, paddingBottom: 14, borderBottom: i < result.improvements.length - 1 ? "1px solid var(--border)" : "none" }}><div style={{ minWidth: 26, height: 26, borderRadius: 7, background: "rgba(255,193,7,.12)", border: "1px solid rgba(255,193,7,.35)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#FFC107", fontWeight: 700 }}>{i + 1}</div><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12, color: "#FFC107", marginBottom: 3, fontWeight: 600 }}>{imp.field}</div><div style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.5 }}>{imp.why || imp.suggestion}</div>{imp.ready && String(imp.ready).trim() && <CaixaCopiar texto={imp.ready} cor="#FFC107" />}</div></div>)}</div>}
-            {result.description_suggestion && String(result.description_suggestion).trim() && <div style={{ background: "rgba(0,240,255,.08)", border: "1px solid rgba(0,240,255,.25)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#00F0FF", marginBottom: 4, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>📄 Descrição pronta para colar</div><div style={{ fontSize: 12, color: "var(--text-3)" }}>Copie e cole na descrição do seu anúncio</div><CaixaCopiar texto={result.description_suggestion} cor="#00F0FF" /></div>}
-            {result.title_suggestion && <div style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#00C853", marginBottom: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>✦ Título pronto para colar</div><div style={{ fontSize: 14, color: "var(--text-strong)", fontWeight: 600 }}>{result.title_suggestion}</div><div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 4 }}>{result.title_suggestion.length} caracteres</div><CaixaCopiar texto={result.title_suggestion} cor="#00C853" /></div>}
+            {result.description_suggestion && String(result.description_suggestion).trim() && <div style={{ background: "rgba(0,240,255,.08)", border: "1px solid rgba(0,240,255,.25)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#0e7490", marginBottom: 4, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>📄 Descrição pronta para colar</div><div style={{ fontSize: 12, color: "var(--text-3)" }}>Copie e cole na descrição do seu anúncio</div><CaixaCopiar texto={result.description_suggestion} cor="#0e7490" /></div>}
+            {result.title_suggestion && <div style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#0a9d4e", marginBottom: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>✦ Título pronto para colar</div><div style={{ fontSize: 14, color: "var(--text-strong)", fontWeight: 600 }}>{result.title_suggestion}</div><div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 4 }}>{result.title_suggestion.length} caracteres</div><CaixaCopiar texto={result.title_suggestion} cor="#0a9d4e" /></div>}
           </div>
         )}
       </div>
@@ -1619,7 +1721,7 @@ function SinoNotificacoes({ notificacoes, setNotificacoes, darkMode }) {
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 {naoLidas > 0 && (
-                  <button onClick={marcarTodasLidas} style={{ background: "none", border: "none", fontSize: 11, color: "#00F0FF", cursor: "pointer", fontWeight: 600 }}>Marcar todas como lidas</button>
+                  <button onClick={marcarTodasLidas} style={{ background: "none", border: "none", fontSize: 11, color: "#0e7490", cursor: "pointer", fontWeight: 600 }}>Marcar todas como lidas</button>
                 )}
                 {notificacoes.length > 0 && (
                   <button onClick={limparTodas} style={{ background: "none", border: "none", fontSize: 11, color: "var(--text-3)", cursor: "pointer" }}>Limpar</button>
@@ -1645,7 +1747,7 @@ function SinoNotificacoes({ notificacoes, setNotificacoes, darkMode }) {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                         <div style={{ fontWeight: 700, fontSize: 13, color: darkMode ? "var(--text-2)" : "var(--text-strong)" }}>{n.titulo}</div>
-                        {!n.lido && <div style={{ width: 8, height: 8, background: "#00F0FF", borderRadius: "50%", flexShrink: 0, marginTop: 4 }} />}
+                        {!n.lido && <div style={{ width: 8, height: 8, background: "#0e7490", borderRadius: "50%", flexShrink: 0, marginTop: 4 }} />}
                       </div>
                       <div style={{ fontSize: 12, color: darkMode ? "var(--text-3)" : "var(--text-2)", marginTop: 2, lineHeight: 1.4 }}>{n.msg}</div>
                       <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 4 }}>{fmtDate(n.data)}</div>
@@ -1664,7 +1766,7 @@ function SinoNotificacoes({ notificacoes, setNotificacoes, darkMode }) {
               </div>
             )}
             {typeof Notification !== "undefined" && Notification.permission === "granted" && (
-              <div style={{ padding: "8px 16px", borderTop: `1px solid ${border}`, fontSize: 11, color: "#00C853", textAlign: "center" }}>
+              <div style={{ padding: "8px 16px", borderTop: `1px solid ${border}`, fontSize: 11, color: "#0a9d4e", textAlign: "center" }}>
                 ✓ Notificações do navegador ativadas
               </div>
             )}
@@ -1798,7 +1900,7 @@ function PainelBackup({ onClose }) {
 
           {/* Status */}
           {status && (
-            <div style={{ background:status.startsWith("✅")?"rgba(0,200,83,.12)":"rgba(255,82,82,.12)", border:`1px solid ${status.startsWith("✅")?"rgba(0,200,83,.35)":"rgba(255,82,82,.35)"}`, borderRadius:10, padding:"10px 16px", marginBottom:8, fontSize:13, fontWeight:600, color:status.startsWith("✅")?"#00C853":"#FF5252" }}>
+            <div style={{ background:status.startsWith("✅")?"rgba(0,200,83,.12)":"rgba(255,82,82,.12)", border:`1px solid ${status.startsWith("✅")?"rgba(0,200,83,.35)":"rgba(255,82,82,.35)"}`, borderRadius:10, padding:"10px 16px", marginBottom:8, fontSize:13, fontWeight:600, color:status.startsWith("✅")?"#0a9d4e":"#FF5252" }}>
               {status}
             </div>
           )}
@@ -1837,7 +1939,7 @@ function PainelBackup({ onClose }) {
               {resumo.map((r, i) => (
                 <div key={r.key} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 16px", borderBottom:i<resumo.length-1?"1px solid var(--border)":"none", background:i%2===0?"var(--bg-2)":"var(--surface)" }}>
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <div style={{ width:8, height:8, borderRadius:"50%", background:r.empty?"var(--surface-3)":"#00C853" }} />
+                    <div style={{ width:8, height:8, borderRadius:"50%", background:r.empty?"var(--surface-3)":"#0a9d4e" }} />
                     <span style={{ fontSize:13, color:"var(--text-strong)" }}>{r.label}</span>
                   </div>
                   <div style={{ display:"flex", gap:16, alignItems:"center" }}>
@@ -1864,12 +1966,12 @@ function PainelBackup({ onClose }) {
             {/* Exportar */}
             <div style={{ background:"rgba(0,200,83,.12)", border:"1px solid rgba(0,200,83,.35)", borderRadius:12, padding:"18px 20px" }}>
               <div style={{ fontSize:28, marginBottom:8 }}>⬇️</div>
-              <div style={{ fontWeight:700, fontSize:14, color:"#00C853", marginBottom:4 }}>Exportar Backup</div>
+              <div style={{ fontWeight:700, fontSize:14, color:"#0a9d4e", marginBottom:4 }}>Exportar Backup</div>
               <div style={{ fontSize:12, color:"var(--text-2)", marginBottom:8, lineHeight:1.5 }}>
                 Baixa um arquivo JSON com todos os seus dados. Guarde em local seguro.
               </div>
               <button onClick={exportarBackup}
-                style={{ width:"100%", background:"#00C853", border:"none", color:"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
+                style={{ width:"100%", background:"#0a9d4e", border:"none", color:"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
                 ⬇️ Exportar Backup Agora
               </button>
             </div>
@@ -1877,11 +1979,11 @@ function PainelBackup({ onClose }) {
             {/* Importar */}
             <div style={{ background:"rgba(59,140,255,.14)", border:"1px solid rgba(77,179,255,.35)", borderRadius:12, padding:"18px 20px" }}>
               <div style={{ fontSize:28, marginBottom:8 }}>⬆️</div>
-              <div style={{ fontWeight:700, fontSize:14, color:"#3B8CFF", marginBottom:4 }}>Restaurar Backup</div>
+              <div style={{ fontWeight:700, fontSize:14, color:"#1976FF", marginBottom:4 }}>Restaurar Backup</div>
               <div style={{ fontSize:12, color:"var(--text-2)", marginBottom:8, lineHeight:1.5 }}>
                 Selecione um arquivo de backup (.json) para restaurar seus dados.
               </div>
-              <label style={{ display:"block", width:"100%", background:"#3B8CFF", border:"none", color:"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:"pointer", fontSize:13, textAlign:"center" }}>
+              <label style={{ display:"block", width:"100%", background:"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:"pointer", fontSize:13, textAlign:"center" }}>
                 {importing ? "Lendo arquivo..." : "⬆️ Selecionar Arquivo"}
                 <input type="file" accept=".json" style={{ display:"none" }} onChange={e => { if(e.target.files[0]) handleImportFile(e.target.files[0]); e.target.value=""; }} />
               </label>
@@ -1907,9 +2009,9 @@ const SESSION_KEY = "ml_auth_session";
 
 // Permissões disponíveis por aba
 const PERMISSOES_DISPONIVEIS = [
-  { key: "listings",        label: "📢 Anúncios" },
-  { key: "orders",          label: "📦 Pedidos" },
-  { key: "admin",           label: "⚙️ Administração" },
+  { key: "listings",        label: "Anúncios" },
+  { key: "orders",          label: "Pedidos" },
+  { key: "admin",           label: "Administração" },
 ];
 
 // A validação de senha agora acontece SOMENTE no servidor (/api/auth/app-login).
@@ -2013,7 +2115,7 @@ function LoginScreen({ onLogin }) {
       <div style={{ width:"100%", maxWidth:420 }}>
         {/* Logo */}
         <div style={{ textAlign:"center", marginBottom:32 }}>
-          <div style={{ width:64, height:64, borderRadius:"50%", background:"rgba(77,179,255,.12)", border:"1px solid rgba(77,179,255,.45)", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"'Space Grotesk',sans-serif", fontSize:30, fontWeight:700, color:"#4DB3FF", marginBottom:12, boxShadow:"0 0 32px rgba(77,179,255,.4)" }}>F</div>
+          <div style={{ width:64, height:64, borderRadius:"50%", background:"rgba(77,179,255,.12)", border:"1px solid rgba(77,179,255,.45)", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"'Space Grotesk',sans-serif", fontSize:30, fontWeight:700, color:"#1976FF", marginBottom:12, boxShadow:"0 0 32px rgba(77,179,255,.4)" }}>F</div>
           <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:24, color:"var(--text-strong)", letterSpacing:-0.5 }}>Flow Marketplaces</div>
           <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:11, color:"var(--text-3)", marginTop:6, letterSpacing:".24em", textTransform:"uppercase" }}>Gestão de Anúncios</div>
         </div>
@@ -2152,7 +2254,7 @@ function ModalUsuario({ usuario, onSave, onClose }) {
                   var temTudo = todasKeys.every(function(k){ return (form.permissoes||[]).includes(k); });
                   set("permissoes", temTudo ? [] : todasKeys);
                 }}
-                style={{ fontSize:11, color:"#3B8CFF", background:"transparent", border:"none", cursor:"pointer", fontWeight:600 }}>
+                style={{ fontSize:11, color:"#1976FF", background:"transparent", border:"none", cursor:"pointer", fontWeight:600 }}>
                 {(function(){
                   var total = 0;
                   PERMISSOES_DISPONIVEIS.forEach(function(p){ total++; if(p.sub) total+=p.sub.length; });
@@ -2172,7 +2274,7 @@ function ModalUsuario({ usuario, onSave, onClose }) {
                     {/* Item pai */}
                     <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", padding:"5px 8px", borderRadius:8,
                       background: isChecked || subChecked > 0 ? "rgba(59,140,255,.14)" : "var(--surface)",
-                      border: "1px solid " + (isChecked || subChecked > 0 ? "#3B8CFF" : "var(--border)"),
+                      border: "1px solid " + (isChecked || subChecked > 0 ? "#1976FF" : "var(--border)"),
                       transition:"all .15s" }}>
                       <input type="checkbox" checked={isChecked} ref={function(el){ try { if (el) el.indeterminate = isIndeterminate; } catch(e){} }}
                         onChange={function() {
@@ -2190,7 +2292,7 @@ function ModalUsuario({ usuario, onSave, onClose }) {
                           }
                         }}
                         style={{ width:14, height:14, cursor:"pointer" }} />
-                      <span style={{ fontSize:13, fontWeight:600, color: isChecked || subChecked > 0 ? "#3B8CFF" : "var(--text-2)", flex:1 }}>{p.label}</span>
+                      <span style={{ fontSize:13, fontWeight:600, color: isChecked || subChecked > 0 ? "#1976FF" : "var(--text-2)", flex:1 }}>{p.label}</span>
                       {p.sub && <span style={{ fontSize:10, color:"var(--text-3)" }}>{subChecked}/{subTotal}</span>}
                     </label>
                     {/* Sub-permissões */}
@@ -2219,7 +2321,7 @@ function ModalUsuario({ usuario, onSave, onClose }) {
                                   set("permissoes", newPerms);
                                 }}
                                 style={{ width:12, height:12, cursor:"pointer" }} />
-                              <span style={{ fontSize:12, color: sChecked ? "#4DB3FF" : "var(--text-2)", fontWeight: sChecked ? 600 : 400 }}>{s.label}</span>
+                              <span style={{ fontSize:12, color: sChecked ? "#1976FF" : "var(--text-2)", fontWeight: sChecked ? 600 : 400 }}>{s.label}</span>
                             </label>
                           );
                         })}
@@ -2292,7 +2394,7 @@ function AdminTab({ currentUser }) {
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
         <div>
-          <div style={{ fontWeight:800, fontSize:18, color:"var(--text-strong)" }}>⚙️ Administração de Usuários</div>
+          <div style={{ fontWeight:800, fontSize:18, color:"var(--text-strong)" }}>Equipe</div>
           <div style={{ fontSize:13, color:"var(--text-3)", marginTop:2 }}>Gerencie quem pode acessar o dashboard e o que cada um pode ver</div>
         </div>
         <button onClick={()=>{ setEditingUser(null); setShowModal(true); }}
@@ -2303,13 +2405,13 @@ function AdminTab({ currentUser }) {
 
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))", gap:12 }}>
         {usuarios.map(u => (
-          <div key={u.id} style={{ background:"var(--surface)", border:`2px solid ${u.id===currentUser.id?"#4DB3FF":u.ativo?"var(--border)":"var(--border)"}`, borderRadius:14, padding:"18px 20px", position:"relative", opacity:u.ativo?1:0.6 }}>
+          <div key={u.id} style={{ background:"var(--surface)", border:`2px solid ${u.id===currentUser.id?"#1976FF":u.ativo?"var(--border)":"var(--border)"}`, borderRadius:14, padding:"18px 20px", position:"relative", opacity:u.ativo?1:0.6 }}>
             {u.id===currentUser.id && (
               <div style={{ position:"absolute", top:12, left:12, background:"#1976FF", color:"#fff", fontSize:10, padding:"2px 8px", borderRadius:20, fontWeight:700 }}>VOCÊ</div>
             )}
             <div style={{ display:"flex", justifyContent:"flex-end", gap:6, marginBottom:8 }}>
               <button onClick={()=>toggleAtivo(u.id)}
-                style={{ background:u.ativo?"rgba(0,200,83,.12)":"var(--bg-2)", border:`1px solid ${u.ativo?"rgba(0,200,83,.35)":"var(--border)"}`, color:u.ativo?"#00C853":"var(--text-3)", padding:"3px 10px", borderRadius:6, cursor:"pointer", fontSize:11, fontWeight:600 }}>
+                style={{ background:u.ativo?"rgba(0,200,83,.12)":"var(--bg-2)", border:`1px solid ${u.ativo?"rgba(0,200,83,.35)":"var(--border)"}`, color:u.ativo?"#0a9d4e":"var(--text-3)", padding:"3px 10px", borderRadius:6, cursor:"pointer", fontSize:11, fontWeight:600 }}>
                 {u.ativo?"● Ativo":"○ Inativo"}
               </button>
               <button onClick={()=>{ setEditingUser(u); setShowModal(true); }}
@@ -2334,7 +2436,7 @@ function AdminTab({ currentUser }) {
             <div style={{ fontSize:11, color:"var(--text-3)", marginBottom:6, fontWeight:600, textTransform:"uppercase" }}>Permissões</div>
             <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
               {PERMISSOES_DISPONIVEIS.map(p => (
-                <span key={p.key} style={{ fontSize:11, padding:"2px 8px", borderRadius:20, background:u.permissoes?.includes(p.key)?"rgba(59,140,255,.14)":"var(--bg-2)", color:u.permissoes?.includes(p.key)?"#3B8CFF":"var(--text-4)", border:`1px solid ${u.permissoes?.includes(p.key)?"rgba(77,179,255,.35)":"var(--border)"}`, fontWeight:u.permissoes?.includes(p.key)?600:400 }}>
+                <span key={p.key} style={{ fontSize:11, padding:"2px 8px", borderRadius:20, background:u.permissoes?.includes(p.key)?"rgba(59,140,255,.14)":"var(--bg-2)", color:u.permissoes?.includes(p.key)?"#1976FF":"var(--text-4)", border:`1px solid ${u.permissoes?.includes(p.key)?"rgba(77,179,255,.35)":"var(--border)"}`, fontWeight:u.permissoes?.includes(p.key)?600:400 }}>
                   {p.label}
                 </span>
               ))}
@@ -2475,7 +2577,7 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
             </div>
             <div style={{ display:"flex", gap:6 }}>
               <button onClick={resetIcmsPadrao}
-                style={{ fontSize:10, color:"#00F0FF", background:"rgba(0,240,255,.10)", border:"1px solid rgba(0,240,255,.35)", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontWeight:600 }}>
+                style={{ fontSize:10, color:"#0e7490", background:"rgba(0,240,255,.10)", border:"1px solid rgba(0,240,255,.35)", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontWeight:600 }}>
                 ↺ Usar alíquotas padrão
               </button>
               <button onClick={function(){ setShowIcmsTable(function(v){return !v;}); }}
@@ -2715,10 +2817,10 @@ function detectTipoEnvio(o, shipmentStatuses) {
 function BadgeTipoEnvio({ tipo }) {
   if (!tipo) return null;
   var cfg = {
-    "FULL": { bg:"rgba(77,179,255,.22)", color:"#3B8CFF", label:"FULL" },
+    "FULL": { bg:"rgba(77,179,255,.22)", color:"#1976FF", label:"FULL" },
     "Flex": { bg:"rgba(139,92,246,.18)", color:"#7c3aed", label:"Flex" },
-    "ME2":  { bg:"rgba(0,240,255,.25)", color:"#00F0FF", label:"ME2" },
-    "ME1":  { bg:"rgba(0,200,83,.18)", color:"#00C853", label:"ME1" },
+    "ME2":  { bg:"rgba(0,240,255,.25)", color:"#0e7490", label:"ME2" },
+    "ME1":  { bg:"rgba(0,200,83,.18)", color:"#0a9d4e", label:"ME1" },
   }[tipo];
   if (!cfg) return null;
   return (
@@ -2741,7 +2843,7 @@ function NovoProdutoPrecForm({ onSave, onClose, marketplaceInicial, shopeeDoc })
   var frete=parseFloat(f.frete||0);
   var lucro=bruto-custo-frete-taxa;
   var margem=bruto>0?(lucro/bruto)*100:0;
-  var mCor=margem>=20?"#00C853":margem>=0?"#FFC107":"#FF5252";
+  var mCor=margem>=20?"#0a9d4e":margem>=0?"#FFC107":"#FF5252";
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
       {/* Marketplace do produto */}
@@ -2798,7 +2900,7 @@ function NovoProdutoPrecForm({ onSave, onClose, marketplaceInicial, shopeeDoc })
       </div>
       {bruto > 0 && custo > 0 && (
         <div style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:"10px 14px", display:"flex", gap:16 }}>
-          <div><div style={{ fontSize:10, color:"var(--text-3)" }}>Lucro</div><div style={{ fontWeight:700, color:lucro>=0?"#00F0FF":"#FF5252" }}>R$ {lucro.toFixed(2).replace(".",",")}</div></div>
+          <div><div style={{ fontSize:10, color:"var(--text-3)" }}>Lucro</div><div style={{ fontWeight:700, color:lucro>=0?"#0e7490":"#FF5252" }}>R$ {lucro.toFixed(2).replace(".",",")}</div></div>
           <div><div style={{ fontSize:10, color:"var(--text-3)" }}>Margem</div><div style={{ fontWeight:700, color:mCor }}>{margem.toFixed(1)}%</div></div>
           <div><div style={{ fontSize:10, color:"var(--text-3)" }}>Taxa {ehShopee?"Shopee":"ML"}</div><div style={{ fontWeight:700, color:"#FF5252" }}>R$ {taxa.toFixed(2).replace(".",",")}</div></div>
         </div>
@@ -3084,7 +3186,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                     {listingRef && (
                       <span style={{ fontSize:9, fontWeight:700, padding:"1px 6px", borderRadius:4, marginRight:6, whiteSpace:"nowrap",
                         background: tipoPrem?"rgba(139,92,246,.18)":"rgba(59,140,255,.18)",
-                        color: tipoPrem?"#a78bfa":"#3B8CFF" }}>
+                        color: tipoPrem?"#a78bfa":"#1976FF" }}>
                         {tipoPrem?"⭐ Premium 17%":"📋 Clássico 12%"}
                       </span>
                     )}
@@ -3097,7 +3199,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                     <span style={{ fontSize:12, fontWeight:700, color:"#7c3aed" }}>→ R$ {p.precoNovo.toFixed(2).replace(".",",")}</span>
                     {!ehShopee && (
                       <a href={"https://www.mercadolivre.com.br/seller-admin/listing/edit?itemId="+id} target="_blank" rel="noreferrer"
-                        style={{ fontSize:11, color:"#00F0FF", textDecoration:"none", fontWeight:600, whiteSpace:"nowrap" }}>
+                        style={{ fontSize:11, color:"#0e7490", textDecoration:"none", fontWeight:600, whiteSpace:"nowrap" }}>
                         Editar no ML ↗
                       </a>
                     )}
@@ -3108,7 +3210,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                       </a>
                     )}
                     <button onClick={function(){ confirmarAtualizado(id); }}
-                      style={{ background:"#00C853", border:"none", color:"#fff", fontWeight:700, padding:"4px 10px", borderRadius:6, cursor:"pointer", fontSize:11, whiteSpace:"nowrap" }}>
+                      style={{ background:"#0a9d4e", border:"none", color:"#fff", fontWeight:700, padding:"4px 10px", borderRadius:6, cursor:"pointer", fontSize:11, whiteSpace:"nowrap" }}>
                       ✓ Já atualizei
                     </button>
                   </div>
@@ -3225,7 +3327,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
               // Lucro e margem com desconto e frete
               var lucroFinal = precoComDesc - custo - frete - taxaSobreDesc;
               var margemFinal = precoComDesc > 0 ? (lucroFinal/precoComDesc)*100 : 0;
-              var mCor = margemFinal >= margemAlvo ? "#00C853" : margemFinal >= margemAlvo*0.6 ? "#FFC107" : "#FF5252";
+              var mCor = margemFinal >= margemAlvo ? "#0a9d4e" : margemFinal >= margemAlvo*0.6 ? "#FFC107" : "#FF5252";
               var isEditing = selectedId === l.id;
               var t = l.listing_type_id||"";
               var isPremium = t==="gold_premium"||t==="gold_pro";
@@ -3240,18 +3342,18 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                         onChange={function(e){ salvarSku(l, e.target.value); }}
                         onBlur={function(){ setEditingSkuId(null); }}
                         onKeyDown={function(e){ if(e.key==="Enter"||e.key==="Escape"){ setEditingSkuId(null); } }}
-                        style={{ width:80, background:"var(--surface)", border:"1px solid #00F0FF", color:"var(--text-strong)", padding:"2px 6px", borderRadius:4, fontSize:11, fontFamily:"monospace", outline:"none" }} />
+                        style={{ width:80, background:"var(--surface)", border:"1px solid #0e7490", color:"var(--text-strong)", padding:"2px 6px", borderRadius:4, fontSize:11, fontFamily:"monospace", outline:"none" }} />
                     ) : (
                       <span onClick={function(){ setEditingSkuId(l.id); }} title="Clique para editar o SKU"
                         style={{ cursor:"pointer", fontSize:11, fontFamily:"monospace", fontWeight:700, color:"var(--text-2)", background:"var(--surface-3)", padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap", display:"inline-flex", alignItems:"center", gap:4 }}>
                         {l.seller_sku||l.sku||"—"}
-                        <span style={{ color:"#00F0FF", fontSize:9 }}>✎</span>
+                        <span style={{ color:"#0e7490", fontSize:9 }}>✎</span>
                       </span>
                     )}
                   </td>
 
                   {/* MLB */}
-                  <td style={{ padding:"6px 8px", fontSize:11, color:"#00F0FF", fontFamily:"monospace" }}>
+                  <td style={{ padding:"6px 8px", fontSize:11, color:"#0e7490", fontFamily:"monospace" }}>
                     {l._isExtra
                       ? <span style={{ fontSize:10, fontWeight:700, color:"#FFC107", background:"rgba(255,193,7,.12)", border:"1px solid rgba(255,193,7,.35)", padding:"2px 7px", borderRadius:5, whiteSpace:"nowrap" }}>🆕 Novo</span>
                       : l.id}
@@ -3267,7 +3369,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                     ) : (
                       <span style={{ fontSize:10, fontWeight:700, padding:"2px 6px", borderRadius:5, whiteSpace:"nowrap",
                         background: isPremium?"rgba(139,92,246,.14)":"rgba(59,140,255,.14)",
-                        color: isPremium?"#7c3aed":"#3B8CFF",
+                        color: isPremium?"#7c3aed":"#1976FF",
                         border:"1px solid "+(isPremium?"rgba(139,92,246,.35)":"rgba(77,179,255,.35)") }}>
                         {isPremium?"⭐ Premium":"📋 Clássico"}
                       </span>
@@ -3287,7 +3389,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                         onBlur={function(){ setSelectedId(null); }}
                         onKeyDown={function(e){ if(e.key==="Enter"){ e.target.blur(); } }}
                         autoFocus
-                        style={{ width:72, background:"var(--surface)", border:"1px solid #00F0FF", color:"var(--text-strong)", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
+                        style={{ width:72, background:"var(--surface)", border:"1px solid #0e7490", color:"var(--text-strong)", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
                     ) : (
                       <span onClick={function(){setSelectedId(l.id);}} title="Clique para editar custo"
                         style={{ cursor:"pointer", fontSize:12, fontWeight:600, color:custo>0?"var(--text-2)":"#FF5252",
@@ -3313,7 +3415,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                       <input type="number" step="0.01" min="0" defaultValue={freteConfig||""} placeholder="0,00"
                         onBlur={function(e){ var v=parseFloat(e.target.value)||0; setFretesAndSave(function(f){return Object.assign({},f,{[l.id]:v});}); setEditingFreteId(null); }}
                         autoFocus
-                        style={{ width:72, background:"var(--surface)", border:"1px solid #00F0FF", color:"var(--text-strong)", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
+                        style={{ width:72, background:"var(--surface)", border:"1px solid #0e7490", color:"var(--text-strong)", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
                     ) : (
                       <span onClick={function(){setEditingFreteId(l.id);}} title="Frete esperado"
                         style={{ cursor:"pointer", fontSize:12, fontWeight:600,
@@ -3423,7 +3525,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                           {(feeRate*100).toFixed(0)}% s/ {descPct>0?"desc":"atual"}
                         </div>
                         <div title="Taxa padrão do Mercado Livre: Clássico 12% · Premium 17%"
-                          style={{ fontSize:9, fontWeight:700, color: isPremium?"#7c3aed":"#3B8CFF", marginTop:1 }}>
+                          style={{ fontSize:9, fontWeight:700, color: isPremium?"#7c3aed":"#1976FF", marginTop:1 }}>
                           {isPremium ? "Premium 17%" : "Clássico 12%"}
                         </div>
                       </>
@@ -3434,7 +3536,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                   <td style={{ padding:"6px 8px", background:"rgba(139,92,246,.12)" }}>
                     {custo > 0 ? (
                       <div>
-                        <span style={{ fontSize:13, fontWeight:700, color:lucroFinal>=0?"#00F0FF":"#FF5252" }}>
+                        <span style={{ fontSize:13, fontWeight:700, color:lucroFinal>=0?"#0e7490":"#FF5252" }}>
                           R$ {lucroFinal.toFixed(2).replace(".",",")}
                         </span>
                         {descPct > 0 && (
@@ -3466,7 +3568,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                     ) : (
                       <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
                         <a href={"https://www.mercadolivre.com.br/seller-admin/listing/edit?itemId="+l.id} target="_blank" rel="noreferrer"
-                          style={{ fontSize:11, color:"#00F0FF", textDecoration:"none", fontWeight:600 }}>
+                          style={{ fontSize:11, color:"#0e7490", textDecoration:"none", fontWeight:600 }}>
                           Editar ML ↗
                         </a>
                         <a href={"https://vendedores.mercadolivre.com.br/ferramentas/promocoes"} target="_blank" rel="noreferrer"
@@ -3680,7 +3782,7 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
         {[
           { label:"Anúncios analisados",     valor: resumo.analisados,     cor:"var(--text-strong)" },
           { label:"Melhorias sugeridas",     valor: resumo.totalMelhorias, cor:"#FFC107" },
-          { label:"Anúncios otimizados",     valor: resumo.otimizados,     cor:"#00C853" },
+          { label:"Anúncios otimizados",     valor: resumo.otimizados,     cor:"#0a9d4e" },
         ].map(function(c){
           return (
             <div key={c.label} style={{ background:"var(--surface)", border:"1px solid var(--border-soft)", borderRadius:12, padding:"14px 16px" }}>
@@ -3701,7 +3803,7 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
           var ativo = filtro === f.key;
           return (
             <button key={f.key} onClick={function(){ setFiltro(f.key); }}
-              style={{ background:ativo?"#1976FF":"var(--surface)", color:ativo?"#fff":"var(--text-2)", border:"1px solid "+(ativo?"#4DB3FF":"var(--border)"), borderRadius:20, padding:"5px 14px", fontSize:12, fontWeight:600, cursor:"pointer" }}>
+              style={{ background:ativo?"#1976FF":"var(--surface)", color:ativo?"#fff":"var(--text-2)", border:"1px solid "+(ativo?"#1976FF":"var(--border)"), borderRadius:20, padding:"5px 14px", fontSize:12, fontWeight:600, cursor:"pointer" }}>
               {f.label}
             </button>
           );
@@ -3720,7 +3822,7 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
           var l = x.l, pts = x.pts;
           var aberto = expandido === l.id;
           var qtd = pts ? pts.length : null;
-          var corQtd = qtd === null ? "var(--text-3)" : qtd === 0 ? "#00C853" : qtd >= 4 ? "#FF5252" : "#FFC107";
+          var corQtd = qtd === null ? "var(--text-3)" : qtd === 0 ? "#0a9d4e" : qtd >= 4 ? "#FF5252" : "#FFC107";
           return (
             <div key={l.id} style={{ background:"var(--surface)", border:"1px solid var(--border-soft)", borderRadius:12, overflow:"hidden" }}>
               <div onClick={function(){ if (qtd) setExpandido(aberto ? null : l.id); }}
@@ -3734,7 +3836,7 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
                   {qtd === null
                     ? <span style={{ fontSize:12, color:"var(--text-3)" }}>não analisado</span>
                     : qtd === 0
-                      ? <span style={{ fontSize:12, fontWeight:700, color:"#00C853" }}>✓ otimizado</span>
+                      ? <span style={{ fontSize:12, fontWeight:700, color:"#0a9d4e" }}>✓ otimizado</span>
                       : <span style={{ fontSize:13, fontWeight:800, color:corQtd }}>{qtd} melhoria{qtd>1?"s":""} {aberto ? "▲" : "▼"}</span>}
                 </div>
               </div>
@@ -3995,7 +4097,7 @@ function ChatInternoWidget({ currentUser }) {
             {[{k:"conversa",l:"💬 Conversa"},{k:"tarefas",l:"✓ Tarefas"+(tarefasMinhas>0?" ("+tarefasMinhas+")":"")}].map(function(t){
               var a = aba===t.k;
               return <button key={t.k} onClick={function(){setAba(t.k);}}
-                style={{ flex:1, padding:"9px", border:"none", borderBottom:a?"2px solid #4DB3FF":"2px solid transparent",
+                style={{ flex:1, padding:"9px", border:"none", borderBottom:a?"2px solid #1976FF":"2px solid transparent",
                   background:"transparent", color:a?"var(--text-strong)":"var(--text-3)", fontWeight:a?700:400, fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>
                 {t.l}
               </button>;
@@ -4009,7 +4111,7 @@ function ChatInternoWidget({ currentUser }) {
                 {canais.map(function(c){
                   var a = canalAtivo===c.k;
                   return <button key={c.k} onClick={function(){setCanalAtivo(c.k);}}
-                    style={{ padding:"5px 10px", borderRadius:14, border:"1px solid "+(a?"#4DB3FF":"var(--border)"),
+                    style={{ padding:"5px 10px", borderRadius:14, border:"1px solid "+(a?"#1976FF":"var(--border)"),
                       background:a?"#1976FF":"var(--surface)", color:a?"#fff":"var(--text-2)", fontSize:11, fontWeight:a?700:400, cursor:"pointer", whiteSpace:"nowrap" }}>
                     {c.icon} {c.l}
                   </button>;
@@ -4034,7 +4136,7 @@ function ChatInternoWidget({ currentUser }) {
                           m.anexo.tipo?.startsWith("image/") ? (
                             <img src={m.anexo.data} alt={m.anexo.nome} style={{ maxWidth:200, borderRadius:8, marginBottom:m.texto?6:0, display:"block" }} />
                           ) : (
-                            <a href={m.anexo.data} download={m.anexo.nome} style={{ display:"flex", alignItems:"center", gap:6, color:isMe?"rgba(77,179,255,.35)":"#3B8CFF", textDecoration:"none", marginBottom:m.texto?6:0 }}>
+                            <a href={m.anexo.data} download={m.anexo.nome} style={{ display:"flex", alignItems:"center", gap:6, color:isMe?"rgba(77,179,255,.35)":"#1976FF", textDecoration:"none", marginBottom:m.texto?6:0 }}>
                               📎 {m.anexo.nome}
                             </a>
                           )
@@ -4075,7 +4177,7 @@ function ChatInternoWidget({ currentUser }) {
                 </button>
                 {tarefas.length===0 && <div style={{ textAlign:"center", color:"var(--text-3)", fontSize:12, padding:20 }}>Nenhuma tarefa criada</div>}
                 {tarefas.slice().reverse().map(function(t){
-                  var corPrior = t.prioridade==="alta"?"#FF5252":t.prioridade==="media"?"#FFC107":"#00C853";
+                  var corPrior = t.prioridade==="alta"?"#FF5252":t.prioridade==="media"?"#FFC107":"#0a9d4e";
                   var concluida = t.status==="concluida";
                   return (
                     <div key={t.id} style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 12px", marginBottom:8, opacity:concluida?0.6:1 }}>
@@ -4092,7 +4194,7 @@ function ChatInternoWidget({ currentUser }) {
                         </div>
                         {!concluida && t.responsavelId===currentUser.id && (
                           <button onClick={function(){mudarStatusTarefa(t.id,"concluida");}}
-                            style={{ background:"#00C853", border:"none", color:"#fff", padding:"3px 9px", borderRadius:6, cursor:"pointer", fontSize:10, fontWeight:600 }}>
+                            style={{ background:"#0a9d4e", border:"none", color:"#fff", padding:"3px 9px", borderRadius:6, cursor:"pointer", fontSize:10, fontWeight:600 }}>
                             ✓ Concluir
                           </button>
                         )}
@@ -4212,14 +4314,14 @@ function PainelConfiguracoesGlobal(props) {
         React.createElement("div", {style:{display:"flex",borderBottom:"2px solid var(--border)"}},
           ABAS.map(function(t){
             var a=aba===t.k;
-            return React.createElement("button",{key:t.k,onClick:function(){setAba(t.k);},style:{flex:1,padding:"10px",border:"none",borderBottom:a?"2px solid #4DB3FF":"2px solid transparent",background:"transparent",color:a?"var(--text-strong)":"var(--text-3)",fontWeight:a?700:400,fontSize:12,cursor:"pointer",fontFamily:"inherit",marginBottom:-2}}, t.l);
+            return React.createElement("button",{key:t.k,onClick:function(){setAba(t.k);},style:{flex:1,padding:"10px",border:"none",borderBottom:a?"2px solid #1976FF":"2px solid transparent",background:"transparent",color:a?"var(--text-strong)":"var(--text-3)",fontWeight:a?700:400,fontSize:12,cursor:"pointer",fontFamily:"inherit",marginBottom:-2}}, t.l);
           })
         ),
         React.createElement("div", {style:{flex:1,overflowY:"auto",padding:"16px 18px"}},
           aba==="config" ? React.createElement(ImpostosCompacto, {impostos:impostos,setImpostos:setImpostos,custosFixos:custosFixos,setCustosFixos:setCustosFixos,faturamentoMes:faturamentoMes,irpjCsllConfig:irpjCsllConfig,setIrpjCsllConfig:setIrpjCsllConfig}) :
           aba==="aparencia" ? React.createElement("div", {style:{display:"flex",gap:10}},
             [{v:false,l:"Claro"},{v:true,l:"Escuro"}].map(function(t){
-              return React.createElement("button",{key:String(t.v),onClick:function(){setDarkMode(t.v);localStorage.setItem("darkMode",t.v?"1":"0");},style:{flex:1,padding:14,borderRadius:10,border:"2px solid "+(darkMode===t.v?"#4DB3FF":"var(--border)"),background:darkMode===t.v?"#1976FF":"var(--surface)",color:darkMode===t.v?"#fff":"var(--text-2)",fontWeight:700,fontSize:14,cursor:"pointer"}}, t.v?"Escuro":"Claro");
+              return React.createElement("button",{key:String(t.v),onClick:function(){setDarkMode(t.v);localStorage.setItem("darkMode",t.v?"1":"0");},style:{flex:1,padding:14,borderRadius:10,border:"2px solid "+(darkMode===t.v?"#1976FF":"var(--border)"),background:darkMode===t.v?"#1976FF":"var(--surface)",color:darkMode===t.v?"#fff":"var(--text-2)",fontWeight:700,fontSize:14,cursor:"pointer"}}, t.v?"Escuro":"Claro");
             })
           ) :
           aba==="backup" ? React.createElement("div", {style:{display:"flex",flexDirection:"column",gap:14}},
@@ -4256,12 +4358,12 @@ function PainelConfiguracoesGlobal(props) {
               return React.createElement("div",{key:u.id,style:{background:"var(--bg-2)",border:"1px solid var(--border)",borderRadius:10,padding:"10px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:10}},
                 React.createElement("div",{style:{width:36,height:36,borderRadius:9,background:"#1976FF",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:"#FFC107",flexShrink:0}}, u.nome&&u.nome.charAt(0).toUpperCase()),
                 React.createElement("div",{style:{flex:1,minWidth:0}},
-                  React.createElement("div",{style:{fontWeight:700,fontSize:13,color:"var(--text-strong)"}}, u.nome, isMe&&React.createElement("span",{style:{fontSize:10,color:"#00F0FF",background:"rgba(59,140,255,.14)",padding:"1px 5px",borderRadius:4,marginLeft:6}},"voce")),
-                  React.createElement("div",{style:{fontSize:11,color:"var(--text-2)"}}, "@"+u.usuario+" - "+(u.admin?"Admin":"Usuario")+" - ",React.createElement("span",{style:{color:u.ativo?"#00C853":"#FF5252",fontWeight:600}},u.ativo?"Ativo":"Inativo")),
+                  React.createElement("div",{style:{fontWeight:700,fontSize:13,color:"var(--text-strong)"}}, u.nome, isMe&&React.createElement("span",{style:{fontSize:10,color:"#0e7490",background:"rgba(59,140,255,.14)",padding:"1px 5px",borderRadius:4,marginLeft:6}},"voce")),
+                  React.createElement("div",{style:{fontSize:11,color:"var(--text-2)"}}, "@"+u.usuario+" - "+(u.admin?"Admin":"Usuario")+" - ",React.createElement("span",{style:{color:u.ativo?"#0a9d4e":"#FF5252",fontWeight:600}},u.ativo?"Ativo":"Inativo")),
                   u.email&&React.createElement("div",{style:{fontSize:10,color:"var(--text-3)",marginTop:1}}, u.email)
                 ),
                 React.createElement("div",{style:{display:"flex",gap:6}},
-                  React.createElement("button",{onClick:function(){setEditingUser(u);setShowModalUser(true);},style:{background:"rgba(59,140,255,.14)",border:"1px solid rgba(77,179,255,.35)",color:"#3B8CFF",padding:"4px 10px",borderRadius:7,cursor:"pointer",fontSize:11,fontWeight:600}},"Editar"),
+                  React.createElement("button",{onClick:function(){setEditingUser(u);setShowModalUser(true);},style:{background:"rgba(59,140,255,.14)",border:"1px solid rgba(77,179,255,.35)",color:"#1976FF",padding:"4px 10px",borderRadius:7,cursor:"pointer",fontSize:11,fontWeight:600}},"Editar"),
                   !isMe&&React.createElement("button",{onClick:function(){deleteUser(u.id);},style:{background:"rgba(255,82,82,.12)",border:"1px solid rgba(255,82,82,.35)",color:"#FF5252",padding:"4px 8px",borderRadius:7,cursor:"pointer",fontSize:11}},"X")
                 )
               );
@@ -5573,7 +5675,7 @@ export default function App() {
     if (hasFreeShipping) {
       return {
         topLabel: "Grátis ao comprador",
-        topColor: "#00C853",
+        topColor: "#0a9d4e",
         topBg: "rgba(0,200,83,.12)",
         bottomLabel: cost > 0 ? `Seu custo: ${fmt(cost)}` : "Seu custo: calculando...",
         bottomColor: "#7c3aed",
@@ -5581,7 +5683,7 @@ export default function App() {
     }
     return {
       topLabel: "Comprador paga",
-      topColor: "#3B8CFF",
+      topColor: "#1976FF",
       topBg: "rgba(59,140,255,.14)",
       bottomLabel: cost > 0 ? `Seu custo: ${fmt(cost)}` : "Seu custo: calculando...",
       bottomColor: "#7c3aed",
@@ -5628,7 +5730,7 @@ export default function App() {
         .scroll-x::-webkit-scrollbar-track{background:rgba(255,255,255,.05);border-radius:8px}
         .scroll-x::-webkit-scrollbar-thumb{background:var(--text-4);border-radius:8px;border:2px solid transparent;background-clip:padding-box}
         .scroll-x::-webkit-scrollbar-thumb:hover{background:#7C8AAE}
-        input:focus,textarea:focus,select:focus{outline:2px solid #4DB3FF;outline-offset:1px}
+        input:focus,textarea:focus,select:focus{outline:2px solid #1976FF;outline-offset:1px}
 
         /* ── TABELAS ── */
         table{border-collapse:collapse;width:100%}
@@ -5642,7 +5744,7 @@ export default function App() {
 
         /* ── FILTRO PERIOD ── */
         .filter-btn{background:var(--surface);border:1px solid var(--border);color:var(--text-2);padding:5px 14px;cursor:pointer;font-family:inherit;font-size:12px;border-radius:20px;transition:all .15s;font-weight:500}
-        .filter-btn.active{background:#1976FF;border-color:#4DB3FF;color:#fff;font-weight:600}
+        .filter-btn.active{background:#1976FF;border-color:#1976FF;color:#fff;font-weight:600}
         .filter-btn:hover:not(.active){background:var(--bg-2);border-color:var(--text-4)}
         .dark .filter-btn{background:var(--bg-2);border-color:var(--text-2);color:var(--text-3)}
         .dark .filter-btn.active{background:var(--surface-3);color:var(--text-strong)}
@@ -5656,15 +5758,15 @@ export default function App() {
 
         /* ── INPUTS ── */
         .search-input{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text-strong);padding:8px 14px 8px 38px;border-radius:8px;font-family:inherit;font-size:13px;outline:none;transition:border .15s}
-        .search-input:focus{border-color:#4DB3FF;box-shadow:0 0 0 3px rgba(15,23,42,.06)}
+        .search-input:focus{border-color:#1976FF;box-shadow:0 0 0 3px rgba(15,23,42,.06)}
         .dark input{background:var(--bg-2)!important;border-color:var(--text-2)!important;color:var(--text-2)!important}
         .dark select{background:var(--bg-2);border-color:var(--text-2);color:var(--text-2)}
 
         /* ── MISC ── */
         .copy-btn{background:transparent;border:none;color:var(--text-4);cursor:pointer;padding:2px 5px;border-radius:4px;font-size:11px;transition:all .15s}
         .copy-btn:hover{background:var(--surface-3);color:var(--text-2)}
-        .title-link{color:#3B8CFF;text-decoration:none;font-weight:500;transition:color .15s}
-        .title-link:hover{color:#3B8CFF;text-decoration:underline}
+        .title-link{color:#1976FF;text-decoration:none;font-weight:500;transition:color .15s}
+        .title-link:hover{color:#1976FF;text-decoration:underline}
         select{background:var(--surface);border:1px solid var(--border);color:var(--text-2);padding:7px 12px;border-radius:8px;font-family:inherit;font-size:13px;cursor:pointer;font-weight:400}
 
         /* ── CARDS ── */
@@ -5682,7 +5784,7 @@ export default function App() {
         display:"flex", flexDirection:"column", padding:"14px 12px", zIndex:100 }}>
         {/* Logo */}
         <div style={{ display:"flex", alignItems:"center", gap:9, padding:"2px 6px 14px", borderBottom:"1px solid var(--border-soft)", marginBottom:10 }}>
-          <div style={{ width:34, height:34, borderRadius:"50%", background:"rgba(77,179,255,.12)", border:"1px solid rgba(77,179,255,.45)", boxShadow:"0 0 14px rgba(77,179,255,.35)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:15, color:"#4DB3FF", letterSpacing:-0.5, flexShrink:0 }}>F</div>
+          <div style={{ width:34, height:34, borderRadius:"50%", background:"rgba(77,179,255,.12)", border:"1px solid rgba(77,179,255,.45)", boxShadow:"0 0 14px rgba(77,179,255,.35)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:15, color:"#1976FF", letterSpacing:-0.5, flexShrink:0 }}>F</div>
           <div>
             <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:15, color:"var(--text-strong)", letterSpacing:-0.4, lineHeight:1.2 }}>Flow</div>
             <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:8, color:"var(--text-3)", letterSpacing:2, textTransform:"uppercase", lineHeight:1, marginTop:2 }}>Marketplaces</div>
@@ -5718,7 +5820,6 @@ export default function App() {
               { titulo:"Configuração", itens:[
                 currentUser?.permissoes?.includes("admin") && { key:"admin", label:"Equipe" },
                 { key:"integracoes", label:"Integrações" },
-                { key:"__config", label:"Configurações", acao:"config" },
               ]},
             ];
             function renderItem(t) {
@@ -5730,7 +5831,7 @@ export default function App() {
                 background: isActive ? "rgba(25,118,255,.16)" : "transparent",
                 color: isActive ? "var(--text-strong)" : "var(--text-3)",
                 fontWeight: isActive ? 700 : 500,
-                borderLeft: "3px solid "+(isActive ? "#4DB3FF" : "transparent"),
+                borderLeft: "3px solid "+(isActive ? "#1976FF" : "transparent"),
                 transition:"background .15s,color .15s",
               };
               var conteudo = [
@@ -5782,7 +5883,7 @@ export default function App() {
         <div style={{ borderTop:"1px solid var(--border-soft)", paddingTop:10, display:"flex", flexDirection:"column", gap:8 }}>
           <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
             {!token && <span style={{ background: "var(--surface-3)", border: "1px solid var(--border)", color: "var(--text-3)", fontSize: 10, padding: "3px 9px", borderRadius: 20, fontWeight: 600 }}>● Não conectado</span>}
-            {token && <span style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", color: "#00C853", fontSize: 10, padding: "3px 9px", borderRadius: 20, fontWeight: 700, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"100%" }}>● {user?.nickname}</span>}
+            {token && <span style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", color: "#0a9d4e", fontSize: 10, padding: "3px 9px", borderRadius: 20, fontWeight: 700, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"100%" }}>● {user?.nickname}</span>}
             <SinoNotificacoes notificacoes={notificacoes} setNotificacoes={setNotificacoes} darkMode={darkMode} />
           </div>
           {loading && <span style={{ color: "var(--text-3)", fontSize: 11 }}>⏳ {loadingMsg}</span>}
@@ -5822,10 +5923,10 @@ export default function App() {
             style={{ background:"rgba(255,82,82,.12)", border:"1px solid rgba(255,82,82,.35)", color:"#FF5252", fontWeight:600, padding:"9px", borderRadius:8, cursor:"pointer", fontSize:12, width:"100%" }}>
             Sair
           </button>
-          {/* Config — SEMPRE por último */}
-          <button onClick={function(){ setShowConfigPanel(true); setConfigPanelTab("aparencia"); }}
+          {/* Alternador de tema (substitui o botão de Configurações no rodapé) */}
+          <button onClick={function(){ setDarkMode(function(d){ var nd = !d; try { localStorage.setItem("darkMode", nd ? "1" : "0"); } catch(e){} return nd; }); }}
             style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"9px", borderRadius:8, cursor:"pointer", fontSize:12, width:"100%" }}>
-            ⚙️ Configurações
+            {darkMode ? "Tema claro" : "Tema escuro"}
           </button>
         </div>
       </aside>
@@ -5849,7 +5950,7 @@ export default function App() {
                   <button key={t.key}
                     onClick={function(){ setAbaAnuncio(t.key); }}
                     style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 20px", border:"none",
-                      borderBottom: active?"2px solid #4DB3FF":"2px solid transparent", marginBottom:-2,
+                      borderBottom: active?"2px solid #1976FF":"2px solid transparent", marginBottom:-2,
                       background:"transparent", color:active?"var(--text-strong)":"var(--text-3)",
                       fontWeight:active?700:400, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>
                     {t.label}
@@ -5875,7 +5976,7 @@ export default function App() {
                   <FiltroGrupo titulo="Status">
                     {[{key:"all",label:"Todos"},{key:"active",label:"● Ativos"},{key:"paused",label:"○ Pausados"}].map(function(f){
                       return <FiltroBotao key={f.key} label={f.label} active={statusFilter===f.key}
-                        cor={f.key==="active"?"#00C853":f.key==="paused"?"var(--text-3)":"var(--text-strong)"}
+                        cor={f.key==="active"?"#0a9d4e":f.key==="paused"?"var(--text-3)":"var(--text-strong)"}
                         bg={f.key==="active"?"rgba(0,200,83,.12)":f.key==="paused"?"var(--surface-3)":"var(--surface-3)"}
                         onClick={function(){setStatusFilter(f.key);}} />;
                     })}
@@ -5965,7 +6066,7 @@ export default function App() {
                             {l.checks.filter(c => !c.pass).slice(0, 2).map(c => (
                               <span key={c.key} style={{ fontSize: 10, color: "#FF5252", background: "rgba(255,82,82,.12)", border: "1px solid rgba(255,82,82,.35)", padding: "1px 6px", borderRadius: 4, fontWeight: 500 }}>✗ {c.label}</span>
                             ))}
-                            <span style={{ fontSize: 10, padding: "1px 7px", borderRadius: 4, fontWeight: 500, background: l.status === "active" ? "rgba(0,200,83,.12)" : "var(--bg-2)", color: l.status === "active" ? "#00C853" : "var(--text-3)", border: `1px solid ${l.status === "active" ? "rgba(0,200,83,.35)" : "var(--border)"}` }}>
+                            <span style={{ fontSize: 10, padding: "1px 7px", borderRadius: 4, fontWeight: 500, background: l.status === "active" ? "rgba(0,200,83,.12)" : "var(--bg-2)", color: l.status === "active" ? "#0a9d4e" : "var(--text-3)", border: `1px solid ${l.status === "active" ? "rgba(0,200,83,.35)" : "var(--border)"}` }}>
                               {l.status === "active" ? "● ativo" : "○ pausado"}
                             </span>
                           </div>
@@ -5988,7 +6089,7 @@ export default function App() {
                             const qty = l.available_quantity ?? 0;
                             const min = minStock[l.id] ?? 0;
                             const abaixo = min > 0 && qty < min;
-                            const color = abaixo ? "#FF5252" : qty === 0 ? "#FF5252" : qty <= 5 ? "#FFC107" : "#00C853";
+                            const color = abaixo ? "#FF5252" : qty === 0 ? "#FF5252" : qty <= 5 ? "#FFC107" : "#0a9d4e";
                             const bg = abaixo ? "rgba(255,82,82,.12)" : qty === 0 ? "rgba(255,82,82,.12)" : qty <= 5 ? "rgba(255,193,7,.12)" : "rgba(0,200,83,.12)";
                             return (
                               <div>
@@ -6053,7 +6154,7 @@ export default function App() {
                           })()}
                         </td>
                         <td>
-                          <span style={{ fontWeight: 700, color: "#00C853", fontSize: 13 }}>{fmt(l.youReceive)}</span>
+                          <span style={{ fontWeight: 700, color: "#0a9d4e", fontSize: 13 }}>{fmt(l.youReceive)}</span>
                           <div style={{ fontSize: 10, color: "var(--text-3)" }}>após tarifa e frete</div>
                         </td>
                         <td>
@@ -6062,10 +6163,10 @@ export default function App() {
                             onBlur={function(){ setEditandoCustoId(function(cur){ return cur === l.id ? null : cur; }); }}
                             style={{ background: "var(--bg-2)", border: "1px solid var(--border)", color: "var(--text-strong)", padding: "5px 8px", borderRadius: 6, width: 80, fontSize: 12, textAlign: "right" }} />
                         </td>
-                        <td style={{ color: l.profit >= 0 ? "#00C853" : "#FF5252", fontWeight: 700 }}>{fmt(l.profit)}</td>
+                        <td style={{ color: l.profit >= 0 ? "#0a9d4e" : "#FF5252", fontWeight: 700 }}>{fmt(l.profit)}</td>
                         <td style={{ minWidth: 130 }}><MarginBar value={l.margin} /></td>
                         <td>
-                          <span style={{ color: l.totalProfit >= 0 ? "#00C853" : "#FF5252", fontWeight: 700 }}>{l.cost > 0 ? fmt(l.totalProfit) : "—"}</span>
+                          <span style={{ color: l.totalProfit >= 0 ? "#0a9d4e" : "#FF5252", fontWeight: 700 }}>{l.cost > 0 ? fmt(l.totalProfit) : "—"}</span>
                           <div style={{ fontSize: 10, color: "var(--text-3)" }}>{l.sold_quantity} vendidos</div>
                         </td>
                         <td>
@@ -6101,7 +6202,7 @@ export default function App() {
                   <button key={t.key}
                     onClick={function(){ setAbaPedido(t.key); }}
                     style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 20px", border:"none",
-                      borderBottom: active?"2px solid #4DB3FF":"2px solid transparent", marginBottom:-2,
+                      borderBottom: active?"2px solid #1976FF":"2px solid transparent", marginBottom:-2,
                       background:"transparent", color:active?"var(--text-strong)":"var(--text-3)",
                       fontWeight:active?700:400, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>
                     {t.label}
@@ -6134,7 +6235,7 @@ export default function App() {
                     })}
                   </FiltroGrupo>
                   <FiltroGrupo titulo="Tipo de Envio">
-                    {[{key:"todos",l:"Todos"},{key:"FULL",l:"FULL",c:"#3B8CFF",bg:"rgba(59,140,255,.14)"},{key:"Flex",l:"Flex",c:"#7c3aed",bg:"rgba(139,92,246,.14)"},{key:"ME2",l:"ME2",c:"#00F0FF",bg:"rgba(0,240,255,.10)"},{key:"ME1",l:"ME1",c:"#4DB3FF",bg:"rgba(77,179,255,.2)"}].map(function(e){
+                    {[{key:"todos",l:"Todos"},{key:"FULL",l:"FULL",c:"#1976FF",bg:"rgba(59,140,255,.14)"},{key:"Flex",l:"Flex",c:"#7c3aed",bg:"rgba(139,92,246,.14)"},{key:"ME2",l:"ME2",c:"#0e7490",bg:"rgba(0,240,255,.10)"},{key:"ME1",l:"ME1",c:"#1976FF",bg:"rgba(77,179,255,.2)"}].map(function(e){
                       return <FiltroBotao key={e.key} label={e.l} active={filterEnvio===e.key} cor={e.c||"var(--text-strong)"} bg={e.bg||"var(--surface-3)"} onClick={function(){setFilterEnvio(e.key);setPaginaPedidos(1);}} />;
                     })}
                   </FiltroGrupo>
@@ -6215,7 +6316,7 @@ export default function App() {
                           {o.buyerName ? (
                             <div style={{ position:"relative" }}>
                               <button onClick={function(){ setShowClienteDetalhe(showClienteDetalhe===o.id ? null : o.id); }}
-                                style={{ background:"none", border:"none", color:"#00F0FF", cursor:"pointer", fontSize:11, fontWeight:600, padding:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"100%", display:"block" }}>
+                                style={{ background:"none", border:"none", color:"#0e7490", cursor:"pointer", fontSize:11, fontWeight:600, padding:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"100%", display:"block" }}>
                                 {o.buyerName}
                               </button>
                               {showClienteDetalhe === o.id && (
@@ -6263,8 +6364,8 @@ export default function App() {
                         <td style={{ padding:"7px 10px", fontSize:11, color:"var(--text-2)", textAlign:"center" }}>×{o.qty}</td>
                         <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#FFC107", fontWeight:600, fontSize:12 }}>{fmt(o.fee)}</span></td>
                         <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#7c3aed", fontWeight:600, fontSize:12 }}>{o.freteSeller > 0 ? fmt(o.freteSeller) : "—"}</span></td>
-                        <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#00C853", fontWeight:700, fontSize:12 }}>{fmt(youReceive)}</span></td>
-                        <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap", fontSize:12, color:o.profit>=0?"#00C853":"#FF5252", fontWeight:700 }}>{o.cost > 0 ? fmt(o.profit) : "—"}</td>
+                        <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#0a9d4e", fontWeight:700, fontSize:12 }}>{fmt(youReceive)}</span></td>
+                        <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap", fontSize:12, color:o.profit>=0?"#0a9d4e":"#FF5252", fontWeight:700 }}>{o.cost > 0 ? fmt(o.profit) : "—"}</td>
                         <td style={{ padding:"10px 12px" }}><MarginBar value={o.margin} /></td>
                       </tr>
                     );
@@ -6317,7 +6418,10 @@ export default function App() {
         {tab === "estoque" && <EstoqueTab produtos={produtos} />}
         {tab === "vincular" && <VincularTab enriched={enriched} produtos={produtos} />}
         {tab === "relatorios" && <RelatoriosTab enrichedOrders={enrichedOrders} />}
-        {tab === "expedicao" && <ExpedicaoTab rawOrders={rawOrders} />}
+        {tab === "expedicao" && <EmConstrucao tab="expedicao" />}
+        {tab === "notas_fiscais" && <EmConstrucao tab="notas_fiscais" />}
+        {tab === "contas_receber" && <ContasReceberTab enrichedOrders={enrichedOrders} paymentData={paymentData} />}
+        {tab === "clientes" && <ClientesTab rawOrders={rawOrders} />}
         {tab === "integracoes" && <IntegracoesTab token={token} user={user} lastUpdate={lastUpdate} />}
         {tab === "dre" && <DreTab />}
         {TELAS_FIN[tab] && <TelaEstruturada cfg={TELAS_FIN[tab]} />}

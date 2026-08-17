@@ -321,6 +321,88 @@ function EmConstrucao({ tab }) {
   );
 }
 
+// Dashboard com os dados REAIS da empresa (a partir dos pedidos já sincronizados): faturamento,
+// lucro líquido, margem, taxas, impostos, custo e top produtos — com filtro por período.
+function DashboardTab({ enrichedOrders }) {
+  const [periodo, setPeriodo] = useState("30"); // hoje | 7 | 30 | tudo
+  const hojeStr = new Date().toISOString().slice(0, 10);
+  var cutoff = "0000-00-00";
+  if (periodo !== "tudo") {
+    var d = new Date(); d.setDate(d.getDate() - (periodo === "hoje" ? 0 : parseInt(periodo, 10)));
+    cutoff = d.toISOString().slice(0, 10);
+  }
+  var validos = (enrichedOrders || []).filter(function(o){
+    if (o.status === "cancelled") return false;
+    if (periodo === "hoje") return (o.date || "") === hojeStr;
+    return (o.date || "") >= cutoff;
+  });
+  var fat = 0, taxas = 0, impostos = 0, custo = 0, lucro = 0, porProduto = {};
+  validos.forEach(function(o){
+    var q = o.qty || 1;
+    var lucroPed = (o.profit || 0) * q;
+    fat += (o.price || 0) * q; taxas += (o.fee || 0) * q; impostos += (o.imposto || 0) * q;
+    custo += (o.cost || 0) * q; lucro += lucroPed;
+    var k = o.listing_id || o.title || "?";
+    if (!porProduto[k]) porProduto[k] = { titulo: o.title || k, lucro: 0, qtd: 0 };
+    porProduto[k].lucro += lucroPed; porProduto[k].qtd += q;
+  });
+  var nPed = validos.length;
+  var ticket = nPed ? fat / nPed : 0;
+  var margem = fat ? (lucro / fat * 100) : 0;
+  var top = Object.keys(porProduto).map(function(k){ return porProduto[k]; }).sort(function(a,b){ return b.lucro - a.lucro; }).slice(0, 8);
+  var kpis = [
+    { l:"Faturamento", v:fmt(fat), c:"var(--text-strong)" },
+    { l:"Lucro líquido", v:fmt(lucro), c: lucro >= 0 ? "#00C853" : "#FF5252" },
+    { l:"Margem", v:margem.toFixed(1) + "%", c: margem >= 0 ? "#00C853" : "#FF5252" },
+    { l:"Pedidos", v:String(nPed), c:"var(--text-strong)" },
+    { l:"Ticket médio", v:fmt(ticket), c:"var(--text-strong)" },
+    { l:"Taxas do marketplace", v:"- " + fmt(taxas), c:"#FFC107" },
+    { l:"Impostos", v:"- " + fmt(impostos), c:"#FFC107" },
+    { l:"Custo dos produtos", v:"- " + fmt(custo), c:"#FFC107" },
+  ];
+  var periodos = [["hoje","Hoje"],["7","7 dias"],["30","30 dias"],["tudo","Tudo"]];
+  return (
+    <div style={{ padding:"2px" }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:16 }}>
+        <div>
+          <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Dashboard</div>
+          <div style={{ fontSize:13, color:"var(--text-3)" }}>Faturamento, taxas, impostos e lucro real do período.</div>
+        </div>
+        <div style={{ display:"flex", gap:6 }}>
+          {periodos.map(function(p){
+            var ativo = periodo === p[0];
+            return <button key={p[0]} onClick={function(){ setPeriodo(p[0]); }}
+              style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600,
+                background: ativo ? "#1976FF" : "var(--surface)", color: ativo ? "#fff" : "var(--text-3)" }}>{p[1]}</button>;
+          })}
+        </div>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))", gap:12, marginBottom:20 }}>
+        {kpis.map(function(k,i){
+          return <div key={i} style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px" }}>
+            <div style={{ fontSize:11, color:"var(--text-3)", textTransform:"uppercase", letterSpacing:.5, fontWeight:600 }}>{k.l}</div>
+            <div style={{ fontSize:22, fontWeight:800, color:k.c, marginTop:6 }}>{k.v}</div>
+          </div>;
+        })}
+      </div>
+      <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px" }}>
+        <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)", marginBottom:12 }}>Top produtos por lucro</div>
+        {top.length === 0 ? (
+          <div style={{ color:"var(--text-3)", fontSize:13, padding:"12px 0" }}>Sem vendas no período.</div>
+        ) : top.map(function(p,i){
+          return <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"9px 0", borderBottom: i < top.length-1 ? "1px solid var(--border-soft)" : "none" }}>
+            <div style={{ minWidth:0, flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontSize:13, color:"var(--text-2)" }}>{p.titulo}</div>
+            <div style={{ display:"flex", gap:16, alignItems:"center", flexShrink:0 }}>
+              <span style={{ fontSize:11, color:"var(--text-3)" }}>{p.qtd} vend.</span>
+              <span style={{ fontSize:13, fontWeight:700, color: p.lucro >= 0 ? "#00C853" : "#FF5252" }}>{fmt(p.lucro)}</span>
+            </div>
+          </div>;
+        })}
+      </div>
+    </div>
+  );
+}
+
 // Importa/sincroniza anúncios ML para o cadastro de produtos
 function syncListingsToProdutos(listings, produtosExistentes) {
   var hoje = new Date().toLocaleDateString("sv-SE");
@@ -1131,7 +1213,7 @@ function SinoNotificacoes({ notificacoes, setNotificacoes, darkMode }) {
       {aberto && (
         <>
           <div onClick={() => setAberto(false)} style={{ position: "fixed", inset: 0, zIndex: 200 }} />
-          <div style={{ position: "absolute", top: 46, right: 0, width: 380, background: bg, border: `1px solid ${border}`, borderRadius: 14, boxShadow: "0 8px 32px rgba(0,0,0,.15)", zIndex: 201, overflow: "hidden" }}>
+          <div style={{ position: "fixed", left: 14, bottom: 14, width: 360, maxWidth: "calc(100vw - 28px)", maxHeight: "78vh", background: bg, border: `1px solid ${border}`, borderRadius: 14, boxShadow: "0 8px 32px rgba(0,0,0,.28)", zIndex: 201, overflow: "hidden", display: "flex", flexDirection: "column" }}>
             {/* Header */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", borderBottom: `1px solid ${border}` }}>
               <div style={{ fontWeight: 700, fontSize: 14, color: darkMode ? "var(--text-2)" : "var(--text-strong)" }}>
@@ -5215,10 +5297,10 @@ export default function App() {
               { titulo:"Operação", itens:[
                 { key:"dashboard", label:"Dashboard" },
                 { key:"produtos", label:"Produtos" },
-                currentUser?.permissoes?.includes("listings") && { key:"listings", label:"Anúncios", badge:enriched.length },
+                currentUser?.permissoes?.includes("listings") && { key:"listings", label:"Anúncios" },
                 { key:"vincular", label:"Vincular anúncios" },
                 currentUser?.permissoes?.includes("listings") && { key:"precificacao", label:"Precificação" },
-                currentUser?.permissoes?.includes("orders") && { key:"orders", label:"Vendas", badge:enrichedOrders.length },
+                currentUser?.permissoes?.includes("orders") && { key:"orders", label:"Vendas" },
                 { key:"expedicao", label:"Expedição" },
                 { key:"compras", label:"Compras" },
                 { key:"estoque", label:"Estoque" },
@@ -5830,7 +5912,10 @@ export default function App() {
         {tab === "admin" && currentUser?.permissoes?.includes("admin") && (
           <AdminTab currentUser={currentUser} />
         )}
-        {["dashboard","produtos","vincular","expedicao","compras","estoque","contas_pagar","contas_receber","clientes","fornecedores","notas_fiscais","dre","relatorios","integracoes"].indexOf(tab) >= 0 && (
+        {tab === "dashboard" && (
+          <DashboardTab enrichedOrders={enrichedOrders} />
+        )}
+        {["produtos","vincular","expedicao","compras","estoque","contas_pagar","contas_receber","clientes","fornecedores","notas_fiscais","dre","relatorios","integracoes"].indexOf(tab) >= 0 && (
           <EmConstrucao tab={tab} />
         )}
       </div>{/* fecha a coluna do conteúdo */}

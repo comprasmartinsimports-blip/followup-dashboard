@@ -650,6 +650,96 @@ function ClientesTab({ rawOrders }) {
   );
 }
 
+// Vendas: cada venda com custos/taxas do momento; clicar abre o painel com o detalhamento completo.
+function VendasTab({ enrichedOrders }) {
+  const [sel, setSel] = useState(null);
+  const [situacao, setSituacao] = useState("todas");
+  function calc(o){
+    var q = o.qty || 1;
+    var fat = (o.price || 0) * q, taxas = (o.fee || 0) * q, frete = o.freteSeller || 0;
+    var custo = (o.cost || 0) * q, imposto = (o.imposto || 0) * q;
+    var repasse = fat - taxas - frete, lucro = repasse - custo - imposto;
+    return { q, fat, taxas, frete, custo, imposto, repasse, lucro, margem: fat ? lucro / fat * 100 : 0 };
+  }
+  var lista = (enrichedOrders || []).filter(function(o){
+    if (situacao === "ativas") return o.status !== "cancelled";
+    if (situacao === "canceladas") return o.status === "cancelled";
+    return true;
+  }).slice().sort(function(a,b){ return (b.date || "").localeCompare(a.date || ""); });
+  var filtros = [["todas","Todas"],["ativas","Ativas"],["canceladas","Canceladas"]];
+  function Linha(label, valor, opts){
+    opts = opts || {};
+    return <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"9px 0", borderBottom: opts.forte ? "none" : "1px solid var(--border-soft)" }}>
+      <span style={{ fontSize: opts.forte ? 14 : 13, fontWeight: opts.forte ? 800 : 500, color: opts.forte ? "var(--text-strong)" : "var(--text-3)" }}>{label}</span>
+      <span style={{ fontSize: opts.forte ? 15 : 13, fontWeight: opts.forte ? 800 : 600, color: opts.cor || "var(--text-2)", fontVariantNumeric:"tabular-nums" }}>{valor}</span>
+    </div>;
+  }
+  return (
+    <div style={{ padding:2 }}>
+      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Vendas</div>
+      <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Cada venda guarda os custos e taxas do momento. Clique para ver o detalhamento.</div>
+      <div style={{ display:"flex", gap:6, marginBottom:12 }}>
+        {filtros.map(function(f){ var a = situacao === f[0]; return <button key={f[0]} onClick={function(){ setSituacao(f[0]); }} style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background: a ? "#1976FF" : "var(--surface)", color: a ? "#fff" : "var(--text-3)" }}>{f[1]}</button>; })}
+      </div>
+      <div style={_tableWrap}>
+        <table style={_table}>
+          <thead><tr>{["Data","Código MLB","SKU","Anúncio","Qtd","Faturamento","Lucro","Margem"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+          <tbody>
+            {lista.slice(0,400).map(function(o,i){
+              var c = calc(o);
+              return <tr key={o.id || i} onClick={function(){ setSel(o); }} style={{ cursor:"pointer" }}>
+                <td style={_td}>{o.date || "—"}</td>
+                <td style={_tdMono}>{o.listing_id || o.id}</td>
+                <td style={_tdMono}>{o.sku || "—"}</td>
+                <td style={{ ..._td, maxWidth:240, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)" }}>{o.title || "—"}</td>
+                <td style={_td}>{c.q}</td>
+                <td style={_td}>{fmt(c.fat)}</td>
+                <td style={{ ..._td, fontWeight:700, color: c.lucro >= 0 ? "#0a9d4e" : "#FF5252" }}>{fmt(c.lucro)}</td>
+                <td style={{ ..._td, color: c.margem >= 0 ? "#0a9d4e" : "#FF5252" }}>{c.margem.toFixed(1)}%</td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+        {lista.length === 0 && <div style={{ padding:24, textAlign:"center", color:"var(--text-3)" }}>Nenhuma venda.</div>}
+      </div>
+
+      {sel && (function(){
+        var c = calc(sel);
+        return <>
+          <div onClick={function(){ setSel(null); }} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.4)", zIndex:400 }} />
+          <div style={{ position:"fixed", top:0, right:0, bottom:0, width:440, maxWidth:"100vw", background:"var(--bg-2)", borderLeft:"1px solid var(--border)", boxShadow:"-8px 0 32px rgba(0,0,0,.28)", zIndex:401, overflowY:"auto", padding:"22px 24px" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, marginBottom:4 }}>
+              <div style={{ fontWeight:800, fontSize:17, color:"var(--text-strong)", lineHeight:1.3 }}>{sel.title || "Venda"}</div>
+              <button onClick={function(){ setSel(null); }} style={{ background:"none", border:"none", color:"var(--text-3)", fontSize:22, cursor:"pointer", lineHeight:1, flexShrink:0 }}>×</button>
+            </div>
+            <div style={{ fontSize:12, color:"var(--text-3)", marginBottom:16 }}>Venda de {sel.date || "—"} · Mercado Livre</div>
+
+            <div style={{ fontSize:11, fontWeight:700, color:"var(--text-3)", textTransform:"uppercase", letterSpacing:.5, margin:"6px 0 2px" }}>Identificação</div>
+            {Linha("Código MLB", sel.listing_id || sel.id)}
+            {Linha("SKU", sel.sku || "—")}
+            {Linha("Quantidade", String(c.q))}
+            {Linha("Situação", sel.status === "cancelled" ? "Cancelada" : "Ativa", { cor: sel.status === "cancelled" ? "#FF5252" : "#0a9d4e" })}
+
+            <div style={{ fontSize:11, fontWeight:700, color:"var(--text-3)", textTransform:"uppercase", letterSpacing:.5, margin:"16px 0 2px" }}>Descontos do marketplace</div>
+            {Linha("Taxas do marketplace", "- " + fmt(c.taxas), { cor:"#FFC107" })}
+            {Linha("Frete pago por você", "- " + fmt(c.frete), { cor:"#FFC107" })}
+            <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 14px", margin:"10px 0" }}>
+              {Linha("Repasse do marketplace", fmt(c.repasse), { forte:true, cor:"var(--text-strong)" })}
+            </div>
+
+            <div style={{ fontSize:11, fontWeight:700, color:"var(--text-3)", textTransform:"uppercase", letterSpacing:.5, margin:"6px 0 2px" }}>Seus custos</div>
+            {Linha("Custo do produto", "- " + fmt(c.custo), { cor:"#FFC107" })}
+            {Linha("Imposto", "- " + fmt(c.imposto), { cor:"#FFC107" })}
+            <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"12px 14px", marginTop:12 }}>
+              {Linha("Lucro líquido", fmt(c.lucro) + "  (" + c.margem.toFixed(1) + "%)", { forte:true, cor: c.lucro >= 0 ? "#0a9d4e" : "#FF5252" })}
+            </div>
+          </div>
+        </>;
+      })()}
+    </div>
+  );
+}
+
 // Expedição: pedidos com o status de envio do ML (a enviar / enviado / entregue), com filtro.
 function ExpedicaoTab({ rawOrders }) {
   const [filtro, setFiltro] = useState("todos");
@@ -6190,6 +6280,9 @@ export default function App() {
         )}
 
         {tab === "orders" && currentUser?.permissoes?.includes("orders") && (
+          <VendasTab enrichedOrders={enrichedOrders} />
+        )}
+        {false && (
           <>
             {/* Sub-abas de Pedidos */}
             <div style={{ display:"flex", gap:2, borderBottom:"2px solid var(--border)", marginBottom:10 }}>

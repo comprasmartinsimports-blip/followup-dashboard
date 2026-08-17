@@ -8,9 +8,24 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
     <style>
-      body{background:#0A0F18;
-        background-image:radial-gradient(1100px 500px at 75% -10%, rgba(25,118,255,.09), transparent 60%),
-                         radial-gradient(800px 420px at -10% 110%, rgba(0,240,255,.05), transparent 60%);}
+      /* ── Tokens de tema (escuro = padrão; claro sob [data-theme="light"]) ──
+         O app usa var(--...) no lugar das cores fixas, então trocar o tema troca tudo. */
+      :root{
+        --bg:#0A0F18; --bg-2:#121A24; --surface:#182230; --surface-3:#223048;
+        --text-strong:#FFFFFF; --text-2:#A9B4C5; --text-3:#67759B; --text-4:#4A5878;
+        --border:rgba(255,255,255,.12); --border-soft:rgba(255,255,255,.08);
+        --app-bg-image:radial-gradient(1100px 500px at 75% -10%, rgba(25,118,255,.09), transparent 60%),
+                       radial-gradient(800px 420px at -10% 110%, rgba(0,240,255,.05), transparent 60%);
+        color-scheme:dark;
+      }
+      :root[data-theme="light"]{
+        --bg:#eef1f6; --bg-2:#ffffff; --surface:#ffffff; --surface-3:#eef2f8;
+        --text-strong:#141d2b; --text-2:#45526b; --text-3:#5a6b86; --text-4:#8492a8;
+        --border:#dbe2ec; --border-soft:#e7ecf3;
+        --app-bg-image:none;
+        color-scheme:light;
+      }
+      body{ background:var(--bg); background-image:var(--app-bg-image); }
       /* Remove as setinhas (spinner) dos campos numéricos em todo o sistema */
       input[type="number"]::-webkit-outer-spin-button,
       input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }

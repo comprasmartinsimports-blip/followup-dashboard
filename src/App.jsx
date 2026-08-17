@@ -88,8 +88,8 @@ function getListingTypeLabel(type) {
   // gold_special, gold_extra, demais = Clássico (12%)
   if (type === "gold_premium" || type === "gold_pro") return { label: "Premium · 17%", color: "#7c3aed" };
   if (type === "gold_special" || type === "gold_extra") return { label: "Clássico · 12%", color: "#3B8CFF" };
-  if (type === "silver") return { label: "Gratuito", color: "#67759B" };
-  if (type === "free") return { label: "Gratuito", color: "#67759B" };
+  if (type === "silver") return { label: "Gratuito", color: "var(--text-3)" };
+  if (type === "free") return { label: "Gratuito", color: "var(--text-3)" };
   return { label: type ? "Clássico" : "—", color: "#3B8CFF" };
 }
 
@@ -314,8 +314,8 @@ function EmConstrucao({ tab }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:"62vh", textAlign:"center", padding:24 }}>
       <div style={{ fontSize:60, marginBottom:16, opacity:.9 }}>{info[0]}</div>
-      <div style={{ fontSize:24, fontWeight:800, color:"#FFFFFF", marginBottom:8, letterSpacing:-0.4 }}>{info[1]}</div>
-      <div style={{ fontSize:14, color:"#8593AE", maxWidth:440, lineHeight:1.6 }}>{info[2]}</div>
+      <div style={{ fontSize:24, fontWeight:800, color:"var(--text-strong)", marginBottom:8, letterSpacing:-0.4 }}>{info[1]}</div>
+      <div style={{ fontSize:14, color:"var(--text-3)", maxWidth:440, lineHeight:1.6 }}>{info[2]}</div>
       <div style={{ marginTop:18, fontSize:12, fontWeight:700, color:"#FFC107", background:"rgba(255,193,7,.12)", border:"1px solid rgba(255,193,7,.35)", borderRadius:20, padding:"5px 14px" }}>🚧 Em construção</div>
     </div>
   );
@@ -758,7 +758,7 @@ function getOrderStatusInfo(status, tags, fulfilled, shipmentStatus) {
   if (["shipped", "in_transit"].includes(shipmentStatus))
     return { label: "Enviado", color: "#00F0FF", bg: "rgba(0,240,255,.10)" };
   if (status === "paid") return { label: "Ag. Envio", color: "#FFC107", bg: "rgba(255,193,7,.12)" };
-  return { label: status ?? "—", color: "#A9B4C5", bg: "#A9B4C5" };
+  return { label: status ?? "—", color: "var(--text-2)", bg: "var(--text-2)" };
 }
 
 // ── Componente de Paginação ─────────────────────────────────────────────
@@ -785,14 +785,14 @@ function Paginacao({ total, porPagina, paginaAtual, onMudar }) {
   }
 
   var btnStyle = function(ativo) { return {
-    padding:"6px 11px", borderRadius:7, border: ativo ? "2px solid #4DB3FF" : "1px solid rgba(255,255,255,.12)",
-    background: ativo ? "#1976FF" : "#182230", color: ativo ? "#fff" : "#A9B4C5",
+    padding:"6px 11px", borderRadius:7, border: ativo ? "2px solid #4DB3FF" : "1px solid var(--border)",
+    background: ativo ? "#1976FF" : "var(--surface)", color: ativo ? "#fff" : "var(--text-2)",
     fontWeight: ativo ? 700 : 400, fontSize:13, cursor:"pointer", fontFamily:"inherit", minWidth:34
   }; };
 
   return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 0", borderTop:"1px solid rgba(255,255,255,.10)", marginTop:4, flexWrap:"wrap", gap:8 }}>
-      <span style={{ fontSize:12, color:"#67759B" }}>
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 0", borderTop:"1px solid var(--border)", marginTop:4, flexWrap:"wrap", gap:8 }}>
+      <span style={{ fontSize:12, color:"var(--text-3)" }}>
         Mostrando {inicio}–{fim} de <strong>{total}</strong> registros
       </span>
       <div style={{ display:"flex", gap:4, alignItems:"center" }}>
@@ -801,7 +801,7 @@ function Paginacao({ total, porPagina, paginaAtual, onMudar }) {
         <button onClick={function(){ onMudar(paginaAtual-1); }} disabled={paginaAtual===1}
           style={Object.assign({},btnStyle(false),{opacity:paginaAtual===1?0.4:1})}>‹</button>
         {paginasVisiveis().map(function(p, i) {
-          if (p === "...") return <span key={"e"+i} style={{ color:"#67759B", padding:"0 4px" }}>…</span>;
+          if (p === "...") return <span key={"e"+i} style={{ color:"var(--text-3)", padding:"0 4px" }}>…</span>;
           return <button key={p} onClick={function(){ onMudar(p); }} style={btnStyle(p===paginaAtual)}>{p}</button>;
         })}
         <button onClick={function(){ onMudar(paginaAtual+1); }} disabled={paginaAtual===totalPags}
@@ -814,12 +814,12 @@ function Paginacao({ total, porPagina, paginaAtual, onMudar }) {
 }
 
 function MarginBar({ value }) {
-  if (value === null) return <span style={{ fontSize: 12, color: "#67759B" }}>— insira custo</span>;
+  if (value === null) return <span style={{ fontSize: 12, color: "var(--text-3)" }}>— insira custo</span>;
   const pct = Math.max(0, Math.min(1, value));
   const color = pct >= 0.25 ? "#00C853" : pct >= 0.15 ? "#FFC107" : "#FF5252";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <div style={{ flex: 1, height: 4, background: "#223048", borderRadius: 99, overflow: "hidden", minWidth: 60 }}>
+      <div style={{ flex: 1, height: 4, background: "var(--surface-3)", borderRadius: 99, overflow: "hidden", minWidth: 60 }}>
         <div style={{ width: `${pct * 100}%`, height: "100%", background: color, borderRadius: 99 }} />
       </div>
       <span style={{ fontSize: 12, fontWeight: 600, color, minWidth: 38, textAlign: "right" }}>{fmtPct(pct)}</span>
@@ -838,9 +838,9 @@ function CaixaCopiar({ texto, cor }) {
   }
   return (
     <div style={{ position:"relative", marginTop:8 }}>
-      <div style={{ background:"#0A0F18", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, padding:"10px 12px", fontSize:13, color:"#E6EDF7", lineHeight:1.55, whiteSpace:"pre-wrap", maxHeight:220, overflowY:"auto" }}>{texto}</div>
+      <div style={{ background:"var(--bg)", border:"1px solid var(--border)", borderRadius:8, padding:"10px 12px", fontSize:13, color:"#E6EDF7", lineHeight:1.55, whiteSpace:"pre-wrap", maxHeight:220, overflowY:"auto" }}>{texto}</div>
       <button onClick={copiar}
-        style={{ position:"absolute", top:6, right:6, background: copiado?cf:"#223048", border:"1px solid "+(copiado?cf:"rgba(255,255,255,.14)"), color: copiado?"#0A0F18":"#A9B4C5", fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:6, cursor:"pointer" }}>
+        style={{ position:"absolute", top:6, right:6, background: copiado?cf:"var(--surface-3)", border:"1px solid "+(copiado?cf:"rgba(255,255,255,.14)"), color: copiado?"var(--bg)":"var(--text-2)", fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:6, cursor:"pointer" }}>
         {copiado ? "✓ Copiado" : "Copiar"}
       </button>
     </div>
@@ -859,15 +859,15 @@ function AIPanel({ listing, onClose }) {
   }
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", backdropFilter: "blur(4px)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 300 }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "#182230", borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 760, maxHeight: "88vh", overflowY: "auto", padding: "28px 32px 40px", boxShadow: "0 -4px 40px rgba(0,0,0,.12)" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 760, maxHeight: "88vh", overflowY: "auto", padding: "28px 32px 40px", boxShadow: "0 -4px 40px rgba(0,0,0,.12)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 18, color: "#FFFFFF", marginBottom: 4 }}>Qualidade do Anúncio</div>
-            <div style={{ color: "#A9B4C5", fontSize: 13, maxWidth: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{listing.title}</div>
+            <div style={{ fontWeight: 700, fontSize: 18, color: "var(--text-strong)", marginBottom: 4 }}>Qualidade do Anúncio</div>
+            <div style={{ color: "var(--text-2)", fontSize: 13, maxWidth: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{listing.title}</div>
           </div>
-          <button onClick={onClose} style={{ background: "#223048", border: "none", color: "#A9B4C5", width: 32, height: 32, borderRadius: 8, cursor: "pointer", fontSize: 16 }}>✕</button>
+          <button onClick={onClose} style={{ background: "var(--surface-3)", border: "none", color: "var(--text-2)", width: 32, height: 32, borderRadius: 8, cursor: "pointer", fontSize: 16 }}>✕</button>
         </div>
-        <div style={{ background: "#121A24", border: "1px solid rgba(255,255,255,.12)", borderRadius: 12, padding: "16px 20px", marginBottom: 20 }}>
+        <div style={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 12, padding: "16px 20px", marginBottom: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 14 }}>
             <div style={{ width: 52, height: 52, borderRadius: 12, background: scoreBg(score), display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
               <span style={{ fontSize: 18, fontWeight: 800, color: scoreColor(score) }}>{score}</span>
@@ -875,7 +875,7 @@ function AIPanel({ listing, onClose }) {
             </div>
             <div>
               <div style={{ fontWeight: 700, fontSize: 16, color: scoreColor(score) }}>{scoreLabel(score)}</div>
-              <div style={{ color: "#67759B", fontSize: 12 }}>Score de qualidade do anúncio</div>
+              <div style={{ color: "var(--text-3)", fontSize: 12 }}>Score de qualidade do anúncio</div>
             </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -887,22 +887,22 @@ function AIPanel({ listing, onClose }) {
             ))}
           </div>
         </div>
-        {state === "idle" && <div style={{ textAlign: "center", padding: "28px 0" }}><div style={{ color: "#67759B", fontSize: 13, marginBottom: 16 }}>Analise com IA para receber sugestões personalizadas</div><button onClick={runAnalysis} style={{ background: "#1976FF", border: "none", color: "#fff", fontWeight: 700, padding: "11px 32px", borderRadius: 10, cursor: "pointer", fontSize: 14 }}>✦ Analisar com IA</button></div>}
-        {state === "loading" && <div style={{ textAlign: "center", padding: "32px 0", color: "#67759B" }}><div style={{ fontSize: 28, marginBottom: 12, animation: "spin 1.2s linear infinite", display: "inline-block" }}>⟳</div><style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style><div style={{ fontSize: 13 }}>Analisando...</div></div>}
-        {state === "error" && <div style={{ textAlign: "center", padding: "24px 0" }}><div style={{ color: "#FF5252", fontSize: 13, marginBottom: 12 }}>Erro: {errorMsg}</div><button onClick={runAnalysis} style={{ background: "#223048", border: "1px solid rgba(255,255,255,.12)", color: "#A9B4C5", padding: "8px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>Tentar novamente</button></div>}
+        {state === "idle" && <div style={{ textAlign: "center", padding: "28px 0" }}><div style={{ color: "var(--text-3)", fontSize: 13, marginBottom: 16 }}>Analise com IA para receber sugestões personalizadas</div><button onClick={runAnalysis} style={{ background: "#1976FF", border: "none", color: "#fff", fontWeight: 700, padding: "11px 32px", borderRadius: 10, cursor: "pointer", fontSize: 14 }}>✦ Analisar com IA</button></div>}
+        {state === "loading" && <div style={{ textAlign: "center", padding: "32px 0", color: "var(--text-3)" }}><div style={{ fontSize: 28, marginBottom: 12, animation: "spin 1.2s linear infinite", display: "inline-block" }}>⟳</div><style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style><div style={{ fontSize: 13 }}>Analisando...</div></div>}
+        {state === "error" && <div style={{ textAlign: "center", padding: "24px 0" }}><div style={{ color: "#FF5252", fontSize: 13, marginBottom: 12 }}>Erro: {errorMsg}</div><button onClick={runAnalysis} style={{ background: "var(--surface-3)", border: "1px solid var(--border)", color: "var(--text-2)", padding: "8px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>Tentar novamente</button></div>}
         {state === "done" && result && (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ background: "rgba(255,193,7,.12)", border: "1px solid rgba(255,193,7,.35)", borderRadius: 10, padding: "14px 18px" }}>
               <div style={{ fontSize: 11, color: "#FFC107", marginBottom: 6, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Avaliação Geral</div>
-              <div style={{ fontSize: 14, color: "#FFFFFF", lineHeight: 1.6 }}>{result.score_commentary}</div>
+              <div style={{ fontSize: 14, color: "var(--text-strong)", lineHeight: 1.6 }}>{result.score_commentary}</div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               {result.strengths?.length > 0 && <div style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#00C853", marginBottom: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>✓ Pontos Fortes</div>{result.strengths.map((s, i) => <div key={i} style={{ fontSize: 13, color: "#00C853", marginBottom: 6, paddingLeft: 10, borderLeft: "2px solid rgba(0,200,83,.45)" }}>{s}</div>)}</div>}
-              {result.keywords?.length > 0 && <div style={{ background: "#121A24", border: "1px solid rgba(255,255,255,.12)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#A9B4C5", marginBottom: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Palavras-chave</div><div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{result.keywords.map((k, i) => <span key={i} style={{ background: "#223048", color: "#A9B4C5", fontSize: 12, padding: "3px 10px", borderRadius: 20 }}>{k}</span>)}</div></div>}
+              {result.keywords?.length > 0 && <div style={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "var(--text-2)", marginBottom: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Palavras-chave</div><div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{result.keywords.map((k, i) => <span key={i} style={{ background: "var(--surface-3)", color: "var(--text-2)", fontSize: 12, padding: "3px 10px", borderRadius: 20 }}>{k}</span>)}</div></div>}
             </div>
-            {result.improvements?.length > 0 && <div style={{ background: "#182230", border: "1px solid rgba(255,255,255,.12)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#FFC107", marginBottom: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>⚡ O que Melhorar — com sugestão pronta</div>{result.improvements.map((imp, i) => <div key={i} style={{ display: "flex", gap: 12, marginBottom: 14, paddingBottom: 14, borderBottom: i < result.improvements.length - 1 ? "1px solid rgba(255,255,255,.10)" : "none" }}><div style={{ minWidth: 26, height: 26, borderRadius: 7, background: "rgba(255,193,7,.12)", border: "1px solid rgba(255,193,7,.35)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#FFC107", fontWeight: 700 }}>{i + 1}</div><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12, color: "#FFC107", marginBottom: 3, fontWeight: 600 }}>{imp.field}</div><div style={{ fontSize: 13, color: "#A9B4C5", lineHeight: 1.5 }}>{imp.why || imp.suggestion}</div>{imp.ready && String(imp.ready).trim() && <CaixaCopiar texto={imp.ready} cor="#FFC107" />}</div></div>)}</div>}
-            {result.description_suggestion && String(result.description_suggestion).trim() && <div style={{ background: "rgba(0,240,255,.08)", border: "1px solid rgba(0,240,255,.25)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#00F0FF", marginBottom: 4, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>📄 Descrição pronta para colar</div><div style={{ fontSize: 12, color: "#67759B" }}>Copie e cole na descrição do seu anúncio</div><CaixaCopiar texto={result.description_suggestion} cor="#00F0FF" /></div>}
-            {result.title_suggestion && <div style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#00C853", marginBottom: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>✦ Título pronto para colar</div><div style={{ fontSize: 14, color: "#FFFFFF", fontWeight: 600 }}>{result.title_suggestion}</div><div style={{ fontSize: 11, color: "#67759B", marginTop: 4 }}>{result.title_suggestion.length} caracteres</div><CaixaCopiar texto={result.title_suggestion} cor="#00C853" /></div>}
+            {result.improvements?.length > 0 && <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#FFC107", marginBottom: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>⚡ O que Melhorar — com sugestão pronta</div>{result.improvements.map((imp, i) => <div key={i} style={{ display: "flex", gap: 12, marginBottom: 14, paddingBottom: 14, borderBottom: i < result.improvements.length - 1 ? "1px solid var(--border)" : "none" }}><div style={{ minWidth: 26, height: 26, borderRadius: 7, background: "rgba(255,193,7,.12)", border: "1px solid rgba(255,193,7,.35)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#FFC107", fontWeight: 700 }}>{i + 1}</div><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12, color: "#FFC107", marginBottom: 3, fontWeight: 600 }}>{imp.field}</div><div style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.5 }}>{imp.why || imp.suggestion}</div>{imp.ready && String(imp.ready).trim() && <CaixaCopiar texto={imp.ready} cor="#FFC107" />}</div></div>)}</div>}
+            {result.description_suggestion && String(result.description_suggestion).trim() && <div style={{ background: "rgba(0,240,255,.08)", border: "1px solid rgba(0,240,255,.25)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#00F0FF", marginBottom: 4, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>📄 Descrição pronta para colar</div><div style={{ fontSize: 12, color: "var(--text-3)" }}>Copie e cole na descrição do seu anúncio</div><CaixaCopiar texto={result.description_suggestion} cor="#00F0FF" /></div>}
+            {result.title_suggestion && <div style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", borderRadius: 10, padding: "14px 18px" }}><div style={{ fontSize: 11, color: "#00C853", marginBottom: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>✦ Título pronto para colar</div><div style={{ fontSize: 14, color: "var(--text-strong)", fontWeight: 600 }}>{result.title_suggestion}</div><div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 4 }}>{result.title_suggestion.length} caracteres</div><CaixaCopiar texto={result.title_suggestion} cor="#00C853" /></div>}
           </div>
         )}
       </div>
@@ -1057,22 +1057,22 @@ function MLConnectModal({ onConnect, onClose }) {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 24 }}>
-      <div style={{ background: "#182230", borderRadius: 16, width: "100%", maxWidth: 480, padding: "32px 36px", boxShadow: "0 20px 60px rgba(0,0,0,.15)" }}>
+      <div style={{ background: "var(--surface)", borderRadius: 16, width: "100%", maxWidth: 480, padding: "32px 36px", boxShadow: "0 20px 60px rgba(0,0,0,.15)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <div style={{ fontWeight: 800, fontSize: 18, color: "#FFFFFF" }}>Conectar Mercado Livre</div>
-          <button onClick={onClose} style={{ background: "#223048", border: "none", color: "#A9B4C5", width: 32, height: 32, borderRadius: 8, cursor: "pointer", fontSize: 16 }}>✕</button>
+          <div style={{ fontWeight: 800, fontSize: 18, color: "var(--text-strong)" }}>Conectar Mercado Livre</div>
+          <button onClick={onClose} style={{ background: "var(--surface-3)", border: "none", color: "var(--text-2)", width: 32, height: 32, borderRadius: 8, cursor: "pointer", fontSize: 16 }}>✕</button>
         </div>
-        <p style={{ color: "#A9B4C5", fontSize: 13, lineHeight: 1.7, marginBottom: 20 }}>
+        <p style={{ color: "var(--text-2)", fontSize: 13, lineHeight: 1.7, marginBottom: 20 }}>
           Cole o token de acesso do Mercado Livre. O token fica salvo no navegador e você só precisa reconectar quando ele expirar (a cada 6 horas).
         </p>
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, color: "#67759B", marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>Token de acesso</div>
+          <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>Token de acesso</div>
           <textarea value={tokenInput} onChange={e => setTokenInput(e.target.value)} placeholder="APP_USR-..." rows={3}
-            style={{ width: "100%", background: "#121A24", border: `1px solid ${errorMsg ? "#fca5a5" : "rgba(255,255,255,.12)"}`, color: "#FFFFFF", padding: "10px 14px", borderRadius: 10, fontFamily: "monospace", fontSize: 12, resize: "none", outline: "none" }} />
+            style={{ width: "100%", background: "var(--bg-2)", border: `1px solid ${errorMsg ? "#fca5a5" : "var(--border)"}`, color: "var(--text-strong)", padding: "10px 14px", borderRadius: 10, fontFamily: "monospace", fontSize: 12, resize: "none", outline: "none" }} />
         </div>
         {errorMsg && <div style={{ background: "rgba(255,82,82,.12)", border: "1px solid rgba(255,82,82,.35)", color: "#FF5252", fontSize: 13, padding: "10px 14px", borderRadius: 8, marginBottom: 16 }}>⚠ {errorMsg}</div>}
         <button onClick={handleConnect} disabled={loading || !tokenInput.trim()}
-          style={{ width: "100%", background: loading || !tokenInput.trim() ? "#223048" : "#1976FF", border: "none", color: loading || !tokenInput.trim() ? "#67759B" : "#fff", fontWeight: 700, padding: "12px", borderRadius: 10, cursor: loading || !tokenInput.trim() ? "not-allowed" : "pointer", fontSize: 14 }}>
+          style={{ width: "100%", background: loading || !tokenInput.trim() ? "var(--surface-3)" : "#1976FF", border: "none", color: loading || !tokenInput.trim() ? "var(--text-3)" : "#fff", fontWeight: 700, padding: "12px", borderRadius: 10, cursor: loading || !tokenInput.trim() ? "not-allowed" : "pointer", fontSize: 14 }}>
           {loading ? "Verificando..." : "Conectar"}
         </button>
       </div>
@@ -1113,13 +1113,13 @@ function SinoNotificacoes({ notificacoes, setNotificacoes, darkMode }) {
     }
   }
 
-  const bg = darkMode ? "#121A24" : "#fff";
-  const border = darkMode ? "#A9B4C5" : "rgba(255,255,255,.12)";
+  const bg = darkMode ? "var(--bg-2)" : "#fff";
+  const border = darkMode ? "var(--text-2)" : "var(--border)";
 
   return (
     <div style={{ position: "relative" }}>
       <button onClick={() => { setAberto(a => !a); pedirPermissao(); }}
-        style={{ position: "relative", background: naoLidas > 0 ? "rgba(255,193,7,.18)" : darkMode ? "#121A24" : "#223048", border: `1px solid ${naoLidas > 0 ? "rgba(255,193,7,.35)" : border}`, color: naoLidas > 0 ? "#FFC107" : darkMode ? "#67759B" : "#A9B4C5", width: 38, height: 38, borderRadius: 10, cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        style={{ position: "relative", background: naoLidas > 0 ? "rgba(255,193,7,.18)" : darkMode ? "var(--bg-2)" : "var(--surface-3)", border: `1px solid ${naoLidas > 0 ? "rgba(255,193,7,.35)" : border}`, color: naoLidas > 0 ? "#FFC107" : darkMode ? "var(--text-3)" : "var(--text-2)", width: 38, height: 38, borderRadius: 10, cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>
         🔔
         {naoLidas > 0 && (
           <div style={{ position: "absolute", top: -4, right: -4, background: "#FF5252", color: "#fff", width: 18, height: 18, borderRadius: "50%", fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
@@ -1134,7 +1134,7 @@ function SinoNotificacoes({ notificacoes, setNotificacoes, darkMode }) {
           <div style={{ position: "absolute", top: 46, right: 0, width: 380, background: bg, border: `1px solid ${border}`, borderRadius: 14, boxShadow: "0 8px 32px rgba(0,0,0,.15)", zIndex: 201, overflow: "hidden" }}>
             {/* Header */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", borderBottom: `1px solid ${border}` }}>
-              <div style={{ fontWeight: 700, fontSize: 14, color: darkMode ? "#A9B4C5" : "#FFFFFF" }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: darkMode ? "var(--text-2)" : "var(--text-strong)" }}>
                 🔔 Notificações {naoLidas > 0 && <span style={{ fontSize: 11, background: "#FF5252", color: "#fff", padding: "1px 7px", borderRadius: 20, marginLeft: 6 }}>{naoLidas} novas</span>}
               </div>
               <div style={{ display: "flex", gap: 8 }}>
@@ -1142,7 +1142,7 @@ function SinoNotificacoes({ notificacoes, setNotificacoes, darkMode }) {
                   <button onClick={marcarTodasLidas} style={{ background: "none", border: "none", fontSize: 11, color: "#00F0FF", cursor: "pointer", fontWeight: 600 }}>Marcar todas como lidas</button>
                 )}
                 {notificacoes.length > 0 && (
-                  <button onClick={limparTodas} style={{ background: "none", border: "none", fontSize: 11, color: "#67759B", cursor: "pointer" }}>Limpar</button>
+                  <button onClick={limparTodas} style={{ background: "none", border: "none", fontSize: 11, color: "var(--text-3)", cursor: "pointer" }}>Limpar</button>
                 )}
               </div>
             </div>
@@ -1150,7 +1150,7 @@ function SinoNotificacoes({ notificacoes, setNotificacoes, darkMode }) {
             {/* Lista */}
             <div style={{ maxHeight: 420, overflowY: "auto" }}>
               {notificacoes.length === 0 ? (
-                <div style={{ padding: "32px 16px", textAlign: "center", color: "#67759B" }}>
+                <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--text-3)" }}>
                   <div style={{ fontSize: 32, marginBottom: 8 }}>🔔</div>
                   <div style={{ fontSize: 13 }}>Nenhuma notificação</div>
                   <div style={{ fontSize: 11, marginTop: 4 }}>Reconecte o ML para verificar novos pedidos</div>
@@ -1164,11 +1164,11 @@ function SinoNotificacoes({ notificacoes, setNotificacoes, darkMode }) {
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                        <div style={{ fontWeight: 700, fontSize: 13, color: darkMode ? "#A9B4C5" : "#FFFFFF" }}>{n.titulo}</div>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: darkMode ? "var(--text-2)" : "var(--text-strong)" }}>{n.titulo}</div>
                         {!n.lido && <div style={{ width: 8, height: 8, background: "#00F0FF", borderRadius: "50%", flexShrink: 0, marginTop: 4 }} />}
                       </div>
-                      <div style={{ fontSize: 12, color: darkMode ? "#67759B" : "#A9B4C5", marginTop: 2, lineHeight: 1.4 }}>{n.msg}</div>
-                      <div style={{ fontSize: 10, color: "#67759B", marginTop: 4 }}>{fmtDate(n.data)}</div>
+                      <div style={{ fontSize: 12, color: darkMode ? "var(--text-3)" : "var(--text-2)", marginTop: 2, lineHeight: 1.4 }}>{n.msg}</div>
+                      <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 4 }}>{fmtDate(n.data)}</div>
                     </div>
                   </div>
                 </div>
@@ -1177,7 +1177,7 @@ function SinoNotificacoes({ notificacoes, setNotificacoes, darkMode }) {
 
             {/* Footer — permissão browser */}
             {typeof Notification !== "undefined" && Notification.permission === "default" && (
-              <div style={{ padding: "10px 16px", borderTop: `1px solid ${border}`, background: darkMode ? "#1976FF" : "#121A24" }}>
+              <div style={{ padding: "10px 16px", borderTop: `1px solid ${border}`, background: darkMode ? "#1976FF" : "var(--bg-2)" }}>
                 <button onClick={pedirPermissao} style={{ width: "100%", background: "#1976FF", border: "none", color: "#fff", fontWeight: 600, padding: "8px", borderRadius: 8, cursor: "pointer", fontSize: 12 }}>
                   🔔 Ativar notificações do navegador
                 </button>
@@ -1304,14 +1304,14 @@ function PainelBackup({ onClose }) {
 
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.65)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:700, padding:24 }}>
-      <div style={{ background:"#182230", borderRadius:20, width:"100%", maxWidth:580, maxHeight:"90vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 64px rgba(0,0,0,.2)" }}>
+      <div style={{ background:"var(--surface)", borderRadius:20, width:"100%", maxWidth:580, maxHeight:"90vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 64px rgba(0,0,0,.2)" }}>
         {/* Header */}
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", borderBottom:"1px solid rgba(255,255,255,.10)" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", borderBottom:"1px solid var(--border)" }}>
           <div>
-            <div style={{ fontWeight:800, fontSize:18, color:"#FFFFFF" }}>💾 Backup e Restauração</div>
-            <div style={{ fontSize:12, color:"#67759B", marginTop:2 }}>Exporte seus dados para um arquivo seguro ou restaure de um backup anterior</div>
+            <div style={{ fontWeight:800, fontSize:18, color:"var(--text-strong)" }}>💾 Backup e Restauração</div>
+            <div style={{ fontSize:12, color:"var(--text-3)", marginTop:2 }}>Exporte seus dados para um arquivo seguro ou restaure de um backup anterior</div>
           </div>
-          <button onClick={onClose} style={{ background:"#223048", border:"none", color:"#A9B4C5", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
+          <button onClick={onClose} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
         </div>
 
         <div style={{ flex:1, overflowY:"auto", padding:"12px 16px" }}>
@@ -1333,7 +1333,7 @@ function PainelBackup({ onClose }) {
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:4, marginBottom:8 }}>
                 {preview.prev.map(p => (
-                  <div key={p.key} style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:"#FFFFFF" }}>
+                  <div key={p.key} style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:"var(--text-strong)" }}>
                     <span>{p.label}</span>
                     <span style={{ fontWeight:600, color:"#FFC107" }}>{p.count} registro(s)</span>
                   </div>
@@ -1341,7 +1341,7 @@ function PainelBackup({ onClose }) {
               </div>
               <div style={{ display:"flex", gap:8 }}>
                 <button onClick={() => setPreview(null)}
-                  style={{ flex:1, background:"#182230", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", fontWeight:600, padding:"10px", borderRadius:8, cursor:"pointer" }}>Cancelar</button>
+                  style={{ flex:1, background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"10px", borderRadius:8, cursor:"pointer" }}>Cancelar</button>
                 <button onClick={confirmarImport}
                   style={{ flex:2, background:"#FFC107", border:"none", color:"#fff", fontWeight:700, padding:"10px", borderRadius:8, cursor:"pointer" }}>
                   ✓ Sim, restaurar dados
@@ -1352,29 +1352,29 @@ function PainelBackup({ onClose }) {
 
           {/* Resumo dos dados atuais */}
           <div style={{ marginBottom:10 }}>
-            <div style={{ fontWeight:700, fontSize:14, color:"#FFFFFF", marginBottom:12 }}>📊 Dados Armazenados Atualmente</div>
-            <div style={{ background:"#121A24", border:"1px solid rgba(255,255,255,.12)", borderRadius:12, overflow:"hidden" }}>
+            <div style={{ fontWeight:700, fontSize:14, color:"var(--text-strong)", marginBottom:12 }}>📊 Dados Armazenados Atualmente</div>
+            <div style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:12, overflow:"hidden" }}>
               {resumo.map((r, i) => (
-                <div key={r.key} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 16px", borderBottom:i<resumo.length-1?"1px solid rgba(255,255,255,.10)":"none", background:i%2===0?"#121A24":"#182230" }}>
+                <div key={r.key} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 16px", borderBottom:i<resumo.length-1?"1px solid var(--border)":"none", background:i%2===0?"var(--bg-2)":"var(--surface)" }}>
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <div style={{ width:8, height:8, borderRadius:"50%", background:r.empty?"#223048":"#00C853" }} />
-                    <span style={{ fontSize:13, color:"#FFFFFF" }}>{r.label}</span>
+                    <div style={{ width:8, height:8, borderRadius:"50%", background:r.empty?"var(--surface-3)":"#00C853" }} />
+                    <span style={{ fontSize:13, color:"var(--text-strong)" }}>{r.label}</span>
                   </div>
                   <div style={{ display:"flex", gap:16, alignItems:"center" }}>
                     {!r.empty ? (
                       <>
-                        <span style={{ fontSize:12, color:"#A9B4C5" }}>{r.count} registro(s)</span>
-                        <span style={{ fontSize:11, color:"#67759B", background:"#223048", padding:"2px 8px", borderRadius:20 }}>{formatSize(r.size)}</span>
+                        <span style={{ fontSize:12, color:"var(--text-2)" }}>{r.count} registro(s)</span>
+                        <span style={{ fontSize:11, color:"var(--text-3)", background:"var(--surface-3)", padding:"2px 8px", borderRadius:20 }}>{formatSize(r.size)}</span>
                       </>
                     ) : (
-                      <span style={{ fontSize:12, color:"#67759B" }}>vazio</span>
+                      <span style={{ fontSize:12, color:"var(--text-3)" }}>vazio</span>
                     )}
                   </div>
                 </div>
               ))}
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", background:"#223048", borderTop:"2px solid rgba(255,255,255,.12)" }}>
-                <span style={{ fontSize:13, fontWeight:700, color:"#FFFFFF" }}>Total</span>
-                <span style={{ fontSize:13, fontWeight:700, color:"#FFFFFF" }}>{formatSize(totalSize)}</span>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", background:"var(--surface-3)", borderTop:"2px solid var(--border)" }}>
+                <span style={{ fontSize:13, fontWeight:700, color:"var(--text-strong)" }}>Total</span>
+                <span style={{ fontSize:13, fontWeight:700, color:"var(--text-strong)" }}>{formatSize(totalSize)}</span>
               </div>
             </div>
           </div>
@@ -1385,7 +1385,7 @@ function PainelBackup({ onClose }) {
             <div style={{ background:"rgba(0,200,83,.12)", border:"1px solid rgba(0,200,83,.35)", borderRadius:12, padding:"18px 20px" }}>
               <div style={{ fontSize:28, marginBottom:8 }}>⬇️</div>
               <div style={{ fontWeight:700, fontSize:14, color:"#00C853", marginBottom:4 }}>Exportar Backup</div>
-              <div style={{ fontSize:12, color:"#A9B4C5", marginBottom:8, lineHeight:1.5 }}>
+              <div style={{ fontSize:12, color:"var(--text-2)", marginBottom:8, lineHeight:1.5 }}>
                 Baixa um arquivo JSON com todos os seus dados. Guarde em local seguro.
               </div>
               <button onClick={exportarBackup}
@@ -1398,7 +1398,7 @@ function PainelBackup({ onClose }) {
             <div style={{ background:"rgba(59,140,255,.14)", border:"1px solid rgba(77,179,255,.35)", borderRadius:12, padding:"18px 20px" }}>
               <div style={{ fontSize:28, marginBottom:8 }}>⬆️</div>
               <div style={{ fontWeight:700, fontSize:14, color:"#3B8CFF", marginBottom:4 }}>Restaurar Backup</div>
-              <div style={{ fontSize:12, color:"#A9B4C5", marginBottom:8, lineHeight:1.5 }}>
+              <div style={{ fontSize:12, color:"var(--text-2)", marginBottom:8, lineHeight:1.5 }}>
                 Selecione um arquivo de backup (.json) para restaurar seus dados.
               </div>
               <label style={{ display:"block", width:"100%", background:"#3B8CFF", border:"none", color:"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:"pointer", fontSize:13, textAlign:"center" }}>
@@ -1528,38 +1528,38 @@ function LoginScreen({ onLogin }) {
   }
 
   return (
-    <div style={{ minHeight:"100vh", background:"#0A0F18", backgroundImage:"radial-gradient(1100px 500px at 75% -10%, rgba(25,118,255,.12), transparent 60%), radial-gradient(800px 420px at -10% 110%, rgba(0,240,255,.06), transparent 60%)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Inter','Segoe UI',sans-serif", padding:24 }}>
+    <div style={{ minHeight:"100vh", background:"var(--bg)", backgroundImage:"radial-gradient(1100px 500px at 75% -10%, rgba(25,118,255,.12), transparent 60%), radial-gradient(800px 420px at -10% 110%, rgba(0,240,255,.06), transparent 60%)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Inter','Segoe UI',sans-serif", padding:24 }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');*{box-sizing:border-box;margin:0;padding:0}`}</style>
       <div style={{ width:"100%", maxWidth:420 }}>
         {/* Logo */}
         <div style={{ textAlign:"center", marginBottom:32 }}>
           <div style={{ width:64, height:64, borderRadius:"50%", background:"rgba(77,179,255,.12)", border:"1px solid rgba(77,179,255,.45)", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"'Space Grotesk',sans-serif", fontSize:30, fontWeight:700, color:"#4DB3FF", marginBottom:12, boxShadow:"0 0 32px rgba(77,179,255,.4)" }}>F</div>
-          <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:24, color:"#fff", letterSpacing:-0.5 }}>Flow Marketplaces</div>
-          <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:11, color:"#67759B", marginTop:6, letterSpacing:".24em", textTransform:"uppercase" }}>Gestão de Anúncios</div>
+          <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:24, color:"var(--text-strong)", letterSpacing:-0.5 }}>Flow Marketplaces</div>
+          <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:11, color:"var(--text-3)", marginTop:6, letterSpacing:".24em", textTransform:"uppercase" }}>Gestão de Anúncios</div>
         </div>
 
         {/* Card */}
-        <div style={{ background:"#121A24", borderRadius:20, padding:"32px 36px", boxShadow:"0 20px 60px rgba(0,0,0,.4)", border:"1px solid #A9B4C5" }}>
-          <div style={{ fontWeight:700, fontSize:18, color:"#A9B4C5", marginBottom:10 }}>Entrar no sistema</div>
+        <div style={{ background:"var(--bg-2)", borderRadius:20, padding:"32px 36px", boxShadow:"0 20px 60px rgba(0,0,0,.4)", border:"1px solid var(--text-2)" }}>
+          <div style={{ fontWeight:700, fontSize:18, color:"var(--text-2)", marginBottom:10 }}>Entrar no sistema</div>
 
           <div style={{ marginBottom:8 }}>
-            <div style={{ fontSize:11, color:"#A9B4C5", marginBottom:8, fontWeight:600, letterSpacing:1, textTransform:"uppercase" }}>Usuário</div>
+            <div style={{ fontSize:11, color:"var(--text-2)", marginBottom:8, fontWeight:600, letterSpacing:1, textTransform:"uppercase" }}>Usuário</div>
             <input value={usuario} onChange={e => { setUsuario(e.target.value); setErro(""); }}
               onKeyDown={e => e.key==="Enter" && handleLogin()}
               placeholder="Digite seu usuário"
-              style={{ width:"100%", background:"#0A0F18", border:`1px solid ${erro?"#FF5252":"rgba(255,255,255,.14)"}`, color:"#FFFFFF", padding:"12px 16px", borderRadius:10, fontSize:14, outline:"none", fontFamily:"inherit" }} />
+              style={{ width:"100%", background:"var(--bg)", border:`1px solid ${erro?"#FF5252":"rgba(255,255,255,.14)"}`, color:"var(--text-strong)", padding:"12px 16px", borderRadius:10, fontSize:14, outline:"none", fontFamily:"inherit" }} />
           </div>
 
           <div style={{ marginBottom:10 }}>
-            <div style={{ fontSize:11, color:"#A9B4C5", marginBottom:8, fontWeight:600, letterSpacing:1, textTransform:"uppercase" }}>Senha</div>
+            <div style={{ fontSize:11, color:"var(--text-2)", marginBottom:8, fontWeight:600, letterSpacing:1, textTransform:"uppercase" }}>Senha</div>
             <div style={{ position:"relative" }}>
               <input type={showSenha?"text":"password"} value={senha}
                 onChange={e => { setSenha(e.target.value); setErro(""); }}
                 onKeyDown={e => e.key==="Enter" && handleLogin()}
                 placeholder="Digite sua senha"
-                style={{ width:"100%", background:"#0A0F18", border:`1px solid ${erro?"#FF5252":"rgba(255,255,255,.14)"}`, color:"#FFFFFF", padding:"12px 48px 12px 16px", borderRadius:10, fontSize:14, outline:"none", fontFamily:"inherit" }} />
+                style={{ width:"100%", background:"var(--bg)", border:`1px solid ${erro?"#FF5252":"rgba(255,255,255,.14)"}`, color:"var(--text-strong)", padding:"12px 48px 12px 16px", borderRadius:10, fontSize:14, outline:"none", fontFamily:"inherit" }} />
               <button onClick={() => setShowSenha(s=>!s)}
-                style={{ position:"absolute", right:14, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color:"#A9B4C5", fontSize:16 }}>
+                style={{ position:"absolute", right:14, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color:"var(--text-2)", fontSize:16 }}>
                 {showSenha?"🙈":"👁"}
               </button>
             </div>
@@ -1572,11 +1572,11 @@ function LoginScreen({ onLogin }) {
           )}
 
           <button onClick={handleLogin} disabled={loading||!usuario||!senha}
-            style={{ width:"100%", background:loading||!usuario||!senha?"#223048":"#0A0F18", border:`1px solid ${loading||!usuario||!senha?"rgba(255,255,255,.08)":"rgba(255,255,255,.18)"}`, color:loading||!usuario||!senha?"#67759B":"#FFFFFF", fontWeight:800, padding:"14px", borderRadius:12, cursor:loading||!usuario||!senha?"not-allowed":"pointer", fontSize:15, transition:"all .15s" }}>
+            style={{ width:"100%", background:loading||!usuario||!senha?"var(--surface-3)":"var(--bg)", border:`1px solid ${loading||!usuario||!senha?"var(--border-soft)":"rgba(255,255,255,.18)"}`, color:loading||!usuario||!senha?"var(--text-3)":"var(--text-strong)", fontWeight:800, padding:"14px", borderRadius:12, cursor:loading||!usuario||!senha?"not-allowed":"pointer", fontSize:15, transition:"all .15s" }}>
             {loading ? "Verificando..." : "Entrar"}
           </button>
 
-          <div style={{ textAlign:"center", marginTop:16, fontSize:12, color:"#A9B4C5" }}>
+          <div style={{ textAlign:"center", marginTop:16, fontSize:12, color:"var(--text-2)" }}>
             Acesso restrito — somente usuários autorizados
           </div>
         </div>
@@ -1621,51 +1621,51 @@ function ModalUsuario({ usuario, onSave, onClose }) {
 
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.7)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:600, padding:24 }}>
-      <div style={{ background:"#182230", borderRadius:16, width:"100%", maxWidth:520, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.3)", maxHeight:"90vh", overflowY:"auto" }}>
+      <div style={{ background:"var(--surface)", borderRadius:16, width:"100%", maxWidth:520, padding:"28px 32px", boxShadow:"0 20px 60px rgba(0,0,0,.3)", maxHeight:"90vh", overflowY:"auto" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-          <div style={{ fontWeight:800, fontSize:17, color:"#FFFFFF" }}>{usuario ? "Editar Usuário" : "Novo Usuário"}</div>
-          <button onClick={onClose} style={{ background:"#223048", border:"none", color:"#A9B4C5", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
+          <div style={{ fontWeight:800, fontSize:17, color:"var(--text-strong)" }}>{usuario ? "Editar Usuário" : "Novo Usuário"}</div>
+          <button onClick={onClose} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", width:32, height:32, borderRadius:8, cursor:"pointer", fontSize:16 }}>✕</button>
         </div>
 
         <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:10 }}>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
             <div>
-              <div style={{ fontSize:11, color:"#67759B", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Nome completo *</div>
+              <div style={{ fontSize:11, color:"var(--text-3)", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Nome completo *</div>
               <input value={form.nome} onChange={e=>set("nome",e.target.value)} placeholder="Ex: João Silva"
-                style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                style={{ width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
             </div>
             <div>
-              <div style={{ fontSize:11, color:"#67759B", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Usuário (login) *</div>
+              <div style={{ fontSize:11, color:"var(--text-3)", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Usuário (login) *</div>
               <input value={form.usuario} onChange={e=>set("usuario",e.target.value.toLowerCase().replace(/\s/g,""))} placeholder="Ex: joao"
-                style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none", fontFamily:"monospace" }} />
+                style={{ width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none", fontFamily:"monospace" }} />
             </div>
           </div>
 
           <div>
-            <div style={{ fontSize:11, color:"#67759B", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Email (para notificações de tarefas)</div>
+            <div style={{ fontSize:11, color:"var(--text-3)", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>Email (para notificações de tarefas)</div>
             <input type="email" value={form.email||""} onChange={e=>set("email",e.target.value)} placeholder="usuario@empresa.com"
-              style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+              style={{ width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
           </div>
 
           <div>
-            <div style={{ fontSize:11, color:"#67759B", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>
+            <div style={{ fontSize:11, color:"var(--text-3)", marginBottom:5, fontWeight:600, textTransform:"uppercase" }}>
               {usuario ? "Nova senha (deixe vazio para manter)" : "Senha *"}
             </div>
             <div style={{ position:"relative" }}>
               <input type={showSenha?"text":"password"} value={form.senha||""} onChange={e=>set("senha",e.target.value)}
                 placeholder={usuario?"••••••••":"Mínimo 6 caracteres"}
-                style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"9px 44px 9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+                style={{ width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 44px 9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
               <button onClick={()=>setShowSenha(s=>!s)}
-                style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color:"#67759B", fontSize:14 }}>
+                style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color:"var(--text-3)", fontSize:14 }}>
                 {showSenha?"🙈":"👁"}
               </button>
             </div>
           </div>
 
           {/* Permissões */}
-          <div style={{ background:"#121A24", borderRadius:12, padding:"14px 16px" }}>
+          <div style={{ background:"var(--bg-2)", borderRadius:12, padding:"14px 16px" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-              <div style={{ fontWeight:700, fontSize:13, color:"#FFFFFF" }}>Permissões de Acesso</div>
+              <div style={{ fontWeight:700, fontSize:13, color:"var(--text-strong)" }}>Permissões de Acesso</div>
               <button onClick={function(){
                   var todasKeys = [];
                   PERMISSOES_DISPONIVEIS.forEach(function(p){ todasKeys.push(p.key); if(p.sub) p.sub.forEach(function(s){ todasKeys.push(s.key); }); });
@@ -1691,8 +1691,8 @@ function ModalUsuario({ usuario, onSave, onClose }) {
                   <div key={p.key}>
                     {/* Item pai */}
                     <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", padding:"5px 8px", borderRadius:8,
-                      background: isChecked || subChecked > 0 ? "rgba(59,140,255,.14)" : "#182230",
-                      border: "1px solid " + (isChecked || subChecked > 0 ? "#3B8CFF" : "rgba(255,255,255,.12)"),
+                      background: isChecked || subChecked > 0 ? "rgba(59,140,255,.14)" : "var(--surface)",
+                      border: "1px solid " + (isChecked || subChecked > 0 ? "#3B8CFF" : "var(--border)"),
                       transition:"all .15s" }}>
                       <input type="checkbox" checked={isChecked} ref={function(el){ try { if (el) el.indeterminate = isIndeterminate; } catch(e){} }}
                         onChange={function() {
@@ -1710,8 +1710,8 @@ function ModalUsuario({ usuario, onSave, onClose }) {
                           }
                         }}
                         style={{ width:14, height:14, cursor:"pointer" }} />
-                      <span style={{ fontSize:13, fontWeight:600, color: isChecked || subChecked > 0 ? "#3B8CFF" : "#A9B4C5", flex:1 }}>{p.label}</span>
-                      {p.sub && <span style={{ fontSize:10, color:"#67759B" }}>{subChecked}/{subTotal}</span>}
+                      <span style={{ fontSize:13, fontWeight:600, color: isChecked || subChecked > 0 ? "#3B8CFF" : "var(--text-2)", flex:1 }}>{p.label}</span>
+                      {p.sub && <span style={{ fontSize:10, color:"var(--text-3)" }}>{subChecked}/{subTotal}</span>}
                     </label>
                     {/* Sub-permissões */}
                     {p.sub && (isChecked || subChecked > 0 || true) && (
@@ -1720,8 +1720,8 @@ function ModalUsuario({ usuario, onSave, onClose }) {
                           var sChecked = (form.permissoes||[]).includes(s.key);
                           return (
                             <label key={s.key} style={{ display:"flex", alignItems:"center", gap:6, cursor:"pointer", padding:"6px 10px", borderRadius:7,
-                              background: sChecked ? "rgba(77,179,255,.12)" : "#121A24",
-                              border: "1px solid " + (sChecked ? "#bae6fd" : "rgba(255,255,255,.10)"),
+                              background: sChecked ? "rgba(77,179,255,.12)" : "var(--bg-2)",
+                              border: "1px solid " + (sChecked ? "#bae6fd" : "var(--border)"),
                               transition:"all .15s" }}>
                               <input type="checkbox" checked={sChecked}
                                 onChange={function() {
@@ -1739,7 +1739,7 @@ function ModalUsuario({ usuario, onSave, onClose }) {
                                   set("permissoes", newPerms);
                                 }}
                                 style={{ width:12, height:12, cursor:"pointer" }} />
-                              <span style={{ fontSize:12, color: sChecked ? "#4DB3FF" : "#A9B4C5", fontWeight: sChecked ? 600 : 400 }}>{s.label}</span>
+                              <span style={{ fontSize:12, color: sChecked ? "#4DB3FF" : "var(--text-2)", fontWeight: sChecked ? 600 : 400 }}>{s.label}</span>
                             </label>
                           );
                         })}
@@ -1753,21 +1753,21 @@ function ModalUsuario({ usuario, onSave, onClose }) {
 
           {/* Status e Admin */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-            <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", padding:"10px 14px", borderRadius:8, background:"#121A24", border:"1px solid rgba(255,255,255,.12)" }}>
+            <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", padding:"10px 14px", borderRadius:8, background:"var(--bg-2)", border:"1px solid var(--border)" }}>
               <input type="checkbox" checked={form.ativo} onChange={e=>set("ativo",e.target.checked)} style={{ width:14, height:14 }} />
-              <span style={{ fontSize:13, color:"#A9B4C5", fontWeight:500 }}>Usuário ativo</span>
+              <span style={{ fontSize:13, color:"var(--text-2)", fontWeight:500 }}>Usuário ativo</span>
             </label>
-            <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", padding:"10px 14px", borderRadius:8, background:"#121A24", border:"1px solid rgba(255,255,255,.12)" }}>
+            <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", padding:"10px 14px", borderRadius:8, background:"var(--bg-2)", border:"1px solid var(--border)" }}>
               <input type="checkbox" checked={form.admin||false} onChange={e=>set("admin",e.target.checked)} style={{ width:14, height:14 }} />
-              <span style={{ fontSize:13, color:"#A9B4C5", fontWeight:500 }}>Administrador</span>
+              <span style={{ fontSize:13, color:"var(--text-2)", fontWeight:500 }}>Administrador</span>
             </label>
           </div>
         </div>
 
         <div style={{ display:"flex", gap:8 }}>
-          <button onClick={onClose} style={{ flex:1, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
+          <button onClick={onClose} style={{ flex:1, background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
           <button onClick={handleSave} disabled={!form.nome||!form.usuario}
-            style={{ flex:2, background:!form.nome||!form.usuario?"#223048":"#1976FF", border:"none", color:!form.nome||!form.usuario?"#67759B":"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:!form.nome||!form.usuario?"not-allowed":"pointer" }}>
+            style={{ flex:2, background:!form.nome||!form.usuario?"var(--surface-3)":"#1976FF", border:"none", color:!form.nome||!form.usuario?"var(--text-3)":"#fff", fontWeight:700, padding:"11px", borderRadius:10, cursor:!form.nome||!form.usuario?"not-allowed":"pointer" }}>
             Salvar Usuário
           </button>
         </div>
@@ -1812,8 +1812,8 @@ function AdminTab({ currentUser }) {
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
         <div>
-          <div style={{ fontWeight:800, fontSize:18, color:"#FFFFFF" }}>⚙️ Administração de Usuários</div>
-          <div style={{ fontSize:13, color:"#67759B", marginTop:2 }}>Gerencie quem pode acessar o dashboard e o que cada um pode ver</div>
+          <div style={{ fontWeight:800, fontSize:18, color:"var(--text-strong)" }}>⚙️ Administração de Usuários</div>
+          <div style={{ fontSize:13, color:"var(--text-3)", marginTop:2 }}>Gerencie quem pode acessar o dashboard e o que cada um pode ver</div>
         </div>
         <button onClick={()=>{ setEditingUser(null); setShowModal(true); }}
           style={{ background:"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"10px 22px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
@@ -1823,17 +1823,17 @@ function AdminTab({ currentUser }) {
 
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))", gap:12 }}>
         {usuarios.map(u => (
-          <div key={u.id} style={{ background:"#182230", border:`2px solid ${u.id===currentUser.id?"#4DB3FF":u.ativo?"rgba(255,255,255,.12)":"rgba(255,255,255,.10)"}`, borderRadius:14, padding:"18px 20px", position:"relative", opacity:u.ativo?1:0.6 }}>
+          <div key={u.id} style={{ background:"var(--surface)", border:`2px solid ${u.id===currentUser.id?"#4DB3FF":u.ativo?"var(--border)":"var(--border)"}`, borderRadius:14, padding:"18px 20px", position:"relative", opacity:u.ativo?1:0.6 }}>
             {u.id===currentUser.id && (
               <div style={{ position:"absolute", top:12, left:12, background:"#1976FF", color:"#fff", fontSize:10, padding:"2px 8px", borderRadius:20, fontWeight:700 }}>VOCÊ</div>
             )}
             <div style={{ display:"flex", justifyContent:"flex-end", gap:6, marginBottom:8 }}>
               <button onClick={()=>toggleAtivo(u.id)}
-                style={{ background:u.ativo?"rgba(0,200,83,.12)":"#121A24", border:`1px solid ${u.ativo?"rgba(0,200,83,.35)":"rgba(255,255,255,.12)"}`, color:u.ativo?"#00C853":"#67759B", padding:"3px 10px", borderRadius:6, cursor:"pointer", fontSize:11, fontWeight:600 }}>
+                style={{ background:u.ativo?"rgba(0,200,83,.12)":"var(--bg-2)", border:`1px solid ${u.ativo?"rgba(0,200,83,.35)":"var(--border)"}`, color:u.ativo?"#00C853":"var(--text-3)", padding:"3px 10px", borderRadius:6, cursor:"pointer", fontSize:11, fontWeight:600 }}>
                 {u.ativo?"● Ativo":"○ Inativo"}
               </button>
               <button onClick={()=>{ setEditingUser(u); setShowModal(true); }}
-                style={{ background:"#223048", border:"none", color:"#A9B4C5", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:12 }}>✏️</button>
+                style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:12 }}>✏️</button>
               {u.id!==currentUser.id && (
                 <button onClick={()=>deleteUser(u.id)}
                   style={{ background:"rgba(255,82,82,.12)", border:"none", color:"#FF5252", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:12 }}>🗑</button>
@@ -1841,25 +1841,25 @@ function AdminTab({ currentUser }) {
             </div>
 
             <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:12 }}>
-              <div style={{ width:42, height:42, borderRadius:12, background:u.admin?"#1976FF":"#223048", display:"flex", alignItems:"center", justifyContent:"center", fontSize:15, fontWeight:800, color:u.admin?"#FFC107":"#A9B4C5" }}>
+              <div style={{ width:42, height:42, borderRadius:12, background:u.admin?"#1976FF":"var(--surface-3)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:15, fontWeight:800, color:u.admin?"#FFC107":"var(--text-2)" }}>
                 {u.nome?.charAt(0).toUpperCase()}
               </div>
               <div>
-                <div style={{ fontWeight:700, fontSize:15, color:"#FFFFFF" }}>{u.nome}</div>
-                <div style={{ fontSize:12, color:"#67759B", fontFamily:"monospace" }}>@{u.usuario}</div>
+                <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)" }}>{u.nome}</div>
+                <div style={{ fontSize:12, color:"var(--text-3)", fontFamily:"monospace" }}>@{u.usuario}</div>
                 {u.admin && <div style={{ fontSize:10, color:"#7c3aed", fontWeight:700 }}>ADMINISTRADOR</div>}
               </div>
             </div>
 
-            <div style={{ fontSize:11, color:"#67759B", marginBottom:6, fontWeight:600, textTransform:"uppercase" }}>Permissões</div>
+            <div style={{ fontSize:11, color:"var(--text-3)", marginBottom:6, fontWeight:600, textTransform:"uppercase" }}>Permissões</div>
             <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
               {PERMISSOES_DISPONIVEIS.map(p => (
-                <span key={p.key} style={{ fontSize:11, padding:"2px 8px", borderRadius:20, background:u.permissoes?.includes(p.key)?"rgba(59,140,255,.14)":"#121A24", color:u.permissoes?.includes(p.key)?"#3B8CFF":"#4A5878", border:`1px solid ${u.permissoes?.includes(p.key)?"rgba(77,179,255,.35)":"rgba(255,255,255,.10)"}`, fontWeight:u.permissoes?.includes(p.key)?600:400 }}>
+                <span key={p.key} style={{ fontSize:11, padding:"2px 8px", borderRadius:20, background:u.permissoes?.includes(p.key)?"rgba(59,140,255,.14)":"var(--bg-2)", color:u.permissoes?.includes(p.key)?"#3B8CFF":"var(--text-4)", border:`1px solid ${u.permissoes?.includes(p.key)?"rgba(77,179,255,.35)":"var(--border)"}`, fontWeight:u.permissoes?.includes(p.key)?600:400 }}>
                   {p.label}
                 </span>
               ))}
             </div>
-            <div style={{ fontSize:11, color:"#4A5878", marginTop:10 }}>Criado em {u.criadoEm||"—"}</div>
+            <div style={{ fontSize:11, color:"var(--text-4)", marginTop:10 }}>Criado em {u.criadoEm||"—"}</div>
           </div>
         ))}
       </div>
@@ -1929,10 +1929,10 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
 
   function ItemRow({ item, onRemove }) {
     return (
-      <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 0", borderBottom:"1px solid rgba(255,255,255,.08)" }}>
-        <div style={{ flex:1, fontSize:13, color:"#FFFFFF", fontWeight:500 }}>{item.nome}</div>
-        <div style={{ fontSize:13, fontWeight:700, color:"#A9B4C5" }}>{item.tipo==="%" ? item.valor+"%" : "R$ "+parseFloat(item.valor).toFixed(2).replace(".",",")}</div>
-        <div style={{ fontSize:12, color:"#67759B" }}>= R$ {calcValor(item, faturamentoMes).toFixed(2).replace(".",",")}</div>
+      <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 0", borderBottom:"1px solid var(--border-soft)" }}>
+        <div style={{ flex:1, fontSize:13, color:"var(--text-strong)", fontWeight:500 }}>{item.nome}</div>
+        <div style={{ fontSize:13, fontWeight:700, color:"var(--text-2)" }}>{item.tipo==="%" ? item.valor+"%" : "R$ "+parseFloat(item.valor).toFixed(2).replace(".",",")}</div>
+        <div style={{ fontSize:12, color:"var(--text-3)" }}>= R$ {calcValor(item, faturamentoMes).toFixed(2).replace(".",",")}</div>
         <button onClick={function(){ onRemove(item.id); }} style={{ background:"rgba(255,82,82,.12)", border:"none", color:"#FF5252", width:24, height:24, borderRadius:6, cursor:"pointer", fontSize:11, flexShrink:0 }}>✕</button>
       </div>
     );
@@ -1942,55 +1942,55 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
 
       {/* ── IMPOSTOS — Lucro Real ── */}
-      <div style={{ background:"#182230", border:"1px solid rgba(255,82,82,.35)", borderRadius:14, overflow:"hidden" }}>
+      <div style={{ background:"var(--surface)", border:"1px solid rgba(255,82,82,.35)", borderRadius:14, overflow:"hidden" }}>
         <div style={{ background:"rgba(255,82,82,.12)", padding:"10px 14px", borderBottom:"1px solid rgba(255,82,82,.35)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
             <div style={{ fontWeight:700, fontSize:14, color:"#FF5252" }}>📋 Impostos — Regime Lucro Real</div>
-            <div style={{ fontSize:11, color:"#67759B", marginTop:1 }}>ICMS por estado, IRPJ e CSLL</div>
+            <div style={{ fontSize:11, color:"var(--text-3)", marginTop:1 }}>ICMS por estado, IRPJ e CSLL</div>
           </div>
           <div style={{ textAlign:"right" }}>
-            <div style={{ fontSize:11, color:"#67759B" }}>IRPJ+CSLL s/ faturamento</div>
+            <div style={{ fontSize:11, color:"var(--text-3)" }}>IRPJ+CSLL s/ faturamento</div>
             <div style={{ fontSize:17, fontWeight:800, color:"#FF5252" }}>R$ {totalImpFixo.toFixed(2).replace(".",",")}</div>
           </div>
         </div>
 
         <div style={{ padding:"14px 18px" }}>
           {/* IRPJ e CSLL */}
-          <div style={{ fontSize:11, color:"#67759B", fontWeight:700, textTransform:"uppercase", marginBottom:8 }}>IRPJ e CSLL (sobre o Lucro Real apurado)</div>
+          <div style={{ fontSize:11, color:"var(--text-3)", fontWeight:700, textTransform:"uppercase", marginBottom:8 }}>IRPJ e CSLL (sobre o Lucro Real apurado)</div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:14 }}>
             <div>
-              <div style={{ fontSize:10, color:"#67759B", marginBottom:4 }}>IRPJ base (%)</div>
+              <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:4 }}>IRPJ base (%)</div>
               <div style={{ display:"flex", alignItems:"center", gap:4 }}>
                 <input type="number" step="0.01" value={irpjPct}
                   onChange={function(e){ salvarIrpjCsll(e.target.value, irpjAdicionalPct, csllPct); }}
-                  style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"7px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
-                <span style={{ fontSize:12, color:"#67759B" }}>%</span>
+                  style={{ width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"7px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
+                <span style={{ fontSize:12, color:"var(--text-3)" }}>%</span>
               </div>
             </div>
             <div>
-              <div style={{ fontSize:10, color:"#67759B", marginBottom:4 }}>IRPJ adicional (%)</div>
+              <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:4 }}>IRPJ adicional (%)</div>
               <div style={{ display:"flex", alignItems:"center", gap:4 }}>
                 <input type="number" step="0.01" value={irpjAdicionalPct}
                   onChange={function(e){ salvarIrpjCsll(irpjPct, e.target.value, csllPct); }}
-                  style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"7px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
-                <span style={{ fontSize:12, color:"#67759B" }}>%</span>
+                  style={{ width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"7px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
+                <span style={{ fontSize:12, color:"var(--text-3)" }}>%</span>
               </div>
-              <div style={{ fontSize:9, color:"#4A5878", marginTop:2 }}>Sobre lucro &gt; R$ 20mil/mês</div>
+              <div style={{ fontSize:9, color:"var(--text-4)", marginTop:2 }}>Sobre lucro &gt; R$ 20mil/mês</div>
             </div>
             <div>
-              <div style={{ fontSize:10, color:"#67759B", marginBottom:4 }}>CSLL (%)</div>
+              <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:4 }}>CSLL (%)</div>
               <div style={{ display:"flex", alignItems:"center", gap:4 }}>
                 <input type="number" step="0.01" value={csllPct}
                   onChange={function(e){ salvarIrpjCsll(irpjPct, irpjAdicionalPct, e.target.value); }}
-                  style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"7px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
-                <span style={{ fontSize:12, color:"#67759B" }}>%</span>
+                  style={{ width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"7px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
+                <span style={{ fontSize:12, color:"var(--text-3)" }}>%</span>
               </div>
             </div>
           </div>
 
           {/* ICMS por estado */}
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-            <div style={{ fontSize:11, color:"#67759B", fontWeight:700, textTransform:"uppercase" }}>
+            <div style={{ fontSize:11, color:"var(--text-3)", fontWeight:700, textTransform:"uppercase" }}>
               ICMS por Estado (alíquota interna de venda)
             </div>
             <div style={{ display:"flex", gap:6 }}>
@@ -1999,21 +1999,21 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
                 ↺ Usar alíquotas padrão
               </button>
               <button onClick={function(){ setShowIcmsTable(function(v){return !v;}); }}
-                style={{ fontSize:10, color:"#A9B4C5", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontWeight:600 }}>
+                style={{ fontSize:10, color:"var(--text-2)", background:"var(--bg-2)", border:"1px solid var(--border)", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontWeight:600 }}>
                 {showIcmsTable ? "▲ Ocultar tabela" : "▼ Ver/editar todos os 27 estados"}
               </button>
             </div>
           </div>
 
           {!showIcmsTable ? (
-            <div style={{ display:"flex", alignItems:"center", gap:14, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", borderRadius:10, padding:"10px 14px" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:14, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 14px" }}>
               <div>
-                <div style={{ fontSize:10, color:"#67759B" }}>Estados configurados</div>
-                <div style={{ fontSize:16, fontWeight:800, color:"#FFFFFF" }}>{ufsConfigurados.length}/27</div>
+                <div style={{ fontSize:10, color:"var(--text-3)" }}>Estados configurados</div>
+                <div style={{ fontSize:16, fontWeight:800, color:"var(--text-strong)" }}>{ufsConfigurados.length}/27</div>
               </div>
-              <div style={{ width:1, height:28, background:"#223048" }} />
+              <div style={{ width:1, height:28, background:"var(--surface-3)" }} />
               <div>
-                <div style={{ fontSize:10, color:"#67759B" }}>Alíquota média configurada</div>
+                <div style={{ fontSize:10, color:"var(--text-3)" }}>Alíquota média configurada</div>
                 <div style={{ fontSize:16, fontWeight:800, color:"#FF5252" }}>{icmsMedioRef.toFixed(2)}%</div>
               </div>
               {ufsConfigurados.length===0 && (
@@ -2026,13 +2026,13 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
                 var uf = e[0], nome = e[1], padrao = e[2];
                 var valorAtual = icmsConfig[uf] !== undefined ? icmsConfig[uf] : "";
                 return (
-                  <div key={uf} style={{ display:"flex", alignItems:"center", gap:6, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, padding:"6px 10px" }}>
-                    <span style={{ fontSize:11, fontWeight:700, color:"#FFFFFF", width:26, flexShrink:0 }}>{uf}</span>
-                    <span style={{ fontSize:10, color:"#67759B", flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{nome}</span>
+                  <div key={uf} style={{ display:"flex", alignItems:"center", gap:6, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:"6px 10px" }}>
+                    <span style={{ fontSize:11, fontWeight:700, color:"var(--text-strong)", width:26, flexShrink:0 }}>{uf}</span>
+                    <span style={{ fontSize:10, color:"var(--text-3)", flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{nome}</span>
                     <input type="number" step="0.1" placeholder={String(padrao)} value={valorAtual}
                       onChange={function(ev){ setIcmsEstado(uf, ev.target.value); }}
-                      style={{ width:50, background:"#182230", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"3px 5px", borderRadius:6, fontSize:11, outline:"none", textAlign:"center" }} />
-                    <span style={{ fontSize:10, color:"#67759B" }}>%</span>
+                      style={{ width:50, background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"3px 5px", borderRadius:6, fontSize:11, outline:"none", textAlign:"center" }} />
+                    <span style={{ fontSize:10, color:"var(--text-3)" }}>%</span>
                   </div>
                 );
               })}
@@ -2042,23 +2042,23 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
       </div>
 
       {/* ── CUSTOS FIXOS DETALHADOS ── */}
-      <div style={{ background:"#182230", border:"1px solid rgba(255,193,7,.35)", borderRadius:14, overflow:"hidden" }}>
+      <div style={{ background:"var(--surface)", border:"1px solid rgba(255,193,7,.35)", borderRadius:14, overflow:"hidden" }}>
         <div style={{ background:"rgba(255,193,7,.12)", padding:"10px 14px", borderBottom:"1px solid rgba(255,193,7,.35)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
             <div style={{ fontWeight:700, fontSize:14, color:"#FFC107" }}>🏢 Custos Fixos Detalhados</div>
-            <div style={{ fontSize:11, color:"#67759B", marginTop:1 }}>Aluguel, salários, assinaturas, sistemas...</div>
+            <div style={{ fontSize:11, color:"var(--text-3)", marginTop:1 }}>Aluguel, salários, assinaturas, sistemas...</div>
           </div>
           <div style={{ textAlign:"right" }}>
-            <div style={{ fontSize:11, color:"#67759B" }}>Total mensal</div>
+            <div style={{ fontSize:11, color:"var(--text-3)" }}>Total mensal</div>
             <div style={{ fontSize:17, fontWeight:800, color:"#FFC107" }}>R$ {totalFix.toFixed(2).replace(".",",")}</div>
           </div>
         </div>
         <div style={{ padding:"12px 18px" }}>
           {custosFixos.length === 0
-            ? <div style={{ fontSize:12, color:"#67759B", padding:"8px 0", textAlign:"center" }}>Nenhum custo fixo cadastrado — adicione abaixo com o valor real (R$) de cada item</div>
+            ? <div style={{ fontSize:12, color:"var(--text-3)", padding:"8px 0", textAlign:"center" }}>Nenhum custo fixo cadastrado — adicione abaixo com o valor real (R$) de cada item</div>
             : (
               <div>
-                <div style={{ display:"flex", gap:8, padding:"4px 0 8px", borderBottom:"1px solid rgba(255,255,255,.10)", fontSize:10, color:"#67759B", fontWeight:700, textTransform:"uppercase" }}>
+                <div style={{ display:"flex", gap:8, padding:"4px 0 8px", borderBottom:"1px solid var(--border)", fontSize:10, color:"var(--text-3)", fontWeight:700, textTransform:"uppercase" }}>
                   <div style={{ flex:1 }}>Custo</div>
                   <div>Valor</div>
                   <div>= R$ mensal</div>
@@ -2071,19 +2071,19 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
           <div style={{ display:"flex", gap:6, marginTop:12, alignItems:"center" }}>
             <input value={novoCusto.nome} onChange={function(e){setNovoCusto(function(s){return Object.assign({},s,{nome:e.target.value});});}}
               placeholder="Ex: Aluguel, Funcionário, Sistema..."
-              style={{ flex:2, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"7px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
-            <div style={{ display:"flex", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, overflow:"hidden", flexShrink:0 }}>
+              style={{ flex:2, background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"7px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
+            <div style={{ display:"flex", border:"1px solid var(--border)", borderRadius:8, overflow:"hidden", flexShrink:0 }}>
               {["R$","%"].map(function(t){
                 return <button key={t} onClick={function(){setNovoCusto(function(s){return Object.assign({},s,{tipo:t});});}}
                   style={{ padding:"7px 10px", border:"none", cursor:"pointer", fontSize:12, fontWeight:700,
-                    background: novoCusto.tipo===t?"#1976FF":"#182230", color: novoCusto.tipo===t?"#fff":"#A9B4C5" }}>{t}</button>;
+                    background: novoCusto.tipo===t?"#1976FF":"var(--surface)", color: novoCusto.tipo===t?"#fff":"var(--text-2)" }}>{t}</button>;
               })}
             </div>
             <input type="number" step="0.01" value={novoCusto.valor} onChange={function(e){setNovoCusto(function(s){return Object.assign({},s,{valor:e.target.value});});}}
               placeholder={novoCusto.tipo==="R$" ? "0,00" : "0"}
-              style={{ width:90, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"7px 10px", borderRadius:8, fontSize:12, outline:"none", flexShrink:0 }} />
+              style={{ width:90, background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"7px 10px", borderRadius:8, fontSize:12, outline:"none", flexShrink:0 }} />
             <button onClick={addCusto} disabled={!novoCusto.nome||!novoCusto.valor}
-              style={{ background: (novoCusto.nome&&novoCusto.valor)?"#1976FF":"#223048", border:"none", color:(novoCusto.nome&&novoCusto.valor)?"#fff":"#67759B",
+              style={{ background: (novoCusto.nome&&novoCusto.valor)?"#1976FF":"var(--surface-3)", border:"none", color:(novoCusto.nome&&novoCusto.valor)?"#fff":"var(--text-3)",
                 fontWeight:700, padding:"7px 16px", borderRadius:8, cursor:(novoCusto.nome&&novoCusto.valor)?"pointer":"not-allowed", fontSize:12, flexShrink:0 }}>+ Adicionar</button>
           </div>
         </div>
@@ -2100,7 +2100,7 @@ function LayoutFiltros({ filtros, busca, acoes, children }) {
     <div style={{ display:"flex", gap:0, minHeight:"calc(100vh - 180px)" }}>
       {/* Painel lateral — mais estreito e delicado */}
       {filtros && (
-        <div style={{ width:168, flexShrink:0, background:"#121A24", borderRight:"1px solid rgba(255,255,255,.08)", padding:"8px 8px", display:"flex", flexDirection:"column", gap:10 }}>
+        <div style={{ width:168, flexShrink:0, background:"var(--bg-2)", borderRight:"1px solid var(--border-soft)", padding:"8px 8px", display:"flex", flexDirection:"column", gap:10 }}>
           {filtros}
         </div>
       )}
@@ -2136,9 +2136,9 @@ function FiltroGrupo({ titulo, children }) {
         onClick={function(){ setOpen(function(v){return !v;}); }}
         style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center",
           padding:"5px 9px", borderRadius:7,
-          border:"1px solid "+(activeLabel?"#4A5878":"rgba(255,255,255,.12)"),
-          background: activeLabel ? "#223048" : "#182230",
-          color: activeLabel ? "#FFFFFF" : "#67759B",
+          border:"1px solid "+(activeLabel?"var(--text-4)":"var(--border)"),
+          background: activeLabel ? "var(--surface-3)" : "var(--surface)",
+          color: activeLabel ? "var(--text-strong)" : "var(--text-3)",
           fontWeight: activeLabel ? 600 : 400, fontSize:11, cursor:"pointer", textAlign:"left",
           transition:"border-color .15s" }}>
         <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>
@@ -2148,7 +2148,7 @@ function FiltroGrupo({ titulo, children }) {
       </button>
       {open && (
         <div style={{ position:"absolute", top:"100%", left:0, right:0, marginTop:2,
-          background:"#182230", border:"1px solid rgba(255,255,255,.12)", borderRadius:7,
+          background:"var(--surface)", border:"1px solid var(--border)", borderRadius:7,
           boxShadow:"0 6px 20px rgba(0,0,0,.07)", overflow:"hidden", zIndex:100 }}>
           {childArr.map(function(child, i) {
             if (!child) return null;
@@ -2171,16 +2171,16 @@ function FiltroBotao({ label, active, cor, bg, onClick, count }) {
   return (
     <button onClick={onClick}
       style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
-        padding:"6px 10px", border:"none", borderBottom:"1px solid rgba(255,255,255,.08)",
-        background: active ? (bg||"#223048") : "#182230",
-        color: active ? (cor||"#FFFFFF") : "#A9B4C5",
+        padding:"6px 10px", border:"none", borderBottom:"1px solid var(--border-soft)",
+        background: active ? (bg||"var(--surface-3)") : "var(--surface)",
+        color: active ? (cor||"var(--text-strong)") : "var(--text-2)",
         fontWeight: active ? 600 : 400, fontSize:11, cursor:"pointer",
         textAlign:"left", width:"100%", transition:"background .1s" }}>
       <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{label}</span>
       {count !== undefined && (
         <span style={{ fontSize:9, fontWeight:600, flexShrink:0, marginLeft:4,
-          color: active?(cor||"#FFFFFF"):"#67759B",
-          background: active?"transparent":"#223048",
+          color: active?(cor||"var(--text-strong)"):"var(--text-3)",
+          background: active?"transparent":"var(--surface-3)",
           padding:"1px 5px", borderRadius:8 }}>
           {count}
         </span>
@@ -2266,50 +2266,50 @@ function NovoProdutoPrecForm({ onSave, onClose, marketplaceInicial, shopeeDoc })
     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
       {/* Marketplace do produto */}
       <div>
-        <div style={{ fontSize:10, color:"#67759B", marginBottom:4, fontWeight:600, textTransform:"uppercase" }}>Marketplace</div>
+        <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:4, fontWeight:600, textTransform:"uppercase" }}>Marketplace</div>
         <div style={{ display:"flex", gap:6 }}>
           {[{k:"ml",l:"🟡 Mercado Livre",c:"#FFC107"},{k:"shopee",l:"🛒 Shopee",c:"#EE4D2D"}].map(function(m){
             var a=f.marketplace===m.k;
             return <button key={m.k} onClick={function(){ set("marketplace",m.k); }}
-              style={{ flex:1, background:a?m.c:"#182230", color:a?"#fff":"#A9B4C5", border:"1px solid "+(a?m.c:"rgba(255,255,255,.12)"), borderRadius:8, padding:"8px", fontSize:12, fontWeight:700, cursor:"pointer" }}>{m.l}</button>;
+              style={{ flex:1, background:a?m.c:"var(--surface)", color:a?"#fff":"var(--text-2)", border:"1px solid "+(a?m.c:"var(--border)"), borderRadius:8, padding:"8px", fontSize:12, fontWeight:700, cursor:"pointer" }}>{m.l}</button>;
           })}
         </div>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
         <div>
-          <div style={{ fontSize:10, color:"#67759B", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Nome do Produto *</div>
+          <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Nome do Produto *</div>
           <input value={f.nome} onChange={function(e){set("nome",e.target.value);}} placeholder="Ex: Lanterna Traseira Uno"
-            style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
+            style={{ width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
         </div>
         <div>
-          <div style={{ fontSize:10, color:"#67759B", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>SKU *</div>
+          <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>SKU *</div>
           <input value={f.sku} onChange={function(e){set("sku",e.target.value);}} placeholder="Ex: 1234"
-            style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none", fontFamily:"monospace" }} />
+            style={{ width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none", fontFamily:"monospace" }} />
         </div>
         <div>
-          <div style={{ fontSize:10, color:"#67759B", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Custo (R$)</div>
+          <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Custo (R$)</div>
           <input type="number" step="0.01" value={f.custo} onChange={function(e){set("custo",e.target.value);}} placeholder="0,00"
-            style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
+            style={{ width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
         </div>
         <div>
-          <div style={{ fontSize:10, color:"#67759B", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Preço de Venda (R$)</div>
+          <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Preço de Venda (R$)</div>
           <input type="number" step="0.01" value={f.precoVenda} onChange={function(e){set("precoVenda",e.target.value);}} placeholder="0,00"
-            style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
+            style={{ width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
         </div>
         <div>
-          <div style={{ fontSize:10, color:"#67759B", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Frete (R$)</div>
+          <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>Frete (R$)</div>
           <input type="number" step="0.01" value={f.frete} onChange={function(e){set("frete",e.target.value);}} placeholder="0,00"
-            style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
+            style={{ width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
         </div>
         <div>
-          <div style={{ fontSize:10, color:"#67759B", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>{ehShopee ? "Taxa Shopee" : "Taxa ML (%)"}</div>
+          <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:3, fontWeight:600, textTransform:"uppercase" }}>{ehShopee ? "Taxa Shopee" : "Taxa ML (%)"}</div>
           {ehShopee ? (
-            <div style={{ background:"#121A24", border:"1px solid rgba(238,77,45,.35)", color:"#EE4D2D", padding:"8px 10px", borderRadius:8, fontSize:12, fontWeight:700 }}>
+            <div style={{ background:"var(--bg-2)", border:"1px solid rgba(238,77,45,.35)", color:"#EE4D2D", padding:"8px 10px", borderRadius:8, fontSize:12, fontWeight:700 }}>
               {bruto>0 ? (function(){ var fx=taxaShopeeFaixa(bruto); return (fx.pct*100).toFixed(0)+"% + R$"+fx.fixo+(shopeeDoc==="CPF"?" + R$3":""); })() : "automática por preço"}
             </div>
           ) : (
             <select value={f.taxaMl} onChange={function(e){set("taxaMl",e.target.value);}}
-              style={{ width:"100%", background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", padding:"8px 10px", borderRadius:8, fontSize:12 }}>
+              style={{ width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"8px 10px", borderRadius:8, fontSize:12 }}>
               <option value="12">12% — Clássico</option>
               <option value="17">17% — Premium</option>
             </select>
@@ -2317,16 +2317,16 @@ function NovoProdutoPrecForm({ onSave, onClose, marketplaceInicial, shopeeDoc })
         </div>
       </div>
       {bruto > 0 && custo > 0 && (
-        <div style={{ background:"#121A24", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, padding:"10px 14px", display:"flex", gap:16 }}>
-          <div><div style={{ fontSize:10, color:"#67759B" }}>Lucro</div><div style={{ fontWeight:700, color:lucro>=0?"#00F0FF":"#FF5252" }}>R$ {lucro.toFixed(2).replace(".",",")}</div></div>
-          <div><div style={{ fontSize:10, color:"#67759B" }}>Margem</div><div style={{ fontWeight:700, color:mCor }}>{margem.toFixed(1)}%</div></div>
-          <div><div style={{ fontSize:10, color:"#67759B" }}>Taxa {ehShopee?"Shopee":"ML"}</div><div style={{ fontWeight:700, color:"#FF5252" }}>R$ {taxa.toFixed(2).replace(".",",")}</div></div>
+        <div style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:"10px 14px", display:"flex", gap:16 }}>
+          <div><div style={{ fontSize:10, color:"var(--text-3)" }}>Lucro</div><div style={{ fontWeight:700, color:lucro>=0?"#00F0FF":"#FF5252" }}>R$ {lucro.toFixed(2).replace(".",",")}</div></div>
+          <div><div style={{ fontSize:10, color:"var(--text-3)" }}>Margem</div><div style={{ fontWeight:700, color:mCor }}>{margem.toFixed(1)}%</div></div>
+          <div><div style={{ fontSize:10, color:"var(--text-3)" }}>Taxa {ehShopee?"Shopee":"ML"}</div><div style={{ fontWeight:700, color:"#FF5252" }}>R$ {taxa.toFixed(2).replace(".",",")}</div></div>
         </div>
       )}
       <div style={{ display:"flex", gap:8, marginTop:4 }}>
-        <button onClick={onClose} style={{ flex:1, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", fontWeight:600, padding:"9px", borderRadius:9, cursor:"pointer" }}>Cancelar</button>
+        <button onClick={onClose} style={{ flex:1, background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"9px", borderRadius:9, cursor:"pointer" }}>Cancelar</button>
         <button onClick={function(){ if(f.nome&&f.sku) onSave(f); }} disabled={!f.nome||!f.sku}
-          style={{ flex:2, background:f.nome&&f.sku?"#7c3aed":"#223048", border:"none", color:f.nome&&f.sku?"#fff":"#67759B", fontWeight:700, padding:"9px", borderRadius:9, cursor:f.nome&&f.sku?"pointer":"not-allowed" }}>
+          style={{ flex:2, background:f.nome&&f.sku?"#7c3aed":"var(--surface-3)", border:"none", color:f.nome&&f.sku?"#fff":"var(--text-3)", fontWeight:700, padding:"9px", borderRadius:9, cursor:f.nome&&f.sku?"pointer":"not-allowed" }}>
           Salvar e Acompanhar
         </button>
       </div>
@@ -2528,21 +2528,21 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
 
   return (
     <div style={{ padding:"0 20px" }}>
-      <div style={{ padding:"12px 0 8px", borderBottom:"1px solid rgba(255,255,255,.12)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+      <div style={{ padding:"12px 0 8px", borderBottom:"1px solid var(--border)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         <div>
-          <div style={{ fontWeight:800, fontSize:20, color:"#FFFFFF", marginBottom:4 }}>💲 Precificação</div>
-          <div style={{ fontSize:13, color:"#A9B4C5" }}>Calcule o preço ideal para cada anúncio com base na margem desejada</div>
+          <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)", marginBottom:4 }}>💲 Precificação</div>
+          <div style={{ fontSize:13, color:"var(--text-2)" }}>Calcule o preço ideal para cada anúncio com base na margem desejada</div>
         </div>
-        <div style={{ display:"flex", alignItems:"center", gap:7, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", borderRadius:10, padding:"10px 16px" }}>
-          <span style={{ fontSize:13, color:"#A9B4C5", fontWeight:600 }}>Margem alvo:</span>
+        <div style={{ display:"flex", alignItems:"center", gap:7, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 16px" }}>
+          <span style={{ fontSize:13, color:"var(--text-2)", fontWeight:600 }}>Margem alvo:</span>
           <input type="number" min="1" max="99" value={margemAlvo} onChange={function(e){setMargemAlvo(parseFloat(e.target.value)||20);}}
-            style={{ width:60, background:"#182230", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"6px 10px", borderRadius:8, fontSize:15, fontWeight:700, outline:"none", textAlign:"center" }} />
-          <span style={{ fontSize:15, fontWeight:700, color:"#FFFFFF" }}>%</span>
+            style={{ width:60, background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"6px 10px", borderRadius:8, fontSize:15, fontWeight:700, outline:"none", textAlign:"center" }} />
+          <span style={{ fontSize:15, fontWeight:700, color:"var(--text-strong)" }}>%</span>
         </div>
       </div>
 
       {/* Sub-abas do marketplace + (Shopee) seletor CNPJ/CPF */}
-      <div style={{ display:"flex", alignItems:"center", gap:2, borderBottom:"2px solid rgba(255,255,255,.10)", margin:"12px 0 4px" }}>
+      <div style={{ display:"flex", alignItems:"center", gap:2, borderBottom:"2px solid var(--border)", margin:"12px 0 4px" }}>
         {[
           { key:"ml",     label:"🟡 Mercado Livre", cor:"#FFC107" },
           { key:"shopee", label:"🛒 Shopee",        cor:"#EE4D2D" },
@@ -2552,7 +2552,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
             <button key={m.key} onClick={function(){ setMktSel(m.key); }}
               style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 18px", border:"none",
                 borderBottom: ativo ? "2px solid "+m.cor : "2px solid transparent", marginBottom:-2,
-                background:"transparent", color: ativo ? "#FFFFFF" : "#67759B",
+                background:"transparent", color: ativo ? "var(--text-strong)" : "var(--text-3)",
                 fontWeight: ativo?700:500, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>
               {m.label}
             </button>
@@ -2560,13 +2560,13 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
         })}
         {mktSel === "shopee" && (
           <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:6 }}>
-            <span style={{ fontSize:11, color:"#67759B", fontWeight:600 }}>Taxa como:</span>
+            <span style={{ fontSize:11, color:"var(--text-3)", fontWeight:600 }}>Taxa como:</span>
             {["CNPJ","CPF"].map(function(d){
               var ativo = shopeeDoc === d;
               return (
                 <button key={d} onClick={function(){ setShopeeDocSave(d); }}
-                  style={{ background: ativo?"#EE4D2D":"#182230", color: ativo?"#fff":"#A9B4C5",
-                    border:"1px solid "+(ativo?"#EE4D2D":"rgba(255,255,255,.12)"), borderRadius:16,
+                  style={{ background: ativo?"#EE4D2D":"var(--surface)", color: ativo?"#fff":"var(--text-2)",
+                    border:"1px solid "+(ativo?"#EE4D2D":"var(--border)"), borderRadius:16,
                     padding:"3px 12px", fontSize:11, fontWeight:700, cursor:"pointer" }}>{d}</button>
               );
             })}
@@ -2598,8 +2598,8 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
               var descItem = parseFloat(descontosConfig && descontosConfig[id] || 0);
               var precoBruto = descItem > 0 ? p.precoNovo / (1 - descItem/100) : p.precoNovo;
               return (
-                <div key={id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"#182230", border:"1px solid rgba(255,193,7,.35)", borderRadius:8, padding:"7px 12px" }}>
-                  <div style={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontSize:12, color:"#FFFFFF" }}>
+                <div key={id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"var(--surface)", border:"1px solid rgba(255,193,7,.35)", borderRadius:8, padding:"7px 12px" }}>
+                  <div style={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontSize:12, color:"var(--text-strong)" }}>
                     <span style={{ fontWeight:700, color:"#FFC107", marginRight:6 }}>SKU {skuRef}</span>
                     {listingRef && (
                       <span style={{ fontSize:9, fontWeight:700, padding:"1px 6px", borderRadius:4, marginRight:6, whiteSpace:"nowrap",
@@ -2612,7 +2612,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                   </div>
                   <div style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
                     {precoBruto > p.precoNovo + 0.001 && (
-                      <span style={{ fontSize:11, color:"#67759B", textDecoration:"line-through" }}>R$ {precoBruto.toFixed(2).replace(".",",")}</span>
+                      <span style={{ fontSize:11, color:"var(--text-3)", textDecoration:"line-through" }}>R$ {precoBruto.toFixed(2).replace(".",",")}</span>
                     )}
                     <span style={{ fontSize:12, fontWeight:700, color:"#7c3aed" }}>→ R$ {p.precoNovo.toFixed(2).replace(".",",")}</span>
                     {!ehShopee && (
@@ -2647,21 +2647,21 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
           + Precificar Novo Produto
         </button>
         <div style={{ position:"relative", flex:1 }}>
-          <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:"#67759B", fontSize:14 }}>🔍</span>
+          <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:"var(--text-3)", fontSize:14 }}>🔍</span>
           <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar por título, MLB ou SKU..."
-            style={{ width:"100%", background:"#182230", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"10px 14px 10px 36px", borderRadius:10, fontSize:13, outline:"none" }} />
+            style={{ width:"100%", background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"10px 14px 10px 36px", borderRadius:10, fontSize:13, outline:"none" }} />
           {busca && (
-            <button onClick={function(){setBusca("");}} style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:"#67759B", cursor:"pointer", fontSize:18, lineHeight:1 }}>×</button>
+            <button onClick={function(){setBusca("");}} style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:"var(--text-3)", cursor:"pointer", fontSize:18, lineHeight:1 }}>×</button>
           )}
         </div>
         <select value={buscaTipo} onChange={function(e){setBuscaTipo(e.target.value);}}
-          style={{ background:"#182230", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"10px 12px", borderRadius:10, fontSize:12, outline:"none", cursor:"pointer", flexShrink:0 }}>
+          style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"10px 12px", borderRadius:10, fontSize:12, outline:"none", cursor:"pointer", flexShrink:0 }}>
           <option value="all">Tudo</option>
           <option value="title">Título</option>
           <option value="sku">SKU (exato)</option>
           <option value="mlb">MLB</option>
         </select>
-        <div style={{ display:"flex", alignItems:"center", gap:8, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", borderRadius:10, padding:"0 14px", fontSize:12, color:"#A9B4C5", whiteSpace:"nowrap" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:10, padding:"0 14px", fontSize:12, color:"var(--text-2)", whiteSpace:"nowrap" }}>
           {listsFiltrados.length} anúncio(s)
         </div>
       </div>
@@ -2669,7 +2669,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
       {/* Modal novo produto para precificação */}
       {showNovoProdutoPrec && (
         <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.5)", zIndex:600, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
-          <div style={{ background:"#182230", borderRadius:14, width:480, padding:20 }}>
+          <div style={{ background:"var(--surface)", borderRadius:14, width:480, padding:20 }}>
             <div style={{ fontWeight:700, fontSize:15, marginBottom:14 }}>+ Precificar Novo Produto</div>
             <NovoProdutoPrecForm
               marketplaceInicial={mktSel}
@@ -2692,10 +2692,10 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
 
       {/* Produtos extras (ainda não anunciados) */}
       {/* Tabela */}
-      <div className="scroll-x" style={{ background:"#182230", border:"1px solid rgba(255,255,255,.12)", borderRadius:12, overflow:"auto" }}>
+      <div className="scroll-x" style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, overflow:"auto" }}>
         <table style={{ borderCollapse:"collapse", width:"100%", minWidth:900 }}>
           <thead>
-            <tr style={{ background:"#121A24" }}>
+            <tr style={{ background:"var(--bg-2)" }}>
               {[
                 "SKU","MLB","Tipo","Anúncio",
                 "Custo","Preço Atual","Frete Real","Frete Config.",
@@ -2704,7 +2704,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                 "Lucro Simulado","Margem Simulada","Ação"
               ].map(function(h){
                 var isSimul = ["💡 Vender por → Anunciar por","Lucro Simulado","Margem Simulada","Taxa ML (s/ desconto)"].includes(h);
-                return <th key={h} style={{ fontSize:10, color: isSimul?"#7c3aed":"#A9B4C5", fontWeight:600, textTransform:"uppercase", padding:"8px 10px", borderBottom:"1px solid rgba(255,255,255,.12)", textAlign:"left", whiteSpace:"nowrap", background: isSimul?"rgba(139,92,246,.12)":"transparent" }}>{h}</th>;
+                return <th key={h} style={{ fontSize:10, color: isSimul?"#7c3aed":"var(--text-2)", fontWeight:600, textTransform:"uppercase", padding:"8px 10px", borderBottom:"1px solid var(--border)", textAlign:"left", whiteSpace:"nowrap", background: isSimul?"rgba(139,92,246,.12)":"transparent" }}>{h}</th>;
               })}
             </tr>
           </thead>
@@ -2751,7 +2751,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
               var isPremium = t==="gold_premium"||t==="gold_pro";
 
               return (
-                <tr key={l.id} style={{ borderBottom:"1px solid rgba(255,255,255,.10)", background:i%2===0?"#182230":"#121A24" }}>
+                <tr key={l.id} style={{ borderBottom:"1px solid var(--border)", background:i%2===0?"var(--surface)":"var(--bg-2)" }}>
 
                   {/* SKU — editável */}
                   <td style={{ padding:"6px 8px" }}>
@@ -2760,10 +2760,10 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                         onChange={function(e){ salvarSku(l, e.target.value); }}
                         onBlur={function(){ setEditingSkuId(null); }}
                         onKeyDown={function(e){ if(e.key==="Enter"||e.key==="Escape"){ setEditingSkuId(null); } }}
-                        style={{ width:80, background:"#182230", border:"1px solid #00F0FF", color:"#FFFFFF", padding:"2px 6px", borderRadius:4, fontSize:11, fontFamily:"monospace", outline:"none" }} />
+                        style={{ width:80, background:"var(--surface)", border:"1px solid #00F0FF", color:"var(--text-strong)", padding:"2px 6px", borderRadius:4, fontSize:11, fontFamily:"monospace", outline:"none" }} />
                     ) : (
                       <span onClick={function(){ setEditingSkuId(l.id); }} title="Clique para editar o SKU"
-                        style={{ cursor:"pointer", fontSize:11, fontFamily:"monospace", fontWeight:700, color:"#A9B4C5", background:"#223048", padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap", display:"inline-flex", alignItems:"center", gap:4 }}>
+                        style={{ cursor:"pointer", fontSize:11, fontFamily:"monospace", fontWeight:700, color:"var(--text-2)", background:"var(--surface-3)", padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap", display:"inline-flex", alignItems:"center", gap:4 }}>
                         {l.seller_sku||l.sku||"—"}
                         <span style={{ color:"#00F0FF", fontSize:9 }}>✎</span>
                       </span>
@@ -2796,7 +2796,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
 
                   {/* Anúncio */}
                   <td style={{ padding:"6px 8px", maxWidth:220, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                    <div style={{ fontSize:12, fontWeight:600, color:"#FFFFFF" }}>{l.title}</div>
+                    <div style={{ fontSize:12, fontWeight:600, color:"var(--text-strong)" }}>{l.title}</div>
                   </td>
 
                   {/* Custo (editável) */}
@@ -2807,10 +2807,10 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                         onBlur={function(){ setSelectedId(null); }}
                         onKeyDown={function(e){ if(e.key==="Enter"){ e.target.blur(); } }}
                         autoFocus
-                        style={{ width:72, background:"#182230", border:"1px solid #00F0FF", color:"#FFFFFF", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
+                        style={{ width:72, background:"var(--surface)", border:"1px solid #00F0FF", color:"var(--text-strong)", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
                     ) : (
                       <span onClick={function(){setSelectedId(l.id);}} title="Clique para editar custo"
-                        style={{ cursor:"pointer", fontSize:12, fontWeight:600, color:custo>0?"#A9B4C5":"#FF5252",
+                        style={{ cursor:"pointer", fontSize:12, fontWeight:600, color:custo>0?"var(--text-2)":"#FF5252",
                           background:custo>0?"transparent":"rgba(255,82,82,.12)", padding:custo>0?"0":"2px 6px", borderRadius:4 }}>
                         {custo>0?"R$ "+custo.toFixed(2).replace(".",","): "✎ Sem custo"}
                       </span>
@@ -2818,7 +2818,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                   </td>
 
                   {/* Preço Atual */}
-                  <td style={{ padding:"6px 8px", fontSize:12, fontWeight:700, color:"#FFFFFF", whiteSpace:"nowrap" }}>
+                  <td style={{ padding:"6px 8px", fontSize:12, fontWeight:700, color:"var(--text-strong)", whiteSpace:"nowrap" }}>
                     R$ {bruto.toFixed(2).replace(".",",")}
                   </td>
 
@@ -2833,12 +2833,12 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                       <input type="number" step="0.01" min="0" defaultValue={freteConfig||""} placeholder="0,00"
                         onBlur={function(e){ var v=parseFloat(e.target.value)||0; setFretesAndSave(function(f){return Object.assign({},f,{[l.id]:v});}); setEditingFreteId(null); }}
                         autoFocus
-                        style={{ width:72, background:"#182230", border:"1px solid #00F0FF", color:"#FFFFFF", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
+                        style={{ width:72, background:"var(--surface)", border:"1px solid #00F0FF", color:"var(--text-strong)", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
                     ) : (
                       <span onClick={function(){setEditingFreteId(l.id);}} title="Frete esperado"
                         style={{ cursor:"pointer", fontSize:12, fontWeight:600,
-                          color:freteConfig>0?"#FFC107":"#67759B",
-                          background:freteConfig>0?"transparent":"#121A24",
+                          color:freteConfig>0?"#FFC107":"var(--text-3)",
+                          background:freteConfig>0?"transparent":"var(--bg-2)",
                           padding:freteConfig>0?"0":"2px 6px", borderRadius:4 }}>
                         {freteConfig>0?"R$ "+freteConfig.toFixed(2).replace(".",","):"✎ definir"}
                       </span>
@@ -2849,16 +2849,16 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                   <td style={{ padding:"6px 8px", background:"rgba(139,92,246,.12)" }}>
                     {editingPrecoId === l.id ? (
                       <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
-                        <span style={{ fontSize:9, color:"#67759B" }}>Vender por (c/ desconto):</span>
+                        <span style={{ fontSize:9, color:"var(--text-3)" }}>Vender por (c/ desconto):</span>
                         <div style={{ display:"flex", alignItems:"center", gap:3 }}>
-                          <span style={{ fontSize:10, color:"#67759B" }}>R$</span>
+                          <span style={{ fontSize:10, color:"var(--text-3)" }}>R$</span>
                           <input type="number" step="0.01" min="0"
                             defaultValue={precoVendaDesejado||""}
                             placeholder={bruto.toFixed(2)}
                             autoFocus
                             onBlur={function(e){ var v=parseFloat(e.target.value)||0; setPrecoVenda(l.id,v); setEditingPrecoId(null); }}
                             onKeyDown={function(e){ if(e.key==="Enter"||e.key==="Escape") e.target.blur(); }}
-                            style={{ width:78, background:"#182230", border:"1px solid #7c3aed", color:"#FFFFFF", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none", textAlign:"right" }} />
+                            style={{ width:78, background:"var(--surface)", border:"1px solid #7c3aed", color:"var(--text-strong)", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none", textAlign:"right" }} />
                         </div>
                       </div>
                     ) : (
@@ -2868,9 +2868,9 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                             <span style={{ fontSize:13, fontWeight:800, color:"#7c3aed" }}>
                               📢 R$ {precoParaAnunciar.toFixed(2).replace(".",",")}
                             </span>
-                            <div style={{ fontSize:10, color:"#A9B4C5" }}>
+                            <div style={{ fontSize:10, color:"var(--text-2)" }}>
                               vender por R$ {precoVendaDesejado.toFixed(2).replace(".",",")}
-                              {descPct > 0 && <span style={{ color:"#67759B" }}> (-{descPct}%)</span>}
+                              {descPct > 0 && <span style={{ color:"var(--text-3)" }}> (-{descPct}%)</span>}
                             </div>
                             {pendentesAtualizacao[l.id] && (
                               <div style={{ fontSize:9, fontWeight:700, color:"#FFC107", background:"rgba(255,193,7,.12)", border:"1px solid rgba(255,193,7,.35)", padding:"1px 5px", borderRadius:4, marginTop:2, display:"inline-block" }}>
@@ -2879,7 +2879,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                             )}
                           </div>
                         ) : (
-                          <span style={{ fontSize:11, color:"#67759B", background:"rgba(139,92,246,.14)", border:"1px dashed rgba(139,92,246,.35)", padding:"2px 7px", borderRadius:5 }}>
+                          <span style={{ fontSize:11, color:"var(--text-3)", background:"rgba(139,92,246,.14)", border:"1px dashed rgba(139,92,246,.35)", padding:"2px 7px", borderRadius:5 }}>
                             ✎ simular
                           </span>
                         )}
@@ -2897,8 +2897,8 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                           autoFocus
                           onBlur={function(e){ var v=Math.min(80,Math.max(0,parseFloat(e.target.value)||0)); setDesconto(l.id,v); setEditingDescId(null); }}
                           onKeyDown={function(e){ if(e.key==="Enter"||e.key==="Escape") e.target.blur(); }}
-                          style={{ width:46, background:"#182230", border:"1px solid #7c3aed", color:"#FFFFFF", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none", textAlign:"center" }} />
-                        <span style={{ fontSize:11, color:"#67759B" }}>%</span>
+                          style={{ width:46, background:"var(--surface)", border:"1px solid #7c3aed", color:"var(--text-strong)", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none", textAlign:"center" }} />
+                        <span style={{ fontSize:11, color:"var(--text-3)" }}>%</span>
                       </div>
                     ) : (
                       <div onClick={function(){ setEditingDescId(l.id); }} title="% de desconto na promoção" style={{ cursor:"pointer" }}>
@@ -2912,7 +2912,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                             </div>
                           </div>
                         ) : (
-                          <span style={{ fontSize:11, color:"#67759B", background:"#121A24", border:"1px dashed rgba(255,255,255,.12)", padding:"2px 7px", borderRadius:5 }}>
+                          <span style={{ fontSize:11, color:"var(--text-3)", background:"var(--bg-2)", border:"1px dashed var(--border)", padding:"2px 7px", borderRadius:5 }}>
                             ✎ definir
                           </span>
                         )}
@@ -2929,7 +2929,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                       var f = taxaShopeeFaixa(precoComDesc);
                       return (
                         <>
-                          <div style={{ fontSize:10, color:"#67759B" }}>
+                          <div style={{ fontSize:10, color:"var(--text-3)" }}>
                             {(f.pct*100).toFixed(0)}% + R$ {f.fixo}{shopeeDoc==="CPF" ? " + R$3" : ""}
                           </div>
                           <div title="Taxa da Shopee 2026 por faixa de preço" style={{ fontSize:9, fontWeight:700, color:"#EE4D2D", marginTop:1 }}>
@@ -2939,7 +2939,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                       );
                     })() : (
                       <>
-                        <div style={{ fontSize:10, color:"#67759B" }}>
+                        <div style={{ fontSize:10, color:"var(--text-3)" }}>
                           {(feeRate*100).toFixed(0)}% s/ {descPct>0?"desc":"atual"}
                         </div>
                         <div title="Taxa padrão do Mercado Livre: Clássico 12% · Premium 17%"
@@ -2958,10 +2958,10 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                           R$ {lucroFinal.toFixed(2).replace(".",",")}
                         </span>
                         {descPct > 0 && (
-                          <div style={{ fontSize:10, color:"#67759B", marginTop:1 }}>c/ {descPct}% desc</div>
+                          <div style={{ fontSize:10, color:"var(--text-3)", marginTop:1 }}>c/ {descPct}% desc</div>
                         )}
                       </div>
-                    ) : <span style={{color:"#67759B",fontSize:11}}>—</span>}
+                    ) : <span style={{color:"var(--text-3)",fontSize:11}}>—</span>}
                   </td>
 
                   {/* Margem Simulada */}
@@ -2971,7 +2971,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                         {margemFinal.toFixed(1)}%
                         {margemFinal >= margemAlvo ? " ✓" : " ↓"}
                       </span>
-                    ) : <span style={{color:"#67759B",fontSize:11}}>—</span>}
+                    ) : <span style={{color:"var(--text-3)",fontSize:11}}>—</span>}
                   </td>
 
                   {/* Ação */}
@@ -3002,7 +3002,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
           </tbody>
         </table>
         {listsFiltrados.length === 0 && (
-          <div style={{ textAlign:"center", padding:"40px", color:"#67759B" }}>
+          <div style={{ textAlign:"center", padding:"40px", color:"var(--text-3)" }}>
             <div style={{ fontSize:32, marginBottom:8 }}>🔍</div>
             <div>Nenhum anúncio encontrado</div>
           </div>
@@ -3178,19 +3178,19 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
     <div style={{ padding: "0 12px" }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12, marginBottom:16 }}>
         <div>
-          <div style={{ fontWeight:800, fontSize:18, color:"#FFFFFF" }}>🔎 Concorrência — melhorias do anúncio</div>
-          <div style={{ fontSize:12, color:"#67759B", maxWidth:680 }}>Compara cada anúncio ativo com os <strong>mais vendidos da mesma categoria</strong> e mostra o que os líderes têm e o seu não (clipe, fotos em alta, Premium, atacado, garantia), além das boas práticas do ML.</div>
+          <div style={{ fontWeight:800, fontSize:18, color:"var(--text-strong)" }}>🔎 Concorrência — melhorias do anúncio</div>
+          <div style={{ fontSize:12, color:"var(--text-3)", maxWidth:680 }}>Compara cada anúncio ativo com os <strong>mais vendidos da mesma categoria</strong> e mostra o que os líderes têm e o seu não (clipe, fotos em alta, Premium, atacado, garantia), além das boas práticas do ML.</div>
         </div>
         <div style={{ display:"flex", gap:8, alignItems:"center" }}>
           {analisando && (
             <>
-              <span style={{ fontSize:12, color:"#67759B" }}>⏳ {progresso.feito}/{progresso.total} categorias</span>
+              <span style={{ fontSize:12, color:"var(--text-3)" }}>⏳ {progresso.feito}/{progresso.total} categorias</span>
               <button onClick={function(){ cancelRef.current = true; }}
                 style={{ background:"rgba(255,82,82,.12)", border:"1px solid rgba(255,82,82,.35)", color:"#FF5252", fontWeight:600, padding:"8px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>Parar</button>
             </>
           )}
           <button onClick={analisarTodos} disabled={analisando || !categoriasUnicas.length}
-            style={{ background: analisando?"#223048":"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"9px 18px", borderRadius:8, cursor:analisando?"wait":"pointer", fontSize:13 }}>
+            style={{ background: analisando?"var(--surface-3)":"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"9px 18px", borderRadius:8, cursor:analisando?"wait":"pointer", fontSize:13 }}>
             {analisando ? "Analisando..." : "🔍 Analisar (" + categoriasUnicas.length + " categorias)"}
           </button>
         </div>
@@ -3198,13 +3198,13 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
 
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))", gap:12, marginBottom:16 }}>
         {[
-          { label:"Anúncios analisados",     valor: resumo.analisados,     cor:"#FFFFFF" },
+          { label:"Anúncios analisados",     valor: resumo.analisados,     cor:"var(--text-strong)" },
           { label:"Melhorias sugeridas",     valor: resumo.totalMelhorias, cor:"#FFC107" },
           { label:"Anúncios otimizados",     valor: resumo.otimizados,     cor:"#00C853" },
         ].map(function(c){
           return (
-            <div key={c.label} style={{ background:"#182230", border:"1px solid rgba(255,255,255,.08)", borderRadius:12, padding:"14px 16px" }}>
-              <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:10, color:"#67759B", fontWeight:700, textTransform:"uppercase", letterSpacing:".12em" }}>{c.label}</div>
+            <div key={c.label} style={{ background:"var(--surface)", border:"1px solid var(--border-soft)", borderRadius:12, padding:"14px 16px" }}>
+              <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:10, color:"var(--text-3)", fontWeight:700, textTransform:"uppercase", letterSpacing:".12em" }}>{c.label}</div>
               <div style={{ fontSize:24, fontWeight:800, color:c.cor, marginTop:4 }}>{c.valor}</div>
             </div>
           );
@@ -3221,18 +3221,18 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
           var ativo = filtro === f.key;
           return (
             <button key={f.key} onClick={function(){ setFiltro(f.key); }}
-              style={{ background:ativo?"#1976FF":"#182230", color:ativo?"#fff":"#A9B4C5", border:"1px solid "+(ativo?"#4DB3FF":"rgba(255,255,255,.12)"), borderRadius:20, padding:"5px 14px", fontSize:12, fontWeight:600, cursor:"pointer" }}>
+              style={{ background:ativo?"#1976FF":"var(--surface)", color:ativo?"#fff":"var(--text-2)", border:"1px solid "+(ativo?"#4DB3FF":"var(--border)"), borderRadius:20, padding:"5px 14px", fontSize:12, fontWeight:600, cursor:"pointer" }}>
               {f.label}
             </button>
           );
         })}
         <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Buscar por título, MLB ou SKU..."
-          style={{ marginLeft:"auto", background:"#121A24", color:"#FFFFFF", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, padding:"7px 12px", fontSize:13, minWidth:240, fontFamily:"inherit" }} />
+          style={{ marginLeft:"auto", background:"var(--bg-2)", color:"var(--text-strong)", border:"1px solid var(--border)", borderRadius:8, padding:"7px 12px", fontSize:13, minWidth:240, fontFamily:"inherit" }} />
       </div>
 
       <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
         {!visiveis.length && (
-          <div style={{ background:"#182230", border:"1px solid rgba(255,255,255,.08)", borderRadius:12, padding:"40px 20px", textAlign:"center", color:"#67759B", fontSize:13 }}>
+          <div style={{ background:"var(--surface)", border:"1px solid var(--border-soft)", borderRadius:12, padding:"40px 20px", textAlign:"center", color:"var(--text-3)", fontSize:13 }}>
             {ativos.length ? "Clique em “Analisar” para comparar seus anúncios com os líderes de cada categoria." : "Nenhum anúncio ativo encontrado."}
           </div>
         )}
@@ -3240,35 +3240,35 @@ function ConcorrenciaTab({ enriched, token, sellerId }) {
           var l = x.l, pts = x.pts;
           var aberto = expandido === l.id;
           var qtd = pts ? pts.length : null;
-          var corQtd = qtd === null ? "#67759B" : qtd === 0 ? "#00C853" : qtd >= 4 ? "#FF5252" : "#FFC107";
+          var corQtd = qtd === null ? "var(--text-3)" : qtd === 0 ? "#00C853" : qtd >= 4 ? "#FF5252" : "#FFC107";
           return (
-            <div key={l.id} style={{ background:"#182230", border:"1px solid rgba(255,255,255,.08)", borderRadius:12, overflow:"hidden" }}>
+            <div key={l.id} style={{ background:"var(--surface)", border:"1px solid var(--border-soft)", borderRadius:12, overflow:"hidden" }}>
               <div onClick={function(){ if (qtd) setExpandido(aberto ? null : l.id); }}
                 style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", cursor: qtd ? "pointer" : "default" }}>
-                {l.thumbnail && <img src={l.thumbnail.replace("http://","https://")} alt="" style={{ width:44, height:44, borderRadius:8, objectFit:"cover", border:"1px solid rgba(255,255,255,.12)", flexShrink:0 }} />}
+                {l.thumbnail && <img src={l.thumbnail.replace("http://","https://")} alt="" style={{ width:44, height:44, borderRadius:8, objectFit:"cover", border:"1px solid var(--border)", flexShrink:0 }} />}
                 <div style={{ minWidth:0, flex:1 }}>
-                  <a href={l.permalink} target="_blank" rel="noreferrer" onClick={function(e){ e.stopPropagation(); }} style={{ fontSize:13, fontWeight:600, color:"#FFFFFF", textDecoration:"none", display:"block", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{l.title}</a>
-                  <div style={{ fontSize:11, color:"#67759B" }}>{l.id}{l.sku ? " · SKU " + l.sku : ""}</div>
+                  <a href={l.permalink} target="_blank" rel="noreferrer" onClick={function(e){ e.stopPropagation(); }} style={{ fontSize:13, fontWeight:600, color:"var(--text-strong)", textDecoration:"none", display:"block", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{l.title}</a>
+                  <div style={{ fontSize:11, color:"var(--text-3)" }}>{l.id}{l.sku ? " · SKU " + l.sku : ""}</div>
                 </div>
                 <div style={{ textAlign:"right", flexShrink:0 }}>
                   {qtd === null
-                    ? <span style={{ fontSize:12, color:"#67759B" }}>não analisado</span>
+                    ? <span style={{ fontSize:12, color:"var(--text-3)" }}>não analisado</span>
                     : qtd === 0
                       ? <span style={{ fontSize:12, fontWeight:700, color:"#00C853" }}>✓ otimizado</span>
                       : <span style={{ fontSize:13, fontWeight:800, color:corQtd }}>{qtd} melhoria{qtd>1?"s":""} {aberto ? "▲" : "▼"}</span>}
                 </div>
               </div>
               {aberto && qtd > 0 && (
-                <div style={{ borderTop:"1px solid rgba(255,255,255,.08)", padding:"10px 16px", display:"flex", flexDirection:"column", gap:6 }}>
+                <div style={{ borderTop:"1px solid var(--border-soft)", padding:"10px 16px", display:"flex", flexDirection:"column", gap:6 }}>
                   {pts.map(function(p, i){
                     return (
-                      <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start", padding:"7px 10px", background:"#121A24", borderRadius:8, border:"1px solid "+(p.tipo==="lider"?"rgba(255,193,7,.25)":"rgba(255,255,255,.06)") }}>
+                      <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start", padding:"7px 10px", background:"var(--bg-2)", borderRadius:8, border:"1px solid "+(p.tipo==="lider"?"rgba(255,193,7,.25)":"rgba(255,255,255,.06)") }}>
                         <span style={{ fontSize:15, lineHeight:1.2 }}>{p.ico}</span>
                         <div style={{ minWidth:0 }}>
-                          <div style={{ fontSize:13, fontWeight:600, color:"#FFFFFF" }}>{p.t}
+                          <div style={{ fontSize:13, fontWeight:600, color:"var(--text-strong)" }}>{p.t}
                             {p.tipo==="lider" && <span style={{ marginLeft:8, fontSize:9, fontFamily:"'JetBrains Mono',monospace", color:"#FFC107", border:"1px solid rgba(255,193,7,.35)", borderRadius:6, padding:"1px 5px", textTransform:"uppercase", letterSpacing:".08em" }}>concorrente</span>}
                           </div>
-                          <div style={{ fontSize:12, color:"#67759B", marginTop:1 }}>{p.d}</div>
+                          <div style={{ fontSize:12, color:"var(--text-3)", marginTop:1 }}>{p.d}</div>
                         </div>
                       </div>
                     );
@@ -3500,23 +3500,23 @@ function ChatInternoWidget({ currentUser }) {
 
       {/* Painel do chat */}
       {open && (
-        <div style={{ position:"fixed", bottom:20, right:20, width:420, height:560, background:"#182230",
+        <div style={{ position:"fixed", bottom:20, right:20, width:420, height:560, background:"var(--surface)",
           borderRadius:16, boxShadow:"0 12px 40px rgba(0,0,0,.25)", zIndex:500, display:"flex",
-          flexDirection:"column", overflow:"hidden", border:"1px solid rgba(255,255,255,.12)" }}>
+          flexDirection:"column", overflow:"hidden", border:"1px solid var(--border)" }}>
 
           {/* Header */}
           <div style={{ background:"#1976FF", padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <div style={{ color:"#fff", fontWeight:700, fontSize:14 }}>💬 Chat da Equipe</div>
-            <button onClick={function(){setOpen(false);}} style={{ background:"transparent", border:"none", color:"#67759B", fontSize:18, cursor:"pointer" }}>✕</button>
+            <button onClick={function(){setOpen(false);}} style={{ background:"transparent", border:"none", color:"var(--text-3)", fontSize:18, cursor:"pointer" }}>✕</button>
           </div>
 
           {/* Sub-abas */}
-          <div style={{ display:"flex", borderBottom:"1px solid rgba(255,255,255,.12)" }}>
+          <div style={{ display:"flex", borderBottom:"1px solid var(--border)" }}>
             {[{k:"conversa",l:"💬 Conversa"},{k:"tarefas",l:"✓ Tarefas"+(tarefasMinhas>0?" ("+tarefasMinhas+")":"")}].map(function(t){
               var a = aba===t.k;
               return <button key={t.k} onClick={function(){setAba(t.k);}}
                 style={{ flex:1, padding:"9px", border:"none", borderBottom:a?"2px solid #4DB3FF":"2px solid transparent",
-                  background:"transparent", color:a?"#FFFFFF":"#67759B", fontWeight:a?700:400, fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>
+                  background:"transparent", color:a?"var(--text-strong)":"var(--text-3)", fontWeight:a?700:400, fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>
                 {t.l}
               </button>;
             })}
@@ -3525,12 +3525,12 @@ function ChatInternoWidget({ currentUser }) {
           {aba === "conversa" ? (
             <>
               {/* Canais */}
-              <div style={{ display:"flex", gap:4, padding:"8px 10px", borderBottom:"1px solid rgba(255,255,255,.10)", overflowX:"auto" }}>
+              <div style={{ display:"flex", gap:4, padding:"8px 10px", borderBottom:"1px solid var(--border)", overflowX:"auto" }}>
                 {canais.map(function(c){
                   var a = canalAtivo===c.k;
                   return <button key={c.k} onClick={function(){setCanalAtivo(c.k);}}
-                    style={{ padding:"5px 10px", borderRadius:14, border:"1px solid "+(a?"#4DB3FF":"rgba(255,255,255,.12)"),
-                      background:a?"#1976FF":"#182230", color:a?"#fff":"#A9B4C5", fontSize:11, fontWeight:a?700:400, cursor:"pointer", whiteSpace:"nowrap" }}>
+                    style={{ padding:"5px 10px", borderRadius:14, border:"1px solid "+(a?"#4DB3FF":"var(--border)"),
+                      background:a?"#1976FF":"var(--surface)", color:a?"#fff":"var(--text-2)", fontSize:11, fontWeight:a?700:400, cursor:"pointer", whiteSpace:"nowrap" }}>
                     {c.icon} {c.l}
                   </button>;
                 })}
@@ -3539,7 +3539,7 @@ function ChatInternoWidget({ currentUser }) {
               {/* Mensagens */}
               <div style={{ flex:1, overflowY:"auto", padding:"10px 14px", display:"flex", flexDirection:"column", gap:8 }}>
                 {msgsCanal.length===0 && (
-                  <div style={{ textAlign:"center", color:"#67759B", fontSize:12, padding:30 }}>
+                  <div style={{ textAlign:"center", color:"var(--text-3)", fontSize:12, padding:30 }}>
                     Nenhuma mensagem ainda. Comece a conversa!
                   </div>
                 )}
@@ -3547,8 +3547,8 @@ function ChatInternoWidget({ currentUser }) {
                   var isMe = m.autorId === currentUser.id;
                   return (
                     <div key={m.id} style={{ display:"flex", flexDirection:"column", alignItems:isMe?"flex-end":"flex-start" }}>
-                      {!isMe && <div style={{ fontSize:10, color:"#67759B", marginBottom:2, marginLeft:4 }}>{m.autorNome}</div>}
-                      <div style={{ maxWidth:"80%", background:isMe?"#1976FF":"#223048", color:isMe?"#fff":"#FFFFFF",
+                      {!isMe && <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:2, marginLeft:4 }}>{m.autorNome}</div>}
+                      <div style={{ maxWidth:"80%", background:isMe?"#1976FF":"var(--surface-3)", color:isMe?"#fff":"var(--text-strong)",
                         padding:"8px 12px", borderRadius:isMe?"12px 12px 4px 12px":"12px 12px 12px 4px", fontSize:13 }}>
                         {m.anexo && (
                           m.anexo.tipo?.startsWith("image/") ? (
@@ -3561,7 +3561,7 @@ function ChatInternoWidget({ currentUser }) {
                         )}
                         {m.texto && <div style={{ whiteSpace:"pre-wrap" }}>{m.texto}</div>}
                       </div>
-                      <div style={{ fontSize:9, color:"#4A5878", marginTop:2 }}>
+                      <div style={{ fontSize:9, color:"var(--text-4)", marginTop:2 }}>
                         {new Date(m.data).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}
                       </div>
                     </div>
@@ -3571,16 +3571,16 @@ function ChatInternoWidget({ currentUser }) {
               </div>
 
               {/* Input */}
-              <div style={{ display:"flex", gap:6, padding:"10px 12px", borderTop:"1px solid rgba(255,255,255,.12)" }}>
+              <div style={{ display:"flex", gap:6, padding:"10px 12px", borderTop:"1px solid var(--border)" }}>
                 <input type="file" ref={fileRef} style={{display:"none"}} onChange={handleFileChange} accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
                 <button onClick={function(){fileRef.current?.click();}}
-                  style={{ background:"#223048", border:"none", color:"#A9B4C5", width:36, height:36, borderRadius:9, cursor:"pointer", fontSize:16, flexShrink:0 }}>
+                  style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", width:36, height:36, borderRadius:9, cursor:"pointer", fontSize:16, flexShrink:0 }}>
                   📎
                 </button>
                 <input value={texto} onChange={function(e){setTexto(e.target.value);}} onKeyDown={handleKey} placeholder="Digite uma mensagem..."
-                  style={{ flex:1, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"8px 12px", borderRadius:9, fontSize:13, outline:"none" }} />
+                  style={{ flex:1, background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"8px 12px", borderRadius:9, fontSize:13, outline:"none" }} />
                 <button onClick={function(){enviarMensagem();}} disabled={!texto.trim()}
-                  style={{ background:texto.trim()?"#1976FF":"#223048", border:"none", color:texto.trim()?"#fff":"#67759B", width:36, height:36, borderRadius:9, cursor:texto.trim()?"pointer":"not-allowed", fontSize:16, flexShrink:0 }}>
+                  style={{ background:texto.trim()?"#1976FF":"var(--surface-3)", border:"none", color:texto.trim()?"#fff":"var(--text-3)", width:36, height:36, borderRadius:9, cursor:texto.trim()?"pointer":"not-allowed", fontSize:16, flexShrink:0 }}>
                   ➤
                 </button>
               </div>
@@ -3593,21 +3593,21 @@ function ChatInternoWidget({ currentUser }) {
                   style={{ width:"100%", background:"#1976FF", border:"none", color:"#fff", fontWeight:700, padding:"9px", borderRadius:9, cursor:"pointer", fontSize:12, marginBottom:12 }}>
                   + Nova Tarefa
                 </button>
-                {tarefas.length===0 && <div style={{ textAlign:"center", color:"#67759B", fontSize:12, padding:20 }}>Nenhuma tarefa criada</div>}
+                {tarefas.length===0 && <div style={{ textAlign:"center", color:"var(--text-3)", fontSize:12, padding:20 }}>Nenhuma tarefa criada</div>}
                 {tarefas.slice().reverse().map(function(t){
                   var corPrior = t.prioridade==="alta"?"#FF5252":t.prioridade==="media"?"#FFC107":"#00C853";
                   var concluida = t.status==="concluida";
                   return (
-                    <div key={t.id} style={{ background:"#121A24", border:"1px solid rgba(255,255,255,.12)", borderRadius:10, padding:"10px 12px", marginBottom:8, opacity:concluida?0.6:1 }}>
+                    <div key={t.id} style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 12px", marginBottom:8, opacity:concluida?0.6:1 }}>
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:6 }}>
-                        <div style={{ fontSize:13, fontWeight:700, color:"#FFFFFF", textDecoration:concluida?"line-through":"none" }}>{t.titulo}</div>
+                        <div style={{ fontSize:13, fontWeight:700, color:"var(--text-strong)", textDecoration:concluida?"line-through":"none" }}>{t.titulo}</div>
                         <span style={{ fontSize:9, fontWeight:700, color:corPrior, background:corPrior+"18", padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
                           {t.prioridade}
                         </span>
                       </div>
-                      {t.descricao && <div style={{ fontSize:11, color:"#A9B4C5", marginTop:3 }}>{t.descricao}</div>}
+                      {t.descricao && <div style={{ fontSize:11, color:"var(--text-2)", marginTop:3 }}>{t.descricao}</div>}
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:6 }}>
-                        <div style={{ fontSize:10, color:"#67759B" }}>
+                        <div style={{ fontSize:10, color:"var(--text-3)" }}>
                           👤 {t.responsavelNome} {t.prazo && "· 📅 "+new Date(t.prazo).toLocaleDateString("pt-BR")}
                         </div>
                         {!concluida && t.responsavelId===currentUser.id && (
@@ -3643,22 +3643,22 @@ function ModalNovaTarefa({ usuarios, onSave, onClose }) {
 
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.6)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:700, padding:16 }}>
-      <div style={{ background:"#182230", borderRadius:14, width:"100%", maxWidth:420, padding:20 }}>
-        <div style={{ fontWeight:700, fontSize:15, color:"#FFFFFF", marginBottom:14 }}>+ Nova Tarefa</div>
+      <div style={{ background:"var(--surface)", borderRadius:14, width:"100%", maxWidth:420, padding:20 }}>
+        <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)", marginBottom:14 }}>+ Nova Tarefa</div>
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           <input value={titulo} onChange={function(e){setTitulo(e.target.value);}} placeholder="Título da tarefa"
-            style={{ background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
+            style={{ background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none" }} />
           <textarea value={descricao} onChange={function(e){setDescricao(e.target.value);}} placeholder="Descrição (opcional)" rows={3}
-            style={{ background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none", resize:"none", fontFamily:"inherit" }} />
+            style={{ background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 12px", borderRadius:8, fontSize:13, outline:"none", resize:"none", fontFamily:"inherit" }} />
           <select value={responsavelId} onChange={function(e){setResponsavelId(e.target.value);}}
-            style={{ background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", padding:"9px 12px", borderRadius:8, fontSize:13 }}>
+            style={{ background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"9px 12px", borderRadius:8, fontSize:13 }}>
             {usuarios.map(function(u){ return <option key={u.id} value={u.id}>{u.nome}</option>; })}
           </select>
           <div style={{ display:"flex", gap:8 }}>
             <input type="date" value={prazo} onChange={function(e){setPrazo(e.target.value);}}
-              style={{ flex:1, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", padding:"9px 12px", borderRadius:8, fontSize:13 }} />
+              style={{ flex:1, background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"9px 12px", borderRadius:8, fontSize:13 }} />
             <select value={prioridade} onChange={function(e){setPrioridade(e.target.value);}}
-              style={{ flex:1, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", padding:"9px 12px", borderRadius:8, fontSize:13 }}>
+              style={{ flex:1, background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"9px 12px", borderRadius:8, fontSize:13 }}>
               <option value="baixa">Baixa</option>
               <option value="media">Média</option>
               <option value="alta">Alta</option>
@@ -3666,10 +3666,10 @@ function ModalNovaTarefa({ usuarios, onSave, onClose }) {
           </div>
         </div>
         <div style={{ display:"flex", gap:8, marginTop:16 }}>
-          <button onClick={onClose} style={{ flex:1, background:"#121A24", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", fontWeight:600, padding:"10px", borderRadius:9, cursor:"pointer" }}>Cancelar</button>
+          <button onClick={onClose} style={{ flex:1, background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"10px", borderRadius:9, cursor:"pointer" }}>Cancelar</button>
           <button onClick={function(){ if(titulo.trim()) onSave({titulo,descricao,responsavelId,prazo,prioridade}); }}
             disabled={!titulo.trim()}
-            style={{ flex:2, background:titulo.trim()?"#1976FF":"#223048", border:"none", color:titulo.trim()?"#fff":"#67759B", fontWeight:700, padding:"10px", borderRadius:9, cursor:titulo.trim()?"pointer":"not-allowed" }}>
+            style={{ flex:2, background:titulo.trim()?"#1976FF":"var(--surface-3)", border:"none", color:titulo.trim()?"#fff":"var(--text-3)", fontWeight:700, padding:"10px", borderRadius:9, cursor:titulo.trim()?"pointer":"not-allowed" }}>
             Criar Tarefa
           </button>
         </div>
@@ -3724,26 +3724,26 @@ function PainelConfiguracoesGlobal(props) {
 
   return (
     React.createElement("div", {style:{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",backdropFilter:"blur(4px)",zIndex:800,display:"flex",alignItems:"flex-start",justifyContent:"flex-end",padding:"56px 8px 8px"}},
-      React.createElement("div", {style:{background:"#182230",borderRadius:14,width:700,maxHeight:"calc(100vh - 68px)",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,.22)",overflow:"hidden"}},
+      React.createElement("div", {style:{background:"var(--surface)",borderRadius:14,width:700,maxHeight:"calc(100vh - 68px)",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,.22)",overflow:"hidden"}},
         React.createElement("div", {style:{background:"#1976FF",padding:"13px 18px",display:"flex",justifyContent:"space-between",alignItems:"center"}},
-          React.createElement("div", {style:{color:"#fff",fontWeight:700,fontSize:15}}, "Configuracoes do Sistema"),
-          React.createElement("button", {onClick:onClose, style:{background:"transparent",border:"none",color:"#67759B",fontSize:20,cursor:"pointer",lineHeight:1}}, "x")
+          React.createElement("div", {style:{color:"var(--text-strong)",fontWeight:700,fontSize:15}}, "Configuracoes do Sistema"),
+          React.createElement("button", {onClick:onClose, style:{background:"transparent",border:"none",color:"var(--text-3)",fontSize:20,cursor:"pointer",lineHeight:1}}, "x")
         ),
-        React.createElement("div", {style:{display:"flex",borderBottom:"2px solid rgba(255,255,255,.10)"}},
+        React.createElement("div", {style:{display:"flex",borderBottom:"2px solid var(--border)"}},
           ABAS.map(function(t){
             var a=aba===t.k;
-            return React.createElement("button",{key:t.k,onClick:function(){setAba(t.k);},style:{flex:1,padding:"10px",border:"none",borderBottom:a?"2px solid #4DB3FF":"2px solid transparent",background:"transparent",color:a?"#FFFFFF":"#67759B",fontWeight:a?700:400,fontSize:12,cursor:"pointer",fontFamily:"inherit",marginBottom:-2}}, t.l);
+            return React.createElement("button",{key:t.k,onClick:function(){setAba(t.k);},style:{flex:1,padding:"10px",border:"none",borderBottom:a?"2px solid #4DB3FF":"2px solid transparent",background:"transparent",color:a?"var(--text-strong)":"var(--text-3)",fontWeight:a?700:400,fontSize:12,cursor:"pointer",fontFamily:"inherit",marginBottom:-2}}, t.l);
           })
         ),
         React.createElement("div", {style:{flex:1,overflowY:"auto",padding:"16px 18px"}},
           aba==="config" ? React.createElement(ImpostosCompacto, {impostos:impostos,setImpostos:setImpostos,custosFixos:custosFixos,setCustosFixos:setCustosFixos,faturamentoMes:faturamentoMes,irpjCsllConfig:irpjCsllConfig,setIrpjCsllConfig:setIrpjCsllConfig}) :
           aba==="aparencia" ? React.createElement("div", {style:{display:"flex",gap:10}},
             [{v:false,l:"Claro"},{v:true,l:"Escuro"}].map(function(t){
-              return React.createElement("button",{key:String(t.v),onClick:function(){setDarkMode(t.v);localStorage.setItem("darkMode",t.v?"1":"0");},style:{flex:1,padding:14,borderRadius:10,border:"2px solid "+(darkMode===t.v?"#4DB3FF":"rgba(255,255,255,.12)"),background:darkMode===t.v?"#1976FF":"#182230",color:darkMode===t.v?"#fff":"#A9B4C5",fontWeight:700,fontSize:14,cursor:"pointer"}}, t.v?"Escuro":"Claro");
+              return React.createElement("button",{key:String(t.v),onClick:function(){setDarkMode(t.v);localStorage.setItem("darkMode",t.v?"1":"0");},style:{flex:1,padding:14,borderRadius:10,border:"2px solid "+(darkMode===t.v?"#4DB3FF":"var(--border)"),background:darkMode===t.v?"#1976FF":"var(--surface)",color:darkMode===t.v?"#fff":"var(--text-2)",fontWeight:700,fontSize:14,cursor:"pointer"}}, t.v?"Escuro":"Claro");
             })
           ) :
           aba==="backup" ? React.createElement("div", {style:{display:"flex",flexDirection:"column",gap:14}},
-            React.createElement("div", {style:{background:"#121A24",border:"1px solid rgba(255,255,255,.12)",borderRadius:12,padding:16}},
+            React.createElement("div", {style:{background:"var(--bg-2)",border:"1px solid var(--border)",borderRadius:12,padding:16}},
               React.createElement("div", {style:{fontWeight:700,fontSize:14,marginBottom:12}}, "Exportar Backup"),
               React.createElement("button", {
                 onClick:function(){
@@ -3756,9 +3756,9 @@ function PainelConfiguracoesGlobal(props) {
                 style:{background:"#1976FF",border:"none",color:"#fff",fontWeight:700,padding:"10px 20px",borderRadius:9,cursor:"pointer",fontSize:13}
               }, "Exportar Backup")
             ),
-            React.createElement("div", {style:{background:"#121A24",border:"1px solid rgba(255,255,255,.12)",borderRadius:12,padding:16}},
+            React.createElement("div", {style:{background:"var(--bg-2)",border:"1px solid var(--border)",borderRadius:12,padding:16}},
               React.createElement("div", {style:{fontWeight:700,fontSize:14,marginBottom:4}}, "Restaurar Backup"),
-              React.createElement("label", {style:{background:"#182230",border:"2px dashed rgba(255,255,255,.12)",borderRadius:9,padding:14,display:"block",textAlign:"center",cursor:"pointer",fontSize:13,color:"#A9B4C5"}},
+              React.createElement("label", {style:{background:"var(--surface)",border:"2px dashed var(--border)",borderRadius:9,padding:14,display:"block",textAlign:"center",cursor:"pointer",fontSize:13,color:"var(--text-2)"}},
                 "Clique para selecionar arquivo de backup (.json)",
                 React.createElement("input", {type:"file",accept:".json",style:{display:"none"},onChange:function(e){
                   var file=e.target.files[0];if(!file)return;
@@ -3773,12 +3773,12 @@ function PainelConfiguracoesGlobal(props) {
           React.createElement("div", null,
             usuarios.map(function(u){
               var isMe=u.id===currentUser.id;
-              return React.createElement("div",{key:u.id,style:{background:"#121A24",border:"1px solid rgba(255,255,255,.12)",borderRadius:10,padding:"10px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:10}},
+              return React.createElement("div",{key:u.id,style:{background:"var(--bg-2)",border:"1px solid var(--border)",borderRadius:10,padding:"10px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:10}},
                 React.createElement("div",{style:{width:36,height:36,borderRadius:9,background:"#1976FF",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:"#FFC107",flexShrink:0}}, u.nome&&u.nome.charAt(0).toUpperCase()),
                 React.createElement("div",{style:{flex:1,minWidth:0}},
-                  React.createElement("div",{style:{fontWeight:700,fontSize:13,color:"#FFFFFF"}}, u.nome, isMe&&React.createElement("span",{style:{fontSize:10,color:"#00F0FF",background:"rgba(59,140,255,.14)",padding:"1px 5px",borderRadius:4,marginLeft:6}},"voce")),
-                  React.createElement("div",{style:{fontSize:11,color:"#A9B4C5"}}, "@"+u.usuario+" - "+(u.admin?"Admin":"Usuario")+" - ",React.createElement("span",{style:{color:u.ativo?"#00C853":"#FF5252",fontWeight:600}},u.ativo?"Ativo":"Inativo")),
-                  u.email&&React.createElement("div",{style:{fontSize:10,color:"#67759B",marginTop:1}}, u.email)
+                  React.createElement("div",{style:{fontWeight:700,fontSize:13,color:"var(--text-strong)"}}, u.nome, isMe&&React.createElement("span",{style:{fontSize:10,color:"#00F0FF",background:"rgba(59,140,255,.14)",padding:"1px 5px",borderRadius:4,marginLeft:6}},"voce")),
+                  React.createElement("div",{style:{fontSize:11,color:"var(--text-2)"}}, "@"+u.usuario+" - "+(u.admin?"Admin":"Usuario")+" - ",React.createElement("span",{style:{color:u.ativo?"#00C853":"#FF5252",fontWeight:600}},u.ativo?"Ativo":"Inativo")),
+                  u.email&&React.createElement("div",{style:{fontSize:10,color:"var(--text-3)",marginTop:1}}, u.email)
                 ),
                 React.createElement("div",{style:{display:"flex",gap:6}},
                   React.createElement("button",{onClick:function(){setEditingUser(u);setShowModalUser(true);},style:{background:"rgba(59,140,255,.14)",border:"1px solid rgba(77,179,255,.35)",color:"#3B8CFF",padding:"4px 10px",borderRadius:7,cursor:"pointer",fontSize:11,fontWeight:600}},"Editar"),
@@ -4014,7 +4014,12 @@ export default function App() {
   const [lastUpdate, setLastUpdate] = useState(() => localStorage.getItem("ml_last_update"));
   const [minutesTick, setMinutesTick] = useState(0);
   const [showMLModal, setShowMLModal] = useState(false);
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "1");
+  // Tema: escuro por padrão (preserva o visual atual); só fica claro se o usuário escolher.
+  // "1"/ausente = escuro; "0" = claro. Aplica data-theme na raiz p/ os tokens CSS trocarem.
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") !== "0");
+  useEffect(function(){
+    try { document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light"); } catch(e) {}
+  }, [darkMode]);
   const [metaMensal, setMetaMensal] = useState(() => parseFloat(localStorage.getItem("metaMensal") || "0"));
   const [impostos, setImpostos] = useState(() => {
     try { var v = JSON.parse(localStorage.getItem("impostos_config") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
@@ -5116,64 +5121,64 @@ export default function App() {
   if (!currentUser) return <LoginScreen onLogin={(user) => { setCurrentUser(user); }} />;
 
   return (
-    <div className={darkMode?"dark":""} style={{ minHeight:"100vh", background:"transparent", color:"#FFFFFF", fontFamily:"'Inter',system-ui,sans-serif", transition:"background .2s,color .2s", display:"flex", alignItems:"flex-start" }}>
+    <div className={darkMode?"dark":""} style={{ minHeight:"100vh", background:"transparent", color:"var(--text-strong)", fontFamily:"'Inter',system-ui,sans-serif", transition:"background .2s,color .2s", display:"flex", alignItems:"flex-start" }}>
       <style>{`
         *{box-sizing:border-box;margin:0;padding:0}
         body,#root{font-family:'Inter',system-ui,sans-serif}
-        input:not([type=checkbox]):not([type=radio]),textarea,select{background:#121A24;color:#FFFFFF;border:1px solid rgba(255,255,255,.12)}
-        input::placeholder,textarea::placeholder{color:#67759B}
+        input:not([type=checkbox]):not([type=radio]),textarea,select{background:var(--bg-2);color:var(--text-strong);border:1px solid var(--border)}
+        input::placeholder,textarea::placeholder{color:var(--text-3)}
         ::-webkit-scrollbar{width:4px;height:4px}
         ::-webkit-scrollbar-track{background:transparent}
-        ::-webkit-scrollbar-thumb{background:#4A5878;border-radius:99px}
-        ::-webkit-scrollbar-thumb:hover{background:#67759B}
+        ::-webkit-scrollbar-thumb{background:var(--text-4);border-radius:99px}
+        ::-webkit-scrollbar-thumb:hover{background:var(--text-3)}
         .app-header::-webkit-scrollbar{display:none}
         /* Barra de rolagem horizontal visível e "pegável" nas tabelas largas */
         .scroll-x{overflow-x:auto;overflow-y:visible}
         .scroll-x::-webkit-scrollbar{height:12px}
         .scroll-x::-webkit-scrollbar-track{background:rgba(255,255,255,.05);border-radius:8px}
-        .scroll-x::-webkit-scrollbar-thumb{background:#4A5878;border-radius:8px;border:2px solid transparent;background-clip:padding-box}
+        .scroll-x::-webkit-scrollbar-thumb{background:var(--text-4);border-radius:8px;border:2px solid transparent;background-clip:padding-box}
         .scroll-x::-webkit-scrollbar-thumb:hover{background:#7C8AAE}
         input:focus,textarea:focus,select:focus{outline:2px solid #4DB3FF;outline-offset:1px}
 
         /* ── TABELAS ── */
         table{border-collapse:collapse;width:100%}
-        th{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#67759B;text-transform:uppercase;letter-spacing:0.12em;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.10);text-align:left;font-weight:700;background:#121A24;white-space:nowrap}
-        td{padding:10px 14px;font-size:13px;border-bottom:1px solid rgba(255,255,255,.10);vertical-align:middle;color:#A9B4C5}
+        th{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.12em;padding:10px 14px;border-bottom:1px solid var(--border);text-align:left;font-weight:700;background:var(--bg-2);white-space:nowrap}
+        td{padding:10px 14px;font-size:13px;border-bottom:1px solid var(--border);vertical-align:middle;color:var(--text-2)}
         tr:last-child td{border-bottom:none}
-        tbody tr:hover td{background:#121A24;transition:background .1s}
-        .dark th{background:#121A24!important;border-bottom-color:#A9B4C5!important;color:#A9B4C5!important}
-        .dark td{border-bottom-color:#121A24!important;color:#4A5878!important}
-        .dark tbody tr:hover td{background:#121A24!important}
+        tbody tr:hover td{background:var(--bg-2);transition:background .1s}
+        .dark th{background:var(--bg-2)!important;border-bottom-color:var(--text-2)!important;color:var(--text-2)!important}
+        .dark td{border-bottom-color:var(--bg-2)!important;color:var(--text-4)!important}
+        .dark tbody tr:hover td{background:var(--bg-2)!important}
 
         /* ── FILTRO PERIOD ── */
-        .filter-btn{background:#182230;border:1px solid rgba(255,255,255,.12);color:#A9B4C5;padding:5px 14px;cursor:pointer;font-family:inherit;font-size:12px;border-radius:20px;transition:all .15s;font-weight:500}
+        .filter-btn{background:var(--surface);border:1px solid var(--border);color:var(--text-2);padding:5px 14px;cursor:pointer;font-family:inherit;font-size:12px;border-radius:20px;transition:all .15s;font-weight:500}
         .filter-btn.active{background:#1976FF;border-color:#4DB3FF;color:#fff;font-weight:600}
-        .filter-btn:hover:not(.active){background:#121A24;border-color:#4A5878}
-        .dark .filter-btn{background:#121A24;border-color:#A9B4C5;color:#67759B}
-        .dark .filter-btn.active{background:#223048;color:#FFFFFF}
+        .filter-btn:hover:not(.active){background:var(--bg-2);border-color:var(--text-4)}
+        .dark .filter-btn{background:var(--bg-2);border-color:var(--text-2);color:var(--text-3)}
+        .dark .filter-btn.active{background:var(--surface-3);color:var(--text-strong)}
 
         /* ── SUB-ABAS (Financeiro, etc) ── */
-        .tab-btn{background:transparent;border:none;border-bottom:2px solid transparent;color:#67759B;padding:14px 18px;cursor:pointer;font-family:inherit;font-size:13px;transition:all .15s;font-weight:500;border-radius:0}
-        .tab-btn.active{color:#FFFFFF;border-bottom-color:#FFFFFF;font-weight:600}
-        .tab-btn:hover:not(.active){color:#A9B4C5;background:#121A24}
-        .dark .tab-btn{color:#A9B4C5}
-        .dark .tab-btn.active{color:#A9B4C5;border-bottom-color:#A9B4C5}
+        .tab-btn{background:transparent;border:none;border-bottom:2px solid transparent;color:var(--text-3);padding:14px 18px;cursor:pointer;font-family:inherit;font-size:13px;transition:all .15s;font-weight:500;border-radius:0}
+        .tab-btn.active{color:var(--text-strong);border-bottom-color:var(--text-strong);font-weight:600}
+        .tab-btn:hover:not(.active){color:var(--text-2);background:var(--bg-2)}
+        .dark .tab-btn{color:var(--text-2)}
+        .dark .tab-btn.active{color:var(--text-2);border-bottom-color:var(--text-2)}
 
         /* ── INPUTS ── */
-        .search-input{width:100%;background:#182230;border:1px solid rgba(255,255,255,.12);color:#FFFFFF;padding:8px 14px 8px 38px;border-radius:8px;font-family:inherit;font-size:13px;outline:none;transition:border .15s}
+        .search-input{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text-strong);padding:8px 14px 8px 38px;border-radius:8px;font-family:inherit;font-size:13px;outline:none;transition:border .15s}
         .search-input:focus{border-color:#4DB3FF;box-shadow:0 0 0 3px rgba(15,23,42,.06)}
-        .dark input{background:#121A24!important;border-color:#A9B4C5!important;color:#A9B4C5!important}
-        .dark select{background:#121A24;border-color:#A9B4C5;color:#A9B4C5}
+        .dark input{background:var(--bg-2)!important;border-color:var(--text-2)!important;color:var(--text-2)!important}
+        .dark select{background:var(--bg-2);border-color:var(--text-2);color:var(--text-2)}
 
         /* ── MISC ── */
-        .copy-btn{background:transparent;border:none;color:#4A5878;cursor:pointer;padding:2px 5px;border-radius:4px;font-size:11px;transition:all .15s}
-        .copy-btn:hover{background:#223048;color:#A9B4C5}
+        .copy-btn{background:transparent;border:none;color:var(--text-4);cursor:pointer;padding:2px 5px;border-radius:4px;font-size:11px;transition:all .15s}
+        .copy-btn:hover{background:var(--surface-3);color:var(--text-2)}
         .title-link{color:#3B8CFF;text-decoration:none;font-weight:500;transition:color .15s}
         .title-link:hover{color:#3B8CFF;text-decoration:underline}
-        select{background:#182230;border:1px solid rgba(255,255,255,.12);color:#A9B4C5;padding:7px 12px;border-radius:8px;font-family:inherit;font-size:13px;cursor:pointer;font-weight:400}
+        select{background:var(--surface);border:1px solid var(--border);color:var(--text-2);padding:7px 12px;border-radius:8px;font-family:inherit;font-size:13px;cursor:pointer;font-weight:400}
 
         /* ── CARDS ── */
-        .sl-card{background:#182230;border:1px solid rgba(255,255,255,.12);border-radius:12px;box-shadow:0 1px 3px rgba(15,23,42,.04)}
+        .sl-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 3px rgba(15,23,42,.04)}
 
         /* ── ANIMAÇÕES ── */
         @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
@@ -5183,14 +5188,14 @@ export default function App() {
 
       {/* ── BARRA LATERAL ESQUERDA — logo + abas (vertical) + status + botões (Config por último) ── */}
       <aside style={{ width:214, flexShrink:0, position:"sticky", top:0, height:"100vh", overflowY:"auto",
-        background:darkMode?"#0E1622":"#121A24", borderRight:"1px solid rgba(255,255,255,.08)",
+        background:darkMode?"var(--bg)":"var(--bg-2)", borderRight:"1px solid var(--border-soft)",
         display:"flex", flexDirection:"column", padding:"14px 12px", zIndex:100 }}>
         {/* Logo */}
-        <div style={{ display:"flex", alignItems:"center", gap:9, padding:"2px 6px 14px", borderBottom:"1px solid rgba(255,255,255,.08)", marginBottom:10 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:9, padding:"2px 6px 14px", borderBottom:"1px solid var(--border-soft)", marginBottom:10 }}>
           <div style={{ width:34, height:34, borderRadius:"50%", background:"rgba(77,179,255,.12)", border:"1px solid rgba(77,179,255,.45)", boxShadow:"0 0 14px rgba(77,179,255,.35)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:15, color:"#4DB3FF", letterSpacing:-0.5, flexShrink:0 }}>F</div>
           <div>
-            <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:15, color:"#FFFFFF", letterSpacing:-0.4, lineHeight:1.2 }}>Flow</div>
-            <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:8, color:"#67759B", letterSpacing:2, textTransform:"uppercase", lineHeight:1, marginTop:2 }}>Marketplaces</div>
+            <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:15, color:"var(--text-strong)", letterSpacing:-0.4, lineHeight:1.2 }}>Flow</div>
+            <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:8, color:"var(--text-3)", letterSpacing:2, textTransform:"uppercase", lineHeight:1, marginTop:2 }}>Marketplaces</div>
           </div>
         </div>
         {/* Abas de navegação — verticais */}
@@ -5238,15 +5243,15 @@ export default function App() {
                       padding:"9px 12px", borderRadius:9, border:"none", cursor:"pointer", fontFamily:"inherit",
                       fontSize:13, textAlign:"left",
                       background: isActive ? "rgba(25,118,255,.16)" : "transparent",
-                      color: isActive ? "#FFFFFF" : "#8593AE",
+                      color: isActive ? "var(--text-strong)" : "var(--text-3)",
                       fontWeight: isActive ? 700 : 500,
                       borderLeft: "3px solid "+(isActive ? "#4DB3FF" : "transparent"),
                       transition:"background .15s,color .15s" }}>
                     <span style={{ whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{t.label}</span>
                     {t.badge != null && (
                       <span style={{ fontSize:10, fontWeight:700, padding:"1px 7px", borderRadius:10, flexShrink:0,
-                        background: isActive ? "#1976FF" : "#223048",
-                        color: isActive ? "#fff" : "#67759B", lineHeight:1.6 }}>
+                        background: isActive ? "#1976FF" : "var(--surface-3)",
+                        color: isActive ? "#fff" : "var(--text-3)", lineHeight:1.6 }}>
                         {t.badge}
                       </span>
                     )}
@@ -5255,10 +5260,10 @@ export default function App() {
                     <button title={"Abrir " + t.label + " em nova aba"}
                       onClick={function(){ window.open(window.location.pathname + "?tab=" + t.key, "_blank"); }}
                       style={{ flexShrink:0, width:24, height:24, display:"flex", alignItems:"center", justifyContent:"center",
-                        background:"transparent", border:"none", borderRadius:7, cursor:"pointer", color:"#4A5878", fontSize:12,
+                        background:"transparent", border:"none", borderRadius:7, cursor:"pointer", color:"var(--text-4)", fontSize:12,
                         transition:"background .15s,color .15s" }}
-                      onMouseEnter={function(e){ e.currentTarget.style.background="#223048"; e.currentTarget.style.color="#4DB3FF"; }}
-                      onMouseLeave={function(e){ e.currentTarget.style.background="transparent"; e.currentTarget.style.color="#4A5878"; }}>
+                      onMouseEnter={function(e){ e.currentTarget.style.background="var(--surface-3)"; e.currentTarget.style.color="#4DB3FF"; }}
+                      onMouseLeave={function(e){ e.currentTarget.style.background="transparent"; e.currentTarget.style.color="var(--text-4)"; }}>
                       ↗
                     </button>
                   )}
@@ -5270,7 +5275,7 @@ export default function App() {
               if (!itens.length) return null;
               return (
                 <div key={g.titulo} style={{ marginBottom:4 }}>
-                  <div style={{ fontSize:9, fontWeight:700, letterSpacing:1.4, textTransform:"uppercase", color:"#4A5878", padding:"12px 12px 5px" }}>{g.titulo}</div>
+                  <div style={{ fontSize:9, fontWeight:700, letterSpacing:1.4, textTransform:"uppercase", color:"var(--text-4)", padding:"12px 12px 5px" }}>{g.titulo}</div>
                   {itens.map(renderItem)}
                 </div>
               );
@@ -5282,13 +5287,13 @@ export default function App() {
         <div style={{ flex:1, minHeight:14 }} />
 
         {/* Rodapé: status + botões (Config por último) */}
-        <div style={{ borderTop:"1px solid rgba(255,255,255,.08)", paddingTop:10, display:"flex", flexDirection:"column", gap:8 }}>
+        <div style={{ borderTop:"1px solid var(--border-soft)", paddingTop:10, display:"flex", flexDirection:"column", gap:8 }}>
           <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
-            {!token && <span style={{ background: "#223048", border: "1px solid rgba(255,255,255,.12)", color: "#67759B", fontSize: 10, padding: "3px 9px", borderRadius: 20, fontWeight: 600 }}>● Não conectado</span>}
+            {!token && <span style={{ background: "var(--surface-3)", border: "1px solid var(--border)", color: "var(--text-3)", fontSize: 10, padding: "3px 9px", borderRadius: 20, fontWeight: 600 }}>● Não conectado</span>}
             {token && <span style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", color: "#00C853", fontSize: 10, padding: "3px 9px", borderRadius: 20, fontWeight: 700, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"100%" }}>● {user?.nickname}</span>}
             <SinoNotificacoes notificacoes={notificacoes} setNotificacoes={setNotificacoes} darkMode={darkMode} />
           </div>
-          {loading && <span style={{ color: "#67759B", fontSize: 11 }}>⏳ {loadingMsg}</span>}
+          {loading && <span style={{ color: "var(--text-3)", fontSize: 11 }}>⏳ {loadingMsg}</span>}
           {loadError && <span style={{ color: "#FF5252", fontSize: 11 }}>⚠ {loadError}</span>}
           {token && lastUpdate && (() => {
             const mins = Math.round((Date.now() - parseInt(lastUpdate)) / 60000);
@@ -5296,15 +5301,15 @@ export default function App() {
             const isStale = mins >= 300;
             return (
               <div style={{ fontSize:10, lineHeight:1.4 }}>
-                <span style={{ color: isStale ? "#FF5252" : "#67759B" }}>{isStale ? "⚠️ " : "✓ "}{horas > 0 ? `${horas}h ${mins%60}min` : `${mins}min`} atrás</span>
-                <span style={{ color:"#4A5878" }}> · {isStale ? "token expirando" : "atualizado"}</span>
+                <span style={{ color: isStale ? "#FF5252" : "var(--text-3)" }}>{isStale ? "⚠️ " : "✓ "}{horas > 0 ? `${horas}h ${mins%60}min` : `${mins}min`} atrás</span>
+                <span style={{ color:"var(--text-4)" }}> · {isStale ? "token expirando" : "atualizado"}</span>
               </div>
             );
           })()}
           {token && (
             <button onClick={clicarAtualizarManual} disabled={refreshingManual}
               title="Busca pedidos novos e atualiza os dados sem recarregar tudo"
-              style={{ background: refreshingManual?"#223048":"#182230", border: "1px solid rgba(255,255,255,.12)", color: "#A9B4C5", fontWeight: 600, padding: "9px", borderRadius: 8, cursor: refreshingManual?"wait":"pointer", fontSize: 12, width:"100%" }}>
+              style={{ background: refreshingManual?"var(--surface-3)":"var(--surface)", border: "1px solid var(--border)", color: "var(--text-2)", fontWeight: 600, padding: "9px", borderRadius: 8, cursor: refreshingManual?"wait":"pointer", fontSize: 12, width:"100%" }}>
               {refreshingManual ? "⏳ Atualizando..." : refreshManualMsg ? refreshManualMsg : "🔄 Atualizar"}
             </button>
           )}
@@ -5312,13 +5317,13 @@ export default function App() {
             style={{ background: "#1976FF", border: "none", color: "#fff", fontWeight: 700, padding: "9px", borderRadius: 8, cursor: "pointer", fontSize: 12, width:"100%" }}>
             {token ? "Reconectar" : "Conectar ML"}
           </button>
-          <div style={{ display:"flex", alignItems:"center", gap:6, background:"#182230", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, padding:"6px 8px" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:6, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, padding:"6px 8px" }}>
             <div style={{ width:26, height:26, borderRadius:8, background:"#1976FF", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:800, color:"#FFC107", flexShrink:0 }}>
               {currentUser?.nome?.charAt(0).toUpperCase()}
             </div>
             <div style={{ fontSize:12, lineHeight:1.3, minWidth:0 }}>
-              <div style={{ fontWeight:600, color:"#FFFFFF", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{currentUser?.nome}</div>
-              <div style={{ color:"#67759B", fontSize:10 }}>{currentUser?.admin?"Admin":"Usuário"}</div>
+              <div style={{ fontWeight:600, color:"var(--text-strong)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{currentUser?.nome}</div>
+              <div style={{ color:"var(--text-3)", fontSize:10 }}>{currentUser?.admin?"Admin":"Usuário"}</div>
             </div>
           </div>
           <button onClick={() => { fetch("/api/auth/app-logout", { method:"POST" }).catch(()=>{}); clearSession(); clearSavedTokens(); setCurrentUser(null); setToken(null); setUser(null); }}
@@ -5327,7 +5332,7 @@ export default function App() {
           </button>
           {/* Config — SEMPRE por último */}
           <button onClick={function(){ setShowConfigPanel(true); setConfigPanelTab("aparencia"); }}
-            style={{ background:"#182230", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", fontWeight:600, padding:"9px", borderRadius:8, cursor:"pointer", fontSize:12, width:"100%" }}>
+            style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"9px", borderRadius:8, cursor:"pointer", fontSize:12, width:"100%" }}>
             ⚙️ Configurações
           </button>
         </div>
@@ -5342,7 +5347,7 @@ export default function App() {
         {tab === "listings" && currentUser?.permissoes?.includes("listings") && (
           <>
             {/* Sub-abas de Anúncios */}
-            <div style={{ display:"flex", gap:2, borderBottom:"2px solid rgba(255,255,255,.10)", marginBottom:10 }}>
+            <div style={{ display:"flex", gap:2, borderBottom:"2px solid var(--border)", marginBottom:10 }}>
               {[
                 { key:"ml",    label:"🟡 Anúncios Mercado Livre", badge: enriched.length },
                 { key:"outros",label:"➕ Outros Marketplaces",    badge: null },
@@ -5353,11 +5358,11 @@ export default function App() {
                     onClick={function(){ setAbaAnuncio(t.key); }}
                     style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 20px", border:"none",
                       borderBottom: active?"2px solid #4DB3FF":"2px solid transparent", marginBottom:-2,
-                      background:"transparent", color:active?"#FFFFFF":"#67759B",
+                      background:"transparent", color:active?"var(--text-strong)":"var(--text-3)",
                       fontWeight:active?700:400, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>
                     {t.label}
                     {t.badge != null && (
-                      <span style={{ background:active?"#1976FF":"#223048", color:active?"#fff":"#A9B4C5",
+                      <span style={{ background:active?"#1976FF":"var(--surface-3)", color:active?"#fff":"var(--text-2)",
                         fontSize:11, fontWeight:700, padding:"1px 7px", borderRadius:20 }}>{t.badge}</span>
                     )}
                   </button>
@@ -5366,9 +5371,9 @@ export default function App() {
             </div>
             {/* Conteúdo — só ML por enquanto */}
             {(abaAnuncio) === "outros" ? (
-              <div style={{ textAlign:"center", padding:"60px 20px", color:"#67759B" }}>
+              <div style={{ textAlign:"center", padding:"60px 20px", color:"var(--text-3)" }}>
                 <div style={{ fontSize:48, marginBottom:12 }}>🔌</div>
-                <div style={{ fontWeight:700, fontSize:16, color:"#FFFFFF", marginBottom:8 }}>Em breve: outros marketplaces</div>
+                <div style={{ fontWeight:700, fontSize:16, color:"var(--text-strong)", marginBottom:8 }}>Em breve: outros marketplaces</div>
                 <div style={{ fontSize:13 }}>Integração com Shopee, Shein, Amazon e outros em desenvolvimento</div>
               </div>
             ) : (
@@ -5378,15 +5383,15 @@ export default function App() {
                   <FiltroGrupo titulo="Status">
                     {[{key:"all",label:"Todos"},{key:"active",label:"● Ativos"},{key:"paused",label:"○ Pausados"}].map(function(f){
                       return <FiltroBotao key={f.key} label={f.label} active={statusFilter===f.key}
-                        cor={f.key==="active"?"#00C853":f.key==="paused"?"#67759B":"#FFFFFF"}
-                        bg={f.key==="active"?"rgba(0,200,83,.12)":f.key==="paused"?"#223048":"#223048"}
+                        cor={f.key==="active"?"#00C853":f.key==="paused"?"var(--text-3)":"var(--text-strong)"}
+                        bg={f.key==="active"?"rgba(0,200,83,.12)":f.key==="paused"?"var(--surface-3)":"var(--surface-3)"}
                         onClick={function(){setStatusFilter(f.key);}} />;
                     })}
                   </FiltroGrupo>
                   <FiltroGrupo titulo="Situação">
-                    {[{k:"all",l:"Todos"},{k:"sem_custo",l:"⚠️ Sem custo",cor:"#FF5252",bg:"rgba(255,82,82,.12)"},{k:"sem_atacado",l:"🏷 Sem preço atacado",cor:"#7c3aed",bg:"rgba(139,92,246,.14)"},{k:"com_promo",l:"🔥 Com promoção",cor:"#7c3aed",bg:"rgba(139,92,246,.14)"},{k:"sem_promo",l:"○ Sem promoção",cor:"#A9B4C5",bg:"#223048"},{k:"frete_alto",l:"🚚 Frete acima do config.",cor:"#FFC107",bg:"rgba(255,193,7,.10)"}].map(function(f){
+                    {[{k:"all",l:"Todos"},{k:"sem_custo",l:"⚠️ Sem custo",cor:"#FF5252",bg:"rgba(255,82,82,.12)"},{k:"sem_atacado",l:"🏷 Sem preço atacado",cor:"#7c3aed",bg:"rgba(139,92,246,.14)"},{k:"com_promo",l:"🔥 Com promoção",cor:"#7c3aed",bg:"rgba(139,92,246,.14)"},{k:"sem_promo",l:"○ Sem promoção",cor:"var(--text-2)",bg:"var(--surface-3)"},{k:"frete_alto",l:"🚚 Frete acima do config.",cor:"#FFC107",bg:"rgba(255,193,7,.10)"}].map(function(f){
                       return <FiltroBotao key={f.k} label={f.l} active={filterListingExtra===f.k}
-                        cor={f.cor||"#FFFFFF"} bg={f.bg||"#223048"}
+                        cor={f.cor||"var(--text-strong)"} bg={f.bg||"var(--surface-3)"}
                         onClick={function(){setFilterListingExtra(f.k);setPaginaAnuncios(1);}} />;
                     })}
                   </FiltroGrupo>
@@ -5398,16 +5403,16 @@ export default function App() {
                       {k:"sales_desc", l:"🔥 Mais vendidos"},
                       {k:"sales_asc",  l:"📉 Menos vendidos"},
                     ].map(function(o){
-                      return <FiltroBotao key={o.k} label={o.l} active={sortBy===o.k} cor="#FFFFFF" bg="#223048" onClick={function(){setSortBy(o.k);}} />;
+                      return <FiltroBotao key={o.k} label={o.l} active={sortBy===o.k} cor="var(--text-strong)" bg="var(--surface-3)" onClick={function(){setSortBy(o.k);}} />;
                     })}
                   </FiltroGrupo>
-                  <div style={{ fontSize:11, color:"#67759B", marginTop:"auto" }}>{sorted.length} anúncio(s)</div>
+                  <div style={{ fontSize:11, color:"var(--text-3)", marginTop:"auto" }}>{sorted.length} anúncio(s)</div>
                 </>
               }
               busca={
                 <div style={{ display:"flex", gap:6 }}>
                   <div style={{ position:"relative", flex:1 }}>
-                    <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#67759B", fontSize:13 }}>🔍</span>
+                    <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"var(--text-3)", fontSize:13 }}>🔍</span>
                     <input className="search-input" value={searchListings} onChange={function(e){setSearchListings(e.target.value);}}
                       placeholder={searchType==="title"?"Buscar por título...":searchType==="sku"?"Buscar por SKU exato...":searchType==="mlb"?"Buscar por MLB...":"Buscar por título, MLB ou SKU..."} style={{ paddingLeft:34 }} />
                   </div>
@@ -5420,7 +5425,7 @@ export default function App() {
                 </div>
               }>
 
-            <div className="scroll-x" style={{ background: "#182230", border: "1px solid rgba(255,255,255,.12)", borderRadius: 12, overflow: "auto", boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
+            <div className="scroll-x" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, overflow: "auto", boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
               <table>
                 <thead>
                   <tr>
@@ -5444,7 +5449,7 @@ export default function App() {
                 </thead>
                 <tbody>
                   {sorted.length === 0 ? (
-                    <tr><td colSpan={15} style={{ textAlign: "center", color: "#67759B", padding: 40 }}>Nenhum anúncio encontrado</td></tr>
+                    <tr><td colSpan={15} style={{ textAlign: "center", color: "var(--text-3)", padding: 40 }}>Nenhum anúncio encontrado</td></tr>
                   ) : sorted.slice((paginaAnuncios-1)*POR_PAG_ANUNCIOS, paginaAnuncios*POR_PAG_ANUNCIOS).map(l => {
                     const frete = getFreteDisplay(l);
                     const typeInfo = getListingTypeLabel(l.listing_type_id);
@@ -5453,9 +5458,9 @@ export default function App() {
                         <td style={{ width: 56, padding: "8px 8px 8px 14px" }}>
                           <a href={l.permalink ?? `https://www.mercadolivre.com.br/p/${l.id}`} target="_blank" rel="noreferrer">
                             {l.pictures?.[0]?.url ? (
-                              <img src={l.pictures[0].url} alt="" style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 8, border: "1px solid rgba(255,255,255,.12)", display: "block" }} />
+                              <img src={l.pictures[0].url} alt="" style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 8, border: "1px solid var(--border)", display: "block" }} />
                             ) : (
-                              <div style={{ width: 44, height: 44, borderRadius: 8, background: "#223048", border: "1px solid rgba(255,255,255,.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>📦</div>
+                              <div style={{ width: 44, height: 44, borderRadius: 8, background: "var(--surface-3)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>📦</div>
                             )}
                           </a>
                         </td>
@@ -5468,23 +5473,23 @@ export default function App() {
                             {l.checks.filter(c => !c.pass).slice(0, 2).map(c => (
                               <span key={c.key} style={{ fontSize: 10, color: "#FF5252", background: "rgba(255,82,82,.12)", border: "1px solid rgba(255,82,82,.35)", padding: "1px 6px", borderRadius: 4, fontWeight: 500 }}>✗ {c.label}</span>
                             ))}
-                            <span style={{ fontSize: 10, padding: "1px 7px", borderRadius: 4, fontWeight: 500, background: l.status === "active" ? "rgba(0,200,83,.12)" : "#121A24", color: l.status === "active" ? "#00C853" : "#67759B", border: `1px solid ${l.status === "active" ? "rgba(0,200,83,.35)" : "rgba(255,255,255,.12)"}` }}>
+                            <span style={{ fontSize: 10, padding: "1px 7px", borderRadius: 4, fontWeight: 500, background: l.status === "active" ? "rgba(0,200,83,.12)" : "var(--bg-2)", color: l.status === "active" ? "#00C853" : "var(--text-3)", border: `1px solid ${l.status === "active" ? "rgba(0,200,83,.35)" : "var(--border)"}` }}>
                               {l.status === "active" ? "● ativo" : "○ pausado"}
                             </span>
                           </div>
                         </td>
                         <td>
                           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                            <span style={{ fontSize: 11, color: "#A9B4C5", fontFamily: "monospace", fontWeight: 600 }}>{l.id}</span>
+                            <span style={{ fontSize: 11, color: "var(--text-2)", fontFamily: "monospace", fontWeight: 600 }}>{l.id}</span>
                             <button className="copy-btn" onClick={() => navigator.clipboard.writeText(l.id)}>⎘</button>
                           </div>
                           {l.sku ? (
                             <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3 }}>
-                              <span style={{ fontSize: 10, color: "#67759B" }}>SKU:</span>
-                              <span style={{ fontSize: 11, color: "#A9B4C5", fontFamily: "monospace", fontWeight: 600 }}>{l.sku}</span>
+                              <span style={{ fontSize: 10, color: "var(--text-3)" }}>SKU:</span>
+                              <span style={{ fontSize: 11, color: "var(--text-2)", fontFamily: "monospace", fontWeight: 600 }}>{l.sku}</span>
                               <button className="copy-btn" onClick={() => navigator.clipboard.writeText(l.sku)}>⎘</button>
                             </div>
-                          ) : <div style={{ fontSize: 10, color: "#4A5878", marginTop: 3 }}>SKU: —</div>}
+                          ) : <div style={{ fontSize: 10, color: "var(--text-4)", marginTop: 3 }}>SKU: —</div>}
                         </td>
                         <td>
                           {(() => {
@@ -5499,10 +5504,10 @@ export default function App() {
                                   {qty} un. {abaixo ? "⚠" : ""}
                                 </span>
                                 <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                  <span style={{ fontSize: 10, color: "#67759B" }}>Mín:</span>
+                                  <span style={{ fontSize: 10, color: "var(--text-3)" }}>Mín:</span>
                                   <input type="number" value={minStock[l.id] ?? ""} onChange={e => setMinStockAndSave(m => ({ ...m, [l.id]: Number(e.target.value), ["_src_"+l.id]: "manual" }))} placeholder="0"
                                     title="Editar aqui marca como manual; para voltar a sincronizar com o cadastro do produto, defina o Estoque Mínimo em Produtos novamente"
-                                    style={{ background: "#121A24", border: "1px solid rgba(255,255,255,.12)", color: "#FFFFFF", padding: "2px 6px", borderRadius: 4, width: 52, fontSize: 11, textAlign: "right" }} />
+                                    style={{ background: "var(--bg-2)", border: "1px solid var(--border)", color: "var(--text-strong)", padding: "2px 6px", borderRadius: 4, width: 52, fontSize: 11, textAlign: "right" }} />
                                 </div>
                               </div>
                             );
@@ -5517,9 +5522,9 @@ export default function App() {
                         <td><span style={{ fontSize: 11, color: typeInfo.color, fontWeight: 600 }}>{typeInfo.label}</span></td>
                         <td>
                           {l.hasPromo ? (
-                            <span style={{ fontSize: 13, color: "#67759B", textDecoration: "line-through" }}>{fmt(l.originalPrice)}</span>
+                            <span style={{ fontSize: 13, color: "var(--text-3)", textDecoration: "line-through" }}>{fmt(l.originalPrice)}</span>
                           ) : (
-                            <span style={{ fontWeight: 700, color: "#FFFFFF", fontSize: 13 }}>{fmt(l.originalPrice)}</span>
+                            <span style={{ fontWeight: 700, color: "var(--text-strong)", fontSize: 13 }}>{fmt(l.originalPrice)}</span>
                           )}
                         </td>
                         <td>
@@ -5529,12 +5534,12 @@ export default function App() {
                               <span style={{ fontSize: 10, color: "#FF5252", background: "rgba(255,82,82,.12)", padding: "1px 6px", borderRadius: 4, fontWeight: 600, marginLeft: 4 }}>Promo</span>
                             </div>
                           ) : (
-                            <span style={{ fontWeight: 700, color: "#FFFFFF" }}>{fmt(l.salePrice)}</span>
+                            <span style={{ fontWeight: 700, color: "var(--text-strong)" }}>{fmt(l.salePrice)}</span>
                           )}
                         </td>
                         <td>
                           <span style={{ color: "#FFC107", fontWeight: 700 }}>{fmt(l.fee)}</span>
-                          <div style={{ fontSize: 10, color: "#67759B" }}>{fmtPct(l.feeRate)}</div>
+                          <div style={{ fontSize: 10, color: "var(--text-3)" }}>{fmtPct(l.feeRate)}</div>
                         </td>
                         <td>
                           <div style={{ fontSize: 11, color: frete.topColor, background: frete.topBg, padding: "2px 7px", borderRadius: 5, fontWeight: 600, display: "inline-block", marginBottom: 3 }}>{frete.topLabel}</div>
@@ -5557,19 +5562,19 @@ export default function App() {
                         </td>
                         <td>
                           <span style={{ fontWeight: 700, color: "#00C853", fontSize: 13 }}>{fmt(l.youReceive)}</span>
-                          <div style={{ fontSize: 10, color: "#67759B" }}>após tarifa e frete</div>
+                          <div style={{ fontSize: 10, color: "var(--text-3)" }}>após tarifa e frete</div>
                         </td>
                         <td>
                           <input type="number" value={l.cost || ""} onChange={e => setCostsAndSave(c => ({ ...c, [l.id]: Number(e.target.value) }))} placeholder="0,00"
                             onFocus={function(){ setEditandoCustoId(l.id); }}
                             onBlur={function(){ setEditandoCustoId(function(cur){ return cur === l.id ? null : cur; }); }}
-                            style={{ background: "#121A24", border: "1px solid rgba(255,255,255,.12)", color: "#FFFFFF", padding: "5px 8px", borderRadius: 6, width: 80, fontSize: 12, textAlign: "right" }} />
+                            style={{ background: "var(--bg-2)", border: "1px solid var(--border)", color: "var(--text-strong)", padding: "5px 8px", borderRadius: 6, width: 80, fontSize: 12, textAlign: "right" }} />
                         </td>
                         <td style={{ color: l.profit >= 0 ? "#00C853" : "#FF5252", fontWeight: 700 }}>{fmt(l.profit)}</td>
                         <td style={{ minWidth: 130 }}><MarginBar value={l.margin} /></td>
                         <td>
                           <span style={{ color: l.totalProfit >= 0 ? "#00C853" : "#FF5252", fontWeight: 700 }}>{l.cost > 0 ? fmt(l.totalProfit) : "—"}</span>
-                          <div style={{ fontSize: 10, color: "#67759B" }}>{l.sold_quantity} vendidos</div>
+                          <div style={{ fontSize: 10, color: "var(--text-3)" }}>{l.sold_quantity} vendidos</div>
                         </td>
                         <td>
                           <button onClick={() => setSelectedListing(l)} style={{ background: "#1976FF", border: "none", color: "#fff", fontSize: 11, padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>✦ Analisar</button>
@@ -5594,7 +5599,7 @@ export default function App() {
         {tab === "orders" && currentUser?.permissoes?.includes("orders") && (
           <>
             {/* Sub-abas de Pedidos */}
-            <div style={{ display:"flex", gap:2, borderBottom:"2px solid rgba(255,255,255,.10)", marginBottom:10 }}>
+            <div style={{ display:"flex", gap:2, borderBottom:"2px solid var(--border)", marginBottom:10 }}>
               {[
                 { key:"ml",    label:"🟡 Pedidos Mercado Livre", badge: enrichedOrders.length },
                 { key:"outros",label:"➕ Outros Marketplaces",   badge: null },
@@ -5605,11 +5610,11 @@ export default function App() {
                     onClick={function(){ setAbaPedido(t.key); }}
                     style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 20px", border:"none",
                       borderBottom: active?"2px solid #4DB3FF":"2px solid transparent", marginBottom:-2,
-                      background:"transparent", color:active?"#FFFFFF":"#67759B",
+                      background:"transparent", color:active?"var(--text-strong)":"var(--text-3)",
                       fontWeight:active?700:400, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>
                     {t.label}
                     {t.badge != null && (
-                      <span style={{ background:active?"#1976FF":"#223048", color:active?"#fff":"#A9B4C5",
+                      <span style={{ background:active?"#1976FF":"var(--surface-3)", color:active?"#fff":"var(--text-2)",
                         fontSize:11, fontWeight:700, padding:"1px 7px", borderRadius:20 }}>{t.badge}</span>
                     )}
                   </button>
@@ -5617,9 +5622,9 @@ export default function App() {
               })}
             </div>
             {(abaPedido) === "outros" ? (
-              <div style={{ textAlign:"center", padding:"60px 20px", color:"#67759B" }}>
+              <div style={{ textAlign:"center", padding:"60px 20px", color:"var(--text-3)" }}>
                 <div style={{ fontSize:48, marginBottom:12 }}>🔌</div>
-                <div style={{ fontWeight:700, fontSize:16, color:"#FFFFFF", marginBottom:8 }}>Em breve: outros marketplaces</div>
+                <div style={{ fontWeight:700, fontSize:16, color:"var(--text-strong)", marginBottom:8 }}>Em breve: outros marketplaces</div>
                 <div style={{ fontSize:13 }}>Integração com Shopee, Shein, Amazon e outros em desenvolvimento</div>
               </div>
             ) : (
@@ -5628,52 +5633,52 @@ export default function App() {
                 <>
                   <FiltroGrupo titulo="Período">
                     {[{key:"today",l:"Hoje"},{key:"week",l:"7 dias"},{key:"thismonth",l:"Este mês"},{key:"month",l:"30 dias"},{key:"3months",l:"3 meses"},{key:"all",l:"Todos"}].map(function(f){
-                      return <FiltroBotao key={f.key} label={f.l} active={orderFilter===f.key} cor="#FFFFFF" bg="#223048" onClick={function(){setOrderFilter(f.key);}} />;
+                      return <FiltroBotao key={f.key} label={f.l} active={orderFilter===f.key} cor="var(--text-strong)" bg="var(--surface-3)" onClick={function(){setOrderFilter(f.key);}} />;
                     })}
                   </FiltroGrupo>
                   <FiltroGrupo titulo="Status">
                     {[{key:"all",l:"Todos"},{key:"waiting",l:"⏳ Ag. envio"},{key:"shipped",l:"🚚 Enviados"},{key:"done",l:"✓ Concluídos"},{key:"cancelled",l:"✗ Cancelados"},{key:"refunded",l:"↩ Devolvidos"},{key:"mediation",l:"⚠ Disputa"}].map(function(f){
-                      return <FiltroBotao key={f.key} label={f.l} active={orderStatusFilter===f.key} cor="#FFFFFF" bg="#223048" onClick={function(){setOrderStatusFilter(f.key);}} />;
+                      return <FiltroBotao key={f.key} label={f.l} active={orderStatusFilter===f.key} cor="var(--text-strong)" bg="var(--surface-3)" onClick={function(){setOrderStatusFilter(f.key);}} />;
                     })}
                   </FiltroGrupo>
                   <FiltroGrupo titulo="Tipo de Envio">
                     {[{key:"todos",l:"Todos"},{key:"FULL",l:"FULL",c:"#3B8CFF",bg:"rgba(59,140,255,.14)"},{key:"Flex",l:"Flex",c:"#7c3aed",bg:"rgba(139,92,246,.14)"},{key:"ME2",l:"ME2",c:"#00F0FF",bg:"rgba(0,240,255,.10)"},{key:"ME1",l:"ME1",c:"#4DB3FF",bg:"rgba(77,179,255,.2)"}].map(function(e){
-                      return <FiltroBotao key={e.key} label={e.l} active={filterEnvio===e.key} cor={e.c||"#FFFFFF"} bg={e.bg||"#223048"} onClick={function(){setFilterEnvio(e.key);setPaginaPedidos(1);}} />;
+                      return <FiltroBotao key={e.key} label={e.l} active={filterEnvio===e.key} cor={e.c||"var(--text-strong)"} bg={e.bg||"var(--surface-3)"} onClick={function(){setFilterEnvio(e.key);setPaginaPedidos(1);}} />;
                     })}
                   </FiltroGrupo>
                   <FiltroGrupo titulo="Outros Filtros">
                     <input value={filterSku} onChange={function(e){setFilterSku(e.target.value);}} placeholder="SKU do produto..."
-                      style={{ width:"100%", background:"#182230", border:"1px solid rgba(255,255,255,.12)", color:"#FFFFFF", padding:"6px 8px", borderRadius:7, fontSize:11, outline:"none" }} />
+                      style={{ width:"100%", background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"6px 8px", borderRadius:7, fontSize:11, outline:"none" }} />
                     <select value={filterUF} onChange={function(e){setFilterUF(e.target.value);}}
-                      style={{ width:"100%", background:"#182230", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", padding:"6px 8px", borderRadius:7, fontSize:11 }}>
+                      style={{ width:"100%", background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"6px 8px", borderRadius:7, fontSize:11 }}>
                       <option value="">Estado (UF)</option>
                       {["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"].map(function(uf){return <option key={uf} value={uf}>{uf}</option>;})}
                     </select>
                     <div style={{ display:"flex", gap:4, alignItems:"center" }}>
                       <input type="date" value={dateFrom} onChange={function(e){setDateFrom(e.target.value);}}
-                        style={{ flex:1, background:"#182230", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", padding:"5px 6px", borderRadius:7, fontSize:11 }} />
+                        style={{ flex:1, background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"5px 6px", borderRadius:7, fontSize:11 }} />
                     </div>
                     <div style={{ display:"flex", gap:4, alignItems:"center" }}>
-                      <span style={{ fontSize:10, color:"#67759B" }}>até</span>
+                      <span style={{ fontSize:10, color:"var(--text-3)" }}>até</span>
                       <input type="date" value={dateTo} onChange={function(e){setDateTo(e.target.value);}}
-                        style={{ flex:1, background:"#182230", border:"1px solid rgba(255,255,255,.12)", color:"#A9B4C5", padding:"5px 6px", borderRadius:7, fontSize:11 }} />
+                        style={{ flex:1, background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"5px 6px", borderRadius:7, fontSize:11 }} />
                     </div>
                     {(filterSku||filterUF||dateFrom||dateTo) && (
                       <button onClick={function(){setFilterSku("");setFilterUF("");setDateFrom("");setDateTo("");}}
                         style={{ background:"rgba(255,82,82,.12)", border:"1px solid rgba(255,82,82,.35)", color:"#FF5252", padding:"5px 8px", borderRadius:7, cursor:"pointer", fontSize:11, width:"100%" }}>✕ Limpar filtros</button>
                     )}
                   </FiltroGrupo>
-                  <div style={{ fontSize:11, color:"#67759B", marginTop:"auto" }}>{enrichedOrders.length} pedido(s)<br/>{fmt(enrichedOrders.reduce(function(s,o){return s+o.price*o.qty;},0))}</div>
+                  <div style={{ fontSize:11, color:"var(--text-3)", marginTop:"auto" }}>{enrichedOrders.length} pedido(s)<br/>{fmt(enrichedOrders.reduce(function(s,o){return s+o.price*o.qty;},0))}</div>
                 </>
               }
               busca={
                 <div style={{ position:"relative" }}>
-                  <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"#67759B", fontSize:13 }}>🔍</span>
+                  <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"var(--text-3)", fontSize:13 }}>🔍</span>
                   <input className="search-input" value={searchOrders} onChange={function(e){setSearchOrders(e.target.value);}}
                     placeholder="Buscar por nº pedido, cliente, CPF, e-mail..." style={{ width:"100%", paddingLeft:36 }} />
                 </div>
               }>
-              <div className="scroll-x" style={{ background: "#182230", border: "1px solid rgba(255,255,255,.12)", borderRadius: 12, overflow: "auto", boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
+              <div className="scroll-x" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, overflow: "auto", boxShadow: "0 1px 3px rgba(0,0,0,.04)" }}>
               <table style={{ borderCollapse:"collapse", width:"100%", tableLayout:"fixed" }}>
                 <colgroup>
                   <col style={{ width:130 }} />
@@ -5694,25 +5699,25 @@ export default function App() {
                   <tr>
                     {["Pedido","Status","Envio","Cliente","Produto","Data","Preço","Qtd","Tarifa ML","Frete","Você recebe","Lucro","Margem"].map(function(h,i){
                       var align = [6,7,8,9,10,11].includes(i) ? "right" : i===7 ? "center" : "left";
-                      return <th key={h} style={{ fontSize:11, color:"#67759B", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 12px", borderBottom:"1px solid rgba(255,255,255,.10)", textAlign:align, fontWeight:600, background:"#121A24", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{h}</th>;
+                      return <th key={h} style={{ fontSize:11, color:"var(--text-3)", textTransform:"uppercase", letterSpacing:0.8, padding:"10px 12px", borderBottom:"1px solid var(--border)", textAlign:align, fontWeight:600, background:"var(--bg-2)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{h}</th>;
                     })}
                   </tr>
                 </thead>
                 <tbody>
                   {enrichedOrdersComEnvio.length === 0 ? (
-                    <tr><td colSpan={13} style={{ textAlign:"center", color:"#67759B", padding:40 }}>Nenhum pedido encontrado</td></tr>
+                    <tr><td colSpan={13} style={{ textAlign:"center", color:"var(--text-3)", padding:40 }}>Nenhum pedido encontrado</td></tr>
                   ) : enrichedOrdersComEnvio.slice((paginaPedidos-1)*POR_PAG_PEDIDOS, paginaPedidos*POR_PAG_PEDIDOS).map(function(o) {
                     var youReceive = o.price - o.fee - o.freteSeller;
                     var sInfo = getOrderStatusInfo(o.status, o.tags, o.fulfilled, o.shipment_status);
                     var envLabel = detectTipoEnvio(o, shipmentStatuses) || "";
                     return (
-                      <tr key={o.id} style={{ borderBottom:"1px solid rgba(255,255,255,.08)" }}>
-                        <td style={{ padding:"6px 9px", fontSize:11, color:"#A9B4C5", fontFamily:"monospace", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>#{o.id}</td>
+                      <tr key={o.id} style={{ borderBottom:"1px solid var(--border-soft)" }}>
+                        <td style={{ padding:"6px 9px", fontSize:11, color:"var(--text-2)", fontFamily:"monospace", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>#{o.id}</td>
                         <td style={{ padding:"10px 12px" }}>
                           <span style={{ fontSize:11, fontWeight:600, color:sInfo.color, background:sInfo.bg, padding:"3px 8px", borderRadius:6, whiteSpace:"nowrap" }}>{sInfo.label}</span>
                         </td>
                         <td style={{ padding:"10px 12px" }}>
-                          {envLabel ? <BadgeTipoEnvio tipo={envLabel} /> : <span style={{ color:"#67759B", fontSize:11 }}>—</span>}
+                          {envLabel ? <BadgeTipoEnvio tipo={envLabel} /> : <span style={{ color:"var(--text-3)", fontSize:11 }}>—</span>}
                         </td>
                         <td style={{ padding:"10px 12px", overflow:"hidden" }}>
                           {o.buyerName ? (
@@ -5722,20 +5727,20 @@ export default function App() {
                                 {o.buyerName}
                               </button>
                               {showClienteDetalhe === o.id && (
-                                <div style={{ position:"fixed", zIndex:900, background:"#182230", border:"1px solid rgba(255,255,255,.12)", borderRadius:12, padding:"16px 18px", boxShadow:"0 8px 32px rgba(0,0,0,.15)", minWidth:260, marginTop:4 }}>
-                                  <div style={{ fontWeight:700, fontSize:14, color:"#FFFFFF", marginBottom:10, display:"flex", justifyContent:"space-between" }}>
+                                <div style={{ position:"fixed", zIndex:900, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", boxShadow:"0 8px 32px rgba(0,0,0,.15)", minWidth:260, marginTop:4 }}>
+                                  <div style={{ fontWeight:700, fontSize:14, color:"var(--text-strong)", marginBottom:10, display:"flex", justifyContent:"space-between" }}>
                                     👤 {o.buyerName}
-                                    <button onClick={function(){ setShowClienteDetalhe(null); }} style={{ background:"none", border:"none", cursor:"pointer", color:"#67759B", fontSize:14 }}>✕</button>
+                                    <button onClick={function(){ setShowClienteDetalhe(null); }} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--text-3)", fontSize:14 }}>✕</button>
                                   </div>
-                                  {o.buyerDoc && <div style={{ fontSize:12, color:"#A9B4C5", marginBottom:4 }}>{o.buyerDocType||"Doc"}: {o.buyerDoc}</div>}
-                                  {o.buyerEmail && <div style={{ fontSize:12, color:"#A9B4C5", marginBottom:4 }}>✉️ {o.buyerEmail}</div>}
-                                  {o.buyerPhone && <div style={{ fontSize:12, color:"#A9B4C5", marginBottom:4 }}>📞 {o.buyerPhone}</div>}
-                                  {o.buyerCity && <div style={{ fontSize:12, color:"#A9B4C5", marginBottom:4 }}>📍 {o.buyerCity}{o.buyerUF ? " - "+o.buyerUF : ""}{o.buyerZip ? " ("+o.buyerZip+")" : ""}</div>}
-                                  {o.sku && <div style={{ fontSize:12, color:"#A9B4C5" }}>SKU: {o.sku}</div>}
+                                  {o.buyerDoc && <div style={{ fontSize:12, color:"var(--text-2)", marginBottom:4 }}>{o.buyerDocType||"Doc"}: {o.buyerDoc}</div>}
+                                  {o.buyerEmail && <div style={{ fontSize:12, color:"var(--text-2)", marginBottom:4 }}>✉️ {o.buyerEmail}</div>}
+                                  {o.buyerPhone && <div style={{ fontSize:12, color:"var(--text-2)", marginBottom:4 }}>📞 {o.buyerPhone}</div>}
+                                  {o.buyerCity && <div style={{ fontSize:12, color:"var(--text-2)", marginBottom:4 }}>📍 {o.buyerCity}{o.buyerUF ? " - "+o.buyerUF : ""}{o.buyerZip ? " ("+o.buyerZip+")" : ""}</div>}
+                                  {o.sku && <div style={{ fontSize:12, color:"var(--text-2)" }}>SKU: {o.sku}</div>}
                                 </div>
                               )}
                             </div>
-                          ) : <span style={{ color:"#67759B", fontSize:11 }}>—</span>}
+                          ) : <span style={{ color:"var(--text-3)", fontSize:11 }}>—</span>}
                         </td>
                         <td style={{ padding:"10px 12px", overflow:"hidden" }}>
                           <div style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
@@ -5754,16 +5759,16 @@ export default function App() {
                               } else if (o.permalink) {
                                 link = o.permalink;
                               }
-                              if (!title) return <span style={{ color:"#67759B", fontSize:12 }}>—</span>;
+                              if (!title) return <span style={{ color:"var(--text-3)", fontSize:12 }}>—</span>;
                               return link
                                 ? <a href={link} target="_blank" rel="noreferrer" className="title-link" style={{ fontSize:12 }}>{title}</a>
                                 : <span style={{ fontSize:12 }}>{title}</span>;
                             })()}
                           </div>
                         </td>
-                        <td style={{ padding:"7px 10px", fontSize:11, color:"#A9B4C5", whiteSpace:"nowrap" }}>{fmtDate(o.date)}</td>
-                        <td style={{ padding:"7px 10px", fontSize:12, fontWeight:700, color:"#FFFFFF", textAlign:"right", whiteSpace:"nowrap" }}>{fmt(o.price)}</td>
-                        <td style={{ padding:"7px 10px", fontSize:11, color:"#A9B4C5", textAlign:"center" }}>×{o.qty}</td>
+                        <td style={{ padding:"7px 10px", fontSize:11, color:"var(--text-2)", whiteSpace:"nowrap" }}>{fmtDate(o.date)}</td>
+                        <td style={{ padding:"7px 10px", fontSize:12, fontWeight:700, color:"var(--text-strong)", textAlign:"right", whiteSpace:"nowrap" }}>{fmt(o.price)}</td>
+                        <td style={{ padding:"7px 10px", fontSize:11, color:"var(--text-2)", textAlign:"center" }}>×{o.qty}</td>
                         <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#FFC107", fontWeight:600, fontSize:12 }}>{fmt(o.fee)}</span></td>
                         <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#7c3aed", fontWeight:600, fontSize:12 }}>{o.freteSeller > 0 ? fmt(o.freteSeller) : "—"}</span></td>
                         <td style={{ padding:"10px 12px", textAlign:"right", whiteSpace:"nowrap" }}><span style={{ color:"#00C853", fontWeight:700, fontSize:12 }}>{fmt(youReceive)}</span></td>

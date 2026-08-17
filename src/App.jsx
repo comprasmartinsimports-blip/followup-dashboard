@@ -2493,47 +2493,30 @@ function AdminTab({ currentUser }) {
         </button>
       </div>
 
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))", gap:12 }}>
-        {usuarios.map(u => (
-          <div key={u.id} style={{ background:"var(--surface)", border:`2px solid ${u.id===currentUser.id?"#1976FF":u.ativo?"var(--border)":"var(--border)"}`, borderRadius:14, padding:"18px 20px", position:"relative", opacity:u.ativo?1:0.6 }}>
-            {u.id===currentUser.id && (
-              <div style={{ position:"absolute", top:12, left:12, background:"#1976FF", color:"#fff", fontSize:10, padding:"2px 8px", borderRadius:20, fontWeight:700 }}>VOCÊ</div>
-            )}
-            <div style={{ display:"flex", justifyContent:"flex-end", gap:6, marginBottom:8 }}>
-              <button onClick={()=>toggleAtivo(u.id)}
-                style={{ background:u.ativo?"rgba(0,200,83,.12)":"var(--bg-2)", border:`1px solid ${u.ativo?"rgba(0,200,83,.35)":"var(--border)"}`, color:u.ativo?"#0a9d4e":"var(--text-3)", padding:"3px 10px", borderRadius:6, cursor:"pointer", fontSize:11, fontWeight:600 }}>
-                {u.ativo?"● Ativo":"○ Inativo"}
-              </button>
-              <button onClick={()=>{ setEditingUser(u); setShowModal(true); }}
-                style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:12 }}>✏️</button>
-              {u.id!==currentUser.id && (
-                <button onClick={()=>deleteUser(u.id)}
-                  style={{ background:"rgba(255,82,82,.12)", border:"none", color:"#FF5252", width:28, height:28, borderRadius:6, cursor:"pointer", fontSize:12 }}>🗑</button>
-              )}
-            </div>
-
-            <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:12 }}>
-              <div style={{ width:42, height:42, borderRadius:12, background:u.admin?"#1976FF":"var(--surface-3)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:15, fontWeight:800, color:u.admin?"#FFC107":"var(--text-2)" }}>
-                {u.nome?.charAt(0).toUpperCase()}
+      <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, overflow:"hidden" }}>
+        {usuarios.map(function(u, idx){
+          var eu = u.id === currentUser.id;
+          return (
+            <div key={u.id} style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 18px", borderBottom: idx < usuarios.length-1 ? "1px solid var(--border-soft)" : "none", opacity: u.ativo ? 1 : 0.55 }}>
+              <div style={{ width:40, height:40, borderRadius:10, background: u.admin ? "#1976FF" : "var(--surface-3)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:15, fontWeight:800, color: u.admin ? "#fff" : "var(--text-2)", flexShrink:0 }}>
+                {(u.nome || "?").charAt(0).toUpperCase()}
               </div>
-              <div>
-                <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)" }}>{u.nome}</div>
-                <div style={{ fontSize:12, color:"var(--text-3)", fontFamily:"monospace" }}>@{u.usuario}</div>
-                {u.admin && <div style={{ fontSize:10, color:"#7c3aed", fontWeight:700 }}>ADMINISTRADOR</div>}
+              <div style={{ width:190, flexShrink:0, minWidth:0 }}>
+                <div style={{ fontWeight:700, fontSize:14, color:"var(--text-strong)", display:"flex", alignItems:"center", gap:8 }}>
+                  <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{u.nome}</span>
+                  {eu && <span style={{ fontSize:10, fontWeight:700, color:"#1976FF", background:"rgba(25,118,255,.12)", padding:"1px 7px", borderRadius:20, flexShrink:0 }}>Você</span>}
+                </div>
+                <div style={{ fontSize:12, color:"var(--text-3)", fontFamily:"'JetBrains Mono',monospace" }}>@{u.usuario}{u.admin ? " · admin" : ""}</div>
               </div>
+              <div style={{ flex:1, display:"flex", flexWrap:"wrap", gap:4, minWidth:0 }}>
+                {PERMISSOES_DISPONIVEIS.map(function(p){ var on = u.permissoes && u.permissoes.includes(p.key); return <span key={p.key} style={{ fontSize:11, padding:"2px 8px", borderRadius:20, background: on ? "rgba(25,118,255,.12)" : "var(--bg-2)", color: on ? "#1976FF" : "var(--text-4)", border:"1px solid " + (on ? "rgba(25,118,255,.3)" : "var(--border)"), fontWeight: on ? 600 : 400 }}>{p.label}</span>; })}
+              </div>
+              <button onClick={function(){ toggleAtivo(u.id); }} style={{ fontSize:11, fontWeight:700, padding:"4px 10px", borderRadius:20, cursor:"pointer", flexShrink:0, background: u.ativo ? "rgba(10,157,78,.12)" : "var(--bg-2)", border:"1px solid " + (u.ativo ? "rgba(10,157,78,.35)" : "var(--border)"), color: u.ativo ? "#0a9d4e" : "var(--text-3)" }}>{u.ativo ? "Ativo" : "Inativo"}</button>
+              <button onClick={function(){ setEditingUser(u); setShowModal(true); }} style={{ fontSize:12, fontWeight:600, padding:"5px 12px", borderRadius:8, cursor:"pointer", flexShrink:0, background:"var(--surface-3)", border:"none", color:"var(--text-2)" }}>Editar</button>
+              {!eu && <button onClick={function(){ deleteUser(u.id); }} style={{ fontSize:12, fontWeight:600, padding:"5px 12px", borderRadius:8, cursor:"pointer", flexShrink:0, background:"rgba(255,82,82,.1)", border:"none", color:"#FF5252" }}>Excluir</button>}
             </div>
-
-            <div style={{ fontSize:11, color:"var(--text-3)", marginBottom:6, fontWeight:600, textTransform:"uppercase" }}>Permissões</div>
-            <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
-              {PERMISSOES_DISPONIVEIS.map(p => (
-                <span key={p.key} style={{ fontSize:11, padding:"2px 8px", borderRadius:20, background:u.permissoes?.includes(p.key)?"rgba(59,140,255,.14)":"var(--bg-2)", color:u.permissoes?.includes(p.key)?"#1976FF":"var(--text-4)", border:`1px solid ${u.permissoes?.includes(p.key)?"rgba(77,179,255,.35)":"var(--border)"}`, fontWeight:u.permissoes?.includes(p.key)?600:400 }}>
-                  {p.label}
-                </span>
-              ))}
-            </div>
-            <div style={{ fontSize:11, color:"var(--text-4)", marginTop:10 }}>Criado em {u.criadoEm||"—"}</div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {showModal && <ModalUsuario usuario={editingUser} onSave={saveUser} onClose={()=>{ setShowModal(false); setEditingUser(null); }} />}

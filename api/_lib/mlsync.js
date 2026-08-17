@@ -49,11 +49,20 @@ export async function syncListings(sellerId, token) {
     offset += 50;
     if (offset > 8000) break; // trava de segurança
   }
-  const attrs = "id,title,price,available_quantity,status,listing_type_id,seller_sku,seller_custom_field,category_id,thumbnail,permalink,shipping,last_updated";
+  // SKU do anúncio: fica em seller_custom_field OU num atributo SELLER_SKU do array attributes.
+  function extrairSku(it) {
+    if (it.seller_custom_field) return it.seller_custom_field;
+    if (Array.isArray(it.attributes)) {
+      const a = it.attributes.find((x) => x && (x.id === "SELLER_SKU" || x.id === "GTIN"));
+      if (a && a.id === "SELLER_SKU" && a.value_name) return a.value_name;
+    }
+    return it.seller_sku || null;
+  }
   const rows = [];
   for (let i = 0; i < ids.length; i += 20) {
     const lote = ids.slice(i, i + 20);
-    const multi = await mlGet(`/items?ids=${lote.join(",")}&attributes=${attrs}`, token);
+    // Item COMPLETO (sem filtro de campos) — raw guarda tudo (fotos, atributos) p/ o app ler do cache.
+    const multi = await mlGet(`/items?ids=${lote.join(",")}`, token);
     const items = Array.isArray(multi) ? multi.map((x) => x && x.body).filter((b) => b && b.id) : [];
     for (const it of items) {
       rows.push({
@@ -64,7 +73,7 @@ export async function syncListings(sellerId, token) {
         available_quantity: it.available_quantity ?? null,
         status: it.status || null,
         listing_type_id: it.listing_type_id || null,
-        seller_sku: it.seller_sku || it.seller_custom_field || null,
+        seller_sku: extrairSku(it),
         category_id: it.category_id || null,
         thumbnail: it.thumbnail || null,
         permalink: it.permalink || null,

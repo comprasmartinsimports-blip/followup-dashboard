@@ -4915,12 +4915,12 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
       if (!match) { restantes.push(p); return; }
       absorvidos++;
       // Transfere a precificação do produto novo para o anúncio (só se o anúncio ainda não tiver).
-      var custoExtra = parseFloat(costs && costs[p.id]) || 0;
-      if (custoExtra > 0 && !(costs && costs[match.id] > 0)) addCosts[match.id] = custoExtra;
-      if (p.precoVenda && !(precosVendaConfig && precosVendaConfig[match.id])) addPrecos[match.id] = p.precoVenda;
+      var custoExtra = parseFloat(p.custo) || parseFloat(costs && costs[p.id]) || 0;
+      if (custoExtra > 0) addCosts[match.id] = custoExtra;
+      if (p.precoVenda) addPrecos[match.id] = p.precoVenda;
       var descExtra = descontosConfig && descontosConfig[p.id];
-      if (descExtra && !(descontosConfig && descontosConfig[match.id])) addDesc[match.id] = descExtra;
-      if (p.frete && !(fretesConfig && fretesConfig[match.id])) addFretes[match.id] = parseFloat(p.frete) || 0;
+      if (descExtra) addDesc[match.id] = descExtra;
+      if (p.frete) addFretes[match.id] = parseFloat(p.frete) || 0;
       // não vai para "restantes" → o produto novo é absorvido pelo anúncio real
     });
     if (absorvidos > 0) {
@@ -5173,12 +5173,27 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
               marketplaceInicial={mktSel}
               shopeeDoc={shopeeDoc}
               onSave={function(p){
-                var id = "NOVO_" + Date.now();
-                saveProdutosExtras([...produtosExtras, { id:id, nome:p.nome, sku:p.sku, taxaMl:p.taxaMl, precoVenda:p.precoVenda, frete:p.frete, marketplace:p.marketplace||"ml" }]);
-                // Custo vai para o mesmo lugar dos anúncios (costs_config) → mesma regra e edição.
                 var custoNum = parseFloat(p.custo) || 0;
+                var skuP = (p.sku||"").trim().toLowerCase();
+                var pPrem = parseFloat(p.taxaMl||12) >= 17;
+                // Se o SKU JÁ é um anúncio do ML, aplica a precificação direto no anúncio (não cria
+                // um "produto novo" que sumiria ao ser absorvido). Casa por SKU + tipo (Clássico/Premium).
+                var match = null;
+                if (skuP && (p.marketplace||"ml") === "ml") {
+                  match = (enriched||[]).find(function(l){ if (l._isExtra) return false; if ((l.seller_sku||l.sku||"").trim().toLowerCase()!==skuP) return false; var lPrem=(l.listing_type_id==="gold_pro"||l.listing_type_id==="gold_premium"); return lPrem===pPrem; })
+                    || (enriched||[]).find(function(l){ return !l._isExtra && (l.seller_sku||l.sku||"").trim().toLowerCase()===skuP; });
+                }
+                if (match) {
+                  if (custoNum > 0) setCostsAndSave(function(c){ return Object.assign({}, c, { [match.id]: custoNum }); });
+                  if (p.precoVenda) setPrecosVendaAndSave(function(c){ return Object.assign({}, c, { [match.id]: p.precoVenda }); });
+                  if (p.frete) setFretesAndSave(function(c){ return Object.assign({}, c, { [match.id]: parseFloat(p.frete)||0 }); });
+                  setShowNovoProdutoPrec(false);
+                  alert("Esse SKU já tem anúncio no Mercado Livre — a precificação foi aplicada diretamente no anúncio (SKU " + p.sku + "). Procure por ele na tabela.");
+                  return;
+                }
+                var id = "NOVO_" + Date.now();
+                saveProdutosExtras([...produtosExtras, { id:id, nome:p.nome, sku:p.sku, custo:custoNum, taxaMl:p.taxaMl, precoVenda:p.precoVenda, frete:p.frete, marketplace:p.marketplace||"ml" }]);
                 if (custoNum > 0) setCostsAndSave(function(c){ return Object.assign({}, c, { [id]: custoNum }); });
-                // Se o usuário criou na aba Shopee, garante que a tabela mostre a aba certa.
                 if (p.marketplace) setMktSel(p.marketplace);
                 setShowNovoProdutoPrec(false);
               }}

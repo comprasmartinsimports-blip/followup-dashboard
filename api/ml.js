@@ -13,8 +13,8 @@ import {
   verificarSessao,
   semSenha,
 } from "./_lib/auth.js";
-import { dbEnabled, syncGet, syncSet, upsertConexaoMl } from "./_lib/db.js";
-import { syncListings, syncOrders } from "./_lib/mlsync.js";
+import { dbEnabled, syncGet, syncSet, upsertConexaoMl, listConexoesMl } from "./_lib/db.js";
+import { syncListings, syncOrders, garantirToken } from "./_lib/mlsync.js";
 
 // A sincronização do cache do ML (/_sync_ml) puxa centenas de itens — pede mais tempo que o
 // padrão de 10s. O Vercel limita ao teto do plano se este valor for maior.
@@ -140,6 +140,31 @@ export default async function handler(req, res) {
       }));
     }
     return res.status(200).json({ ok: true, conta: contaMig(), migrated, skipped_ja_no_postgres: skipped, vazias_no_kv: vazias, erros });
+  }
+
+  // ── Cron: sincroniza o cache do ML de TODAS as contas — autenticado por secret ──
+  // Chamado pelo agendador (pg_cron do Supabase). Não usa sessão; valida CRON_SECRET.
+  // Para cada conexão salva, renova o token se preciso e roda o sync de anúncios+pedidos.
+  if (path === "/_cron_sync" || path.startsWith("/_cron_sync?")) {
+    const secret = req.headers["x-cron-secret"] || (req.headers.authorization || "").replace("Bearer ", "");
+    if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+      return res.status(403).json({ error: "Proibido." });
+    }
+    if (!dbEnabled()) return res.status(400).json({ error: "SUPABASE_DB_URL não configurada." });
+    const conexoes = await listConexoesMl();
+    const resultados = [];
+    for (const c of conexoes) {
+      try {
+        const token = await garantirToken(c);
+        if (!token) { resultados.push({ seller: c.seller_id, erro: "sem token" }); continue; }
+        const rl = await syncListings(c.seller_id, token);
+        const ro = await syncOrders(c.seller_id, token);
+        resultados.push({ seller: c.seller_id, listings: rl.upserted, orders: ro.upserted });
+      } catch (e) {
+        resultados.push({ seller: c.seller_id, erro: (e && e.message) || "falha" });
+      }
+    }
+    return res.status(200).json({ ok: true, contas: conexoes.length, resultados });
   }
 
   // ── Sincroniza o cache do ML (anúncios + pedidos) para o Postgres — exige ADMIN ──

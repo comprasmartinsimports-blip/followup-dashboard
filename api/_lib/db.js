@@ -30,6 +30,14 @@ function getSql() {
 // Retorna null se o Supabase não estiver configurado.
 export function sqlClient() { return getSql(); }
 
+// Lista as conexões com o Mercado Livre (uma por conta) — usada pelo cron para sincronizar
+// cada conta sem o usuário estar logado.
+export async function listConexoesMl() {
+  const sql = getSql();
+  if (!sql) return [];
+  return await sql`select seller_id, access_token, refresh_token, expira_em from flow.conexao_ml`;
+}
+
 // Guarda/atualiza o token do ML de uma conta em flow.conexao_ml, para o servidor
 // (cron/webhook) sincronizar sem o usuário estar logado. Preserva o refresh_token antigo
 // se o novo vier vazio.

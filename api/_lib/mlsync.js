@@ -3,7 +3,7 @@
 // (flow.ml_listing / flow.ml_order). Roda NO SERVIDOR (endpoint manual, webhook, cron);
 // o app depois só LÊ do cache — é isso que acaba com a lentidão no boot.
 
-import { sqlClient } from "./db.js";
+import { sqlClient, upsertConexaoMl } from "./db.js";
 
 const ML = "https://api.mercadolibre.com";
 
@@ -12,6 +12,31 @@ async function mlGet(path, token) {
     headers: { Authorization: "Bearer " + token, Accept: "application/json" },
   });
   return r.json();
+}
+
+// Garante um access token válido para a conta: se expirou (ou falta <5 min), renova via OAuth
+// refresh_token e regrava em flow.conexao_ml. Usa as credenciais do app ML já existentes.
+export async function garantirToken(conexao) {
+  const agora = Date.now();
+  const exp = conexao.expira_em ? new Date(conexao.expira_em).getTime() : 0;
+  if (conexao.access_token && exp - agora > 5 * 60 * 1000) return conexao.access_token;
+  if (!conexao.refresh_token) return conexao.access_token || null;
+  const r = await fetch(ML + "/oauth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      client_id: process.env.ML_APP_ID,
+      client_secret: process.env.ML_APP_SECRET,
+      refresh_token: conexao.refresh_token,
+    }),
+  });
+  const d = await r.json();
+  if (d && d.access_token) {
+    await upsertConexaoMl(conexao.seller_id, d.access_token, d.refresh_token || conexao.refresh_token, Date.now() + (d.expires_in || 21600) * 1000);
+    return d.access_token;
+  }
+  return conexao.access_token || null; // fallback: tenta com o token atual
 }
 
 // Insere/atualiza um lote de linhas numa tabela do cache, em UMA instrução por lote.

@@ -13,8 +13,8 @@ import {
   verificarSessao,
   semSenha,
 } from "./_lib/auth.js";
-import { dbEnabled, syncGet, syncSet, upsertConexaoMl, listConexoesMl, listCacheListings, listCacheOrders } from "./_lib/db.js";
-import { syncListings, syncOrders, garantirToken } from "./_lib/mlsync.js";
+import { dbEnabled, syncGet, syncSet, upsertConexaoMl, listConexoesMl, listCacheListings, listCacheOrders, getConexaoMl } from "./_lib/db.js";
+import { syncListings, syncOrders, garantirToken, syncOneListing, syncOneOrder } from "./_lib/mlsync.js";
 
 // A sincronização do cache do ML (/_sync_ml) puxa centenas de itens — pede mais tempo que o
 // padrão de 10s. O Vercel limita ao teto do plano se este valor for maior.
@@ -57,6 +57,40 @@ const SYNC_KEYS_PERMITIDAS = [
 
 export default async function handler(req, res) {
   const path = req.url.replace(/^\/api\/ml/, "");
+
+  // ── Webhook do Mercado Livre (notificações) — PÚBLICO (o ML chama sem sessão) ──
+  // Atualiza APENAS o item/pedido que mudou, em tempo real. Responde 200 rápido; se algo
+  // falhar, engole o erro (o cron a cada 15 min é a rede de segurança). Valida o app pelo
+  // application_id e só sincroniza contas conhecidas (com token salvo em flow.conexao_ml).
+  if (path === "/webhook" || path.startsWith("/webhook?")) {
+    let body = req.body;
+    if (typeof body === "string") { try { body = JSON.parse(body); } catch (e) { body = {}; } }
+    body = body || {};
+    const topic = String(body.topic || "");
+    const resource = String(body.resource || "");
+    const sellerId = body.user_id ? String(body.user_id) : null;
+    // Ignora notificações de outro app (quando ML_APP_ID está configurado).
+    if (process.env.ML_APP_ID && body.application_id && String(body.application_id) !== String(process.env.ML_APP_ID)) {
+      return res.status(200).json({ ok: true, ignored: "application_id" });
+    }
+    try {
+      if (dbEnabled() && sellerId && resource) {
+        const conexao = await getConexaoMl(sellerId);
+        if (conexao) {
+          const token = await garantirToken(conexao);
+          if (token) {
+            const rid = resource.split("/").filter(Boolean).pop();
+            if (topic.indexOf("item") >= 0 && resource.indexOf("/items/") >= 0) {
+              await syncOneListing(sellerId, token, rid);
+            } else if (topic.indexOf("order") >= 0 && resource.indexOf("/orders/") >= 0) {
+              await syncOneOrder(sellerId, token, rid);
+            }
+          }
+        }
+      }
+    } catch (e) { /* engole — cron é a rede de segurança */ }
+    return res.status(200).json({ ok: true });
+  }
 
   // ── Rota de usuários — exige sessão do app; escrita exige admin ──
   if (path === "/_users" || path.startsWith("/_users?")) {

@@ -38,6 +38,14 @@ export async function listConexoesMl() {
   return await sql`select seller_id, access_token, refresh_token, expira_em from flow.conexao_ml`;
 }
 
+// Busca a conexão ML de uma conta (para o webhook pegar o token e sincronizar em tempo real).
+export async function getConexaoMl(sellerId) {
+  const sql = getSql();
+  if (!sql) return null;
+  const rows = await sql`select seller_id, access_token, refresh_token, expira_em from flow.conexao_ml where seller_id=${String(sellerId)} limit 1`;
+  return rows.length ? rows[0] : null;
+}
+
 // Lê uma página de anúncios do cache (raw = item ML completo, mesma shape do fetchAllListings).
 export async function listCacheListings(sellerId, limit, offset) {
   const sql = getSql();

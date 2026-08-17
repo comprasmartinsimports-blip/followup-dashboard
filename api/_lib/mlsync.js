@@ -1,6 +1,6 @@
 // api/_lib/mlsync.js
 // Sincroniza anúncios e pedidos do Mercado Livre para o cache no Postgres
-// (flow.ml_listing / flow.ml_order). Roda NO SERVIDOR (endpoint manual, webhook, cron);
+// (flow.ml_listing / flow.ml_order). Roda NO SERVIDOR (endpoint manual, cron, webhook);
 // o app depois só LÊ do cache — é isso que acaba com a lentidão no boot.
 
 import { sqlClient, upsertConexaoMl } from "./db.js";
@@ -40,7 +40,7 @@ export async function garantirToken(conexao) {
 }
 
 // Insere/atualiza um lote de linhas numa tabela do cache, em UMA instrução por lote.
-// A coluna "raw" é jsonb, então seu placeholder recebe cast ::jsonb (o valor vem como string JSON).
+// A coluna "raw" é jsonb, então seu placeholder recebe cast ::jsonb.
 async function upsertLote(sql, tabela, rows, cols, updateCols) {
   if (!rows.length) return;
   for (let i = 0; i < rows.length; i += 100) {
@@ -60,6 +60,58 @@ async function upsertLote(sql, tabela, rows, cols, updateCols) {
   }
 }
 
+// SKU do anúncio: fica em seller_custom_field OU num atributo SELLER_SKU do array attributes.
+function extrairSku(it) {
+  if (it.seller_custom_field) return it.seller_custom_field;
+  if (Array.isArray(it.attributes)) {
+    const a = it.attributes.find((x) => x && x.id === "SELLER_SKU");
+    if (a && a.value_name) return a.value_name;
+  }
+  return it.seller_sku || null;
+}
+
+const COLS_LISTING = ["seller_id", "id", "title", "price", "available_quantity", "status", "listing_type_id", "seller_sku", "category_id", "thumbnail", "permalink", "free_shipping", "raw", "ml_last_updated"];
+const UPD_LISTING = COLS_LISTING.filter((c) => c !== "seller_id" && c !== "id");
+const COLS_ORDER = ["seller_id", "id", "listing_id", "title", "seller_sku", "status", "qty", "unit_price", "total_amount", "date_created", "raw"];
+const UPD_ORDER = COLS_ORDER.filter((c) => c !== "seller_id" && c !== "id");
+
+function buildListingRow(sellerId, it) {
+  return {
+    seller_id: String(sellerId),
+    id: it.id,
+    title: it.title || null,
+    price: it.price ?? null,
+    available_quantity: it.available_quantity ?? null,
+    status: it.status || null,
+    listing_type_id: it.listing_type_id || null,
+    seller_sku: extrairSku(it),
+    category_id: it.category_id || null,
+    thumbnail: it.thumbnail || null,
+    permalink: it.permalink || null,
+    free_shipping: it.shipping ? !!it.shipping.free_shipping : null,
+    raw: it, // objeto — o postgres.js serializa p/ jsonb uma vez (não pré-stringificar)
+    ml_last_updated: it.last_updated || null,
+  };
+}
+
+function buildOrderRow(sellerId, o) {
+  const it = (o.order_items && o.order_items[0]) || {};
+  const item = it.item || {};
+  return {
+    seller_id: String(sellerId),
+    id: String(o.id),
+    listing_id: item.id || null,
+    title: item.title || null,
+    seller_sku: item.seller_sku || item.seller_custom_field || null,
+    status: o.status || null,
+    qty: it.quantity ?? null,
+    unit_price: it.unit_price ?? null,
+    total_amount: o.total_amount ?? null,
+    date_created: o.date_created || o.date_closed || null,
+    raw: o,
+  };
+}
+
 // Puxa TODOS os anúncios do vendedor e faz upsert. Usa multiget (20 por vez) em vez de
 // /items/{id} um a um — muito mais rápido e cabe no tempo de uma função serverless.
 export async function syncListings(sellerId, token) {
@@ -74,15 +126,6 @@ export async function syncListings(sellerId, token) {
     offset += 50;
     if (offset > 8000) break; // trava de segurança
   }
-  // SKU do anúncio: fica em seller_custom_field OU num atributo SELLER_SKU do array attributes.
-  function extrairSku(it) {
-    if (it.seller_custom_field) return it.seller_custom_field;
-    if (Array.isArray(it.attributes)) {
-      const a = it.attributes.find((x) => x && (x.id === "SELLER_SKU" || x.id === "GTIN"));
-      if (a && a.id === "SELLER_SKU" && a.value_name) return a.value_name;
-    }
-    return it.seller_sku || null;
-  }
   // O multiget precisa listar EXPLICITAMENTE os campos pesados (pictures, attributes, condition),
   // senão vêm vazios — e o app usa fotos/atributos/condição no score de qualidade.
   const attrs = "id,title,price,base_price,available_quantity,sold_quantity,status,sub_status,listing_type_id,seller_custom_field,category_id,thumbnail,permalink,shipping,pictures,attributes,condition,health,last_updated";
@@ -91,28 +134,9 @@ export async function syncListings(sellerId, token) {
     const lote = ids.slice(i, i + 20);
     const multi = await mlGet(`/items?ids=${lote.join(",")}&attributes=${attrs}`, token);
     const items = Array.isArray(multi) ? multi.map((x) => x && x.body).filter((b) => b && b.id) : [];
-    for (const it of items) {
-      rows.push({
-        seller_id: String(sellerId),
-        id: it.id,
-        title: it.title || null,
-        price: it.price ?? null,
-        available_quantity: it.available_quantity ?? null,
-        status: it.status || null,
-        listing_type_id: it.listing_type_id || null,
-        seller_sku: extrairSku(it),
-        category_id: it.category_id || null,
-        thumbnail: it.thumbnail || null,
-        permalink: it.permalink || null,
-        free_shipping: it.shipping ? !!it.shipping.free_shipping : null,
-        raw: it, // objeto — o postgres.js serializa p/ jsonb uma vez (não pré-stringificar)
-        ml_last_updated: it.last_updated || null,
-      });
-    }
+    for (const it of items) rows.push(buildListingRow(sellerId, it));
   }
-  const cols = ["seller_id", "id", "title", "price", "available_quantity", "status", "listing_type_id", "seller_sku", "category_id", "thumbnail", "permalink", "free_shipping", "raw", "ml_last_updated"];
-  const upd = cols.filter((c) => c !== "seller_id" && c !== "id");
-  await upsertLote(sql, "ml_listing", rows, cols, upd);
+  await upsertLote(sql, "ml_listing", rows, COLS_LISTING, UPD_LISTING);
   return { total_ids: ids.length, upserted: rows.length };
 }
 
@@ -133,25 +157,29 @@ export async function syncOrders(sellerId, token, cutoff = "2026-04-01") {
     offset += 50;
     if (offset > 10000) break;
   }
-  const rows = all.map((o) => {
-    const it = (o.order_items && o.order_items[0]) || {};
-    const item = it.item || {};
-    return {
-      seller_id: String(sellerId),
-      id: String(o.id),
-      listing_id: item.id || null,
-      title: item.title || null,
-      seller_sku: item.seller_sku || item.seller_custom_field || null,
-      status: o.status || null,
-      qty: it.quantity ?? null,
-      unit_price: it.unit_price ?? null,
-      total_amount: o.total_amount ?? null,
-      date_created: o.date_created || o.date_closed || null,
-      raw: o, // objeto — serializado uma vez pelo postgres.js
-    };
-  });
-  const cols = ["seller_id", "id", "listing_id", "title", "seller_sku", "status", "qty", "unit_price", "total_amount", "date_created", "raw"];
-  const upd = cols.filter((c) => c !== "seller_id" && c !== "id");
-  await upsertLote(sql, "ml_order", rows, cols, upd);
+  const rows = all.map((o) => buildOrderRow(sellerId, o));
+  await upsertLote(sql, "ml_order", rows, COLS_ORDER, UPD_ORDER);
   return { upserted: rows.length };
+}
+
+// ── Sync UNITÁRIO (usado pelo webhook: atualiza só o que mudou, em tempo real) ──
+
+// Atualiza um único anúncio no cache. /items/{id} devolve o item completo (com fotos/atributos).
+export async function syncOneListing(sellerId, token, itemId) {
+  const sql = sqlClient();
+  if (!sql) return false;
+  const it = await mlGet(`/items/${itemId}`, token);
+  if (!it || !it.id) return false;
+  await upsertLote(sql, "ml_listing", [buildListingRow(sellerId, it)], COLS_LISTING, UPD_LISTING);
+  return true;
+}
+
+// Atualiza um único pedido no cache.
+export async function syncOneOrder(sellerId, token, orderId) {
+  const sql = sqlClient();
+  if (!sql) return false;
+  const o = await mlGet(`/orders/${orderId}`, token);
+  if (!o || !o.id) return false;
+  await upsertLote(sql, "ml_order", [buildOrderRow(sellerId, o)], COLS_ORDER, UPD_ORDER);
+  return true;
 }

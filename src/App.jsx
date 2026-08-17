@@ -5994,6 +5994,7 @@ export default function App() {
   // Tema: escuro por padrão (preserva o visual atual); só fica claro se o usuário escolher.
   // "1"/ausente = escuro; "0" = claro. Aplica data-theme na raiz p/ os tokens CSS trocarem.
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "1");
+  const [menuAberto, setMenuAberto] = useState(null); // grupo do menu do topo aberto (dropdown)
   useEffect(function(){
     try { document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light"); } catch(e) {}
   }, [darkMode]);
@@ -7137,7 +7138,7 @@ export default function App() {
   }
 
   return (
-    <div className={darkMode?"dark":""} style={{ minHeight:"100vh", background:"transparent", color:"var(--text-strong)", fontFamily:"'Inter',system-ui,sans-serif", transition:"background .2s,color .2s", display:"flex", alignItems:"flex-start" }}>
+    <div className={darkMode?"dark":""} style={{ minHeight:"100vh", background:"transparent", color:"var(--text-strong)", fontFamily:"'Inter',system-ui,sans-serif", transition:"background .2s,color .2s", display:"flex", flexDirection:"column", alignItems:"stretch" }}>
       <style>{`
         *{box-sizing:border-box;margin:0;padding:0}
         body,#root{font-family:'Inter',system-ui,sans-serif}
@@ -7215,158 +7216,130 @@ export default function App() {
         @keyframes slPulse{0%,100%{opacity:1}50%{opacity:.4}}
       `}</style>
 
-      {/* ── BARRA LATERAL ESQUERDA — logo + abas (vertical) + status + botões (Config por último) ── */}
-      <aside style={{ width:214, flexShrink:0, position:"sticky", top:0, height:"100vh", overflowY:"auto",
-        background:darkMode?"var(--bg)":"var(--bg-2)", borderRight:"1px solid var(--border-soft)",
-        display:"flex", flexDirection:"column", padding:"14px 12px", zIndex:100 }}>
+      {/* ── MENU SUPERIOR (topo) — logo + grupos com dropdown + status/usuário à direita ── */}
+      <header style={{ position:"sticky", top:0, zIndex:200, display:"flex", alignItems:"center", gap:8,
+        padding:"8px 16px", background:"var(--bg-2)", borderBottom:"1px solid var(--border-soft)", flexWrap:"wrap" }}>
         {/* Logo */}
-        <div style={{ display:"flex", alignItems:"center", gap:9, padding:"2px 6px 14px", borderBottom:"1px solid var(--border-soft)", marginBottom:10 }}>
-          <div style={{ width:34, height:34, borderRadius:"50%", background:"rgba(118,134,146,.12)", border:"1px solid rgba(118,134,146,.45)", boxShadow:"0 0 14px rgba(118,134,146,.35)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Space Grotesk',sans-serif", fontWeight:500, fontSize:15, color:"#768692", letterSpacing:-0.5, flexShrink:0 }}>F</div>
-          <div>
-            <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:500, fontSize:15, color:"var(--text-strong)", letterSpacing:-0.4, lineHeight:1.2 }}>Flow</div>
-            <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:8, color:"var(--text-3)", letterSpacing:2, textTransform:"none", lineHeight:1, marginTop:2 }}>Marketplaces</div>
+        <div style={{ display:"flex", alignItems:"center", gap:9, paddingRight:12, marginRight:2, borderRight:"1px solid var(--border-soft)" }}>
+          <div style={{ width:32, height:32, borderRadius:"50%", background:"rgba(118,134,146,.12)", border:"1px solid rgba(118,134,146,.45)", boxShadow:"0 0 14px rgba(118,134,146,.35)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Space Grotesk',sans-serif", fontWeight:500, fontSize:15, color:"#768692", letterSpacing:-0.5, flexShrink:0 }}>F</div>
+          <div style={{ lineHeight:1.1 }}>
+            <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:500, fontSize:15, color:"var(--text-strong)", letterSpacing:-0.4 }}>Flow</div>
+            <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:8, color:"var(--text-3)", letterSpacing:2, marginTop:1 }}>Marketplaces</div>
           </div>
         </div>
-        {/* Abas de navegação — verticais */}
-        <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
-          {(function() {
-            var grupos = [
-              { titulo:"Operação", itens:[
-                { key:"dashboard", label:"Dashboard" },
-                { key:"produtos", label:"Produtos" },
-                currentUser?.permissoes?.includes("listings") && { key:"listings", label:"Anúncios" },
-                { key:"vincular", label:"Vincular anúncios" },
-                currentUser?.permissoes?.includes("listings") && { key:"precificacao", label:"Precificação" },
-                currentUser?.permissoes?.includes("orders") && { key:"orders", label:"Vendas" },
-                { key:"expedicao", label:"Expedição" },
-                { key:"compras", label:"Compras" },
-                { key:"estoque", label:"Estoque" },
-              ]},
-              { titulo:"Financeiro", itens:[
-                { key:"contas_pagar", label:"Contas a pagar" },
-                { key:"contas_receber", label:"Contas a receber" },
-                { key:"clientes", label:"Clientes" },
-                { key:"fornecedores", label:"Fornecedores" },
-                { key:"notas_fiscais", label:"Notas fiscais" },
-                { key:"dre", label:"DRE e conciliação" },
-              ]},
-              { titulo:"Inteligência", itens:[
-                { key:"relatorios", label:"Relatórios" },
-                currentUser?.permissoes?.includes("listings") && { key:"concorrencia", label:"Concorrência" },
-              ]},
-              { titulo:"Configuração", itens:[
-                currentUser?.permissoes?.includes("admin") && { key:"admin", label:"Equipe" },
-                { key:"integracoes", label:"Integrações" },
-              ]},
-            ];
-            function renderItem(t) {
-              var isActive = tab === t.key;
-              var estilo = {
-                display:"flex", alignItems:"center", justifyContent:"space-between", gap:6, width:"100%", boxSizing:"border-box",
-                padding:"9px 12px", borderRadius:9, border:"none", cursor:"pointer", fontFamily:"inherit",
-                fontSize:13, textAlign:"left", textDecoration:"none",
-                background: isActive ? "rgba(118,134,146,.16)" : "transparent",
-                color: isActive ? "var(--text-strong)" : "var(--text-3)",
-                fontWeight: isActive ? 700 : 500,
-                borderLeft: "3px solid "+(isActive ? "#768692" : "transparent"),
-                transition:"background .15s,color .15s",
-              };
-              var conteudo = [
-                <span key="l" style={{ whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{t.label}</span>,
-                t.badge != null ? (
-                  <span key="b" style={{ fontSize:10, fontWeight:500, padding:"1px 7px", borderRadius:10, flexShrink:0,
-                    background: isActive ? "#768692" : "var(--surface-3)",
-                    color: isActive ? "#fff" : "var(--text-3)", lineHeight:1.6 }}>
-                    {t.badge}
-                  </span>
-                ) : null,
-              ];
-              // "Configurações" abre um painel (modal), então segue como botão.
-              if (t.acao === "config") {
+
+        {/* Grupos de navegação com dropdown */}
+        {(function() {
+          var grupos = [
+            { titulo:"Operação", itens:[
+              { key:"dashboard", label:"Dashboard" },
+              { key:"produtos", label:"Produtos" },
+              currentUser?.permissoes?.includes("listings") && { key:"listings", label:"Anúncios" },
+              { key:"vincular", label:"Vincular anúncios" },
+              currentUser?.permissoes?.includes("listings") && { key:"precificacao", label:"Precificação" },
+              currentUser?.permissoes?.includes("orders") && { key:"orders", label:"Vendas" },
+              { key:"expedicao", label:"Expedição" },
+              { key:"compras", label:"Compras" },
+              { key:"estoque", label:"Estoque" },
+            ]},
+            { titulo:"Financeiro", itens:[
+              { key:"contas_pagar", label:"Contas a pagar" },
+              { key:"contas_receber", label:"Contas a receber" },
+              { key:"clientes", label:"Clientes" },
+              { key:"fornecedores", label:"Fornecedores" },
+              { key:"notas_fiscais", label:"Notas fiscais" },
+              { key:"dre", label:"DRE e conciliação" },
+            ]},
+            { titulo:"Inteligência", itens:[
+              { key:"relatorios", label:"Relatórios" },
+              currentUser?.permissoes?.includes("listings") && { key:"concorrencia", label:"Concorrência" },
+            ]},
+            { titulo:"Configuração", itens:[
+              currentUser?.permissoes?.includes("admin") && { key:"admin", label:"Equipe" },
+              { key:"integracoes", label:"Integrações" },
+            ]},
+          ];
+          function irPara(key){ setTab(key); setMenuAberto(null); }
+          return (
+            <nav style={{ display:"flex", alignItems:"center", gap:2, flexWrap:"wrap" }}>
+              {grupos.map(function(g) {
+                var itens = g.itens.filter(Boolean);
+                if (!itens.length) return null;
+                var grupoAtivo = itens.some(function(t){ return t.key === tab; });
+                var aberto = menuAberto === g.titulo;
                 return (
-                  <button key={t.key} onClick={function(){ setShowConfigPanel(true); setConfigPanelTab("aparencia"); }} style={estilo}>
-                    {conteudo}
-                  </button>
+                  <div key={g.titulo} style={{ position:"relative" }}
+                    onMouseEnter={function(){ setMenuAberto(g.titulo); }}
+                    onMouseLeave={function(){ setMenuAberto(function(m){ return m === g.titulo ? null : m; }); }}>
+                    <button onClick={function(){ setMenuAberto(g.titulo); }}
+                      style={{ display:"flex", alignItems:"center", gap:5, padding:"9px 13px", borderRadius:9, border:"none", cursor:"pointer", fontFamily:"inherit",
+                        fontSize:13.5, fontWeight: grupoAtivo ? 600 : 500,
+                        color: (grupoAtivo || aberto) ? "var(--text-strong)" : "var(--text-2)",
+                        background: aberto ? "var(--surface-3)" : "transparent" }}>
+                      {g.titulo}
+                      <span style={{ fontSize:9, opacity:.7, transform: aberto ? "rotate(180deg)" : "none", transition:"transform .15s" }}>▾</span>
+                    </button>
+                    {aberto && (
+                      <div style={{ position:"absolute", top:"calc(100% + 2px)", left:0, minWidth:212, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, boxShadow:"0 12px 34px rgba(0,0,0,.20)", padding:6, zIndex:300, display:"flex", flexDirection:"column", gap:2 }}>
+                        {itens.map(function(t) {
+                          var isActive = tab === t.key;
+                          return (
+                            <a key={t.key} href={"?tab=" + t.key}
+                              onClick={function(e){ if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; e.preventDefault(); irPara(t.key); }}
+                              style={{ display:"block", padding:"8px 12px", borderRadius:7, textDecoration:"none", whiteSpace:"nowrap", fontSize:13,
+                                fontWeight: isActive ? 600 : 500,
+                                color: isActive ? "var(--text-strong)" : "var(--text-2)",
+                                background: isActive ? "rgba(118,134,146,.14)" : "transparent" }}>
+                              {t.label}
+                            </a>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 );
-              }
-              // Demais itens são LINKS reais: clique esquerdo troca a aba (sem recarregar); clique
-              // direito, do meio ou com Ctrl/Cmd → o navegador abre em NOVA GUIA nativamente (a opção
-              // "Abrir em nova guia" aparece sozinha no menu de contexto do link).
-              return (
-                <a key={t.key} href={"?tab=" + t.key}
-                  onClick={function(e){ if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; e.preventDefault(); setTab(t.key); }}
-                  style={estilo}>
-                  {conteudo}
-                </a>
-              );
-            }
-            return grupos.map(function(g){
-              var itens = g.itens.filter(Boolean);
-              if (!itens.length) return null;
-              return (
-                <div key={g.titulo} style={{ marginBottom:4 }}>
-                  <div style={{ fontSize:9, fontWeight:500, letterSpacing:1.4, textTransform:"none", color:"var(--text-4)", padding:"12px 12px 5px" }}>{g.titulo}</div>
-                  {itens.map(renderItem)}
-                </div>
-              );
-            });
-          })()}
-        </div>
+              })}
+            </nav>
+          );
+        })()}
 
-        {/* Empurra o rodapé (status + botões) para baixo */}
-        <div style={{ flex:1, minHeight:14 }} />
+        {/* Espaço flexível empurra o bloco do usuário para a direita */}
+        <div style={{ flex:1, minWidth:8 }} />
 
-        {/* Rodapé: status + botões (Config por último) */}
-        <div style={{ borderTop:"1px solid var(--border-soft)", paddingTop:10, display:"flex", flexDirection:"column", gap:8 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
-            {!token && <span style={{ background: "var(--surface-3)", border: "1px solid var(--border)", color: "var(--text-3)", fontSize: 10, padding: "3px 9px", borderRadius: 20, fontWeight: 600 }}>● Não conectado</span>}
-            {token && <span style={{ background: "rgba(0,200,83,.12)", border: "1px solid rgba(0,200,83,.35)", color: "#0a9d4e", fontSize: 10, padding: "3px 9px", borderRadius: 20, fontWeight: 500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"100%" }}>● {user?.nickname}</span>}
-            <SinoNotificacoes notificacoes={notificacoes} setNotificacoes={setNotificacoes} darkMode={darkMode} />
-          </div>
-          {loading && <span style={{ color: "var(--text-3)", fontSize: 11 }}>⏳ {loadingMsg}</span>}
-          {loadError && <span style={{ color: "#FF5252", fontSize: 11 }}>⚠ {loadError}</span>}
-          {token && lastUpdate && (() => {
-            const mins = Math.round((Date.now() - parseInt(lastUpdate)) / 60000);
-            const horas = Math.floor(mins / 60);
-            const isStale = mins >= 300;
-            return (
-              <div style={{ fontSize:10, lineHeight:1.4 }}>
-                <span style={{ color: isStale ? "#FF5252" : "var(--text-3)" }}>{isStale ? "⚠️ " : "✓ "}{horas > 0 ? `${horas}h ${mins%60}min` : `${mins}min`} atrás</span>
-                <span style={{ color:"var(--text-4)" }}> · {isStale ? "token expirando" : "atualizado"}</span>
-              </div>
-            );
-          })()}
+        {/* Direita: status + sino + atualizar + reconectar + usuário + tema + sair */}
+        <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", justifyContent:"flex-end" }}>
+          {token && <span style={{ background:"rgba(0,200,83,.12)", border:"1px solid rgba(0,200,83,.35)", color:"#0a9d4e", fontSize:10, padding:"3px 9px", borderRadius:20, fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:180 }}>● {user?.nickname}</span>}
+          {!token && <span style={{ background:"var(--surface-3)", border:"1px solid var(--border)", color:"var(--text-3)", fontSize:10, padding:"3px 9px", borderRadius:20, fontWeight:600 }}>● Não conectado</span>}
+          {token && lastUpdate && (function(){ var mins=Math.round((Date.now()-parseInt(lastUpdate))/60000); var horas=Math.floor(mins/60); var isStale=mins>=300; return <span style={{ fontSize:10, color:isStale?"#FF5252":"var(--text-3)", whiteSpace:"nowrap" }}>{horas>0?(horas+"h "+(mins%60)+"min"):(mins+"min")} atrás</span>; })()}
+          <SinoNotificacoes notificacoes={notificacoes} setNotificacoes={setNotificacoes} darkMode={darkMode} />
           {token && (
-            <button onClick={clicarAtualizarManual} disabled={refreshingManual}
-              title="Busca pedidos novos e atualiza os dados sem recarregar tudo"
-              style={{ background: refreshingManual?"var(--surface-3)":"var(--surface)", border: "1px solid var(--border)", color: "var(--text-2)", fontWeight: 600, padding: "9px", borderRadius: 8, cursor: refreshingManual?"wait":"pointer", fontSize: 12, width:"100%" }}>
-              {refreshingManual ? "⏳ Atualizando..." : refreshManualMsg ? refreshManualMsg : "🔄 Atualizar"}
+            <button onClick={clicarAtualizarManual} disabled={refreshingManual} title="Busca pedidos novos sem recarregar tudo"
+              style={{ background: refreshingManual?"var(--surface-3)":"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"7px 12px", borderRadius:8, cursor: refreshingManual?"wait":"pointer", fontSize:12, whiteSpace:"nowrap" }}>
+              {refreshingManual ? "Atualizando…" : (refreshManualMsg ? refreshManualMsg : "Atualizar")}
             </button>
           )}
           <button onClick={function(){ window.location.href = "/api/auth/login"; }}
-            style={{ background: "#768692", border: "none", color: "#fff", fontWeight: 500, padding: "9px", borderRadius: 8, cursor: "pointer", fontSize: 12, width:"100%" }}>
+            style={{ background:"#768692", border:"none", color:"#fff", fontWeight:500, padding:"7px 12px", borderRadius:8, cursor:"pointer", fontSize:12, whiteSpace:"nowrap" }}>
             {token ? "Reconectar" : "Conectar ML"}
           </button>
-          <div style={{ display:"flex", alignItems:"center", gap:6, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, padding:"6px 8px" }}>
-            <div style={{ width:26, height:26, borderRadius:8, background:"#768692", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:600, color:"#FFC107", flexShrink:0 }}>
-              {currentUser?.nome?.charAt(0).toUpperCase()}
-            </div>
-            <div style={{ fontSize:12, lineHeight:1.3, minWidth:0 }}>
-              <div style={{ fontWeight:600, color:"var(--text-strong)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{currentUser?.nome}</div>
-              <div style={{ color:"var(--text-3)", fontSize:10 }}>{currentUser?.admin?"Admin":"Usuário"}</div>
+          <div style={{ display:"flex", alignItems:"center", gap:7, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, padding:"5px 9px" }}>
+            <div style={{ width:24, height:24, borderRadius:7, background:"#768692", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:600, color:"#FFC107", flexShrink:0 }}>{currentUser?.nome?.charAt(0).toUpperCase()}</div>
+            <div style={{ fontSize:12, lineHeight:1.2, minWidth:0 }}>
+              <div style={{ fontWeight:600, color:"var(--text-strong)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:120 }}>{currentUser?.nome}</div>
+              <div style={{ color:"var(--text-3)", fontSize:10 }}>{currentUser?.admin ? "Admin" : "Usuário"}</div>
             </div>
           </div>
-          <button onClick={() => { fetch("/api/auth/app-logout", { method:"POST" }).catch(()=>{}); clearSession(); clearSavedTokens(); setCurrentUser(null); setToken(null); setUser(null); }}
-            style={{ background:"rgba(255,82,82,.12)", border:"1px solid rgba(255,82,82,.35)", color:"#FF5252", fontWeight:600, padding:"9px", borderRadius:8, cursor:"pointer", fontSize:12, width:"100%" }}>
-            Sair
-          </button>
-          {/* Alternador de tema (substitui o botão de Configurações no rodapé) */}
           <button onClick={function(){ setDarkMode(function(d){ var nd = !d; try { localStorage.setItem("darkMode", nd ? "1" : "0"); } catch(e){} return nd; }); }}
-            style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"9px", borderRadius:8, cursor:"pointer", fontSize:12, width:"100%" }}>
+            style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"7px 11px", borderRadius:8, cursor:"pointer", fontSize:12, whiteSpace:"nowrap" }}>
             {darkMode ? "Tema claro" : "Tema escuro"}
           </button>
+          <button onClick={function(){ fetch("/api/auth/app-logout", { method:"POST" }).catch(function(){}); clearSession(); clearSavedTokens(); setCurrentUser(null); setToken(null); setUser(null); }}
+            style={{ background:"rgba(255,82,82,.12)", border:"1px solid rgba(255,82,82,.35)", color:"#FF5252", fontWeight:600, padding:"7px 12px", borderRadius:8, cursor:"pointer", fontSize:12, whiteSpace:"nowrap" }}>
+            Sair
+          </button>
         </div>
-      </aside>
+      </header>
+      {menuAberto && <div onClick={function(){ setMenuAberto(null); }} style={{ position:"fixed", inset:0, zIndex:150 }} />}
 
       {/* Coluna do conteúdo */}
       <div style={{ flex:1, minWidth:0 }}>

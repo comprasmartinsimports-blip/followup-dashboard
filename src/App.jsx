@@ -447,6 +447,103 @@ function EstoqueTab({ produtos }) {
   );
 }
 
+// Vincular anúncios: mostra cada anúncio e o produto do catálogo ao qual está vinculado (por SKU),
+// destacando os que estão sem SKU / sem produto.
+function VincularTab({ enriched, produtos }) {
+  const [filtro, setFiltro] = useState("todos"); // todos | vinculados | sem_sku
+  var mapaSku = {};
+  (produtos || []).forEach(function(p){ if (p.sku) mapaSku[String(p.sku).toLowerCase()] = p; });
+  var linhas = (enriched || []).map(function(l){
+    var sku = l.seller_sku || l.sku || "";
+    var prod = sku ? mapaSku[String(sku).toLowerCase()] : null;
+    var sit = !sku ? "sem_sku" : (prod ? "vinculado" : "sem_produto");
+    return { id:l.id, titulo:l.title, sku:sku, thumb:l.thumbnail, prod:prod, sit:sit };
+  });
+  var lista = linhas.filter(function(r){
+    if (filtro === "sem_sku") return r.sit === "sem_sku";
+    if (filtro === "vinculados") return r.sit === "vinculado";
+    return true;
+  });
+  var nVinc = linhas.filter(function(r){ return r.sit === "vinculado"; }).length;
+  var nSemSku = linhas.filter(function(r){ return r.sit === "sem_sku"; }).length;
+  var kpis = [
+    { l:"Anúncios", v:String(linhas.length), c:"var(--text-strong)" },
+    { l:"Vinculados", v:String(nVinc), c:"#00C853" },
+    { l:"Sem SKU", v:String(nSemSku), c: nSemSku > 0 ? "#FFC107" : "var(--text-strong)" },
+  ];
+  var badge = { vinculado:["#00C853","rgba(0,200,83,.14)","Vinculado"], sem_sku:["#FFC107","rgba(255,193,7,.14)","Sem SKU"], sem_produto:["#FF5252","rgba(255,82,82,.14)","Sem produto"] };
+  var filtros = [["todos","Todos"],["vinculados","Vinculados"],["sem_sku","Sem SKU"]];
+  return (
+    <div style={{ padding:2 }}>
+      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Vincular anúncios</div>
+      <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Cada anúncio ligado ao produto do catálogo pelo SKU.</div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12, marginBottom:14 }}>
+        {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
+      </div>
+      <div style={{ display:"flex", gap:6, marginBottom:12 }}>
+        {filtros.map(function(f){ var a = filtro === f[0]; return <button key={f[0]} onClick={function(){ setFiltro(f[0]); }} style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background: a ? "#1976FF" : "var(--surface)", color: a ? "#fff" : "var(--text-3)" }}>{f[1]}</button>; })}
+      </div>
+      <div style={_tableWrap}>
+        <table style={_table}>
+          <thead><tr>{["Foto","Anúncio","MLB","SKU","Produto vinculado","Situação"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+          <tbody>
+            {lista.slice(0,400).map(function(r,i){
+              var b = badge[r.sit];
+              return <tr key={r.id || i}>
+                <td style={_td}>{r.thumb ? <img src={r.thumb} alt="" style={{ width:36, height:36, borderRadius:6, objectFit:"cover" }} /> : <div style={{ width:36, height:36, borderRadius:6, background:"var(--surface-3)" }} />}</td>
+                <td style={{ ..._td, maxWidth:280, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)" }}>{r.titulo || "—"}</td>
+                <td style={_tdMono}>{r.id}</td>
+                <td style={_tdMono}>{r.sku || "—"}</td>
+                <td style={{ ..._td, maxWidth:240, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.prod ? nomeProd(r.prod) : "—"}</td>
+                <td style={_td}><span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+        {lista.length === 0 && <div style={{ padding:24, textAlign:"center", color:"var(--text-3)" }}>Nenhum anúncio neste filtro.</div>}
+      </div>
+    </div>
+  );
+}
+
+// Relatórios: faturamento, lucro e margem por MÊS (a partir dos pedidos sincronizados).
+function RelatoriosTab({ enrichedOrders }) {
+  var porMes = {};
+  (enrichedOrders || []).filter(function(o){ return o.status !== "cancelled"; }).forEach(function(o){
+    var mes = (o.date || "").slice(0, 7); if (!mes) return;
+    var q = o.qty || 1;
+    if (!porMes[mes]) porMes[mes] = { mes:mes, fat:0, lucro:0, ped:0 };
+    porMes[mes].fat += (o.price || 0) * q; porMes[mes].lucro += (o.profit || 0) * q; porMes[mes].ped += 1;
+  });
+  var meses = Object.keys(porMes).sort().reverse().map(function(k){ return porMes[k]; });
+  function rotulo(m){ return m.slice(5) + "/" + m.slice(0, 4); }
+  return (
+    <div style={{ padding:2 }}>
+      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Relatórios</div>
+      <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Faturamento, lucro e margem por mês.</div>
+      <div style={_tableWrap}>
+        <table style={_table}>
+          <thead><tr>{["Mês","Pedidos","Faturamento","Lucro líquido","Margem"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+          <tbody>
+            {meses.length === 0 ? (
+              <tr><td style={_td} colSpan={5}>Sem vendas registradas.</td></tr>
+            ) : meses.map(function(m,i){
+              var mg = m.fat ? (m.lucro / m.fat * 100) : 0;
+              return <tr key={i}>
+                <td style={{ ..._td, fontWeight:600, color:"var(--text-strong)" }}>{rotulo(m.mes)}</td>
+                <td style={_td}>{m.ped}</td>
+                <td style={_td}>{fmt(m.fat)}</td>
+                <td style={{ ..._td, fontWeight:700, color: m.lucro >= 0 ? "#00C853" : "#FF5252" }}>{fmt(m.lucro)}</td>
+                <td style={{ ..._td, color: mg >= 0 ? "#00C853" : "#FF5252" }}>{mg.toFixed(1)}%</td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // Dashboard com os dados REAIS da empresa (a partir dos pedidos já sincronizados): faturamento,
 // lucro líquido, margem, taxas, impostos, custo e top produtos — com filtro por período.
 function DashboardTab({ enrichedOrders }) {
@@ -511,20 +608,45 @@ function DashboardTab({ enrichedOrders }) {
           </div>;
         })}
       </div>
-      <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px" }}>
-        <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)", marginBottom:12 }}>Top produtos por lucro</div>
-        {top.length === 0 ? (
-          <div style={{ color:"var(--text-3)", fontSize:13, padding:"12px 0" }}>Sem vendas no período.</div>
-        ) : top.map(function(p,i){
-          return <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"9px 0", borderBottom: i < top.length-1 ? "1px solid var(--border-soft)" : "none" }}>
-            <div style={{ minWidth:0, flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontSize:13, color:"var(--text-2)" }}>{p.titulo}</div>
-            <div style={{ display:"flex", gap:16, alignItems:"center", flexShrink:0 }}>
-              <span style={{ fontSize:11, color:"var(--text-3)" }}>{p.qtd} vend.</span>
-              <span style={{ fontSize:13, fontWeight:700, color: p.lucro >= 0 ? "#00C853" : "#FF5252" }}>{fmt(p.lucro)}</span>
-            </div>
+      {(function(){
+        var arr = Object.keys(porProduto).map(function(k){ return porProduto[k]; });
+        var topP = arr.slice().sort(function(a,b){ return b.lucro - a.lucro; }).slice(0, 8);
+        var piores = arr.slice().sort(function(a,b){ return a.lucro - b.lucro; }).slice(0, 8);
+        var segs = [
+          { l:"Custo produto", v:custo, cor:"#3B8CFF" },
+          { l:"Taxas", v:taxas, cor:"#FFC107" },
+          { l:"Impostos", v:impostos, cor:"#FF9800" },
+          { l:"Lucro", v:Math.max(0, lucro), cor:"#00C853" },
+        ];
+        var somaSeg = segs.reduce(function(s,x){ return s + x.v; }, 0) || 1;
+        function listaProd(titulo, itens){
+          return <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", flex:1, minWidth:280 }}>
+            <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)", marginBottom:12 }}>{titulo}</div>
+            {itens.length === 0 ? <div style={{ color:"var(--text-3)", fontSize:13 }}>Sem vendas no período.</div> :
+              itens.map(function(p,i){ return <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom: i < itens.length-1 ? "1px solid var(--border-soft)" : "none" }}>
+                <div style={{ minWidth:0, flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontSize:13, color:"var(--text-2)" }}>{p.titulo}</div>
+                <span style={{ fontSize:13, fontWeight:700, color: p.lucro >= 0 ? "#00C853" : "#FF5252", flexShrink:0, marginLeft:12 }}>{fmt(p.lucro)}</span>
+              </div>; })}
           </div>;
-        })}
-      </div>
+        }
+        return <>
+          <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", marginBottom:14 }}>
+            <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)", marginBottom:12 }}>Para onde foi o dinheiro</div>
+            <div style={{ display:"flex", height:16, borderRadius:8, overflow:"hidden", marginBottom:10, background:"var(--surface-3)" }}>
+              {segs.map(function(s,i){ return <div key={i} title={s.l} style={{ width:(s.v/somaSeg*100)+"%", background:s.cor }} />; })}
+            </div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:16 }}>
+              {segs.map(function(s,i){ return <div key={i} style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, color:"var(--text-2)" }}>
+                <span style={{ width:10, height:10, borderRadius:2, background:s.cor, display:"inline-block" }} /> {s.l}: <b style={{ color:"var(--text-strong)" }}>{fmt(s.v)}</b>
+              </div>; })}
+            </div>
+          </div>
+          <div style={{ display:"flex", gap:14, flexWrap:"wrap" }}>
+            {listaProd("Top produtos por lucro", topP)}
+            {listaProd("Piores resultados", piores)}
+          </div>
+        </>;
+      })()}
     </div>
   );
 }
@@ -6043,7 +6165,9 @@ export default function App() {
         )}
         {tab === "produtos" && <ProdutosTab produtos={produtos} />}
         {tab === "estoque" && <EstoqueTab produtos={produtos} />}
-        {["vincular","expedicao","compras","contas_pagar","contas_receber","clientes","fornecedores","notas_fiscais","dre","relatorios","integracoes"].indexOf(tab) >= 0 && (
+        {tab === "vincular" && <VincularTab enriched={enriched} produtos={produtos} />}
+        {tab === "relatorios" && <RelatoriosTab enrichedOrders={enrichedOrders} />}
+        {["expedicao","compras","contas_pagar","contas_receber","clientes","fornecedores","notas_fiscais","dre","integracoes"].indexOf(tab) >= 0 && (
           <EmConstrucao tab={tab} />
         )}
       </div>{/* fecha a coluna do conteúdo */}

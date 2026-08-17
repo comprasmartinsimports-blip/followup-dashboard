@@ -544,6 +544,95 @@ function RelatoriosTab({ enrichedOrders }) {
   );
 }
 
+// Expedição: pedidos com o status de envio do ML (a enviar / enviado / entregue), com filtro.
+function ExpedicaoTab({ rawOrders }) {
+  const [filtro, setFiltro] = useState("todos");
+  function categoria(st){
+    if (!st) return "sem";
+    if (st === "delivered") return "entregue";
+    if (st === "shipped") return "enviado";
+    if (st === "pending" || st === "handling" || st === "ready_to_ship") return "aenviar";
+    return "problema";
+  }
+  var base = (rawOrders || []).filter(function(o){ return o.status !== "cancelled"; });
+  var lista = base.filter(function(o){ return filtro === "todos" || categoria(o.shipment_status) === filtro; })
+    .sort(function(a,b){ return (b.date || "").localeCompare(a.date || ""); });
+  var cont = { aenviar:0, enviado:0, entregue:0 };
+  base.forEach(function(o){ var c = categoria(o.shipment_status); if (cont[c] !== undefined) cont[c]++; });
+  var kpis = [
+    { l:"Pedidos", v:String(base.length), c:"var(--text-strong)" },
+    { l:"A enviar", v:String(cont.aenviar), c: cont.aenviar > 0 ? "#FFC107" : "var(--text-strong)" },
+    { l:"Enviados", v:String(cont.enviado), c:"#3B8CFF" },
+    { l:"Entregues", v:String(cont.entregue), c:"#00C853" },
+  ];
+  var badge = { aenviar:["#FFC107","rgba(255,193,7,.14)","A enviar"], enviado:["#3B8CFF","rgba(59,140,255,.14)","Enviado"], entregue:["#00C853","rgba(0,200,83,.14)","Entregue"], problema:["#FF5252","rgba(255,82,82,.14)","Problema"], sem:["var(--text-3)","var(--surface-3)","—"] };
+  var filtros = [["todos","Todos"],["aenviar","A enviar"],["enviado","Enviados"],["entregue","Entregues"]];
+  return (
+    <div style={{ padding:2 }}>
+      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Expedição</div>
+      <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Status de envio dos pedidos.</div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:14 }}>
+        {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
+      </div>
+      <div style={{ display:"flex", gap:6, marginBottom:12, flexWrap:"wrap" }}>
+        {filtros.map(function(f){ var a = filtro === f[0]; return <button key={f[0]} onClick={function(){ setFiltro(f[0]); }} style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background: a ? "#1976FF" : "var(--surface)", color: a ? "#fff" : "var(--text-3)" }}>{f[1]}</button>; })}
+      </div>
+      <div style={_tableWrap}>
+        <table style={_table}>
+          <thead><tr>{["Data","Pedido","Produto","SKU","Qtd","UF","Frete","Envio"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+          <tbody>
+            {lista.slice(0,400).map(function(o,i){
+              var b = badge[categoria(o.shipment_status)];
+              return <tr key={o.id || i}>
+                <td style={_td}>{o.date || "—"}</td>
+                <td style={_tdMono}>{o.id}</td>
+                <td style={{ ..._td, maxWidth:260, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)" }}>{o.title || "—"}</td>
+                <td style={_tdMono}>{o.sku || "—"}</td>
+                <td style={_td}>{o.qty || 1}</td>
+                <td style={_td}>{o.buyerUF || "—"}</td>
+                <td style={_td}>{o.seller_shipping_cost > 0 ? fmt(o.seller_shipping_cost) : "—"}</td>
+                <td style={_td}><span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+        {lista.length === 0 && <div style={{ padding:24, textAlign:"center", color:"var(--text-3)" }}>Nenhum pedido neste filtro.</div>}
+      </div>
+    </div>
+  );
+}
+
+// Integrações: status das conexões do sistema.
+function IntegracoesTab({ token, user, lastUpdate }) {
+  var mins = lastUpdate ? Math.round((Date.now() - parseInt(lastUpdate)) / 60000) : null;
+  var cards = [
+    { nome:"Mercado Livre", desc: token ? ("Conectado" + (user && user.nickname ? " — " + user.nickname : "")) : "Não conectado", ativo: !!token, extra: mins != null ? ("Última sincronização: " + mins + " min atrás") : null },
+    { nome:"Banco de dados (Supabase)", desc:"Dados de negócio e cache de anúncios/pedidos no servidor (Postgres).", ativo:true },
+    { nome:"Sincronização automática", desc:"Atualização a cada 15 min (cron) + webhook do ML em tempo real.", ativo:true },
+    { nome:"Shopee", desc:"Precificação com as taxas 2026. Integração de vendas em breve.", ativo:false },
+  ];
+  return (
+    <div style={{ padding:2 }}>
+      <div style={{ fontWeight:800, fontSize:20, color:"var(--text-strong)" }}>Integrações</div>
+      <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Conexões do sistema com marketplaces e serviços.</div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:12 }}>
+        {cards.map(function(c,i){
+          return <div key={i} style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+              <div style={{ fontWeight:700, fontSize:15, color:"var(--text-strong)" }}>{c.nome}</div>
+              <span style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:20, background: c.ativo ? "rgba(0,200,83,.14)" : "var(--surface-3)", color: c.ativo ? "#00C853" : "var(--text-3)" }}>
+                {c.ativo ? "● Ativo" : "○ Inativo"}
+              </span>
+            </div>
+            <div style={{ fontSize:13, color:"var(--text-2)", lineHeight:1.5 }}>{c.desc}</div>
+            {c.extra && <div style={{ fontSize:11, color:"var(--text-3)", marginTop:6 }}>{c.extra}</div>}
+          </div>;
+        })}
+      </div>
+    </div>
+  );
+}
+
 // Dashboard com os dados REAIS da empresa (a partir dos pedidos já sincronizados): faturamento,
 // lucro líquido, margem, taxas, impostos, custo e top produtos — com filtro por período.
 function DashboardTab({ enrichedOrders }) {
@@ -6167,7 +6256,9 @@ export default function App() {
         {tab === "estoque" && <EstoqueTab produtos={produtos} />}
         {tab === "vincular" && <VincularTab enriched={enriched} produtos={produtos} />}
         {tab === "relatorios" && <RelatoriosTab enrichedOrders={enrichedOrders} />}
-        {["expedicao","compras","contas_pagar","contas_receber","clientes","fornecedores","notas_fiscais","dre","integracoes"].indexOf(tab) >= 0 && (
+        {tab === "expedicao" && <ExpedicaoTab rawOrders={rawOrders} />}
+        {tab === "integracoes" && <IntegracoesTab token={token} user={user} lastUpdate={lastUpdate} />}
+        {["compras","contas_pagar","contas_receber","clientes","fornecedores","notas_fiscais","dre"].indexOf(tab) >= 0 && (
           <EmConstrucao tab={tab} />
         )}
       </div>{/* fecha a coluna do conteúdo */}

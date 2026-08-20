@@ -5818,6 +5818,15 @@ function saveTarefas(t) {
   kvSyncPush("chat_interno_tarefas", t);
 }
 
+// Rótulo de data estilo WhatsApp para os separadores do chat.
+function rotuloDataChat(iso){
+  var d = new Date(iso);
+  var hoje = new Date(); var ontem = new Date(); ontem.setDate(hoje.getDate()-1);
+  function ymd(x){ return x.getFullYear()+"-"+x.getMonth()+"-"+x.getDate(); }
+  if (ymd(d)===ymd(hoje)) return "Hoje";
+  if (ymd(d)===ymd(ontem)) return "Ontem";
+  return d.toLocaleDateString("pt-BR", { day:"2-digit", month:"2-digit", year:"numeric" });
+}
 function ChatInternoWidget({ currentUser }) {
   const [open, setOpen] = useState(false);
   const [aba, setAba] = useState("conversa"); // conversa | tarefas
@@ -5836,6 +5845,13 @@ function ChatInternoWidget({ currentUser }) {
   useEffect(function(){
     if (open && bottomRef.current) bottomRef.current.scrollIntoView({ behavior:"smooth" });
   }, [mensagens, open, canalAtivo]);
+  // Fechar o chat com a tecla Esc.
+  useEffect(function(){
+    if (!open) return;
+    function onKey(e){ if (e.key === "Escape") setOpen(false); }
+    window.addEventListener("keydown", onKey);
+    return function(){ window.removeEventListener("keydown", onKey); };
+  }, [open]);
 
   // Busca imediatamente ao montar (sem esperar o primeiro tick do polling) — inclui a lista
   // de usuários, pra um usuário criado depois já aparecer nas conversas diretas sem precisar
@@ -6023,7 +6039,8 @@ function ChatInternoWidget({ currentUser }) {
           {/* Header */}
           <div style={{ background:"#768692", padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <div style={{ color:"#fff", fontWeight:500, fontSize:14 }}>💬 Chat da Equipe</div>
-            <button onClick={function(){setOpen(false);}} style={{ background:"transparent", border:"none", color:"var(--text-3)", fontSize:18, cursor:"pointer" }}>✕</button>
+            <button onClick={function(){setOpen(false);}} title="Fechar (Esc)"
+              style={{ background:"rgba(255,255,255,.18)", border:"none", color:"#fff", fontSize:17, cursor:"pointer", width:30, height:30, borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1, fontWeight:700 }}>✕</button>
           </div>
 
           {/* Sub-abas */}
@@ -6059,10 +6076,16 @@ function ChatInternoWidget({ currentUser }) {
                     Nenhuma mensagem ainda. Comece a conversa!
                   </div>
                 )}
-                {msgsCanal.map(function(m){
+                {msgsCanal.map(function(m, idx){
                   var isMe = m.autorId === currentUser.id;
+                  var prev = idx>0 ? msgsCanal[idx-1] : null;
+                  var mostraData = !prev || new Date(prev.data).toDateString() !== new Date(m.data).toDateString();
                   return (
-                    <div key={m.id} style={{ display:"flex", flexDirection:"column", alignItems:isMe?"flex-end":"flex-start" }}>
+                    <React.Fragment key={m.id}>
+                    {mostraData && (
+                      <div style={{ alignSelf:"center", margin:"8px 0 2px", background:"var(--surface-3)", color:"var(--text-3)", fontSize:10.5, fontWeight:600, padding:"3px 12px", borderRadius:20 }}>{rotuloDataChat(m.data)}</div>
+                    )}
+                    <div style={{ display:"flex", flexDirection:"column", alignItems:isMe?"flex-end":"flex-start" }}>
                       {!isMe && <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:2, marginLeft:4 }}>{m.autorNome}</div>}
                       <div style={{ maxWidth:"80%", background:isMe?"#768692":"var(--surface-3)", color:isMe?"#fff":"var(--text-strong)",
                         padding:"8px 12px", borderRadius:isMe?"12px 12px 4px 12px":"12px 12px 12px 4px", fontSize:13 }}>
@@ -6081,6 +6104,7 @@ function ChatInternoWidget({ currentUser }) {
                         {new Date(m.data).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}
                       </div>
                     </div>
+                    </React.Fragment>
                   );
                 })}
                 <div ref={bottomRef} />

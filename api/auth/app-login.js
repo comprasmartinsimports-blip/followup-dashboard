@@ -35,6 +35,28 @@ export default async function handler(req, res) {
     u => u.usuario && u.usuario.toLowerCase() === String(usuario).toLowerCase()
   );
 
+  // ── Acesso de emergência (break-glass) ──────────────────────────────────────
+  // Se a variável de ambiente ADMIN_RECOVERY_PASSWORD estiver definida no projeto
+  // (Vercel → Environment Variables) e a senha enviada for igual a ela, o login é
+  // liberado para o usuário digitado (ou, se não existir, o 1º admin da lista): a
+  // conta é REATIVADA e a senha é redefinida para essa senha de recuperação. Só quem
+  // tem acesso às variáveis de ambiente consegue habilitar isso — resgate controlado.
+  const recovery = process.env.ADMIN_RECOVERY_PASSWORD;
+  if (recovery && String(senha) === String(recovery)) {
+    let alvo = user || usuarios.find(u => u.admin) || usuarios[0];
+    if (alvo) {
+      try {
+        const atualizados = usuarios.map(u =>
+          u.id === alvo.id ? Object.assign({}, u, { ativo: true, senhaHash: hashSenha(recovery) }) : u
+        );
+        await salvarUsuarios(atualizados);
+      } catch {}
+      alvo = Object.assign({}, alvo, { ativo: true });
+      res.setHeader("Set-Cookie", await criarCookieSessao(alvo));
+      return res.status(200).json({ ok: true, user: semSenha(alvo), recovery: true });
+    }
+  }
+
   if (!user || !user.ativo) {
     return res.status(401).json({ error: "Usuário ou senha incorretos, ou usuário inativo." });
   }

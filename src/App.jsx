@@ -4314,6 +4314,17 @@ function AdminTab({ currentUser }) {
     setUsuarios(saveUsuarios(updated));
   }
 
+  function resetarSenha(u) {
+    var nova = window.prompt("Nova senha para " + (u.nome || u.usuario) + ":", "");
+    if (nova == null) return; // cancelou
+    nova = String(nova).trim();
+    if (nova.length < 4) { alert("A senha precisa ter pelo menos 4 caracteres."); return; }
+    // saveUsuarios envia u.senha (texto) ao servidor, que faz o hash com scrypt.
+    const updated = getUsuarios().map(u2 => u2.id === u.id ? Object.assign({}, u2, { senha: nova }) : u2);
+    setUsuarios(saveUsuarios(updated));
+    alert("Senha de " + (u.nome || u.usuario) + " redefinida com sucesso.");
+  }
+
   return (
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
@@ -4346,6 +4357,7 @@ function AdminTab({ currentUser }) {
                 {PERMISSOES_DISPONIVEIS.map(function(p){ var on = u.permissoes && u.permissoes.includes(p.key); return <span key={p.key} style={{ fontSize:11, padding:"2px 8px", borderRadius:20, background: on ? "rgba(118,134,146,.12)" : "var(--bg-2)", color: on ? "#768692" : "var(--text-4)", border:"1px solid " + (on ? "rgba(118,134,146,.3)" : "var(--border)"), fontWeight: on ? 600 : 400 }}>{p.label}</span>; })}
               </div>
               <button onClick={function(){ toggleAtivo(u.id); }} style={{ fontSize:11, fontWeight:500, padding:"4px 10px", borderRadius:20, cursor:"pointer", flexShrink:0, background: u.ativo ? "rgba(10,157,78,.12)" : "var(--bg-2)", border:"1px solid " + (u.ativo ? "rgba(10,157,78,.35)" : "var(--border)"), color: u.ativo ? "#0a9d4e" : "var(--text-3)" }}>{u.ativo ? "Ativo" : "Inativo"}</button>
+              <button onClick={function(){ resetarSenha(u); }} title="Definir uma nova senha para este usuário" style={{ fontSize:12, fontWeight:600, padding:"5px 12px", borderRadius:8, cursor:"pointer", flexShrink:0, background:"rgba(118,134,146,.14)", border:"none", color:"#768692" }}>Redefinir senha</button>
               <button onClick={function(){ setEditingUser(u); setShowModal(true); }} style={{ fontSize:12, fontWeight:600, padding:"5px 12px", borderRadius:8, cursor:"pointer", flexShrink:0, background:"var(--surface-3)", border:"none", color:"var(--text-2)" }}>Editar</button>
               {!eu && <button onClick={function(){ deleteUser(u.id); }} style={{ fontSize:12, fontWeight:600, padding:"5px 12px", borderRadius:8, cursor:"pointer", flexShrink:0, background:"rgba(255,82,82,.1)", border:"none", color:"#FF5252" }}>Excluir</button>}
             </div>

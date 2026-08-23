@@ -1132,6 +1132,15 @@ function ClientesTab({ rawOrders }) {
   );
 }
 
+// Rótulo da linha de imposto no detalhamento: mostra a alíquota efetiva daquele pedido,
+// que muda conforme o estado de entrega (ICMS interno x interestadual).
+function rotuloImposto(o) {
+  var pct = parseFloat((o || {}).impostoPct);
+  if (!isFinite(pct) || pct <= 0) return "Imposto";
+  var uf = String((o || {}).buyerUF || "").toUpperCase();
+  return "Imposto (" + pct.toFixed(2).replace(".", ",") + "%" + (uf ? " · " + uf : "") + ")";
+}
+
 // Vendas: cada venda com custos/taxas do momento; clicar abre o painel com o detalhamento completo.
 function VendasTab({ enrichedOrders }) {
   const [sel, setSel] = useState(null);
@@ -1141,7 +1150,7 @@ function VendasTab({ enrichedOrders }) {
     var fat = (o.price || 0) * q, taxas = (o.fee || 0) * q, frete = o.freteSeller || 0;
     var custo = (o.cost || 0) * q, imposto = (o.imposto || 0) * q;
     var repasse = fat - taxas - frete, lucro = repasse - custo - imposto;
-    return { q, fat, taxas, frete, custo, imposto, repasse, lucro, margem: fat ? lucro / fat * 100 : 0 };
+    return { q, fat, taxas, frete, custo, imposto, repasse, lucro, margem: fat ? lucro / fat * 100 : 0, rotuloImp: rotuloImposto(o) };
   }
   var lista = (enrichedOrders || []).filter(function(o){
     if (situacao === "ativas") return o.status !== "cancelled";
@@ -1211,7 +1220,7 @@ function VendasTab({ enrichedOrders }) {
 
             <div style={{ fontSize:11, fontWeight:500, color:"var(--text-3)", textTransform:"none", letterSpacing:.5, margin:"6px 0 2px" }}>Seus custos</div>
             {Linha("Custo do produto", "- " + fmt(c.custo), { cor:"#FFC107" })}
-            {Linha("Imposto", "- " + fmt(c.imposto), { cor:"#FFC107" })}
+            {Linha(c.rotuloImp, "- " + fmt(c.imposto), { cor:"#FFC107" })}
             <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"12px 14px", marginTop:12 }}>
               {Linha("Lucro líquido", fmt(c.lucro) + "  (" + c.margem.toFixed(1) + "%)", { forte:true, cor: c.lucro >= 0 ? "#0a9d4e" : "#FF5252" })}
             </div>
@@ -1276,7 +1285,7 @@ function PedidoDetalheDrawer({ pedido, onClose }) {
 
       <div style={_secTit}>Seus custos</div>
       {Linha("Custo do produto", "- " + fmt(custo), { cor:"#FFC107" })}
-      {Linha("Imposto", "- " + fmt(imposto), { cor:"#FFC107" })}
+      {Linha(rotuloImposto(o), "- " + fmt(imposto), { cor:"#FFC107" })}
       <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"12px 14px", marginTop:12 }}>
         {Linha("Lucro líquido", fmt(lucro) + "  (" + margem.toFixed(1) + "%)", { forte:true, cor: lucro >= 0 ? "#0a9d4e" : "#FF5252" })}
       </div>
@@ -3715,6 +3724,7 @@ const BACKUP_KEYS = [
   { key: "fornecedores_cadastro",   label: "Fornecedores" },
   { key: "notas_fiscais_entrada",   label: "Notas Fiscais" },
   { key: "impostos_config",         label: "Impostos" },
+  { key: "icms_regime_config",      label: "Regime de ICMS" },
   { key: "custos_fixos_config",     label: "Custos Fixos" },
   { key: "metaMensal",              label: "Meta Mensal" },
   { key: "ml_auth_users",           label: "Usuários do Sistema" },
@@ -4379,12 +4389,58 @@ function getIcmsConfig() {
 }
 function saveIcmsConfig(cfg) { try { localStorage.setItem("icms_por_estado", JSON.stringify(cfg)); } catch {} }
 
-function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, faturamentoMes, irpjCsllConfig, setIrpjCsllConfig }) {
+// ── Regime de ICMS sobre a venda ──────────────────────────────────────────────
+// Padrão da operação: mercadoria importada saindo de SP — 4% nas vendas para fora do
+// estado (alíquota interestadual de importado) e 0% nas vendas dentro de SP. O modo
+// "tabela" mantém o comportamento antigo: uma alíquota livre por estado de destino.
+var ICMS_REGIME_PADRAO = { ativo: true, modo: "automatico", ufOrigem: "SP", aliqInterna: 0, aliqInterestadual: 4 };
+function getIcmsRegime() {
+  try {
+    var v = JSON.parse(localStorage.getItem("icms_regime_config") || "{}");
+    if (!v || typeof v !== "object" || Array.isArray(v)) return Object.assign({}, ICMS_REGIME_PADRAO);
+    return Object.assign({}, ICMS_REGIME_PADRAO, v);
+  } catch { return Object.assign({}, ICMS_REGIME_PADRAO); }
+}
+function saveIcmsRegime(cfg) { try { localStorage.setItem("icms_regime_config", JSON.stringify(cfg)); } catch {} }
+
+// Alíquota de ICMS (%) de uma venda, pela UF de entrega do comprador. Sem UF conhecida
+// assume interestadual — é o caso mais comum e o mais conservador para a margem.
+function icmsPctParaUF(uf, regime, tabelaPorEstado) {
+  var r = regime || ICMS_REGIME_PADRAO;
+  if (r.ativo === false) return 0;
+  var destino = String(uf || "").trim().toUpperCase();
+  if (r.modo === "tabela") {
+    var t = parseFloat((tabelaPorEstado || {})[destino]);
+    return isFinite(t) ? t : 0;
+  }
+  var interestadual = parseFloat(r.aliqInterestadual); if (!isFinite(interestadual)) interestadual = 0;
+  var interna = parseFloat(r.aliqInterna); if (!isFinite(interna)) interna = 0;
+  if (!destino) return interestadual;
+  return destino === String(r.ufOrigem || "SP").toUpperCase() ? interna : interestadual;
+}
+
+// Alíquota usada onde ainda não há comprador: projeção de margem de anúncios e precificação.
+// No modo automático usa a interestadual (a maior parte das vendas sai do estado de origem).
+function icmsPctProjecao(regime, tabelaPorEstado) {
+  var r = regime || ICMS_REGIME_PADRAO;
+  if (r.ativo === false) return 0;
+  if (r.modo === "tabela") {
+    var ufs = Object.keys(tabelaPorEstado || {}).filter(function(k){ return isFinite(parseFloat((tabelaPorEstado || {})[k])); });
+    if (!ufs.length) return 0;
+    return ufs.reduce(function(soma, k){ return soma + parseFloat(tabelaPorEstado[k]); }, 0) / ufs.length;
+  }
+  var v = parseFloat(r.aliqInterestadual);
+  return isFinite(v) ? v : 0;
+}
+
+function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, faturamentoMes, irpjCsllConfig, setIrpjCsllConfig, icmsRegime, setIcmsRegime, icmsConfig, setIcmsConfig }) {
   const [novoCusto, setNovoCusto] = useState({ nome:"", valor:"", tipo:"R$" });
   // Persiste no localStorage — o loop de sincronização (pushMudancasLocais) envia daqui para o KV
   function saveCustosFixos(v) { try { localStorage.setItem("custos_fixos_config", JSON.stringify(v)); } catch {} }
-  const [icmsConfig, setIcmsConfig] = useState(getIcmsConfig);
   const [showIcmsTable, setShowIcmsTable] = useState(false);
+  const regime = icmsRegime || ICMS_REGIME_PADRAO;
+  const modoAuto = regime.modo !== "tabela";
+  const ufOrigem = String(regime.ufOrigem || "SP").toUpperCase();
   const irpjPct = irpjCsllConfig.irpj ?? "15";
   const irpjAdicionalPct = irpjCsllConfig.irpjAdicional ?? "10";
   const csllPct = irpjCsllConfig.csll ?? "9";
@@ -4394,13 +4450,15 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
   }
 
   function setIcmsEstado(uf, valor) {
-    var next = Object.assign({}, icmsConfig, { [uf]: valor });
-    setIcmsConfig(next); saveIcmsConfig(next);
+    setIcmsConfig(Object.assign({}, icmsConfig, { [uf]: valor }));
   }
   function resetIcmsPadrao() {
     var next = {};
     ESTADOS_BR_ICMS.forEach(function(e){ next[e[0]] = e[2]; });
-    setIcmsConfig(next); saveIcmsConfig(next);
+    setIcmsConfig(next);
+  }
+  function setRegimeCampo(campo, valor) {
+    setIcmsRegime(Object.assign({}, regime, { [campo]: valor }));
   }
 
   function addCusto() {
@@ -4447,7 +4505,7 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
         <div style={{ background:"rgba(255,82,82,.12)", padding:"10px 14px", borderBottom:"1px solid rgba(255,82,82,.35)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
             <div style={{ fontWeight:500, fontSize:14, color:"#FF5252" }}>📋 Impostos — Regime Lucro Real</div>
-            <div style={{ fontSize:11, color:"var(--text-3)", marginTop:1 }}>ICMS por estado, IRPJ e CSLL</div>
+            <div style={{ fontSize:11, color:"var(--text-3)", marginTop:1 }}>ICMS sobre a venda, IRPJ e CSLL</div>
           </div>
           <div style={{ textAlign:"right" }}>
             <div style={{ fontSize:11, color:"var(--text-3)" }}>IRPJ+CSLL s/ faturamento</div>
@@ -4489,24 +4547,87 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
             </div>
           </div>
 
-          {/* ICMS por estado */}
+          {/* ICMS sobre a venda */}
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-            <div style={{ fontSize:11, color:"var(--text-3)", fontWeight:500, textTransform:"none" }}>
-              ICMS por Estado (alíquota interna de venda)
+            <div>
+              <div style={{ fontSize:11, color:"var(--text-3)", fontWeight:500, textTransform:"none" }}>
+                ICMS sobre a venda
+              </div>
+              <div style={{ fontSize:10, color:"var(--text-4)", marginTop:1 }}>
+                Entra na margem de cada pedido conforme o estado de entrega do comprador
+              </div>
             </div>
-            <div style={{ display:"flex", gap:6 }}>
+            <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, color:"var(--text-2)", cursor:"pointer", flexShrink:0 }}>
+              <input type="checkbox" checked={regime.ativo !== false}
+                onChange={function(e){ setRegimeCampo("ativo", e.target.checked); }}
+                style={{ cursor:"pointer" }} />
+              Aplicar no cálculo de margem
+            </label>
+          </div>
+
+          <div style={{ display:"flex", gap:6, marginBottom:10 }}>
+            {[["automatico", "Por destino (dentro x fora do estado)"], ["tabela", "Tabela por estado"]].map(function(m){
+              var ativo = modoAuto === (m[0] === "automatico");
+              return (
+                <button key={m[0]} onClick={function(){ setRegimeCampo("modo", m[0]); }}
+                  style={{ flex:1, fontSize:11, fontWeight:600, padding:"7px 10px", borderRadius:8, cursor:"pointer",
+                    background: ativo ? "rgba(255,82,82,.12)" : "var(--bg-2)",
+                    border: "1px solid " + (ativo ? "rgba(255,82,82,.45)" : "var(--border)"),
+                    color: ativo ? "#FF5252" : "var(--text-2)" }}>
+                  {m[1]}
+                </button>
+              );
+            })}
+          </div>
+
+          {modoAuto ? (
+            <div style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:10, padding:"12px 14px", opacity: regime.ativo === false ? .5 : 1 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1.3fr 1fr 1fr", gap:10 }}>
+                <div>
+                  <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:4 }}>UF de origem (sua empresa)</div>
+                  <select value={ufOrigem} onChange={function(e){ setRegimeCampo("ufOrigem", e.target.value); }}
+                    style={{ width:"100%", background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"7px 10px", borderRadius:8, fontSize:13, outline:"none", cursor:"pointer" }}>
+                    {ESTADOS_BR_ICMS.map(function(e){ return <option key={e[0]} value={e[0]}>{e[0]} — {e[1]}</option>; })}
+                  </select>
+                </div>
+                <div>
+                  <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:4 }}>Dentro de {ufOrigem} (%)</div>
+                  <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                    <input type="number" step="0.01" min="0" value={regime.aliqInterna ?? 0}
+                      onChange={function(e){ setRegimeCampo("aliqInterna", e.target.value); }}
+                      style={{ width:"100%", background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"7px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
+                    <span style={{ fontSize:12, color:"var(--text-3)" }}>%</span>
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:4 }}>Outros estados (%)</div>
+                  <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                    <input type="number" step="0.01" min="0" value={regime.aliqInterestadual ?? 0}
+                      onChange={function(e){ setRegimeCampo("aliqInterestadual", e.target.value); }}
+                      style={{ width:"100%", background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"7px 10px", borderRadius:8, fontSize:13, outline:"none" }} />
+                    <span style={{ fontSize:12, color:"var(--text-3)" }}>%</span>
+                  </div>
+                  <div style={{ fontSize:9, color:"var(--text-4)", marginTop:2 }}>Alíquota interestadual</div>
+                </div>
+              </div>
+              <div style={{ fontSize:11, color:"var(--text-3)", marginTop:10, lineHeight:1.5 }}>
+                {regime.ativo === false
+                  ? "ICMS desligado — nenhuma alíquota é descontada da margem."
+                  : <>Venda entregue em <b style={{ color:"var(--text-2)" }}>{ufOrigem}</b>: <b style={{ color:"#FF5252" }}>{(parseFloat(regime.aliqInterna) || 0).toFixed(2).replace(".", ",")}%</b> · venda para <b style={{ color:"var(--text-2)" }}>qualquer outro estado</b>: <b style={{ color:"#FF5252" }}>{(parseFloat(regime.aliqInterestadual) || 0).toFixed(2).replace(".", ",")}%</b>. Anúncios e Precificação, que ainda não têm comprador, projetam pela alíquota interestadual.</>}
+              </div>
+            </div>
+          ) : !showIcmsTable ? (
+            <>
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:6, marginBottom:8 }}>
               <button onClick={resetIcmsPadrao}
                 style={{ fontSize:10, color:"#0e7490", background:"rgba(0,240,255,.10)", border:"1px solid rgba(0,240,255,.35)", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontWeight:600 }}>
                 ↺ Usar alíquotas padrão
               </button>
               <button onClick={function(){ setShowIcmsTable(function(v){return !v;}); }}
                 style={{ fontSize:10, color:"var(--text-2)", background:"var(--bg-2)", border:"1px solid var(--border)", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontWeight:600 }}>
-                {showIcmsTable ? "▲ Ocultar tabela" : "▼ Ver/editar todos os 27 estados"}
+                ▼ Ver/editar todos os 27 estados
               </button>
             </div>
-          </div>
-
-          {!showIcmsTable ? (
             <div style={{ display:"flex", alignItems:"center", gap:14, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 14px" }}>
               <div>
                 <div style={{ fontSize:10, color:"var(--text-3)" }}>Estados configurados</div>
@@ -4521,7 +4642,19 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
                 <div style={{ fontSize:11, color:"#FFC107", marginLeft:"auto" }}>⚠️ Clique em "Usar alíquotas padrão" para começar</div>
               )}
             </div>
+            </>
           ) : (
+            <>
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:6, marginBottom:8 }}>
+              <button onClick={resetIcmsPadrao}
+                style={{ fontSize:10, color:"#0e7490", background:"rgba(0,240,255,.10)", border:"1px solid rgba(0,240,255,.35)", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontWeight:600 }}>
+                ↺ Usar alíquotas padrão
+              </button>
+              <button onClick={function(){ setShowIcmsTable(function(v){return !v;}); }}
+                style={{ fontSize:10, color:"var(--text-2)", background:"var(--bg-2)", border:"1px solid var(--border)", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontWeight:600 }}>
+                ▲ Ocultar tabela
+              </button>
+            </div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, maxHeight:340, overflowY:"auto", padding:2 }}>
               {ESTADOS_BR_ICMS.map(function(e){
                 var uf = e[0], nome = e[1], padrao = e[2];
@@ -4538,6 +4671,7 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
                 );
               })}
             </div>
+            </>
           )}
         </div>
       </div>
@@ -4844,7 +4978,10 @@ function NovoProdutoPrecForm({ onSave, onClose, marketplaceInicial, shopeeDoc })
   );
 }
 
-function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFretesAndSave, descontosConfig, setDescontosAndSave, precosVendaConfig, setPrecosVendaAndSave, pendentesAtualizacao, setPendentesAndSave, setSkuOverridesAndSave, rawOrders }) {
+function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFretesAndSave, descontosConfig, setDescontosAndSave, precosVendaConfig, setPrecosVendaAndSave, pendentesAtualizacao, setPendentesAndSave, setSkuOverridesAndSave, rawOrders, icmsPct }) {
+  // ICMS projetado da venda (Financeiro → Impostos). Aqui ainda não há comprador, então vale a
+  // alíquota interestadual — o cenário da maior parte das vendas e o mais conservador no preço.
+  var icmsVendaPct = parseFloat(icmsPct) || 0;
   const [busca, setBusca] = useState("");
   const [buscaTipo, setBuscaTipo] = useState("all"); // all | title | sku | mlb
   const [margemAlvo, setMargemAlvo] = useState(20);
@@ -5024,10 +5161,15 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
     var precoBase = precoVendaCustom > 0 ? precoVendaCustom : bruto;
     // Recalcular taxa proporcional ao novo preço
     var taxaBase = precoVendaCustom > 0 && bruto > 0 ? taxa * (precoVendaCustom / bruto) : taxa;
-    var lucro = precoBase - custo - frete - taxaBase;
+    // ICMS incide sobre o preço de venda — entra no lucro e no preço alvo junto com a taxa do
+    // marketplace, senão a margem alvo sai furada na alíquota do imposto.
+    var icmsValor = precoBase * (icmsVendaPct / 100);
+    var lucro = precoBase - custo - frete - taxaBase - icmsValor;
     var margem = precoBase > 0 ? (lucro / precoBase) * 100 : 0;
-    var precoAlvo = custo > 0 ? (custo + frete) / (1 - (margemAlvo/100) - (taxaBase/precoBase||0.13)) : 0;
-    return { lucro, margem, precoAlvo, taxaBase };
+    var deducoesPct = (taxaBase / precoBase || 0.13) + (icmsVendaPct / 100);
+    var divisor = 1 - (margemAlvo / 100) - deducoesPct;
+    var precoAlvo = custo > 0 && divisor > 0 ? (custo + frete) / divisor : 0;
+    return { lucro, margem, precoAlvo, taxaBase, icmsValor };
   }
 
   // Preço médio real das últimas vendas
@@ -5042,7 +5184,10 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
       <div style={{ padding:"12px 0 8px", borderBottom:"1px solid var(--border)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         <div>
           <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)", marginBottom:4 }}>💲 Precificação</div>
-          <div style={{ fontSize:13, color:"var(--text-2)" }}>Calcule o preço ideal para cada anúncio com base na margem desejada</div>
+          <div style={{ fontSize:13, color:"var(--text-2)" }}>
+            Calcule o preço ideal para cada anúncio com base na margem desejada
+            {icmsVendaPct > 0 && <> · <span style={{ color:"#FF5252" }}>ICMS de {icmsVendaPct.toFixed(2).replace(".", ",")}% já descontado</span></>}
+          </div>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:7, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 16px" }}>
           <span style={{ fontSize:13, color:"var(--text-2)", fontWeight:600 }}>Margem alvo:</span>
@@ -6240,6 +6385,8 @@ function PainelConfiguracoesGlobal(props) {
   var impostos=props.impostos, setImpostos=props.setImpostos;
   var custosFixos=props.custosFixos, setCustosFixos=props.setCustosFixos;
   var irpjCsllConfig=props.irpjCsllConfig||{}, setIrpjCsllConfig=props.setIrpjCsllConfig;
+  var icmsRegime=props.icmsRegime, setIcmsRegime=props.setIcmsRegime;
+  var icmsConfig=props.icmsConfig||{}, setIcmsConfig=props.setIcmsConfig;
   var faturamentoMes=props.faturamentoMes||0;
   var darkMode=props.darkMode, setDarkMode=props.setDarkMode;
   var onClose=props.onClose;
@@ -6288,7 +6435,7 @@ function PainelConfiguracoesGlobal(props) {
           })
         ),
         React.createElement("div", {style:{flex:1,overflowY:"auto",padding:"16px 18px"}},
-          aba==="config" ? React.createElement(ImpostosCompacto, {impostos:impostos,setImpostos:setImpostos,custosFixos:custosFixos,setCustosFixos:setCustosFixos,faturamentoMes:faturamentoMes,irpjCsllConfig:irpjCsllConfig,setIrpjCsllConfig:setIrpjCsllConfig}) :
+          aba==="config" ? React.createElement(ImpostosCompacto, {impostos:impostos,setImpostos:setImpostos,custosFixos:custosFixos,setCustosFixos:setCustosFixos,faturamentoMes:faturamentoMes,irpjCsllConfig:irpjCsllConfig,setIrpjCsllConfig:setIrpjCsllConfig,icmsRegime:icmsRegime,setIcmsRegime:setIcmsRegime,icmsConfig:icmsConfig,setIcmsConfig:setIcmsConfig}) :
           aba==="aparencia" ? React.createElement("div", {style:{display:"flex",gap:10}},
             [{v:false,l:"Claro"},{v:true,l:"Escuro"}].map(function(t){
               return React.createElement("button",{key:String(t.v),onClick:function(){setDarkMode(t.v);localStorage.setItem("darkMode",t.v?"1":"0");},style:{flex:1,padding:14,borderRadius:10,border:"2px solid "+(darkMode===t.v?"#768692":"var(--border)"),background:darkMode===t.v?"#768692":"var(--surface)",color:darkMode===t.v?"#fff":"var(--text-2)",fontWeight:500,fontSize:14,cursor:"pointer"}}, t.v?"Escuro":"Claro");
@@ -6299,7 +6446,7 @@ function PainelConfiguracoesGlobal(props) {
               React.createElement("div", {style:{fontWeight:500,fontSize:14,marginBottom:12}}, "Exportar Backup"),
               React.createElement("button", {
                 onClick:function(){
-                  var chaves=["produtos_cadastro","mov_estoque","vendas_estoque_baixadas","ml_orders_cache","contas_pagar","contas_bancarias","lancamentos","nfe_entrada","nfe_saida","costs_config","fretes_config","descontos_config","precos_venda_config","precos_pendentes_ml","icms_por_estado","irpj_csll_config","fornecedores_db","chat_interno_mensagens","chat_interno_tarefas","min_stock_anuncios","depositos_estoque"];
+                  var chaves=["produtos_cadastro","mov_estoque","vendas_estoque_baixadas","ml_orders_cache","contas_pagar","contas_bancarias","lancamentos","nfe_entrada","nfe_saida","costs_config","fretes_config","descontos_config","precos_venda_config","precos_pendentes_ml","icms_por_estado","icms_regime_config","irpj_csll_config","fornecedores_db","chat_interno_mensagens","chat_interno_tarefas","min_stock_anuncios","depositos_estoque"];
                   var bk={versao:2,data:new Date().toISOString(),dados:{}};
                   chaves.forEach(function(k){try{bk.dados[k]=JSON.parse(localStorage.getItem(k)||"null");}catch{}});
                   var blob=new Blob([JSON.stringify(bk,null,2)],{type:"application/json"});
@@ -6598,6 +6745,13 @@ export default function App() {
     setIrpjCsllConfigState(cfg);
     try { localStorage.setItem("irpj_csll_config", JSON.stringify(cfg)); } catch {}
   }
+  // Regime de ICMS da venda (padrão: 4% fora do estado de origem, 0% dentro dele) e a
+  // tabela por estado do modo manual — no componente raiz para que qualquer ajuste
+  // recalcule na hora a margem de anúncios e pedidos, sem recarregar a página.
+  const [icmsRegime, setIcmsRegimeState] = useState(getIcmsRegime);
+  function setIcmsRegime(cfg) { setIcmsRegimeState(cfg); saveIcmsRegime(cfg); }
+  const [icmsTabela, setIcmsTabelaState] = useState(getIcmsConfig);
+  function setIcmsTabela(cfg) { setIcmsTabelaState(cfg); saveIcmsConfig(cfg); }
   const [showNotif, setShowNotif] = useState(false);
   const [showBackup, setShowBackup] = useState(false);
   const [showConfigPanel, setShowConfigPanel] = useState(false);
@@ -6865,7 +7019,7 @@ export default function App() {
   const SYNC_ALL_KEYS = useRef([
     "notas_fiscais_entrada","costs_config","fretes_config","descontos_config","precos_venda_config",
     "produtos_cadastro","fornecedores_cadastro","contas_pagar","contas_bancarias","categorias_pagar",
-    "custos_fixos_config","impostos_config","irpj_csll_config","icms_por_estado","lancamentos",
+    "custos_fixos_config","impostos_config","irpj_csll_config","icms_por_estado","icms_regime_config","lancamentos",
     "mov_estoque","metaMensal","min_stock_anuncios","real_fees_config","pedidos_compra",
     "precificacao_extras","precos_pendentes_ml","depositos_estoque","estoque_depositos",
     "envios_full","vendas_estoque_baixadas","sku_overrides",
@@ -6896,6 +7050,8 @@ export default function App() {
     custos_fixos_config: setCustosFixos,
     impostos_config: setImpostos,
     irpj_csll_config: mesclarSetter(setIrpjCsllConfigState),
+    icms_regime_config: mesclarSetter(setIcmsRegimeState),
+    icms_por_estado: mesclarSetter(setIcmsTabelaState),
     lancamentos: setLancamentos,
     metaMensal: function(v){ setMetaMensal(parseFloat(v)||0); },
     min_stock_anuncios: mesclarSetter(setMinStock),
@@ -6911,6 +7067,7 @@ export default function App() {
     custos_fixos_config: "array", impostos_config: "array", lancamentos: "array",
     costs_config: "object", fretes_config: "object", descontos_config: "object",
     precos_venda_config: "object", precos_pendentes_ml: "object", irpj_csll_config: "object",
+    icms_regime_config: "object", icms_por_estado: "object",
     min_stock_anuncios: "object", real_fees_config: "object", sku_overrides: "object",
   }).current;
   const lastSyncRef = useRef({}); // key -> string JSON já sincronizado (evita reenviar/reaplicar sem necessidade)
@@ -7411,6 +7568,9 @@ export default function App() {
   // Alíquota efetiva de impostos sobre a venda (soma dos itens percentuais configurados
   // em Financeiro → Impostos) — entra na margem líquida de cada anúncio/pedido.
   const impostoPctVenda = (impostos || []).filter(i => i.tipo === "%").reduce((s, i) => s + (parseFloat(i.valor) || 0), 0);
+  // O ICMS entra por fora dessa soma porque varia com o destino da venda. Anúncios ainda não
+  // têm comprador, então projetam pela alíquota interestadual (o caso mais comum da operação).
+  const icmsPctProjetado = icmsPctProjecao(icmsRegime, icmsTabela);
 
   const enriched = listings.map(l => {
     const cost = costs[l.id] ?? 0;
@@ -7426,7 +7586,7 @@ export default function App() {
     // Taxa padronizada 12%/17% sobre o preço — sem somar tarifa fixa por faixa.
     const margin = calcMargin(salePrice, cost, feeRate, freteSeller, {
       feeFixa: 0,
-      impostoPct: impostoPctVenda,
+      impostoPct: impostoPctVenda + icmsPctProjetado,
     });
     const { score, checks } = calcQualityScore(l);
     // SKU editado manualmente pelo usuário tem prioridade sobre o SKU vindo do ML.
@@ -7583,19 +7743,22 @@ export default function App() {
     // Melhor fonte de tarifa, nesta ordem: (1) sale_fee real cobrado neste pedido,
     // (2) taxa real do anúncio via listing_prices, (3) tabela estimada + tarifa fixa.
     const pay = paymentData[String(o.id)];
+    // ICMS conforme o destino: dentro da UF de origem vs. interestadual (ver Financeiro → Impostos).
+    const icmsPct = icmsPctParaUF(o.buyerUF, icmsRegime, icmsTabela);
+    const impostoPctPedido = impostoPctVenda + icmsPct;
     let base;
     if (pay && pay.tarifaML > 0 && !pay.isCalculated && o.price > 0) {
       const tarifaUnit = pay.tarifaML / (o.qty || 1);
-      base = calcMargin(o.price, cost, tarifaUnit / o.price, freteSeller, { impostoPct: impostoPctVenda });
+      base = calcMargin(o.price, cost, tarifaUnit / o.price, freteSeller, { impostoPct: impostoPctPedido });
     } else {
       // Sem dados reais de tarifa do pedido → usa a taxa padrão por tipo (12%/17%).
       const feeRate = listing ? getRealFeeRate(listing) : 0.12;
       base = calcMargin(o.price, cost, feeRate, freteSeller, {
         feeFixa: 0,
-        impostoPct: impostoPctVenda,
+        impostoPct: impostoPctPedido,
       });
     }
-    return { ...o, listing, ...base, cost, freteSeller };
+    return { ...o, listing, ...base, cost, freteSeller, icmsPct, impostoPct: impostoPctPedido };
   })
 
   // ── Alertas proativos no sino: margem negativa, contas vencendo e ruptura prevista ──
@@ -8408,6 +8571,7 @@ export default function App() {
 
         {tab === "precificacao" && currentUser?.permissoes?.includes("listings") && (
           <PrecificacaoTab
+            icmsPct={icmsPctProjetado}
             enriched={enriched}
             costs={costs}
             setCostsAndSave={setCostsAndSave}
@@ -8463,6 +8627,8 @@ export default function App() {
           impostos={impostos} setImpostos={setImpostos}
           custosFixos={custosFixos} setCustosFixos={setCustosFixos}
           irpjCsllConfig={irpjCsllConfig} setIrpjCsllConfig={setIrpjCsllConfig}
+          icmsRegime={icmsRegime} setIcmsRegime={setIcmsRegime}
+          icmsConfig={icmsTabela} setIcmsConfig={setIcmsTabela}
           faturamentoMes={enrichedOrders.filter(o=>o.date?.startsWith(new Date().toLocaleDateString("sv-SE").slice(0,7))).reduce((s,o)=>s+o.revenue*o.qty,0)}
           darkMode={darkMode} setDarkMode={setDarkMode}
           onClose={function(){ setShowConfigPanel(false); }}

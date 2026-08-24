@@ -98,3 +98,67 @@ export async function syncSet(ns, chave, valor) {
   `;
   return true;
 }
+
+// ── Usuários do sistema ──────────────────────────────────────────────────────
+// Ficavam SÓ no Vercel KV: sem KV configurado, criar usuário respondia ok e o
+// cadastro se perdia, enquanto o resto do sistema seguia funcionando pelo Postgres.
+// Aqui eles passam a viver na mesma base dos outros dados.
+
+// Converte a linha do banco para o formato usado pelo app.
+function usuarioDaLinha(r) {
+  return {
+    id: r.id,
+    nome: r.nome || "",
+    usuario: r.usuario || "",
+    email: r.email || "",
+    senhaHash: r.senha_hash || null,
+    ativo: r.ativo !== false,
+    admin: r.admin === true,
+    permissoes: Array.isArray(r.permissoes) ? r.permissoes : [],
+    criadoEm: r.criado_em ? new Date(r.criado_em).toISOString().slice(0, 10) : null,
+  };
+}
+
+export async function lerUsuariosDb() {
+  const sql = getSql();
+  if (!sql) return [];
+  const rows = await sql`
+    select id, nome, usuario, email, senha_hash, ativo, admin, permissoes, criado_em
+    from flow.usuario order by criado_em
+  `;
+  return rows.map(usuarioDaLinha);
+}
+
+// Grava a lista inteira: faz upsert de cada usuário e apaga quem saiu dela.
+// Tudo numa transação — uma falha no meio não deixa a equipe pela metade.
+export async function salvarUsuariosDb(usuarios) {
+  const sql = getSql();
+  if (!sql) return false;
+  const lista = (usuarios || []).filter(function(u) { return u && u.id; });
+  await sql.begin(async function(tx) {
+    for (const u of lista) {
+      await tx`
+        insert into flow.usuario (id, nome, usuario, email, senha_hash, ativo, admin, permissoes, criado_em)
+        values (
+          ${String(u.id)}, ${u.nome || ""}, ${u.usuario || ""}, ${u.email || null},
+          ${u.senhaHash || null}, ${u.ativo !== false}, ${u.admin === true},
+          ${sql.array(Array.isArray(u.permissoes) ? u.permissoes : [])},
+          ${u.criadoEm ? new Date(u.criadoEm).toISOString() : new Date().toISOString()}
+        )
+        on conflict (id) do update set
+          nome = excluded.nome,
+          usuario = excluded.usuario,
+          email = excluded.email,
+          -- senha só é trocada quando veio uma nova; senão mantém a que está gravada
+          senha_hash = coalesce(excluded.senha_hash, flow.usuario.senha_hash),
+          ativo = excluded.ativo,
+          admin = excluded.admin,
+          permissoes = excluded.permissoes
+      `;
+    }
+    const ids = lista.map(function(u) { return String(u.id); });
+    if (ids.length) await tx`delete from flow.usuario where id <> all(${sql.array(ids)})`;
+    else await tx`delete from flow.usuario`;
+  });
+  return true;
+}

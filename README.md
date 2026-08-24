@@ -48,17 +48,21 @@ ICMS do lucro e o inclui no cálculo do preço alvo, e mostra no topo a alíquot
 | Variável | Obrigatória | Descrição |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Para usar IA | Chave da Anthropic — fica **somente no servidor** (proxy `/api/ai-chat`). **Nunca** use `VITE_ANTHROPIC_KEY`: qualquer variável `VITE_*` é embutida no JavaScript público e visível para qualquer visitante. Se você já usou `VITE_ANTHROPIC_KEY` antes, **revogue essa chave** no console da Anthropic e gere uma nova. |
-| `KV_REST_API_URL` / `KV_REST_API_TOKEN` | Recomendada | Vercel KV / Upstash — persistência de usuários, sessões e dados sincronizados. |
+| `KV_REST_API_URL` / `KV_REST_API_TOKEN` | Opcional | Vercel KV / Upstash. Reserva: sem `SUPABASE_DB_URL`, é aqui que usuários e dados sincronizados são gravados. Com o banco configurado, serve só de espelho. |
 | `SESSION_SECRET` | Recomendada | Segredo para assinar o cookie de sessão do app (qualquer string longa e aleatória). Sem ela, um segredo é gerado e salvo no KV. |
 | `ADMIN_INITIAL_PASSWORD` | Recomendada | Senha inicial do usuário `admin` na primeira execução (padrão: `admin123` — troque no primeiro acesso). |
 | `ML_APP_ID` / `ML_APP_SECRET` / `ML_REDIRECT_URI` | Para conectar ao ML | Credenciais OAuth do app no Mercado Livre. |
-| `SUPABASE_DB_URL` | Opcional | Connection string do Postgres do Supabase (pooler de transação). Enquanto não estiver configurada, o sistema roda 100% no Vercel KV — o deploy não quebra sem ela. |
+| `SUPABASE_DB_URL` | Recomendada | Connection string do Postgres do Supabase (pooler de transação). É o armazenamento principal: usuários (`flow.usuario`), dados de negócio (`flow.sync_store`) e o cache de anúncios/pedidos do ML. Sem ela o sistema cai no Vercel KV. |
 | `ADMIN_RECOVERY_PASSWORD` | Opcional | Acesso de emergência (break-glass): quem souber essa senha entra como admin, reativa a conta e redefine a senha dela para esse valor. Só habilite quando precisar recuperar o acesso, e remova a variável depois. |
 | `CRON_SECRET` | Para o cron | Segredo exigido pelo endpoint `/api/ml/_cron_sync`, que sincroniza o cache de todas as contas do ML. Sem ela o endpoint responde 403. Requer `SUPABASE_DB_URL`. |
 
 O login dos usuários do sistema é validado **no servidor** (`/api/auth/app-login`, hash scrypt),
 que emite um cookie httpOnly assinado. As rotas internas `/api/ml/_users`, `/api/ml/_sync` e
 `/api/ai-chat` exigem esse cookie; alterações de usuários exigem perfil administrador.
+
+Os usuários ficam em `flow.usuario` no Postgres, com o KV como reserva. Se nenhum dos dois
+estiver configurado, criar usuário é **recusado** com essa explicação — antes a operação
+respondia sucesso e o cadastro se perdia, e o usuário não conseguia entrar depois.
 
 ## Integrações
 

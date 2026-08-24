@@ -3,6 +3,7 @@
 // Arquivos/pastas iniciados com "_" dentro de /api não viram rotas no Vercel, só podem ser importados.
 
 import crypto from "node:crypto";
+import { dbEnabled, lerUsuariosDb, salvarUsuariosDb } from "./db.js";
 
 const USERS_KEY = "mlmargem_users";
 const SECRET_KEY = "mlmargem_session_secret";
@@ -133,10 +134,40 @@ function adminPadrao() {
 
 let _usersCache = null;
 
-// Lança ErroPersistencia se o KV estiver configurado mas a leitura falhar. Cair no
-// admin padrão nesse caso faria o login responder "usuário ou senha incorretos" para
-// contas que existem — o usuário some da lista por causa de uma falha de rede.
+// Onde os usuários são guardados: o banco (mesmo do resto do sistema) quando o
+// SUPABASE_DB_URL existe, senão o KV. Os dados de negócio já gravavam no banco com o
+// KV só de reserva; os usuários ficavam SÓ no KV, e era por isso que o cadastro se
+// perdia num sistema em que todo o resto funcionava.
+export function armazenamentoUsuarios() {
+  if (dbEnabled()) return "banco";
+  if (kvConfigurado()) return "kv";
+  return "nenhum";
+}
+
+function falhaBanco(acao, e) {
+  return new ErroPersistencia(
+    "Falha ao " + acao + " os usuários no banco: " + ((e && e.message) || "erro desconhecido")
+  );
+}
+
+// Lança ErroPersistencia se o armazenamento existe mas a leitura falha. Cair no admin
+// padrão nesse caso faria o login responder "usuário ou senha incorretos" para contas
+// que existem — o usuário sumiria da lista por causa de uma falha de rede.
 export async function lerUsuarios() {
+  if (dbEnabled()) {
+    let doBanco;
+    try { doBanco = await lerUsuariosDb(); }
+    catch (e) { throw falhaBanco("ler", e); }
+    if (doBanco.length > 0) return doBanco;
+    // Banco ainda sem usuários: aproveita o que houver no KV (instalação antiga) e
+    // copia para o banco, para ninguém perder o acesso na virada de armazenamento.
+    const doKv = await kvGet(USERS_KEY);
+    if (Array.isArray(doKv) && doKv.length > 0) {
+      try { await salvarUsuariosDb(doKv); } catch {}
+      return doKv;
+    }
+    return _usersCache || adminPadrao();
+  }
   if (!kvConfigurado()) return _usersCache || adminPadrao();
   const kv = await kvGetOuFalha(USERS_KEY);
   if (Array.isArray(kv) && kv.length > 0) return kv;
@@ -148,10 +179,19 @@ export async function lerUsuarios() {
 // vive só naquela instância serverless e some no próximo request.
 export async function salvarUsuarios(usuarios) {
   _usersCache = usuarios;
+  if (dbEnabled()) {
+    try { await salvarUsuariosDb(usuarios); }
+    catch (e) { throw falhaBanco("gravar", e); }
+    // Espelho no KV quando ele existir: reserva de leitura, e falhar aqui não invalida
+    // a gravação que já aconteceu no banco.
+    try { await kvSet(USERS_KEY, usuarios); } catch {}
+    return;
+  }
   if (!kvConfigurado()) {
     throw new ErroPersistencia(
-      "Armazenamento (KV) não configurado no servidor: defina KV_REST_API_URL e " +
-      "KV_REST_API_TOKEN no Vercel. Sem isso, usuários criados se perdem a cada requisição."
+      "Nenhum armazenamento configurado no servidor: defina SUPABASE_DB_URL (banco) ou " +
+      "KV_REST_API_URL/KV_REST_API_TOKEN (KV) no Vercel. Sem isso, usuários criados se " +
+      "perdem a cada requisição."
     );
   }
   const ok = await kvSet(USERS_KEY, usuarios);

@@ -13,7 +13,7 @@ import {
   verificarSessao,
   semSenha,
   normalizarLogin,
-  kvConfigurado,
+  armazenamentoUsuarios,
   ErroPersistencia,
 } from "./_lib/auth.js";
 import { dbEnabled, syncGet, syncSet, upsertConexaoMl, listConexoesMl, listCacheListings, listCacheOrders, getConexaoMl } from "./_lib/db.js";
@@ -128,10 +128,11 @@ export default async function handler(req, res) {
       }
       // Sem armazenamento a gravação não sobrevive à requisição: recusa antes de
       // devolver um "ok" que faria o painel mostrar um usuário que não existe.
-      if (!kvConfigurado()) {
+      if (armazenamentoUsuarios() === "nenhum") {
         return res.status(503).json({
-          error: "Armazenamento (KV) não configurado no servidor: defina KV_REST_API_URL e " +
-                 "KV_REST_API_TOKEN no Vercel. Enquanto isso, usuários criados não são salvos.",
+          error: "Nenhum armazenamento configurado no servidor: defina SUPABASE_DB_URL (banco) " +
+                 "ou KV_REST_API_URL/KV_REST_API_TOKEN (KV) no Vercel. Enquanto isso, usuários " +
+                 "criados não são salvos.",
         });
       }
 

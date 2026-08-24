@@ -2624,6 +2624,7 @@ function HomeTab({ enrichedOrders, currentUser, setTab }){
     ]},
     { titulo:"Configuração", itens:[
       perm.includes("admin") && { key:"admin", label:"Equipe", desc:"Usuários e permissões" },
+      { key:"impostos", label:"Impostos", desc:"ICMS por destino, IRPJ, CSLL e custos fixos" },
       { key:"integracoes", label:"Integrações", desc:"Conexões e marketplaces" },
     ]},
   ];
@@ -4431,6 +4432,22 @@ function icmsPctProjecao(regime, tabelaPorEstado) {
   }
   var v = parseFloat(r.aliqInterestadual);
   return isFinite(v) ? v : 0;
+}
+
+// Tela de Impostos (menu Configuração). O painel abaixo já existia, mas só era montado por
+// uma aba do painel global que nenhum botão abria — ficava inalcançável na interface.
+function ImpostosTab(props) {
+  return (
+    <div style={{ padding:"0 20px" }}>
+      <div style={{ padding:"12px 0 14px", borderBottom:"1px solid var(--border)", marginBottom:16 }}>
+        <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)", marginBottom:4 }}>🧾 Impostos</div>
+        <div style={{ fontSize:13, color:"var(--text-2)" }}>
+          ICMS por destino da venda, IRPJ, CSLL e custos fixos — entram no cálculo de margem de anúncios, pedidos e precificação
+        </div>
+      </div>
+      <ImpostosCompacto {...props} />
+    </div>
+  );
 }
 
 function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, faturamentoMes, irpjCsllConfig, setIrpjCsllConfig, icmsRegime, setIcmsRegime, icmsConfig, setIcmsConfig }) {
@@ -7761,6 +7778,11 @@ export default function App() {
     return { ...o, listing, ...base, cost, freteSeller, icmsPct, impostoPct: impostoPctPedido };
   })
 
+  // Receita líquida do mês corrente — base dos percentuais na tela de Impostos.
+  const faturamentoMesAtual = enrichedOrders
+    .filter(o => o.date?.startsWith(new Date().toLocaleDateString("sv-SE").slice(0, 7)))
+    .reduce((s, o) => s + o.revenue * o.qty, 0);
+
   // ── Alertas proativos no sino: margem negativa, contas vencendo e ruptura prevista ──
   // Cada alerta tem id único por dia — a deduplicação por id impede repetição no sino.
   useEffect(function() {
@@ -8033,6 +8055,7 @@ export default function App() {
             ]},
             { titulo:"Configuração", itens:[
               currentUser?.permissoes?.includes("admin") && { key:"admin", label:"Equipe" },
+              { key:"impostos", label:"Impostos" },
               { key:"integracoes", label:"Integrações" },
             ]},
           ];
@@ -8613,6 +8636,16 @@ export default function App() {
         {tab === "compras" && <ComprasTab produtos={produtos} pedidos={pedidosCompra} salvar={salvarPedidosCompra} />}
         {tab === "clientes" && <ClientesTab rawOrders={rawOrders} />}
         {tab === "integracoes" && <IntegracoesTab token={token} user={user} lastUpdate={lastUpdate} />}
+        {tab === "impostos" && (
+          <ImpostosTab
+            impostos={impostos} setImpostos={setImpostos}
+            custosFixos={custosFixos} setCustosFixos={setCustosFixos}
+            irpjCsllConfig={irpjCsllConfig} setIrpjCsllConfig={setIrpjCsllConfig}
+            icmsRegime={icmsRegime} setIcmsRegime={setIcmsRegime}
+            icmsConfig={icmsTabela} setIcmsConfig={setIcmsTabela}
+            faturamentoMes={faturamentoMesAtual}
+          />
+        )}
         {tab === "dre" && <DreTab enrichedOrders={enrichedOrders} />}
         {TELAS_FIN[tab] && <TelaEstruturada cfg={TELAS_FIN[tab]} />}
       </div>{/* fecha a coluna do conteúdo */}
@@ -8629,7 +8662,7 @@ export default function App() {
           irpjCsllConfig={irpjCsllConfig} setIrpjCsllConfig={setIrpjCsllConfig}
           icmsRegime={icmsRegime} setIcmsRegime={setIcmsRegime}
           icmsConfig={icmsTabela} setIcmsConfig={setIcmsTabela}
-          faturamentoMes={enrichedOrders.filter(o=>o.date?.startsWith(new Date().toLocaleDateString("sv-SE").slice(0,7))).reduce((s,o)=>s+o.revenue*o.qty,0)}
+          faturamentoMes={faturamentoMesAtual}
           darkMode={darkMode} setDarkMode={setDarkMode}
           onClose={function(){ setShowConfigPanel(false); }}
         />

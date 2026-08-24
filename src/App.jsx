@@ -3962,7 +3962,12 @@ function getUsuarios() {
   } catch { return []; }
 }
 
-function saveUsuarios(usuarios) {
+// Salva a lista de usuários NO SERVIDOR (é lá que o login procura) e só então
+// atualiza o cache local. Antes o cache era gravado primeiro e o envio era
+// disparado sem checar a resposta: quando o servidor recusava — sessão expirada,
+// KV fora do ar, sem permissão de admin — o usuário aparecia criado no painel de
+// quem cadastrou e não existia para o login. Devolve { ok, erro, usuarios }.
+async function saveUsuarios(usuarios) {
   // Senhas novas ficam em u.senha (texto) só até o envio — nunca vão para o localStorage
   var senhas = {};
   var semSenhas = usuarios.map(function(u){
@@ -3971,28 +3976,49 @@ function saveUsuarios(usuarios) {
     delete limpo.senhaHash;
     return limpo;
   });
-  localStorage.setItem(AUTH_KEY, JSON.stringify(semSenhas));
+  var res;
   try {
-    fetch("/api/ml/_users", {
+    res = await fetch("/api/ml/_users", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify({ usuarios: semSenhas, senhas: senhas })
-    }).catch(function(){});
-  } catch {}
-  return semSenhas;
+    });
+  } catch (e) {
+    return { ok:false, usuarios:getUsuarios(), semSenha:[],
+      erro:"Não foi possível falar com o servidor. A alteração NÃO foi salva — verifique a conexão e tente de novo." };
+  }
+  var data = await res.json().catch(function(){ return {}; });
+  if (!res.ok) {
+    var motivo = data.error || ("O servidor recusou a alteração (HTTP " + res.status + ").");
+    if (res.status === 401) motivo = "Sua sessão expirou. Saia e entre de novo no sistema para salvar usuários.";
+    if (res.status === 403) motivo = "Sua conta não tem permissão de administrador para alterar usuários.";
+    return { ok:false, usuarios:getUsuarios(), semSenha:[], erro:motivo };
+  }
+  // Confirmado: o cache local passa a ser exatamente o que o servidor gravou.
+  var confirmados = Array.isArray(data.usuarios) && data.usuarios.length ? data.usuarios : semSenhas;
+  try { localStorage.setItem(AUTH_KEY, JSON.stringify(confirmados)); } catch {}
+  return { ok:true, usuarios:confirmados, semSenha: Array.isArray(data.semSenha) ? data.semSenha : [], erro:"" };
 }
 
-// Busca usuários do servidor para o cache local (chamado após o login)
+// Busca usuários do servidor para o cache local (chamado após o login).
+// Devolve { ok, usuarios, erro } — quem chama precisa saber se a lista exibida é a
+// do servidor ou um cache local possivelmente desatualizado.
 async function sincronizarUsuariosDoServidor() {
   try {
     var res = await fetch("/api/ml/_users");
-    if (!res.ok) return;
+    if (!res.ok) {
+      var d = await res.json().catch(function(){ return {}; });
+      return { ok:false, usuarios:getUsuarios(),
+        erro: d.error || ("Não foi possível carregar os usuários do servidor (HTTP " + res.status + ").") };
+    }
     var usuariosServidor = await res.json();
-    if (!Array.isArray(usuariosServidor) || !usuariosServidor.length) return;
+    if (!Array.isArray(usuariosServidor)) {
+      return { ok:false, usuarios:getUsuarios(), erro:"Resposta inesperada do servidor de usuários." };
+    }
     localStorage.setItem(AUTH_KEY, JSON.stringify(usuariosServidor));
-    console.log("[USUÁRIOS] Sincronizados:", usuariosServidor.length);
+    return { ok:true, usuarios:usuariosServidor, erro:"" };
   } catch(e) {
-    console.warn("[USUÁRIOS] Erro na sincronização:", e.message);
+    return { ok:false, usuarios:getUsuarios(), erro:"Sem conexão com o servidor de usuários." };
   }
 }
 
@@ -4105,7 +4131,13 @@ function LoginScreen({ onLogin }) {
 }
 
 // ── Painel de Administração de Usuários ──────────────────────
-function ModalUsuario({ usuario, onSave, onClose }) {
+// Normaliza o login do mesmo jeito que o servidor: sem espaços nas pontas e em
+// minúsculas. "João " e "joao" precisam ser a mesma coisa na hora de entrar.
+function normalizarLoginCliente(v) {
+  return String(v == null ? "" : v).trim().toLowerCase();
+}
+
+function ModalUsuario({ usuario, existentes, onSave, onClose }) {
   const [form, setForm] = useState(usuario || {
     id: Date.now().toString(),
     nome: "", usuario: "", senha: "", ativo: true, admin: false,
@@ -4120,8 +4152,15 @@ function ModalUsuario({ usuario, onSave, onClose }) {
   }
 
   function handleSave() {
-    if (!form.nome || !form.usuario) return;
-    const toSave = { ...form };
+    const login = normalizarLoginCliente(form.usuario);
+    const nome = String(form.nome || "").trim();
+    if (!nome || !login) { alert("Preencha o nome e o usuário."); return; }
+    if (/\s/.test(login)) { alert("O usuário não pode conter espaços — use algo como joao.silva"); return; }
+    const repetido = (existentes || []).some(function(u){
+      return u.id !== form.id && normalizarLoginCliente(u.usuario) === login;
+    });
+    if (repetido) { alert("Já existe um usuário com o login \"" + login + "\". Escolha outro."); return; }
+    const toSave = { ...form, usuario: login, nome: nome };
     // A senha segue em texto (via HTTPS) para o servidor, que calcula o hash com
     // scrypt — saveUsuarios remove o campo antes de gravar no localStorage.
     if (!form.senha) {
@@ -4298,42 +4337,72 @@ function AdminTab({ currentUser }) {
   const [usuarios, setUsuarios] = useState(getUsuarios);
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
+  // Estado da lista exibida: veio do servidor (é o que o login enxerga) ou é cache local?
+  const [estadoServidor, setEstadoServidor] = useState({ carregando:true, ok:false, erro:"" });
+  const [salvando, setSalvando] = useState(false);
+
+  function recarregarDoServidor() {
+    setEstadoServidor(function(e){ return Object.assign({}, e, { carregando:true }); });
+    return sincronizarUsuariosDoServidor().then(function(r){
+      setUsuarios(r.usuarios);
+      setEstadoServidor({ carregando:false, ok:r.ok, erro:r.erro });
+      return r;
+    });
+  }
 
   // Atualiza o cache local com a lista do servidor ao abrir a aba
-  useEffect(function(){
-    sincronizarUsuariosDoServidor().then(function(){ setUsuarios(getUsuarios()); });
-  }, []);
+  useEffect(function(){ recarregarDoServidor(); }, []);
+
+  // Aplica uma alteração: só considera feita depois do "ok" do servidor, porque é lá
+  // que o login procura o usuário. Em caso de falha, mostra o motivo real.
+  async function aplicar(lista, descricao) {
+    setSalvando(true);
+    const r = await saveUsuarios(lista);
+    setUsuarios(r.usuarios);
+    setEstadoServidor({ carregando:false, ok:r.ok, erro:r.erro });
+    setSalvando(false);
+    if (!r.ok) {
+      alert("NÃO foi possível " + descricao + ".\n\n" + r.erro +
+            "\n\nNada foi alterado no servidor — o usuário não conseguiria entrar.");
+      return false;
+    }
+    if (r.semSenha && r.semSenha.length) {
+      alert("Atenção: sem senha definida para " + r.semSenha.join(", ") +
+            ".\nEsses usuários não conseguem entrar até você usar \"Redefinir senha\".");
+    }
+    return true;
+  }
 
   function saveUser(user) {
     const lista = getUsuarios();
     const updated = lista.find(u=>u.id===user.id)
       ? lista.map(u=>u.id===user.id?user:u)
       : [...lista, user];
-    setUsuarios(saveUsuarios(updated));
+    aplicar(updated, "salvar o usuário");
   }
 
   function deleteUser(id) {
     if (id === currentUser.id) { alert("Você não pode excluir seu próprio usuário!"); return; }
     if (!confirm("Excluir este usuário?")) return;
     const updated = getUsuarios().filter(u=>u.id!==id);
-    setUsuarios(saveUsuarios(updated));
+    aplicar(updated, "excluir o usuário");
   }
 
   function toggleAtivo(id) {
     if (id === currentUser.id) { alert("Você não pode desativar seu próprio usuário!"); return; }
     const updated = getUsuarios().map(u=>u.id===id?{...u,ativo:!u.ativo}:u);
-    setUsuarios(saveUsuarios(updated));
+    aplicar(updated, "mudar a situação do usuário");
   }
 
-  function resetarSenha(u) {
+  async function resetarSenha(u) {
     var nova = window.prompt("Nova senha para " + (u.nome || u.usuario) + ":", "");
     if (nova == null) return; // cancelou
     nova = String(nova).trim();
     if (nova.length < 4) { alert("A senha precisa ter pelo menos 4 caracteres."); return; }
     // saveUsuarios envia u.senha (texto) ao servidor, que faz o hash com scrypt.
     const updated = getUsuarios().map(u2 => u2.id === u.id ? Object.assign({}, u2, { senha: nova }) : u2);
-    setUsuarios(saveUsuarios(updated));
-    alert("Senha de " + (u.nome || u.usuario) + " redefinida com sucesso.");
+    const ok = await aplicar(updated, "redefinir a senha");
+    if (ok) alert("Senha de " + (u.nome || u.usuario) + " redefinida com sucesso.");
   }
 
   return (
@@ -4343,11 +4412,37 @@ function AdminTab({ currentUser }) {
           <div style={{ fontWeight:600, fontSize:18, color:"var(--text-strong)" }}>Equipe</div>
           <div style={{ fontSize:13, color:"var(--text-3)", marginTop:2 }}>Gerencie quem pode acessar o dashboard e o que cada um pode ver</div>
         </div>
-        <button onClick={()=>{ setEditingUser(null); setShowModal(true); }}
-          style={{ background:"#768692", border:"none", color:"#fff", fontWeight:500, padding:"10px 22px", borderRadius:10, cursor:"pointer", fontSize:13 }}>
+        <button onClick={()=>{ setEditingUser(null); setShowModal(true); }} disabled={salvando}
+          style={{ background:"#768692", border:"none", color:"#fff", fontWeight:500, padding:"10px 22px", borderRadius:10, cursor: salvando ? "wait" : "pointer", fontSize:13, opacity: salvando ? .6 : 1 }}>
           + Novo Usuário
         </button>
       </div>
+
+      {/* A lista que vale para o login é a do servidor. Quando ela não carrega, o que
+          aparece abaixo é cache local — e cadastrar nesse estado não salva de verdade. */}
+      {!estadoServidor.carregando && (
+        estadoServidor.ok ? (
+          <div style={{ fontSize:11.5, color:"var(--text-3)", marginBottom:10 }}>
+            ✓ Lista carregada do servidor — é exatamente o que o login enxerga.
+            <button onClick={recarregarDoServidor}
+              style={{ marginLeft:8, fontSize:11, color:"#768692", background:"none", border:"none", cursor:"pointer", textDecoration:"underline", fontFamily:"inherit" }}>
+              recarregar
+            </button>
+          </div>
+        ) : (
+          <div style={{ display:"flex", alignItems:"flex-start", gap:8, background:"rgba(255,82,82,.10)", border:"1px solid rgba(255,82,82,.4)", borderRadius:10, padding:"10px 14px", marginBottom:10 }}>
+            <span style={{ fontSize:14 }}>⚠️</span>
+            <div style={{ fontSize:12, color:"var(--text-2)", lineHeight:1.5 }}>
+              <b style={{ color:"#FF5252" }}>A lista abaixo não veio do servidor.</b> {estadoServidor.erro}
+              <br />Ela é uma cópia local: usuários criados agora podem não ser salvos e não conseguiriam entrar.
+              <button onClick={recarregarDoServidor}
+                style={{ marginLeft:6, fontSize:11.5, color:"#768692", background:"none", border:"none", cursor:"pointer", textDecoration:"underline", fontFamily:"inherit" }}>
+                tentar de novo
+              </button>
+            </div>
+          </div>
+        )
+      )}
 
       <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, overflow:"hidden" }}>
         {usuarios.map(function(u, idx){
@@ -4376,7 +4471,7 @@ function AdminTab({ currentUser }) {
         })}
       </div>
 
-      {showModal && <ModalUsuario usuario={editingUser} onSave={saveUser} onClose={()=>{ setShowModal(false); setEditingUser(null); }} />}
+      {showModal && <ModalUsuario usuario={editingUser} existentes={usuarios} onSave={saveUser} onClose={()=>{ setShowModal(false); setEditingUser(null); }} />}
     </div>
   );
 }
@@ -6037,16 +6132,16 @@ function ChatInternoWidget({ currentUser }) {
     kvSyncPull("chat_interno_tarefas").then(function(freshT){
       if (Array.isArray(freshT)) { setTarefas(freshT); try { localStorage.setItem("chat_interno_tarefas", JSON.stringify(freshT)); } catch {} }
     });
-    sincronizarUsuariosDoServidor().then(function(){
-      setUsuarios(getUsuarios().filter(function(u){ return u.ativo; }));
+    sincronizarUsuariosDoServidor().then(function(r){
+      setUsuarios((r.usuarios || []).filter(function(u){ return u.ativo; }));
     });
   }, []);
 
   // Atualiza a lista de usuários periodicamente também (não só ao abrir o widget)
   useEffect(function(){
     var userInterval = setInterval(function(){
-      sincronizarUsuariosDoServidor().then(function(){
-        setUsuarios(getUsuarios().filter(function(u){ return u.ativo; }));
+      sincronizarUsuariosDoServidor().then(function(r){
+        setUsuarios((r.usuarios || []).filter(function(u){ return u.ativo; }));
       });
     }, 20000); // a cada 20s
     return function(){ clearInterval(userInterval); };
@@ -6418,8 +6513,10 @@ function PainelConfiguracoesGlobal(props) {
     var updated = lista.find(function(u){return u.id===user.id;})
       ? lista.map(function(u){return u.id===user.id?user:u;})
       : lista.concat([user]);
-    saveUsuarios(updated);
-    setUsuarios(updated);
+    saveUsuarios(updated).then(function(r){
+      setUsuarios(r.usuarios);
+      if (!r.ok) alert("NÃO foi possível salvar o usuário.\n\n" + r.erro);
+    });
     setShowModalUser(false);
     setEditingUser(null);
   }
@@ -6428,8 +6525,10 @@ function PainelConfiguracoesGlobal(props) {
     if (id===currentUser.id){alert("Voce nao pode excluir seu proprio usuario.");return;}
     if (!window.confirm("Excluir este usuario?")) return;
     var updated = getUsuarios().filter(function(u){return u.id!==id;});
-    saveUsuarios(updated);
-    setUsuarios(updated);
+    saveUsuarios(updated).then(function(r){
+      setUsuarios(r.usuarios);
+      if (!r.ok) alert("NÃO foi possível excluir o usuário.\n\n" + r.erro);
+    });
   }
 
   var ABAS = [

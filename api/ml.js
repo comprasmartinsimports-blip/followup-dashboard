@@ -12,6 +12,9 @@ import {
   hashSenha,
   verificarSessao,
   semSenha,
+  normalizarLogin,
+  kvConfigurado,
+  ErroPersistencia,
 } from "./_lib/auth.js";
 import { dbEnabled, syncGet, syncSet, upsertConexaoMl, listConexoesMl, listCacheListings, listCacheOrders, getConexaoMl } from "./_lib/db.js";
 import { syncListings, syncOrders, garantirToken, syncOneListing, syncOneOrder } from "./_lib/mlsync.js";
@@ -38,6 +41,7 @@ const SYNC_KEYS_PERMITIDAS = [
   "impostos_config",
   "irpj_csll_config",
   "icms_por_estado",
+  "icms_regime_config",
   "lancamentos",
   "mov_estoque",
   "metaMensal",
@@ -54,6 +58,11 @@ const SYNC_KEYS_PERMITIDAS = [
   "chat_interno_tarefas",
   "sku_overrides",
 ];
+
+function falhaPersistencia(e) {
+  const detalhe = e instanceof ErroPersistencia ? " (" + e.message + ")" : "";
+  return "Armazenamento de usuários indisponível" + detalhe + ". Nada foi alterado — tente de novo em instantes.";
+}
 
 export default async function handler(req, res) {
   const path = req.url.replace(/^\/api\/ml/, "");
@@ -100,7 +109,12 @@ export default async function handler(req, res) {
     }
 
     if (req.method === "GET") {
-      const usuarios = await lerUsuarios();
+      let usuarios;
+      try {
+        usuarios = await lerUsuarios();
+      } catch (e) {
+        return res.status(503).json({ error: falhaPersistencia(e) });
+      }
       return res.status(200).json(usuarios.map(semSenha));
     }
 
@@ -112,7 +126,22 @@ export default async function handler(req, res) {
       if (!body || !Array.isArray(body.usuarios)) {
         return res.status(400).json({ error: "Formato inválido" });
       }
-      const atual = await lerUsuarios();
+      // Sem armazenamento a gravação não sobrevive à requisição: recusa antes de
+      // devolver um "ok" que faria o painel mostrar um usuário que não existe.
+      if (!kvConfigurado()) {
+        return res.status(503).json({
+          error: "Armazenamento (KV) não configurado no servidor: defina KV_REST_API_URL e " +
+                 "KV_REST_API_TOKEN no Vercel. Enquanto isso, usuários criados não são salvos.",
+        });
+      }
+
+      let atual;
+      try {
+        atual = await lerUsuarios();
+      } catch (e) {
+        // Gravar em cima de uma leitura que falhou apagaria quem já existe.
+        return res.status(503).json({ error: falhaPersistencia(e) });
+      }
       const mapaAtual = {};
       atual.forEach(function(u) { mapaAtual[u.id] = u; });
 
@@ -123,13 +152,46 @@ export default async function handler(req, res) {
         const limpo = Object.assign({}, u);
         delete limpo.senha;
         delete limpo.senhaHash;
+        // O login é gravado normalizado: espaço no fim ou maiúscula digitada no
+        // cadastro impediam o usuário de entrar com o que lhe foi passado.
+        if (limpo.usuario != null) limpo.usuario = normalizarLogin(limpo.usuario);
+        if (typeof limpo.nome === "string") limpo.nome = limpo.nome.trim();
         const existente = mapaAtual[u.id] || {};
         return Object.assign({}, existente, limpo, {
           senhaHash: senhas[u.id] ? hashSenha(senhas[u.id]) : existente.senhaHash || null,
         });
       });
-      await salvarUsuarios(novos);
-      return res.status(200).json({ ok: true, total: novos.length });
+
+      const semLogin = novos.filter(function(u) { return !u.usuario; });
+      if (semLogin.length) {
+        return res.status(400).json({ error: "Há usuário sem login preenchido." });
+      }
+      const vistos = {};
+      const duplicados = [];
+      novos.forEach(function(u) {
+        if (vistos[u.usuario]) duplicados.push(u.usuario);
+        vistos[u.usuario] = true;
+      });
+      if (duplicados.length) {
+        return res.status(409).json({
+          error: "Login repetido: " + duplicados.join(", ") + ". Cada usuário precisa de um login único.",
+        });
+      }
+      // Um usuário sem senha definida nunca consegue entrar — avisa em vez de deixar
+      // o cadastro "pronto" e o cliente batendo na porta.
+      const semSenhaDefinida = novos.filter(function(u) { return !u.senhaHash; }).map(function(u) { return u.usuario; });
+
+      try {
+        await salvarUsuarios(novos);
+      } catch (e) {
+        return res.status(503).json({ error: falhaPersistencia(e) });
+      }
+      return res.status(200).json({
+        ok: true,
+        total: novos.length,
+        semSenha: semSenhaDefinida,
+        usuarios: novos.map(semSenha),
+      });
     }
 
     return res.status(405).json({ error: "Method not allowed" });

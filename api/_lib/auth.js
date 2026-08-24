@@ -11,23 +11,43 @@ const SESSION_MAX_AGE = 7 * 24 * 60 * 60; // 7 dias, em segundos
 
 // ── KV (Upstash/Vercel KV via REST) ──────────────────────────
 
-export async function kvGet(key) {
-  if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) return null;
+export function kvConfigurado() {
+  return !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+}
+
+// Erro de persistência: o dado NÃO foi lido/gravado. Quem chama precisa avisar o
+// usuário em vez de seguir com uma lista vazia — uma leitura que falhou já foi
+// confundida com "esse usuário não existe".
+export class ErroPersistencia extends Error {
+  constructor(mensagem) { super(mensagem); this.name = "ErroPersistencia"; }
+}
+
+// Leitura crua: devolve null quando a chave não existe e LANÇA quando a leitura falha.
+async function kvGetOuFalha(key) {
+  const r = await fetch(process.env.KV_REST_API_URL + "/get/" + key, {
+    headers: { Authorization: "Bearer " + process.env.KV_REST_API_TOKEN },
+  });
+  if (!r.ok) throw new ErroPersistencia("O armazenamento (KV) respondeu " + r.status + " ao ler " + key + ".");
+  const d = await r.json();
+  if (!d || d.result == null) return null;
   try {
-    const r = await fetch(process.env.KV_REST_API_URL + "/get/" + key, {
-      headers: { Authorization: "Bearer " + process.env.KV_REST_API_TOKEN },
-    });
-    const d = await r.json();
-    if (d && d.result) return JSON.parse(d.result);
-  } catch {}
-  return null;
+    return JSON.parse(d.result);
+  } catch {
+    throw new ErroPersistencia("Conteúdo inválido no armazenamento (KV) para " + key + ".");
+  }
+}
+
+// Versão tolerante, para dados em que uma falha de leitura pode virar "sem valor".
+export async function kvGet(key) {
+  if (!kvConfigurado()) return null;
+  try { return await kvGetOuFalha(key); } catch { return null; }
 }
 
 export async function kvSet(key, value) {
-  if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) return false;
+  if (!kvConfigurado()) return false;
   try {
     // A API REST do Upstash/Vercel KV usa o corpo da requisição como o próprio valor a gravar
-    await fetch(process.env.KV_REST_API_URL + "/set/" + key, {
+    const r = await fetch(process.env.KV_REST_API_URL + "/set/" + key, {
       method: "POST",
       headers: {
         Authorization: "Bearer " + process.env.KV_REST_API_TOKEN,
@@ -35,7 +55,8 @@ export async function kvSet(key, value) {
       },
       body: JSON.stringify(value),
     });
-    return true;
+    // Antes o status era ignorado: um 401/429 do KV passava por gravação bem-sucedida.
+    return r.ok;
   } catch {}
   return false;
 }
@@ -112,15 +133,35 @@ function adminPadrao() {
 
 let _usersCache = null;
 
+// Lança ErroPersistencia se o KV estiver configurado mas a leitura falhar. Cair no
+// admin padrão nesse caso faria o login responder "usuário ou senha incorretos" para
+// contas que existem — o usuário some da lista por causa de uma falha de rede.
 export async function lerUsuarios() {
-  const kv = await kvGet(USERS_KEY);
+  if (!kvConfigurado()) return _usersCache || adminPadrao();
+  const kv = await kvGetOuFalha(USERS_KEY);
   if (Array.isArray(kv) && kv.length > 0) return kv;
   return _usersCache || adminPadrao();
 }
 
+// Lança ErroPersistencia quando a gravação não aconteceu de verdade. Sem isso, criar
+// um usuário respondia "ok" e o cadastro se perdia: o cache de processo (_usersCache)
+// vive só naquela instância serverless e some no próximo request.
 export async function salvarUsuarios(usuarios) {
   _usersCache = usuarios;
-  await kvSet(USERS_KEY, usuarios);
+  if (!kvConfigurado()) {
+    throw new ErroPersistencia(
+      "Armazenamento (KV) não configurado no servidor: defina KV_REST_API_URL e " +
+      "KV_REST_API_TOKEN no Vercel. Sem isso, usuários criados se perdem a cada requisição."
+    );
+  }
+  const ok = await kvSet(USERS_KEY, usuarios);
+  if (!ok) throw new ErroPersistencia("Falha ao gravar os usuários no armazenamento (KV).");
+}
+
+// Normaliza o login: sem espaços nas pontas e sempre em minúsculas. Um espaço
+// invisível no fim do usuário fazia o login nunca bater com o que foi cadastrado.
+export function normalizarLogin(usuario) {
+  return String(usuario == null ? "" : usuario).trim().toLowerCase();
 }
 
 export function semSenha(u) {

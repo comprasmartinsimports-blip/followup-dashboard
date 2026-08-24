@@ -10,14 +10,30 @@ import {
   criarCookieSessao,
   verificarSessao,
   semSenha,
+  normalizarLogin,
+  ErroPersistencia,
 } from "../_lib/auth.js";
+
+function mensagemFalha(e) {
+  if (e instanceof ErroPersistencia) {
+    return "Servidor de usuários indisponível no momento (" + e.message + ") — nenhuma conta foi apagada. Tente de novo em instantes.";
+  }
+  return "Servidor de usuários indisponível no momento — nenhuma conta foi apagada. Tente de novo em instantes.";
+}
 
 export default async function handler(req, res) {
   // GET: retorna a sessão atual (para o app validar o cookie ao abrir)
   if (req.method === "GET") {
     const sessao = await verificarSessao(req);
     if (!sessao) return res.status(200).json({ authenticated: false });
-    const usuarios = await lerUsuarios();
+    let usuarios;
+    try {
+      usuarios = await lerUsuarios();
+    } catch (e) {
+      // Falha ao ler o armazenamento não é "sessão inválida": derrubar o usuário aqui
+      // faria uma instabilidade do KV parecer logout. Mantém a sessão e avisa.
+      return res.status(503).json({ authenticated: false, indisponivel: true, error: mensagemFalha(e) });
+    }
     const user = usuarios.find(u => u.id === sessao.uid && u.ativo);
     if (!user) return res.status(200).json({ authenticated: false });
     return res.status(200).json({ authenticated: true, user: semSenha(user) });
@@ -30,10 +46,16 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Informe usuário e senha" });
   }
 
-  const usuarios = await lerUsuarios();
-  const user = usuarios.find(
-    u => u.usuario && u.usuario.toLowerCase() === String(usuario).toLowerCase()
-  );
+  let usuarios;
+  try {
+    usuarios = await lerUsuarios();
+  } catch (e) {
+    // Sem isto, uma falha de leitura virava "usuário ou senha incorretos" — a conta
+    // existe, mas a resposta mandava o cliente procurar erro na senha.
+    return res.status(503).json({ error: mensagemFalha(e) });
+  }
+  const login = normalizarLogin(usuario);
+  const user = usuarios.find(u => normalizarLogin(u.usuario) === login);
 
   // ── Acesso de emergência (break-glass) ──────────────────────────────────────
   // Se a variável de ambiente ADMIN_RECOVERY_PASSWORD estiver definida no projeto

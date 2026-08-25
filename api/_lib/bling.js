@@ -29,6 +29,19 @@ export const ENTIDADES = {
 // recebe uma tela de erro genérica em vez do motivo real.
 export const TEMPO_LIMITE_MS = 8000;
 
+// Prazo para QUALQUER operação, inclusive as do banco. A resposta ao usuário nunca
+// deve depender de algo que pode não terminar: sem isto, a função morre por tempo
+// esgotado e o navegador mostra uma tela de 504 sem explicação nenhuma.
+export function comPrazo(promessa, ms, oQue) {
+  let id;
+  const limite = new Promise(function(_, rejeitar) {
+    id = setTimeout(function() {
+      rejeitar(new ErroBling((oQue || "A operação") + " não terminou em " + Math.round(ms / 1000) + "s.", 0));
+    }, ms);
+  });
+  return Promise.race([promessa, limite]).finally(function() { clearTimeout(id); });
+}
+
 async function fetchComPrazo(url, opcoes, ms) {
   const prazo = ms || TEMPO_LIMITE_MS;
   try {
@@ -77,10 +90,10 @@ export function urlAutorizacao(state) {
 export async function lerConexao() {
   const sql = sqlClient();
   if (!sql) throw new ErroBling("Banco não configurado (SUPABASE_DB_URL).", 0);
-  const rows = await sql`
+  const rows = await comPrazo(sql`
     select access_token, refresh_token, expira_em, atualizado_em
     from flow.conexao_bling where id = 'bling' limit 1
-  `;
+  `, 10000, "A leitura da conexão no banco");
   return rows.length ? rows[0] : null;
 }
 
@@ -88,7 +101,7 @@ export async function salvarConexao(accessToken, refreshToken, expiraEmMs) {
   const sql = sqlClient();
   if (!sql) throw new ErroBling("Banco não configurado (SUPABASE_DB_URL).", 0);
   const expira = expiraEmMs ? new Date(expiraEmMs).toISOString() : null;
-  await sql`
+  await comPrazo(sql`
     insert into flow.conexao_bling (id, access_token, refresh_token, expira_em, atualizado_em)
     values ('bling', ${accessToken}, ${refreshToken}, ${expira}, now())
     on conflict (id) do update set
@@ -97,7 +110,7 @@ export async function salvarConexao(accessToken, refreshToken, expiraEmMs) {
       refresh_token = coalesce(excluded.refresh_token, flow.conexao_bling.refresh_token),
       expira_em = excluded.expira_em,
       atualizado_em = now()
-  `;
+  `, 10000, "A gravação da conexão no banco");
   return true;
 }
 
@@ -233,7 +246,7 @@ export async function checarRede() {
     const sql = sqlClient();
     if (!sql) resultado.banco = { alcancavel: false, erro: "SUPABASE_DB_URL não configurada" };
     else {
-      await sql`select 1 as ok`;
+      await comPrazo(sql`select 1 as ok`, 10000, "A consulta ao banco");
       resultado.banco = { alcancavel: true, ms: Date.now() - inicioBanco };
     }
   } catch (e) {

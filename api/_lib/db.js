@@ -21,6 +21,10 @@ function getSql() {
       ssl: "require",
       idle_timeout: 20,
       max: 1,              // serverless: 1 conexão por invocação
+      // Sem estes dois, uma conexão que não estabelece deixa a consulta esperando
+      // para sempre — e a função inteira morre por tempo esgotado, sem dizer o motivo.
+      connect_timeout: 10, // segundos para abrir a conexão
+      max_lifetime: 60 * 5,
     });
   }
   return _sql;

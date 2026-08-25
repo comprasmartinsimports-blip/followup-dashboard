@@ -7,7 +7,7 @@ import { verificarSessao } from "./_lib/auth.js";
 import { dbEnabled } from "./_lib/db.js";
 import {
   blingConfigurado, urlAutorizacao, trocarCodigoPorToken, lerConexao, apagarConexao,
-  chamarBling, garantirToken, ENTIDADES, checarRede,
+  chamarBling, garantirToken, ENTIDADES, checarRede, comPrazo,
 } from "./_lib/bling.js";
 import { sincronizarTudo } from "./_lib/blingsync.js";
 import { sqlClient } from "./_lib/db.js";
@@ -43,7 +43,10 @@ export default async function handler(req, res) {
     if (!code) return res.redirect("/?bling=erro&msg=" + encodeURIComponent("O Bling não devolveu o código de autorização."));
     const falta = faltaConfig(res); if (falta) return falta;
     try {
-      await trocarCodigoPorToken(code);
+      // Rede de segurança: mesmo que algo novo trave aqui dentro, o usuário recebe
+      // uma mensagem em vez da tela de 504 do Vercel. As etapas internas (chamada ao
+      // Bling, gravação no banco) têm prazos próprios e dizem qual delas falhou.
+      await comPrazo(trocarCodigoPorToken(code), 25000, "A conexão com o Bling");
       return res.redirect("/?bling=ok");
     } catch (e) {
       const motivo = (e && e.message) || "falha ao autorizar";
@@ -75,16 +78,16 @@ export default async function handler(req, res) {
     };
     if (!dbEnabled()) return res.status(200).json(estado);
     try {
-      const con = await lerConexao();
+      const con = await comPrazo(lerConexao(), 12000, "A leitura da conexão");
       estado.conectado = !!(con && con.access_token);
       estado.expiraEm = con && con.expira_em ? new Date(con.expira_em).toISOString() : null;
       estado.atualizadoEm = con && con.atualizado_em ? new Date(con.atualizado_em).toISOString() : null;
       const sql = sqlClient();
-      const [prod, est, ctas] = await Promise.all([
+      const [prod, est, ctas] = await comPrazo(Promise.all([
         sql`select count(*)::int as n from flow.bling_produto`,
         sql`select count(*)::int as n from flow.bling_estoque`,
         sql`select count(*)::int as n from flow.bling_conta where tipo = 'pagar'`,
-      ]);
+      ]), 12000, "A contagem do que já foi importado");
       estado.contagens = { produtos: prod[0].n, estoque: est[0].n, contas_pagar: ctas[0].n };
     } catch (e) {
       estado.erro = (e && e.message) || "falha ao ler a conexão";

@@ -20,7 +20,10 @@ function getSql() {
       prepare: false,      // pooler em modo transação não suporta prepared statements
       ssl: "require",
       idle_timeout: 20,
-      max: 1,              // serverless: 1 conexão por invocação
+      // Antes era 1. Com uma conexão só, uma consulta presa (função encerrada no meio
+      // de uma gravação) deixava a instância inteira na fila atrás dela. Com folga, o
+      // pedido seguinte usa outra conexão em vez de travar junto.
+      max: 3,
       // Sem estes dois, uma conexão que não estabelece deixa a consulta esperando
       // para sempre — e a função inteira morre por tempo esgotado, sem dizer o motivo.
       connect_timeout: 10, // segundos para abrir a conexão

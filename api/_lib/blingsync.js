@@ -42,13 +42,46 @@ function texto(v) {
 }
 
 // ── Produtos ─────────────────────────────────────────────────────────────────
+// O Bling é fonte de INFORMAÇÃO, não de cadastro: só entram os produtos cujo código
+// já existe no cadastro do Flow. Um produto que existe no Bling e não no Flow é
+// ignorado — a importação nunca cria produto novo.
+
+function normalizarSku(v) {
+  return v === null || v === undefined ? "" : String(v).trim().toLowerCase();
+}
+
+// SKUs cadastrados no Flow, de todas as contas (produtos_cadastro no sync_store).
+export async function skusDoFlow() {
+  const sql = sqlClient();
+  const rows = await sql`
+    select distinct lower(trim(e->>'sku')) as sku
+    from flow.sync_store s, jsonb_array_elements(s.valor) e
+    where s.chave = 'produtos_cadastro'
+      and jsonb_typeof(s.valor) = 'array'
+      and coalesce(trim(e->>'sku'), '') <> ''
+  `;
+  return new Set(rows.map(function(r) { return r.sku; }));
+}
 
 export async function sincronizarProdutos() {
   const sql = sqlClient();
+  const skus = await skusDoFlow();
+  // Sem catálogo lido não dá para filtrar. Parar aqui é proposital: seguir em frente
+  // importaria o Bling inteiro, exatamente o que não se quer.
+  if (!skus.size) {
+    throw new ErroBling(
+      "Nenhum produto com SKU encontrado no cadastro do Flow. A importação só atualiza " +
+      "produtos que já existem aqui, então não há o que atualizar.", 0
+    );
+  }
   const { itens, truncado } = await listarPaginado(ENTIDADES.produtos.caminho, {});
+  let ignorados = 0;
   for (const p of itens) {
     const id = texto(valor(p, ["id"]));
     if (!id) continue;
+    const codigo = valor(p, ["codigo", "sku"]);
+    // Fora do cadastro do Flow: passa direto, sem gravar nada.
+    if (!skus.has(normalizarSku(codigo))) { ignorados++; continue; }
     await sql`
       insert into flow.bling_produto (id, codigo, nome, preco, custo, situacao, raw, atualizado_em)
       values (
@@ -67,7 +100,7 @@ export async function sincronizarProdutos() {
         situacao = excluded.situacao, raw = excluded.raw, atualizado_em = now()
     `;
   }
-  return { registros: itens.length, truncado };
+  return { registros: itens.length - ignorados, ignorados, truncado };
 }
 
 // ── Estoque ──────────────────────────────────────────────────────────────────
@@ -115,19 +148,19 @@ export async function sincronizarEstoque() {
   return { registros: gravados, truncado: false };
 }
 
-// ── Contas a pagar / receber ─────────────────────────────────────────────────
+// ── Contas a pagar ───────────────────────────────────────────────────────────
 
-export async function sincronizarContas(tipo) {
+// Só contas a PAGAR. Contas a receber não são buscadas em lugar nenhum deste arquivo.
+export async function sincronizarContasPagar() {
   const sql = sqlClient();
-  const caminho = tipo === "pagar" ? ENTIDADES.contas_pagar.caminho : ENTIDADES.contas_receber.caminho;
-  const { itens, truncado } = await listarPaginado(caminho, {});
+  const { itens, truncado } = await listarPaginado(ENTIDADES.contas_pagar.caminho, {});
   for (const c of itens) {
     const id = texto(valor(c, ["id"]));
     if (!id) continue;
     await sql`
       insert into flow.bling_conta (id, tipo, situacao, vencimento, valor, contato, raw, atualizado_em)
       values (
-        ${id}, ${tipo},
+        ${id}, 'pagar',
         ${texto(valor(c, ["situacao"]))},
         ${data(valor(c, ["vencimento", "dataVencimento", "vencimentoOriginal"]))},
         ${numero(valor(c, ["valor", "valorTotal", "saldo"]))},
@@ -135,41 +168,8 @@ export async function sincronizarContas(tipo) {
         ${sql.json(c)}, now()
       )
       on conflict (id) do update set
-        tipo = excluded.tipo, situacao = excluded.situacao, vencimento = excluded.vencimento,
+        situacao = excluded.situacao, vencimento = excluded.vencimento,
         valor = excluded.valor, contato = excluded.contato, raw = excluded.raw, atualizado_em = now()
-    `;
-  }
-  return { registros: itens.length, truncado };
-}
-
-// ── Notas fiscais ────────────────────────────────────────────────────────────
-
-export async function sincronizarNotas() {
-  const sql = sqlClient();
-  const { itens, truncado } = await listarPaginado(ENTIDADES.notas.caminho, {});
-  for (const n of itens) {
-    const id = texto(valor(n, ["id"]));
-    if (!id) continue;
-    // No Bling o tipo costuma vir como 0/1 (entrada/saída) ou já como texto.
-    const tipoBruto = valor(n, ["tipo"]);
-    const tipo = tipoBruto === 0 || tipoBruto === "0" ? "entrada"
-      : tipoBruto === 1 || tipoBruto === "1" ? "saida"
-      : texto(tipoBruto);
-    await sql`
-      insert into flow.bling_nota (id, tipo, numero, serie, situacao, data_emissao, valor, raw, atualizado_em)
-      values (
-        ${id}, ${tipo},
-        ${texto(valor(n, ["numero"]))},
-        ${texto(valor(n, ["serie"]))},
-        ${texto(valor(n, ["situacao"]))},
-        ${data(valor(n, ["dataEmissao", "data", "dataOperacao"]))},
-        ${numero(valor(n, ["valorNota", "valor", "total"]))},
-        ${sql.json(n)}, now()
-      )
-      on conflict (id) do update set
-        tipo = excluded.tipo, numero = excluded.numero, serie = excluded.serie,
-        situacao = excluded.situacao, data_emissao = excluded.data_emissao,
-        valor = excluded.valor, raw = excluded.raw, atualizado_em = now()
     `;
   }
   return { registros: itens.length, truncado };
@@ -180,11 +180,9 @@ export async function sincronizarNotas() {
 // relatório, com o erro que o próprio Bling devolveu.
 
 const TAREFAS = [
-  { chave: "produtos",       rotulo: "Produtos",          executar: sincronizarProdutos },
-  { chave: "estoque",        rotulo: "Estoque",           executar: sincronizarEstoque },
-  { chave: "contas_pagar",   rotulo: "Contas a pagar",    executar: function() { return sincronizarContas("pagar"); } },
-  { chave: "contas_receber", rotulo: "Contas a receber",  executar: function() { return sincronizarContas("receber"); } },
-  { chave: "notas",          rotulo: "Notas fiscais",     executar: sincronizarNotas },
+  { chave: "produtos",     rotulo: "Produtos",       executar: sincronizarProdutos },
+  { chave: "estoque",      rotulo: "Estoque",        executar: sincronizarEstoque },
+  { chave: "contas_pagar", rotulo: "Contas a pagar", executar: sincronizarContasPagar },
 ];
 
 export async function sincronizarTudo(somente) {
@@ -195,7 +193,10 @@ export async function sincronizarTudo(somente) {
   for (const tarefa of alvo) {
     try {
       const r = await tarefa.executar();
-      relatorio.push({ chave: tarefa.chave, rotulo: tarefa.rotulo, ok: true, registros: r.registros, truncado: !!r.truncado });
+      relatorio.push({
+        chave: tarefa.chave, rotulo: tarefa.rotulo, ok: true,
+        registros: r.registros, ignorados: r.ignorados || 0, truncado: !!r.truncado,
+      });
     } catch (e) {
       relatorio.push({
         chave: tarefa.chave, rotulo: tarefa.rotulo, ok: false, registros: 0,

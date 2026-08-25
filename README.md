@@ -70,9 +70,17 @@ respondia sucesso e o cadastro se perdia, e o usuário não conseguia entrar dep
 - **Mercado Livre** — conexão por OAuth; traz anúncios, pedidos, frete e tarifas reais.
 - **Bling** — conexão por OAuth 2.0 (API v3). O botão *Conectar* leva à autorização do Bling; o
   servidor troca o código pelo token, guarda em `flow.conexao_bling` e renova sozinho pelo refresh
-  token. Nenhuma credencial passa pelo navegador. O botão *Sincronizar agora* importa produtos e
-  custos, saldos de estoque, contas a pagar e receber e notas fiscais para as tabelas `flow.bling_*`,
-  e mostra um relatório por entidade — uma que falhe não impede as outras.
+  token. Nenhuma credencial passa pelo navegador. O botão *Sincronizar agora* traz, para as tabelas
+  `flow.bling_*`, e mostra um relatório por entidade — uma que falhe não impede as outras:
+  - **Produtos** (custo, preço, situação) **apenas dos SKUs já cadastrados no Flow**. Produto que
+    existe no Bling e não aqui é ignorado: a importação nunca cria cadastro novo. Sem catálogo local
+    legível, a importação de produtos falha de propósito, em vez de trazer o Bling inteiro.
+  - **Estoque** dos produtos importados, por depósito.
+  - **Contas a pagar**.
+
+  Ficam **de fora por escopo**: contas a receber, notas fiscais (entrada e saída) e histórico de
+  vendas. Nenhum endpoint desses é chamado, e `flow.bling_conta` só aceita `tipo = 'pagar'`.
+
   `GET /api/bling/diagnostico` (admin) testa cada endpoint da API e diz qual respondeu o quê.
 
 ## Como subir no Vercel

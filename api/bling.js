@@ -77,19 +77,12 @@ export default async function handler(req, res) {
       estado.expiraEm = con && con.expira_em ? new Date(con.expira_em).toISOString() : null;
       estado.atualizadoEm = con && con.atualizado_em ? new Date(con.atualizado_em).toISOString() : null;
       const sql = sqlClient();
-      const [prod, est, ctas, notas] = await Promise.all([
+      const [prod, est, ctas] = await Promise.all([
         sql`select count(*)::int as n from flow.bling_produto`,
         sql`select count(*)::int as n from flow.bling_estoque`,
-        sql`select tipo, count(*)::int as n from flow.bling_conta group by tipo`,
-        sql`select count(*)::int as n from flow.bling_nota`,
+        sql`select count(*)::int as n from flow.bling_conta where tipo = 'pagar'`,
       ]);
-      estado.contagens = {
-        produtos: prod[0].n,
-        estoque: est[0].n,
-        contas_pagar: (ctas.find(function(r){ return r.tipo === "pagar"; }) || { n: 0 }).n,
-        contas_receber: (ctas.find(function(r){ return r.tipo === "receber"; }) || { n: 0 }).n,
-        notas: notas[0].n,
-      };
+      estado.contagens = { produtos: prod[0].n, estoque: est[0].n, contas_pagar: ctas[0].n };
     } catch (e) {
       estado.erro = (e && e.message) || "falha ao ler a conexão";
     }

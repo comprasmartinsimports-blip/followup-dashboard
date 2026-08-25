@@ -1421,7 +1421,7 @@ function IntegracoesTab({ token, user, lastUpdate }) {
   var cards = [
     { nome:"Mercado Livre", desc:"Anúncios, pedidos, taxas e repasses — sincronizados automaticamente.", status: token ? "conectado" : "disponivel", extra: token && user && user.nickname ? ("Conta: " + user.nickname + (mins != null ? " · última sync há " + mins + " min" : "")) : null,
       acao: token ? { label:"Reconectar", onClick:function(){ window.location.href="/api/auth/login"; }, tipo:"sec" } : { label:"Conectar ML", onClick:function(){ window.location.href="/api/auth/login"; }, tipo:"pri" } },
-    { nome:"Bling", desc:"ERP: produtos, custos, estoque, contas a pagar/receber e notas fiscais.",
+    { nome:"Bling", desc:"ERP: atualiza custo e estoque dos produtos já cadastrados aqui, e traz as contas a pagar.",
       status: blingConectado ? "conectado" : "disponivel",
       extra: (function(){
         if (!bling) return "Verificando...";
@@ -1429,7 +1429,7 @@ function IntegracoesTab({ token, user, lastUpdate }) {
         if (!blingConectado) return "Autorize o acesso à sua conta do Bling para importar os dados.";
         var c = bling.contagens || {};
         return "Importados: " + (c.produtos||0) + " produtos · " + (c.estoque||0) + " saldos · " +
-               ((c.contas_pagar||0) + (c.contas_receber||0)) + " contas · " + (c.notas||0) + " notas";
+               (c.contas_pagar||0) + " contas a pagar";
       })(),
       acao: blingConectado
         ? { label: sincronizando ? "Sincronizando..." : "Sincronizar agora", onClick:sincronizarBling, tipo:"pri" }
@@ -1480,14 +1480,18 @@ function IntegracoesTab({ token, user, lastUpdate }) {
                 <span style={{ width:130, flexShrink:0, color:"var(--text-strong)" }}>{r.rotulo}</span>
                 <span style={{ color: r.ok ? "var(--text-2)" : "#FF5252", lineHeight:1.5 }}>
                   {r.ok
-                    ? (r.registros + " registro(s)" + (r.truncado ? " — houve mais páginas do que o limite; rode de novo" : ""))
+                    ? (r.registros + " registro(s)"
+                       + (r.ignorados ? " · " + r.ignorados + " do Bling ignorado(s) por não existirem no cadastro daqui" : "")
+                       + (r.truncado ? " — houve mais páginas do que o limite; rode de novo" : ""))
                     : r.erro}
                 </span>
               </div>
             );
           })}
-          <div style={{ fontSize:11, color:"var(--text-3)", marginTop:8 }}>
+          <div style={{ fontSize:11, color:"var(--text-3)", marginTop:8, lineHeight:1.5 }}>
             Cada linha é independente: uma que falha não impede as outras de importar.
+            <br />O Bling só atualiza produtos que já existem no cadastro daqui — nenhum produto novo é criado.
+            Contas a receber, notas fiscais e histórico de vendas não são buscados.
           </div>
         </div>
       )}

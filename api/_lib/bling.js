@@ -15,12 +15,13 @@ export const BLING = {
 };
 
 // Endpoints por entidade. limite=100 é o teto por página na v3.
+// Só o que o sistema realmente consome. Contas a receber, notas fiscais (entrada e
+// saída) e histórico de vendas ficam de fora por decisão de escopo: nenhum endpoint
+// desses é chamado, então esse dado nunca sai do Bling.
 export const ENTIDADES = {
   produtos:        { caminho: "/produtos",         rotulo: "Produtos" },
   estoques:        { caminho: "/estoques/saldos",  rotulo: "Estoque" },
   contas_pagar:    { caminho: "/contas/pagar",     rotulo: "Contas a pagar" },
-  contas_receber:  { caminho: "/contas/receber",   rotulo: "Contas a receber" },
-  notas:           { caminho: "/nfe",              rotulo: "Notas fiscais" },
 };
 
 export class ErroBling extends Error {

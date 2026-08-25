@@ -52,6 +52,7 @@ ICMS do lucro e o inclui no cálculo do preço alvo, e mostra no topo a alíquot
 | `SESSION_SECRET` | Recomendada | Segredo para assinar o cookie de sessão do app (qualquer string longa e aleatória). Sem ela, um segredo é gerado e salvo no KV. |
 | `ADMIN_INITIAL_PASSWORD` | Recomendada | Senha inicial do usuário `admin` na primeira execução (padrão: `admin123` — troque no primeiro acesso). |
 | `ML_APP_ID` / `ML_APP_SECRET` / `ML_REDIRECT_URI` | Para conectar ao ML | Credenciais OAuth do app no Mercado Livre. |
+| `BLING_CLIENT_ID` / `BLING_CLIENT_SECRET` / `BLING_REDIRECT_URI` | Para conectar ao Bling | Credenciais OAuth do aplicativo criado no Bling (API v3). O redirect precisa ser exatamente `https://flowmarketplaces.vercel.app/api/bling/callback`, igual ao cadastrado no Bling. |
 | `SUPABASE_DB_URL` | Recomendada | Connection string do Postgres do Supabase (pooler de transação). É o armazenamento principal: usuários (`flow.usuario`), dados de negócio (`flow.sync_store`) e o cache de anúncios/pedidos do ML. Sem ela o sistema cai no Vercel KV. |
 | `ADMIN_RECOVERY_PASSWORD` | Opcional | Acesso de emergência (break-glass): quem souber essa senha entra como admin, reativa a conta e redefine a senha dela para esse valor. Só habilite quando precisar recuperar o acesso, e remova a variável depois. |
 | `CRON_SECRET` | Para o cron | Segredo exigido pelo endpoint `/api/ml/_cron_sync`, que sincroniza o cache de todas as contas do ML. Sem ela o endpoint responde 403. Requer `SUPABASE_DB_URL`. |
@@ -67,8 +68,12 @@ respondia sucesso e o cadastro se perdia, e o usuário não conseguia entrar dep
 ## Integrações
 
 - **Mercado Livre** — conexão por OAuth; traz anúncios, pedidos, frete e tarifas reais.
-- **Bling** — hoje o sistema apenas guarda a credencial da API. A sincronização automática de
-  produtos, custos, estoque e notas fiscais ainda não está implementada.
+- **Bling** — conexão por OAuth 2.0 (API v3). O botão *Conectar* leva à autorização do Bling; o
+  servidor troca o código pelo token, guarda em `flow.conexao_bling` e renova sozinho pelo refresh
+  token. Nenhuma credencial passa pelo navegador. O botão *Sincronizar agora* importa produtos e
+  custos, saldos de estoque, contas a pagar e receber e notas fiscais para as tabelas `flow.bling_*`,
+  e mostra um relatório por entidade — uma que falhe não impede as outras.
+  `GET /api/bling/diagnostico` (admin) testa cada endpoint da API e diz qual respondeu o quê.
 
 ## Como subir no Vercel
 

@@ -1354,31 +1354,87 @@ function ExpedicaoTab({ rawOrders }) {
 
 // Integrações: status das conexões do sistema.
 function IntegracoesTab({ token, user, lastUpdate }) {
-  const [blingModal, setBlingModal] = useState(false);
-  const [blingToken, setBlingToken] = useState(function(){ try { return localStorage.getItem("bling_token") || ""; } catch(e){ return ""; } });
-  const [blingInput, setBlingInput] = useState("");
+  // A conexão com o Bling é OAuth: o token vive no servidor (flow.conexao_bling) e o
+  // navegador só pergunta a situação. Nenhuma credencial passa por aqui.
+  const [bling, setBling] = useState(null);      // resposta de /api/bling/status
+  const [blingErro, setBlingErro] = useState("");
+  const [sincronizando, setSincronizando] = useState(false);
+  const [relatorio, setRelatorio] = useState(null);
   var mins = lastUpdate ? Math.round((Date.now() - parseInt(lastUpdate)) / 60000) : null;
-  var blingConectado = !!(blingToken && blingToken.trim());
-  function salvarBling(){
-    var t = (blingInput||"").trim();
-    if (!t){ alert("Cole o token/credencial da API do Bling."); return; }
-    setBlingToken(t);
-    try { localStorage.setItem("bling_token", t); } catch(e){}
-    try { kvSyncPush("bling_token", t); } catch(e){}
-    setBlingInput(""); setBlingModal(false);
+
+  function carregarBling(){
+    return fetch("/api/bling/status")
+      .then(function(r){ return r.json(); })
+      .then(function(d){ setBling(d); setBlingErro(d && d.erro ? d.erro : ""); })
+      .catch(function(){ setBlingErro("Não foi possível falar com o servidor para saber a situação do Bling."); });
   }
+
+  useEffect(function(){
+    carregarBling();
+    // Retorno da autorização: /?bling=ok ou /?bling=erro&msg=...
+    try {
+      var q = new URLSearchParams(window.location.search);
+      var r = q.get("bling");
+      if (r === "erro") setBlingErro(q.get("msg") || "A autorização no Bling falhou.");
+      if (r === "ok" || r === "erro") {
+        q.delete("bling"); q.delete("msg");
+        var resto = q.toString();
+        window.history.replaceState({}, "", window.location.pathname + (resto ? "?" + resto : ""));
+      }
+    } catch(e) {}
+  }, []);
+
+  var blingConectado = !!(bling && bling.conectado);
+
+  function conectarBling(){
+    if (bling && !bling.credenciaisConfiguradas) {
+      alert("O servidor ainda não tem as credenciais do Bling.\n\nDefina BLING_CLIENT_ID, BLING_CLIENT_SECRET e BLING_REDIRECT_URI nas variáveis de ambiente do Vercel e publique de novo.");
+      return;
+    }
+    window.location.href = "/api/bling/login";
+  }
+
   function desconectarBling(){
-    if (!window.confirm("Desconectar o Bling? A credencial guardada será removida.")) return;
-    setBlingToken("");
-    try { localStorage.removeItem("bling_token"); } catch(e){}
-    try { kvSyncPush("bling_token", ""); } catch(e){}
+    if (!window.confirm("Desconectar o Bling? A autorização guardada no servidor será removida.")) return;
+    fetch("/api/bling/desconectar", { method:"POST" })
+      .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(d){ return { ok:r.ok, d:d }; }); })
+      .then(function(x){
+        if (!x.ok) { alert("Não foi possível desconectar: " + (x.d.error || "erro no servidor")); return; }
+        carregarBling(); setRelatorio(null);
+      })
+      .catch(function(){ alert("Não foi possível falar com o servidor."); });
+  }
+
+  function sincronizarBling(){
+    setSincronizando(true); setRelatorio(null); setBlingErro("");
+    fetch("/api/bling/sincronizar", { method:"POST", headers:{"Content-Type":"application/json"}, body:"{}" })
+      .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(d){ return { ok:r.ok, d:d }; }); })
+      .then(function(x){
+        if (x.d && Array.isArray(x.d.relatorio)) setRelatorio(x.d.relatorio);
+        else setBlingErro((x.d && x.d.error) || "A sincronização falhou no servidor.");
+        return carregarBling();
+      })
+      .catch(function(){ setBlingErro("Não foi possível falar com o servidor durante a sincronização."); })
+      .finally(function(){ setSincronizando(false); });
   }
   var badgeStatus = { conectado:["#0a9d4e","rgba(0,200,83,.14)","● Conectado"], disponivel:["#768692","rgba(118,134,146,.14)","Disponível"], construcao:["#FFC107","rgba(255,193,7,.14)","🚧 Em construção"] };
   var cards = [
     { nome:"Mercado Livre", desc:"Anúncios, pedidos, taxas e repasses — sincronizados automaticamente.", status: token ? "conectado" : "disponivel", extra: token && user && user.nickname ? ("Conta: " + user.nickname + (mins != null ? " · última sync há " + mins + " min" : "")) : null,
       acao: token ? { label:"Reconectar", onClick:function(){ window.location.href="/api/auth/login"; }, tipo:"sec" } : { label:"Conectar ML", onClick:function(){ window.location.href="/api/auth/login"; }, tipo:"pri" } },
-    { nome:"Bling", desc:"ERP: produtos, custos, estoque e notas fiscais.", status: blingConectado ? "conectado" : "disponivel", extra: blingConectado ? "Credencial da API guardada. Sincronização automática entra na próxima etapa." : null,
-      acao: blingConectado ? { label:"Desconectar", onClick:desconectarBling, tipo:"del" } : { label:"Conectar", onClick:function(){ setBlingInput(""); setBlingModal(true); }, tipo:"pri" } },
+    { nome:"Bling", desc:"ERP: produtos, custos, estoque, contas a pagar/receber e notas fiscais.",
+      status: blingConectado ? "conectado" : "disponivel",
+      extra: (function(){
+        if (!bling) return "Verificando...";
+        if (!bling.credenciaisConfiguradas) return "⚠️ Faltam BLING_CLIENT_ID, BLING_CLIENT_SECRET e BLING_REDIRECT_URI no servidor.";
+        if (!blingConectado) return "Autorize o acesso à sua conta do Bling para importar os dados.";
+        var c = bling.contagens || {};
+        return "Importados: " + (c.produtos||0) + " produtos · " + (c.estoque||0) + " saldos · " +
+               ((c.contas_pagar||0) + (c.contas_receber||0)) + " contas · " + (c.notas||0) + " notas";
+      })(),
+      acao: blingConectado
+        ? { label: sincronizando ? "Sincronizando..." : "Sincronizar agora", onClick:sincronizarBling, tipo:"pri" }
+        : { label:"Conectar", onClick:conectarBling, tipo:"pri" },
+      acaoSec: blingConectado ? { label:"Desconectar", onClick:desconectarBling, tipo:"del" } : null },
     { nome:"Amazon", desc:"Marketplace Amazon (anúncios e pedidos).", status:"construcao", extra:null, acao:null },
     { nome:"Shopee", desc:"Marketplace Shopee (anúncios e pedidos).", status:"construcao", extra:null, acao:null },
   ];
@@ -1400,23 +1456,38 @@ function IntegracoesTab({ token, user, lastUpdate }) {
             </div>
             <div style={{ fontSize:13, color:"var(--text-2)", lineHeight:1.5 }}>{c.desc}</div>
             {c.extra && <div style={{ fontSize:11, color:"var(--text-3)", marginTop:6 }}>{c.extra}</div>}
-            {c.acao && <button onClick={c.acao.onClick} style={{ ...btnEstilo(c.acao.tipo), marginTop:12, alignSelf:"flex-start", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13 }}>{c.acao.label}</button>}
+            <div style={{ display:"flex", gap:8, marginTop:12, flexWrap:"wrap" }}>
+              {c.acao && <button onClick={c.acao.onClick} disabled={sincronizando && c.nome==="Bling"} style={{ ...btnEstilo(c.acao.tipo), padding:"8px 16px", borderRadius:8, cursor: sincronizando && c.nome==="Bling" ? "wait" : "pointer", fontSize:13 }}>{c.acao.label}</button>}
+              {c.acaoSec && <button onClick={c.acaoSec.onClick} style={{ ...btnEstilo(c.acaoSec.tipo), padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13 }}>{c.acaoSec.label}</button>}
+            </div>
           </div>;
         })}
       </div>
 
-      {blingModal && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:600, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }} onClick={function(){ setBlingModal(false); }}>
-          <div onClick={function(e){ e.stopPropagation(); }} style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:14, width:520, maxWidth:"100%", padding:22 }}>
-            <div style={{ fontWeight:600, fontSize:17, color:"var(--text-strong)", marginBottom:6 }}>Conectar ao Bling</div>
-            <div style={{ fontSize:13, color:"var(--text-2)", lineHeight:1.5, marginBottom:14 }}>Cole o <b>token de acesso da API do Bling</b> (Bling → Preferências → API/Integrações). Ele fica guardado com segurança e será usado para importar produtos, estoque, custos e notas.</div>
-            <input value={blingInput} onChange={function(e){ setBlingInput(e.target.value); }} placeholder="Token da API do Bling" autoFocus
-              style={{ width:"100%", background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"11px 12px", borderRadius:9, fontSize:13, outline:"none", boxSizing:"border-box" }} />
-            <div style={{ fontSize:11, color:"var(--text-3)", marginTop:8, lineHeight:1.5 }}>Observação: isto guarda a credencial da conexão. A <b>sincronização automática</b> dos dados do Bling é a próxima etapa (precisa dos endpoints de integração no servidor) — quando você tiver o app/credenciais do Bling, eu ativo o fluxo OAuth completo.</div>
-            <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:18 }}>
-              <button onClick={function(){ setBlingModal(false); }} style={{ background:"none", border:"none", color:"var(--text-3)", fontWeight:600, padding:"10px 16px", cursor:"pointer", fontSize:13 }}>Cancelar</button>
-              <button onClick={salvarBling} style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"10px 22px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Salvar conexão</button>
-            </div>
+      {blingErro && (
+        <div style={{ marginTop:14, background:"rgba(255,82,82,.10)", border:"1px solid rgba(255,82,82,.4)", borderRadius:10, padding:"11px 14px", fontSize:12.5, color:"var(--text-2)", lineHeight:1.5 }}>
+          <b style={{ color:"#FF5252" }}>Bling:</b> {blingErro}
+        </div>
+      )}
+
+      {relatorio && (
+        <div style={{ marginTop:14, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"12px 16px" }}>
+          <div style={{ fontWeight:600, fontSize:13.5, color:"var(--text-strong)", marginBottom:8 }}>Resultado da sincronização</div>
+          {relatorio.map(function(r){
+            return (
+              <div key={r.chave} style={{ display:"flex", alignItems:"flex-start", gap:8, padding:"6px 0", borderBottom:"1px solid var(--border-soft)", fontSize:12.5 }}>
+                <span style={{ flexShrink:0 }}>{r.ok ? "✓" : "✕"}</span>
+                <span style={{ width:130, flexShrink:0, color:"var(--text-strong)" }}>{r.rotulo}</span>
+                <span style={{ color: r.ok ? "var(--text-2)" : "#FF5252", lineHeight:1.5 }}>
+                  {r.ok
+                    ? (r.registros + " registro(s)" + (r.truncado ? " — houve mais páginas do que o limite; rode de novo" : ""))
+                    : r.erro}
+                </span>
+              </div>
+            );
+          })}
+          <div style={{ fontSize:11, color:"var(--text-3)", marginTop:8 }}>
+            Cada linha é independente: uma que falha não impede as outras de importar.
           </div>
         </div>
       )}

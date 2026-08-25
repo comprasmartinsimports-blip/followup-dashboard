@@ -7,7 +7,7 @@ import { verificarSessao } from "./_lib/auth.js";
 import { dbEnabled } from "./_lib/db.js";
 import {
   blingConfigurado, urlAutorizacao, trocarCodigoPorToken, lerConexao, apagarConexao,
-  chamarBling, garantirToken, ENTIDADES,
+  chamarBling, garantirToken, ENTIDADES, checarRede,
 } from "./_lib/bling.js";
 import { sincronizarTudo } from "./_lib/blingsync.js";
 import { sqlClient } from "./_lib/db.js";
@@ -46,7 +46,10 @@ export default async function handler(req, res) {
       await trocarCodigoPorToken(code);
       return res.redirect("/?bling=ok");
     } catch (e) {
-      return res.redirect("/?bling=erro&msg=" + encodeURIComponent((e && e.message) || "falha ao autorizar"));
+      const motivo = (e && e.message) || "falha ao autorizar";
+      // O código de autorização é de uso único: depois de falhar, só um novo
+      // clique em Conectar gera outro. Dizer isso evita a tentativa inútil de recarregar.
+      return res.redirect("/?bling=erro&msg=" + encodeURIComponent(motivo + " — clique em Conectar novamente para gerar um novo código."));
     }
   }
 
@@ -107,6 +110,16 @@ export default async function handler(req, res) {
     if (!sessao.admin) return res.status(403).json({ error: "Apenas administradores podem desconectar." });
     await apagarConexao();
     return res.status(200).json({ ok: true });
+  }
+
+  // Mede se o servidor alcança o Bling e o banco. Não precisa estar conectado —
+  // é justamente o que se usa quando o callback falha antes de guardar o token.
+  if (caminho === "/checar-rede") {
+    if (!sessao.admin) return res.status(403).json({ error: "Apenas administradores." });
+    if (!blingConfigurado()) {
+      return res.status(503).json({ error: "Faltam BLING_CLIENT_ID, BLING_CLIENT_SECRET e BLING_REDIRECT_URI no servidor." });
+    }
+    return res.status(200).json(await checarRede());
   }
 
   // Bate em cada endpoint pedindo 1 registro e conta o que respondeu. Serve para

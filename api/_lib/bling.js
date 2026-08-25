@@ -24,6 +24,26 @@ export const ENTIDADES = {
   contas_pagar:    { caminho: "/contas/pagar",     rotulo: "Contas a pagar" },
 };
 
+// Toda chamada ao Bling tem prazo. Sem isso, uma conexão que trava fica pendurada
+// até a plataforma matar a função inteira por tempo esgotado (504), e o usuário
+// recebe uma tela de erro genérica em vez do motivo real.
+export const TEMPO_LIMITE_MS = 8000;
+
+async function fetchComPrazo(url, opcoes, ms) {
+  const prazo = ms || TEMPO_LIMITE_MS;
+  try {
+    return await fetch(url, Object.assign({}, opcoes, { signal: AbortSignal.timeout(prazo) }));
+  } catch (e) {
+    const abortou = e && (e.name === "TimeoutError" || e.name === "AbortError");
+    throw new ErroBling(
+      abortou
+        ? "O Bling não respondeu em " + Math.round(prazo / 1000) + "s (" + url + ")."
+        : "Não foi possível falar com o Bling (" + url + "): " + ((e && e.message) || "falha de rede"),
+      0
+    );
+  }
+}
+
 export class ErroBling extends Error {
   constructor(mensagem, status) {
     super(mensagem);
@@ -90,20 +110,15 @@ export async function apagarConexao() {
 
 // Troca o código de autorização (ou o refresh token) por um access_token.
 async function pedirToken(corpo) {
-  let res;
-  try {
-    res = await fetch(BLING.token, {
-      method: "POST",
-      headers: {
-        Authorization: credencialBasica(),
-        "Content-Type": "application/x-www-form-urlencoded",
-        Accept: "application/json",
-      },
-      body: new URLSearchParams(corpo),
-    });
-  } catch (e) {
-    throw new ErroBling("Não foi possível falar com o Bling: " + ((e && e.message) || "falha de rede"), 0);
-  }
+  const res = await fetchComPrazo(BLING.token, {
+    method: "POST",
+    headers: {
+      Authorization: credencialBasica(),
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json",
+    },
+    body: new URLSearchParams(corpo),
+  });
   const texto = await res.text();
   let dados = {};
   try { dados = texto ? JSON.parse(texto) : {}; } catch { /* resposta não-JSON cai no erro abaixo */ }
@@ -154,14 +169,9 @@ export async function chamarBling(caminho, params, token) {
   const acesso = token || (await garantirToken());
   const q = new URLSearchParams(params || {});
   const url = BLING.api + caminho + (q.toString() ? "?" + q.toString() : "");
-  let res;
-  try {
-    res = await fetch(url, {
-      headers: { Authorization: "Bearer " + acesso, Accept: "application/json" },
-    });
-  } catch (e) {
-    throw new ErroBling("Falha de rede ao chamar " + caminho + ": " + ((e && e.message) || "erro"), 0);
-  }
+  const res = await fetchComPrazo(url, {
+    headers: { Authorization: "Bearer " + acesso, Accept: "application/json" },
+  }, 15000);
   const texto = await res.text();
   let dados = null;
   try { dados = texto ? JSON.parse(texto) : null; } catch { /* tratado abaixo */ }
@@ -191,4 +201,44 @@ export async function listarPaginado(caminho, params, opcoes) {
     if (lote.length < limite) break;
   }
   return { itens, paginas: Math.min(pagina, maxPaginas), truncado: pagina > maxPaginas };
+}
+
+// Checagem de infraestrutura, sem depender de estar conectado: mede se o servidor
+// alcança o Bling e se alcança o banco. Serve para separar "a API não responde"
+// de "o banco não responde" quando o callback estoura o tempo.
+export async function checarRede() {
+  const resultado = { token: null, banco: null };
+
+  const inicioToken = Date.now();
+  try {
+    // Um refresh propositalmente inválido: o Bling responde 400/401 rápido. O que
+    // importa aqui não é a resposta, é chegar até ela.
+    const res = await fetchComPrazo(BLING.token, {
+      method: "POST",
+      headers: {
+        Authorization: credencialBasica(),
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+      },
+      body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: "checagem-invalida" }),
+    });
+    const corpo = (await res.text()).slice(0, 200);
+    resultado.token = { alcancavel: true, status: res.status, ms: Date.now() - inicioToken, resposta: corpo, url: BLING.token };
+  } catch (e) {
+    resultado.token = { alcancavel: false, ms: Date.now() - inicioToken, erro: (e && e.message) || "falha", url: BLING.token };
+  }
+
+  const inicioBanco = Date.now();
+  try {
+    const sql = sqlClient();
+    if (!sql) resultado.banco = { alcancavel: false, erro: "SUPABASE_DB_URL não configurada" };
+    else {
+      await sql`select 1 as ok`;
+      resultado.banco = { alcancavel: true, ms: Date.now() - inicioBanco };
+    }
+  } catch (e) {
+    resultado.banco = { alcancavel: false, ms: Date.now() - inicioBanco, erro: (e && e.message) || "falha" };
+  }
+
+  return resultado;
 }

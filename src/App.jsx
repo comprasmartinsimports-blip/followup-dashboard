@@ -1427,6 +1427,7 @@ function IntegracoesTab({ token, user, lastUpdate }) {
         if (!bling) return "Verificando...";
         if (!bling.credenciaisConfiguradas) return "⚠️ Faltam BLING_CLIENT_ID, BLING_CLIENT_SECRET e BLING_REDIRECT_URI no servidor.";
         if (!blingConectado) return "Autorize o acesso à sua conta do Bling para importar os dados.";
+        if (bling.avisoContagem) return bling.avisoContagem;
         var c = bling.contagens || {};
         return "Importados: " + (c.produtos||0) + " produtos · " + (c.estoque||0) + " saldos · " +
                (c.contas_pagar||0) + " contas a pagar"
@@ -1484,7 +1485,11 @@ function IntegracoesTab({ token, user, lastUpdate }) {
                     ? (r.registros + " registro(s)"
                        + (r.ignorados ? " · " + r.ignorados + " do Bling ignorado(s) por não existirem no cadastro daqui" : "")
                        + (r.desdePagina > 1 ? " · continuou da página " + r.desdePagina : "")
-                       + (r.truncado ? " — ainda há mais para trazer: clique em Sincronizar agora outra vez para continuar de onde parou" : ""))
+                       + (r.truncado
+                            ? (r.chave === "contatos"
+                                ? " — ainda faltam fornecedores; clique em Sincronizar agora outra vez"
+                                : " — ainda há mais para trazer: clique em Sincronizar agora outra vez para continuar de onde parou")
+                            : ""))
                     : r.erro}
                 </span>
               </div>

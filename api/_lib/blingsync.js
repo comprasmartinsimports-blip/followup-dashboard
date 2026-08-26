@@ -66,6 +66,23 @@ async function gravarCursor(entidade, pagina) {
 // já existe no cadastro do Flow. Um produto que existe no Bling e não no Flow é
 // ignorado — a importação nunca cria produto novo.
 
+// Gravar registro a registro custa uma ida ao banco por linha: com 4 mil linhas,
+// isso sozinho consumia todo o tempo da função e a última etapa ficava sem nada.
+// unnest manda o lote inteiro numa consulta só.
+const TAMANHO_LOTE = 300;
+
+function emLotes(lista, tamanho) {
+  const partes = [];
+  for (let i = 0; i < lista.length; i += (tamanho || TAMANHO_LOTE)) {
+    partes.push(lista.slice(i, i + (tamanho || TAMANHO_LOTE)));
+  }
+  return partes;
+}
+
+function coluna(lista, campo) {
+  return lista.map(function(x) { return x[campo]; });
+}
+
 function normalizarSku(v) {
   return v === null || v === undefined ? "" : String(v).trim().toLowerCase();
 }
@@ -98,23 +115,36 @@ export async function sincronizarProdutos(ate) {
   const { itens, acabou, proximaPagina, truncado } =
     await listarPaginado(ENTIDADES.produtos.caminho, {}, { ate, desdePagina });
   let ignorados = 0;
+  const aGravar = [];
   for (const p of itens) {
     const id = texto(valor(p, ["id"]));
     if (!id) continue;
     const codigo = valor(p, ["codigo", "sku"]);
     // Fora do cadastro do Flow: passa direto, sem gravar nada.
     if (!skus.has(normalizarSku(codigo))) { ignorados++; continue; }
+    aGravar.push({
+      id: id,
+      codigo: texto(codigo),
+      nome: texto(valor(p, ["nome", "descricao", "descricaoCurta"])),
+      preco: numero(valor(p, ["preco", "precoVenda"])),
+      custo: numero(valor(p, ["precoCusto", "custo", "precoCompra", "estoque.custoMedio", "fornecedor.precoCusto"])),
+      situacao: texto(valor(p, ["situacao"])),
+      raw: JSON.stringify(p),
+    });
+  }
+  for (const lote of emLotes(aGravar)) {
     await sql`
       insert into flow.bling_produto (id, codigo, nome, preco, custo, situacao, raw, atualizado_em)
-      values (
-        ${id},
-        ${texto(valor(p, ["codigo", "sku"]))},
-        ${texto(valor(p, ["nome", "descricao", "descricaoCurta"]))},
-        ${numero(valor(p, ["preco", "precoVenda"]))},
-        ${numero(valor(p, ["precoCusto", "custo", "precoCompra", "estoque.custoMedio", "fornecedor.precoCusto"]))},
-        ${texto(valor(p, ["situacao"]))},
-        ${sql.json(p)}, now()
-      )
+      select id, codigo, nome, preco, custo, situacao, raw, now()
+      from unnest(
+        ${sql.array(coluna(lote, "id"))}::text[],
+        ${sql.array(coluna(lote, "codigo"))}::text[],
+        ${sql.array(coluna(lote, "nome"))}::text[],
+        ${sql.array(coluna(lote, "preco"))}::numeric[],
+        ${sql.array(coluna(lote, "custo"))}::numeric[],
+        ${sql.array(coluna(lote, "situacao"))}::text[],
+        ${sql.array(coluna(lote, "raw"))}::jsonb[]
+      ) as t(id, codigo, nome, preco, custo, situacao, raw)
       on conflict (id) do update set
         codigo = excluded.codigo, nome = excluded.nome, preco = excluded.preco,
         -- custo só é sobrescrito quando veio preenchido: nem toda listagem traz custo
@@ -138,6 +168,7 @@ export async function sincronizarEstoque(ate) {
   const token = await garantirToken();
   const ids = produtos.map(function(r) { return String(r.id); });
   let gravados = 0;
+  const aGravar = [];
   // Em lotes: a consulta de saldos recebe vários produtos de uma vez.
   let parou = false;
   for (let i = 0; i < ids.length; i += 50) {
@@ -157,21 +188,29 @@ export async function sincronizarEstoque(ate) {
         ? s.depositos
         : [{ id: "geral", saldoFisico: valor(s, ["saldoFisicoTotal", "saldoVirtualTotal", "saldo"]) }];
       for (const d of depositos) {
-        await sql`
-          insert into flow.bling_estoque (produto_id, deposito_id, deposito_nome, saldo, atualizado_em)
-          values (
-            ${produtoId},
-            ${texto(valor(d, ["id", "idDeposito"])) || "geral"},
-            ${texto(valor(d, ["descricao", "nome"]))},
-            ${numero(valor(d, ["saldoFisico", "saldoVirtual", "saldo"]))},
-            now()
-          )
-          on conflict (produto_id, deposito_id) do update set
-            deposito_nome = excluded.deposito_nome, saldo = excluded.saldo, atualizado_em = now()
-        `;
+        aGravar.push({
+          produto_id: produtoId,
+          deposito_id: texto(valor(d, ["id", "idDeposito"])) || "geral",
+          deposito_nome: texto(valor(d, ["descricao", "nome"])),
+          saldo: numero(valor(d, ["saldoFisico", "saldoVirtual", "saldo"])),
+        });
         gravados++;
       }
     }
+  }
+  for (const lote of emLotes(aGravar)) {
+    await sql`
+      insert into flow.bling_estoque (produto_id, deposito_id, deposito_nome, saldo, atualizado_em)
+      select produto_id, deposito_id, deposito_nome, saldo, now()
+      from unnest(
+        ${sql.array(coluna(lote, "produto_id"))}::text[],
+        ${sql.array(coluna(lote, "deposito_id"))}::text[],
+        ${sql.array(coluna(lote, "deposito_nome"))}::text[],
+        ${sql.array(coluna(lote, "saldo"))}::numeric[]
+      ) as t(produto_id, deposito_id, deposito_nome, saldo)
+      on conflict (produto_id, deposito_id) do update set
+        deposito_nome = excluded.deposito_nome, saldo = excluded.saldo, atualizado_em = now()
+    `;
   }
   return { registros: gravados, truncado: parou };
 }
@@ -197,24 +236,39 @@ export async function sincronizarContasPagar(ate) {
   const desdePagina = await lerCursor("contas_pagar");
   const { itens, proximaPagina, truncado } =
     await listarPaginado(ENTIDADES.contas_pagar.caminho, {}, { ate, desdePagina });
+  const aGravar = [];
   for (const c of itens) {
     const id = texto(valor(c, ["id"]));
     if (!id) continue;
+    aGravar.push({
+      id: id,
+      situacao: texto(valor(c, ["situacao"])),
+      situacao_texto: situacaoTexto(valor(c, ["situacao"])),
+      vencimento: data(valor(c, ["vencimento", "dataVencimento", "vencimentoOriginal"])),
+      valor: numero(valor(c, ["valor", "valorTotal", "saldo"])),
+      contato: texto(valor(c, ["contato.nome", "fornecedor.nome", "cliente.nome"])),
+      raw: JSON.stringify(c),
+    });
+  }
+  for (const lote of emLotes(aGravar)) {
     await sql`
       insert into flow.bling_conta (id, tipo, situacao, situacao_texto, vencimento, valor, contato, raw, atualizado_em)
-      values (
-        ${id}, 'pagar',
-        ${texto(valor(c, ["situacao"]))},
-        ${situacaoTexto(valor(c, ["situacao"]))},
-        ${data(valor(c, ["vencimento", "dataVencimento", "vencimentoOriginal"]))},
-        ${numero(valor(c, ["valor", "valorTotal", "saldo"]))},
-        ${texto(valor(c, ["contato.nome", "fornecedor.nome", "cliente.nome"]))},
-        ${sql.json(c)}, now()
-      )
+      select id, 'pagar', situacao, situacao_texto, vencimento, valor, contato, raw, now()
+      from unnest(
+        ${sql.array(coluna(lote, "id"))}::text[],
+        ${sql.array(coluna(lote, "situacao"))}::text[],
+        ${sql.array(coluna(lote, "situacao_texto"))}::text[],
+        ${sql.array(coluna(lote, "vencimento"))}::date[],
+        ${sql.array(coluna(lote, "valor"))}::numeric[],
+        ${sql.array(coluna(lote, "contato"))}::text[],
+        ${sql.array(coluna(lote, "raw"))}::jsonb[]
+      ) as t(id, situacao, situacao_texto, vencimento, valor, contato, raw)
       on conflict (id) do update set
         situacao = excluded.situacao, situacao_texto = excluded.situacao_texto,
-        vencimento = excluded.vencimento,
-        valor = excluded.valor, contato = excluded.contato, raw = excluded.raw, atualizado_em = now()
+        vencimento = excluded.vencimento, valor = excluded.valor,
+        -- o nome do fornecedor vem da etapa de contatos: não apagar com o nulo da listagem
+        contato = coalesce(excluded.contato, flow.bling_conta.contato),
+        raw = excluded.raw, atualizado_em = now()
     `;
   }
   await gravarCursor("contas_pagar", proximaPagina);
@@ -286,7 +340,12 @@ export async function sincronizarTudo(somente) {
   const relatorio = [];
   let restantes = alvo.length;
   for (const tarefa of alvo) {
-    const fatia = Math.max(6000, Math.floor((fimGeral - Date.now()) / restantes));
+    // Reserva o tempo das etapas que ainda faltam antes de repartir o que sobra.
+    // Sem isso, as primeiras (que sempre têm mais páginas) comiam o prazo inteiro e
+    // a última recebia um prazo já vencido — foi o que deixou Fornecedores em zero.
+    const reservaDosOutros = (restantes - 1) * 8000;
+    const disponivel = fimGeral - Date.now() - reservaDosOutros;
+    const fatia = Math.max(6000, disponivel);
     restantes--;
     try {
       const r = await tarefa.executar(Math.min(fimGeral, Date.now() + fatia));

@@ -83,18 +83,23 @@ export default async function handler(req, res) {
       estado.expiraEm = con && con.expira_em ? new Date(con.expira_em).toISOString() : null;
       estado.atualizadoEm = con && con.atualizado_em ? new Date(con.atualizado_em).toISOString() : null;
       const sql = sqlClient();
+      // A contagem é um conforto, não o essencial: se ela falhar (instância fria
+      // reabrindo conexão, por exemplo), o estado da conexão continua valendo e a
+      // tela avisa só que os números não vieram — sem alarme falso de erro.
       const [prod, est, ctas, semNome] = await comPrazo(Promise.all([
         sql`select count(*)::int as n from flow.bling_produto`,
         sql`select count(*)::int as n from flow.bling_estoque`,
         sql`select count(*)::int as n from flow.bling_conta where tipo = 'pagar'`,
         sql`select count(*)::int as n from flow.bling_conta where tipo = 'pagar' and contato is null`,
-      ]), 12000, "A contagem do que já foi importado");
+      ]), 20000, "A contagem do que já foi importado");
       estado.contagens = {
         produtos: prod[0].n, estoque: est[0].n, contas_pagar: ctas[0].n,
         contas_sem_fornecedor: semNome[0].n,
       };
     } catch (e) {
-      estado.erro = (e && e.message) || "falha ao ler a conexão";
+      // Já sabendo que está conectado, uma falha na contagem não é erro de conexão.
+      if (estado.conectado) estado.avisoContagem = "Não foi possível contar agora o que já foi importado.";
+      else estado.erro = (e && e.message) || "falha ao ler a conexão";
     }
     return res.status(200).json(estado);
   }

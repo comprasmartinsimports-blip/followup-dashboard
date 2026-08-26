@@ -146,7 +146,9 @@ export async function sincronizarEstoque(ate) {
     const lote = ids.slice(i, i + 50);
     const params = new URLSearchParams();
     lote.forEach(function(id) { params.append("idsProdutos[]", id); });
-    const resposta = await chamarBling(ENTIDADES.estoques.caminho, Object.fromEntries(params), token);
+    // Passa o URLSearchParams inteiro: Object.fromEntries() colapsaria idsProdutos[]
+    // repetido em um único valor, e o lote de 50 produtos virava um pedido de 1 só.
+    const resposta = await chamarBling(ENTIDADES.estoques.caminho, params, token);
     const linhas = Array.isArray(resposta.data) ? resposta.data : [];
     for (const s of linhas) {
       const produtoId = texto(valor(s, ["produto.id", "idProduto", "id"]));
@@ -204,6 +206,48 @@ export async function sincronizarContasPagar(ate) {
   return { registros: itens.length, truncado, desdePagina };
 }
 
+// ── Fornecedores das contas ──────────────────────────────────────────────────
+// A listagem de contas traz o contato só como id. Aqui cada fornecedor é buscado
+// uma vez e o nome preenche todas as contas dele.
+
+export async function sincronizarContatos(ate) {
+  const sql = sqlClient();
+  // Confere a conexão antes de qualquer atalho: sem isso, "nada pendente" e "não
+  // conectado" davam a mesma linha verde no relatório, escondendo a desconexão.
+  await garantirToken();
+  const pendentes = await sql`
+    select distinct c.raw->'contato'->>'id' as id
+    from flow.bling_conta c
+    where c.raw->'contato'->>'id' is not null
+      and not exists (select 1 from flow.bling_contato b where b.id = c.raw->'contato'->>'id')
+    limit 400
+  `;
+  if (!pendentes.length) return { registros: 0, truncado: false };
+  const token = await garantirToken();
+  let gravados = 0, parou = false;
+  for (const linha of pendentes) {
+    if (ate && Date.now() > ate - 3000) { parou = true; break; }
+    let dados = null;
+    try {
+      const resposta = await chamarBling(ENTIDADES.contatos.caminho + "/" + linha.id, {}, token);
+      dados = resposta && resposta.data ? resposta.data : null;
+    } catch (e) {
+      // Contato apagado no Bling: registra como desconhecido para não ficar tentando
+      // de novo a cada sincronização. Qualquer outro erro interrompe de verdade.
+      if (!e || e.status !== 404) throw e;
+    }
+    const nome = texto(valor(dados || {}, ["nome", "razaoSocial", "fantasia"])) || "(fornecedor não encontrado)";
+    await sql`
+      insert into flow.bling_contato (id, nome, raw, atualizado_em)
+      values (${linha.id}, ${nome}, ${sql.json(dados || {})}, now())
+      on conflict (id) do update set nome = excluded.nome, raw = excluded.raw, atualizado_em = now()
+    `;
+    await sql`update flow.bling_conta set contato = ${nome} where raw->'contato'->>'id' = ${linha.id}`;
+    gravados++;
+  }
+  return { registros: gravados, truncado: parou || gravados < pendentes.length };
+}
+
 // ── Sincronização completa ───────────────────────────────────────────────────
 // Uma entidade que falha não derruba as outras: cada uma vira uma linha do
 // relatório, com o erro que o próprio Bling devolveu.
@@ -212,6 +256,7 @@ const TAREFAS = [
   { chave: "produtos",     rotulo: "Produtos",       executar: sincronizarProdutos },
   { chave: "estoque",      rotulo: "Estoque",        executar: sincronizarEstoque },
   { chave: "contas_pagar", rotulo: "Contas a pagar", executar: sincronizarContasPagar },
+  { chave: "contatos",     rotulo: "Fornecedores",    executar: sincronizarContatos },
 ];
 
 // A função tem tempo máximo no Vercel; 45s deixa margem para responder. O prazo é

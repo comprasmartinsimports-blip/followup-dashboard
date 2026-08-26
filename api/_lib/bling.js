@@ -22,6 +22,7 @@ export const ENTIDADES = {
   produtos:        { caminho: "/produtos",         rotulo: "Produtos" },
   estoques:        { caminho: "/estoques/saldos",  rotulo: "Estoque" },
   contas_pagar:    { caminho: "/contas/pagar",     rotulo: "Contas a pagar" },
+  contatos:        { caminho: "/contatos",         rotulo: "Fornecedores" },
 };
 
 // Toda chamada ao Bling tem prazo. Sem isso, uma conexão que trava fica pendurada

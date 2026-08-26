@@ -1429,7 +1429,8 @@ function IntegracoesTab({ token, user, lastUpdate }) {
         if (!blingConectado) return "Autorize o acesso à sua conta do Bling para importar os dados.";
         var c = bling.contagens || {};
         return "Importados: " + (c.produtos||0) + " produtos · " + (c.estoque||0) + " saldos · " +
-               (c.contas_pagar||0) + " contas a pagar";
+               (c.contas_pagar||0) + " contas a pagar"
+               + (c.contas_sem_fornecedor ? " (" + c.contas_sem_fornecedor + " ainda sem o nome do fornecedor)" : "");
       })(),
       acao: blingConectado
         ? { label: sincronizando ? "Sincronizando..." : "Sincronizar agora", onClick:sincronizarBling, tipo:"pri" }

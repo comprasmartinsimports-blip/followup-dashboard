@@ -178,6 +178,19 @@ export async function sincronizarEstoque(ate) {
 
 // ── Contas a pagar ───────────────────────────────────────────────────────────
 
+// O Bling manda a situação como número. 1 e 2 saíram dos próprios dados: o código 1
+// concentra as contas a vencer (inclusive com vencimento anos à frente) e o 2 é 99%
+// vencido — em aberto e pago, respectivamente. O 3 aparece em pouquíssimas contas e
+// está como "cancelada" por inferência, aguardando conferência no Bling.
+// Código desconhecido vira "código N" em vez de receber um rótulo errado.
+const SITUACAO_CONTA = { "1": "em aberto", "2": "pago", "3": "cancelada" };
+
+function situacaoTexto(codigo) {
+  const c = texto(codigo);
+  if (c === null) return null;
+  return SITUACAO_CONTA[c] || ("código " + c);
+}
+
 // Só contas a PAGAR. Contas a receber não são buscadas em lugar nenhum deste arquivo.
 export async function sincronizarContasPagar(ate) {
   const sql = sqlClient();
@@ -188,17 +201,19 @@ export async function sincronizarContasPagar(ate) {
     const id = texto(valor(c, ["id"]));
     if (!id) continue;
     await sql`
-      insert into flow.bling_conta (id, tipo, situacao, vencimento, valor, contato, raw, atualizado_em)
+      insert into flow.bling_conta (id, tipo, situacao, situacao_texto, vencimento, valor, contato, raw, atualizado_em)
       values (
         ${id}, 'pagar',
         ${texto(valor(c, ["situacao"]))},
+        ${situacaoTexto(valor(c, ["situacao"]))},
         ${data(valor(c, ["vencimento", "dataVencimento", "vencimentoOriginal"]))},
         ${numero(valor(c, ["valor", "valorTotal", "saldo"]))},
         ${texto(valor(c, ["contato.nome", "fornecedor.nome", "cliente.nome"]))},
         ${sql.json(c)}, now()
       )
       on conflict (id) do update set
-        situacao = excluded.situacao, vencimento = excluded.vencimento,
+        situacao = excluded.situacao, situacao_texto = excluded.situacao_texto,
+        vencimento = excluded.vencimento,
         valor = excluded.valor, contato = excluded.contato, raw = excluded.raw, atualizado_em = now()
     `;
   }

@@ -1352,6 +1352,228 @@ function ExpedicaoTab({ rawOrders }) {
   );
 }
 
+
+// ════════════════════════════════════════════════════════════
+//  TENDÊNCIAS POR CATEGORIA
+//  Equivale à análise que hoje é feita na tela do Mercado Livre, com uma diferença
+//  que muda a leitura: aqui os números são os SEUS, tirados dos pedidos já
+//  sincronizados. O painel do ML estima o mercado inteiro; este mostra o que a sua
+//  operação de fato vendeu — e é sobre isso que se decide preço e compra.
+// ════════════════════════════════════════════════════════════
+
+function TendenciasTab({ setTab, setBuscaPrecificacao }) {
+  const [dias, setDias] = useState(30);
+  const [dados, setDados] = useState(null);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState("");
+  const [aberta, setAberta] = useState(null);
+  // Descoberta do que a API do ML oferece de dados de MERCADO (além dos seus
+  // próprios números). Fica aqui, num botão, em vez de exigir abrir um endereço
+  // solto no navegador para depois copiar o resultado.
+  const [mercado, setMercado] = useState(null);
+  const [checandoMercado, setChecandoMercado] = useState(false);
+
+  function checarMercado() {
+    setChecandoMercado(true); setMercado(null);
+    fetch("/api/ml/_descobrir_tendencias")
+      .then(function(r){ return r.json().then(function(d){ return { ok:r.ok, d:d }; }); })
+      .then(function(x){ setMercado(x.ok ? x.d : { erro: x.d.error || "Falhou." }); })
+      .catch(function(){ setMercado({ erro: "Sem conexão com o servidor." }); })
+      .finally(function(){ setChecandoMercado(false); });
+  }
+
+  useEffect(function(){
+    let cancelado = false;
+    setCarregando(true); setErro("");
+    fetch("/api/ml/_tendencias?dias=" + dias)
+      .then(function(r){ return r.json().then(function(d){ return { ok:r.ok, d:d }; }); })
+      .then(function(x){
+        if (cancelado) return;
+        if (!x.ok) { setErro(x.d.error || "Não foi possível carregar as tendências."); setDados(null); }
+        else setDados(x.d);
+      })
+      .catch(function(){ if (!cancelado) setErro("Sem conexão com o servidor."); })
+      .finally(function(){ if (!cancelado) setCarregando(false); });
+    return function(){ cancelado = true; };
+  }, [dias]);
+
+  function Variacao({ pct }) {
+    // Sem base de comparação não se inventa 0%: dizer "estável" seria mentira.
+    if (pct === null || pct === undefined) {
+      return <span style={{ fontSize:11, color:"var(--text-3)" }}>sem base anterior</span>;
+    }
+    var sobe = pct >= 0;
+    var cor = Math.abs(pct) < 1 ? "var(--text-3)" : sobe ? "#0a9d4e" : "#FF5252";
+    var fundo = Math.abs(pct) < 1 ? "var(--bg-2)" : sobe ? "rgba(10,157,78,.12)" : "rgba(255,82,82,.12)";
+    return (
+      <span style={{ fontSize:12, fontWeight:600, color:cor, background:fundo, padding:"3px 9px", borderRadius:20, whiteSpace:"nowrap" }}>
+        {sobe ? "▲" : "▼"} {Math.abs(pct).toFixed(1)}%
+      </span>
+    );
+  }
+
+  var periodos = [[7,"7 dias"],[30,"30 dias"],[90,"90 dias"]];
+
+  return (
+    <div style={{ padding:"0 20px" }}>
+      <div style={{ padding:"12px 0 10px", borderBottom:"1px solid var(--border)", display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:16, flexWrap:"wrap" }}>
+        <div>
+          <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)", marginBottom:4 }}>📈 Tendências por categoria</div>
+          <div style={{ fontSize:13, color:"var(--text-2)" }}>
+            O que cada categoria vendeu no período, comparado com o período anterior de mesmo tamanho.
+          </div>
+        </div>
+        <div style={{ display:"flex", gap:4, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:10, padding:3 }}>
+          {periodos.map(function(p){
+            var ativo = dias === p[0];
+            return (
+              <button key={p[0]} onClick={function(){ setDias(p[0]); }}
+                style={{ padding:"7px 14px", borderRadius:8, border:"none", cursor:"pointer", fontSize:12.5, fontFamily:"inherit",
+                  fontWeight: ativo ? 600 : 500,
+                  background: ativo ? "var(--surface)" : "transparent",
+                  color: ativo ? "var(--text-strong)" : "var(--text-3)" }}>
+                {p[1]}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, margin:"10px 0 14px", flexWrap:"wrap" }}>
+        <div style={{ fontSize:11.5, color:"var(--text-3)", lineHeight:1.5, flex:"1 1 420px" }}>
+          Estes números são os <b>seus</b>, calculados a partir dos pedidos sincronizados do Mercado Livre —
+          não são a estimativa de mercado que aparece no painel do ML.
+        </div>
+        <button onClick={checarMercado} disabled={checandoMercado}
+          title="Pergunta à API do Mercado Livre quais dados de mercado ela disponibiliza"
+          style={{ fontSize:11.5, fontWeight:600, color:"var(--text-2)", background:"var(--bg-2)", border:"1px solid var(--border)", padding:"6px 12px", borderRadius:8, cursor: checandoMercado ? "wait" : "pointer", fontFamily:"inherit", flexShrink:0 }}>
+          {checandoMercado ? "Consultando o ML…" : "Testar dados de mercado do ML"}
+        </button>
+      </div>
+
+      {mercado && (
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"12px 16px", marginBottom:14 }}>
+          <div style={{ fontWeight:600, fontSize:13.5, color:"var(--text-strong)", marginBottom:6 }}>
+            O que a API do Mercado Livre respondeu
+          </div>
+          {mercado.erro
+            ? <div style={{ fontSize:12.5, color:"#FF5252" }}>{mercado.erro}</div>
+            : <>
+                <div style={{ fontSize:11.5, color:"var(--text-3)", marginBottom:8 }}>
+                  Testado com a categoria {mercado.categoriaTestada}. Mande esta lista para o Claude — é com ela
+                  que dá para saber quais dados de mercado existem de verdade.
+                </div>
+                {(mercado.achados || []).map(function(a, i){
+                  return (
+                    <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start", padding:"7px 0", borderBottom:"1px solid var(--border-soft)", fontSize:12 }}>
+                      <span style={{ flexShrink:0 }}>{a.ok ? "✓" : "✕"}</span>
+                      <span style={{ width:190, flexShrink:0, color:"var(--text-strong)" }}>{a.rotulo}</span>
+                      <span style={{ color: a.ok ? "var(--text-2)" : "#FF5252", wordBreak:"break-all", lineHeight:1.5 }}>
+                        {a.erro ? a.erro : "HTTP " + a.status + (a.chaves ? " · campos: " + a.chaves.slice(0, 8).join(", ") : "")}
+                      </span>
+                    </div>
+                  );
+                })}
+              </>}
+        </div>
+      )}
+
+      {carregando && <div style={{ padding:"40px 0", textAlign:"center", color:"var(--text-3)", fontSize:13 }}>Calculando…</div>}
+
+      {erro && !carregando && (
+        <div style={{ background:"rgba(255,82,82,.10)", border:"1px solid rgba(255,82,82,.4)", borderRadius:10, padding:"11px 14px", fontSize:12.5, color:"var(--text-2)" }}>
+          <b style={{ color:"#FF5252" }}>Tendências:</b> {erro}
+        </div>
+      )}
+
+      {!carregando && !erro && dados && dados.categorias.length === 0 && (
+        <div style={{ padding:"40px 0", textAlign:"center", color:"var(--text-3)", fontSize:13 }}>
+          Nenhuma venda no período. Experimente um período maior.
+        </div>
+      )}
+
+      {!carregando && !erro && dados && dados.categorias.map(function(c){
+        var expandida = aberta === c.id;
+        return (
+          <div key={c.id} style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, marginBottom:10, overflow:"hidden" }}>
+            <div style={{ padding:"14px 18px", display:"flex", alignItems:"center", gap:14, flexWrap:"wrap" }}>
+              <div style={{ flex:"1 1 240px", minWidth:0 }}>
+                <div style={{ fontWeight:600, fontSize:15, color:"var(--text-strong)" }}>{c.nome}</div>
+                <div style={{ fontSize:11, color:"var(--text-3)", marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                  {c.caminho || c.id}
+                </div>
+              </div>
+              <div style={{ textAlign:"right" }}>
+                <div style={{ fontSize:10.5, color:"var(--text-3)" }}>Unidades</div>
+                <div style={{ fontSize:17, fontWeight:600, color:"var(--text-strong)" }}>{c.unidades}</div>
+                <div style={{ fontSize:10, color:"var(--text-4)" }}>antes: {c.unidadesAnterior}</div>
+              </div>
+              <div style={{ textAlign:"right" }}>
+                <div style={{ fontSize:10.5, color:"var(--text-3)" }}>Receita</div>
+                <div style={{ fontSize:15, fontWeight:600, color:"var(--text-strong)" }}>{fmt(c.receita)}</div>
+              </div>
+              <div style={{ textAlign:"right" }}>
+                <div style={{ fontSize:10.5, color:"var(--text-3)" }}>Preço médio</div>
+                <div style={{ fontSize:15, fontWeight:600, color:"var(--text-strong)" }}>{c.precoMedio != null ? fmt(c.precoMedio) : "—"}</div>
+              </div>
+              <div style={{ textAlign:"right" }}>
+                <div style={{ fontSize:10.5, color:"var(--text-3)" }}>Anúncios ativos</div>
+                <div style={{ fontSize:15, fontWeight:600, color:"var(--text-strong)" }}>{c.anunciosAtivos}</div>
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:6 }}>
+                <Variacao pct={c.variacaoUnidades} />
+                <button onClick={function(){ setAberta(expandida ? null : c.id); }}
+                  style={{ fontSize:11.5, color:"var(--text-2)", background:"var(--bg-2)", border:"1px solid var(--border)", padding:"4px 10px", borderRadius:7, cursor:"pointer", fontFamily:"inherit" }}>
+                  {expandida ? "▲ Fechar" : "▼ Produtos"}
+                </button>
+              </div>
+            </div>
+
+            {expandida && (
+              <div style={{ borderTop:"1px solid var(--border-soft)", padding:"6px 18px 14px" }}>
+                {c.produtos.length === 0
+                  ? <div style={{ fontSize:12, color:"var(--text-3)", padding:"10px 0" }}>Sem vendas nesta categoria no período.</div>
+                  : c.produtos.map(function(pr){
+                      return (
+                        <div key={pr.anuncio} style={{ display:"flex", alignItems:"center", gap:12, padding:"9px 0", borderBottom:"1px solid var(--border-soft)", flexWrap:"wrap" }}>
+                          <div style={{ flex:"1 1 260px", minWidth:0 }}>
+                            <div style={{ fontSize:13, color:"var(--text-strong)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{pr.titulo}</div>
+                            <div style={{ fontSize:11, color:"var(--text-3)", fontFamily:"'JetBrains Mono',monospace" }}>
+                              SKU {pr.sku || "—"} · {pr.anuncio}
+                            </div>
+                          </div>
+                          <div style={{ textAlign:"right", width:70 }}>
+                            <div style={{ fontSize:10.5, color:"var(--text-3)" }}>Unid.</div>
+                            <div style={{ fontSize:14, fontWeight:600, color:"var(--text-strong)" }}>{pr.unidades}</div>
+                          </div>
+                          <div style={{ textAlign:"right", width:100 }}>
+                            <div style={{ fontSize:10.5, color:"var(--text-3)" }}>Receita</div>
+                            <div style={{ fontSize:14, fontWeight:600, color:"var(--text-strong)" }}>{fmt(pr.receita)}</div>
+                          </div>
+                          <div style={{ display:"flex", gap:6 }}>
+                            <button
+                              onClick={function(){ setBuscaPrecificacao(pr.sku || pr.titulo); setTab("precificacao"); }}
+                              title="Abrir este produto na Precificação"
+                              style={{ fontSize:11.5, fontWeight:600, color:"var(--ui-accent-text)", background:"var(--ui-accent)", border:"none", padding:"6px 12px", borderRadius:7, cursor:"pointer", fontFamily:"inherit" }}>
+                              Precificar
+                            </button>
+                            <a href={"https://www.mercadolivre.com.br/anuncio/" + pr.anuncio} target="_blank" rel="noreferrer"
+                              style={{ fontSize:11.5, fontWeight:600, color:"var(--text-2)", background:"var(--bg-2)", border:"1px solid var(--border)", padding:"6px 12px", borderRadius:7, textDecoration:"none" }}>
+                              Ver no ML
+                            </a>
+                          </div>
+                        </div>
+                      );
+                    })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // Integrações: status das conexões do sistema.
 function IntegracoesTab({ token, user, lastUpdate }) {
   // A conexão com o Bling é OAuth: o token vive no servidor (flow.conexao_bling) e o
@@ -2701,6 +2923,7 @@ function HomeTab({ enrichedOrders, currentUser, setTab }){
       { key:"fornecedores", label:"Fornecedores", desc:"Cadastro de fornecedores" },
     ]},
     { titulo:"Inteligência", itens:[
+      { key:"tendencias", label:"Tendências", desc:"O que cada categoria vendeu, contra o período anterior" },
       { key:"relatorios", label:"Relatórios", desc:"Análises e curva ABC" },
       perm.includes("listings") && { key:"concorrencia", label:"Concorrência", desc:"Vigia de preços" },
     ]},
@@ -5172,12 +5395,14 @@ function NovoProdutoPrecForm({ onSave, onClose, marketplaceInicial, shopeeDoc })
   );
 }
 
-function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFretesAndSave, descontosConfig, setDescontosAndSave, precosVendaConfig, setPrecosVendaAndSave, pendentesAtualizacao, setPendentesAndSave, setSkuOverridesAndSave, rawOrders, icmsPct }) {
+function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFretesAndSave, descontosConfig, setDescontosAndSave, precosVendaConfig, setPrecosVendaAndSave, pendentesAtualizacao, setPendentesAndSave, setSkuOverridesAndSave, rawOrders, icmsPct, buscaInicial }) {
   // ICMS projetado da venda (Financeiro → Impostos). Aqui ainda não há comprador, então vale a
   // alíquota interestadual — o cenário da maior parte das vendas e o mais conservador no preço.
   var icmsVendaPct = parseFloat(icmsPct) || 0;
-  const [busca, setBusca] = useState("");
+  const [busca, setBusca] = useState(buscaInicial || "");
   const [buscaTipo, setBuscaTipo] = useState("all"); // all | title | sku | mlb
+  // Chegou pela tela de Tendências: aplica o filtro do produto escolhido lá.
+  useEffect(function(){ if (buscaInicial) setBusca(buscaInicial); }, [buscaInicial]);
   const [margemAlvo, setMargemAlvo] = useState(20);
   // Casa um item (anúncio ou produto novo) com a busca conforme o tipo escolhido.
   function casaBusca(sku, id, titulo) {
@@ -6924,6 +7149,9 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "1");
   const [menuAberto, setMenuAberto] = useState(null); // grupo do menu do topo aberto (dropdown)
   const [dashSub, setDashSub] = useState("geral"); // sub-aba ativa do Dashboard (controlada pelo menu)
+  // Produto escolhido em Tendências: chega à Precificação já filtrado, para não
+  // obrigar a copiar o SKU na mão de uma tela para a outra.
+  const [buscaPrecificacao, setBuscaPrecificacao] = useState("");
   useEffect(function(){
     try { document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light"); } catch(e) {}
   }, [darkMode]);
@@ -8231,6 +8459,7 @@ export default function App() {
               { key:"fornecedores", label:"Fornecedores" },
             ]},
             { titulo:"Inteligência", itens:[
+              { key:"tendencias", label:"Tendências" },
               { key:"relatorios", label:"Relatórios" },
               currentUser?.permissoes?.includes("listings") && { key:"concorrencia", label:"Concorrência" },
             ]},
@@ -8775,6 +9004,7 @@ export default function App() {
 
         {tab === "precificacao" && currentUser?.permissoes?.includes("listings") && (
           <PrecificacaoTab
+            buscaInicial={buscaPrecificacao}
             icmsPct={icmsPctProjetado}
             enriched={enriched}
             costs={costs}
@@ -8816,6 +9046,7 @@ export default function App() {
         {tab === "contas_pagar" && <ContasPagarTab contas={contasPagar} salvar={salvarContasPagar} />}
         {tab === "compras" && <ComprasTab produtos={produtos} pedidos={pedidosCompra} salvar={salvarPedidosCompra} />}
         {tab === "clientes" && <ClientesTab rawOrders={rawOrders} />}
+        {tab === "tendencias" && <TendenciasTab setTab={setTab} setBuscaPrecificacao={setBuscaPrecificacao} />}
         {tab === "integracoes" && <IntegracoesTab token={token} user={user} lastUpdate={lastUpdate} />}
         {tab === "impostos" && (
           <ImpostosTab

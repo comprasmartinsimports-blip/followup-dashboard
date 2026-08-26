@@ -326,6 +326,138 @@ export default async function handler(req, res) {
     }
   }
 
+  // ── Tendências por categoria ────────────────────────────────────────────────
+  // Espelha a análise que hoje é feita na tela do Mercado Livre, com uma diferença
+  // importante: aqui os números são os SEUS — saem dos pedidos já sincronizados,
+  // não de uma estimativa de mercado. Compara o período escolhido com o anterior
+  // de mesmo tamanho, que é o que transforma número em tendência.
+  if (path === "/_tendencias" || path.startsWith("/_tendencias?")) {
+    const sql = sqlClient();
+    if (!sql) return res.status(503).json({ error: "Banco não configurado (SUPABASE_DB_URL)." });
+    const qsT = new URLSearchParams(path.split("?")[1] || "");
+    let dias = parseInt(qsT.get("dias"), 10);
+    if (!isFinite(dias) || dias < 1 || dias > 365) dias = 30;
+
+    const categorias = await sql`
+      with itens as (
+        select (o.raw->>'date_created')::timestamptz::date as dia,
+               it->'item'->>'category_id' as categoria,
+               coalesce((it->>'quantity')::numeric, 1) as qtd,
+               coalesce((it->>'unit_price')::numeric, 0) as preco
+        from flow.ml_order o, jsonb_array_elements(o.raw->'order_items') it
+        where coalesce(o.raw->>'status', '') <> 'cancelled'
+          and it->'item'->>'category_id' is not null
+      ),
+      lim as (
+        select (current_date - ${dias}::int) as ini_atual,
+               (current_date - (${dias}::int * 2)) as ini_ant
+      )
+      select i.categoria,
+             sum(case when i.dia > l.ini_atual then i.qtd else 0 end)::numeric as unidades,
+             round(sum(case when i.dia > l.ini_atual then i.qtd * i.preco else 0 end), 2) as receita,
+             sum(case when i.dia <= l.ini_atual and i.dia > l.ini_ant then i.qtd else 0 end)::numeric as unidades_ant,
+             round(sum(case when i.dia <= l.ini_atual and i.dia > l.ini_ant then i.qtd * i.preco else 0 end), 2) as receita_ant
+      from itens i cross join lim l
+      group by i.categoria
+      having sum(case when i.dia > l.ini_atual then i.qtd else 0 end) > 0
+          or sum(case when i.dia <= l.ini_atual and i.dia > l.ini_ant then i.qtd else 0 end) > 0
+      order by 2 desc
+    `;
+
+    const tops = await sql`
+      with itens as (
+        select (o.raw->>'date_created')::timestamptz::date as dia,
+               it->'item'->>'category_id' as categoria,
+               it->'item'->>'id' as anuncio,
+               it->'item'->>'title' as titulo,
+               it->'item'->>'seller_sku' as sku,
+               coalesce((it->>'quantity')::numeric, 1) as qtd,
+               coalesce((it->>'unit_price')::numeric, 0) as preco
+        from flow.ml_order o, jsonb_array_elements(o.raw->'order_items') it
+        where coalesce(o.raw->>'status', '') <> 'cancelled'
+          and (o.raw->>'date_created')::timestamptz::date > (current_date - ${dias}::int)
+          and it->'item'->>'category_id' is not null
+      ),
+      somado as (
+        select categoria, anuncio, max(titulo) as titulo, max(sku) as sku,
+               sum(qtd) as unidades, round(sum(qtd * preco), 2) as receita
+        from itens group by categoria, anuncio
+      )
+      select * from (
+        select s.*, row_number() over (partition by categoria order by unidades desc) as pos
+        from somado s
+      ) x where pos <= 5
+    `;
+
+    const anuncios = await sql`
+      select raw->>'category_id' as categoria, count(*)::int as n
+      from flow.ml_listing
+      where raw->>'category_id' is not null and coalesce(raw->>'status','') = 'active'
+      group by 1
+    `;
+
+    // Nomes das categorias: cache no banco, buscando na API só o que falta.
+    const nomes = {};
+    const guardados = await sql`select id, nome, caminho from flow.ml_categoria`;
+    guardados.forEach(function(r) { nomes[r.id] = { nome: r.nome, caminho: r.caminho }; });
+    const faltando = categorias.map(function(c) { return c.categoria; })
+      .filter(function(id) { return !nomes[id]; });
+    if (faltando.length) {
+      const ckT = Object.fromEntries(
+        (req.headers.cookie || "").split(";").map(function(c){ const p = c.trim().split("="); return [p[0], p.slice(1).join("=")]; })
+      );
+      let tk = ckT.ml_access_token || null;
+      if (!tk) {
+        const meu = await kvGet("mlmargem_ml_token_" + sessao.uid);
+        if (meu && meu.accessToken) tk = meu.accessToken;
+      }
+      for (const id of faltando.slice(0, 12)) {
+        try {
+          const r = await fetch("https://api.mercadolibre.com/categories/" + id, {
+            headers: tk ? { Authorization: "Bearer " + tk } : {},
+            signal: AbortSignal.timeout(8000),
+          });
+          if (!r.ok) continue;
+          const j = await r.json();
+          const caminho = Array.isArray(j.path_from_root)
+            ? j.path_from_root.map(function(x) { return x.name; }).join(" › ") : null;
+          nomes[id] = { nome: j.name || id, caminho: caminho };
+          await sql`
+            insert into flow.ml_categoria (id, nome, caminho, atualizado_em)
+            values (${id}, ${j.name || null}, ${caminho}, now())
+            on conflict (id) do update set nome = excluded.nome, caminho = excluded.caminho, atualizado_em = now()
+          `;
+        } catch (e) { /* sem nome agora: a tela mostra o código, que ainda identifica */ }
+      }
+    }
+
+    const porCategoria = {};
+    anuncios.forEach(function(a) { porCategoria[a.categoria] = a.n; });
+    const resposta = categorias.map(function(c) {
+      const u = Number(c.unidades), ua = Number(c.unidades_ant);
+      const r = Number(c.receita), ra = Number(c.receita_ant);
+      return {
+        id: c.categoria,
+        nome: (nomes[c.categoria] && nomes[c.categoria].nome) || c.categoria,
+        caminho: (nomes[c.categoria] && nomes[c.categoria].caminho) || null,
+        unidades: u, receita: r, precoMedio: u > 0 ? r / u : null,
+        unidadesAnterior: ua, receitaAnterior: ra,
+        // Sem base no período anterior não existe variação — null, não zero: zero
+        // seria lido como "não mudou", quando na verdade é "não havia com o que comparar".
+        variacaoUnidades: ua > 0 ? ((u - ua) / ua) * 100 : null,
+        variacaoReceita: ra > 0 ? ((r - ra) / ra) * 100 : null,
+        anunciosAtivos: porCategoria[c.categoria] || 0,
+        produtos: tops.filter(function(t) { return t.categoria === c.categoria; })
+          .map(function(t) {
+            return { anuncio: t.anuncio, titulo: t.titulo, sku: t.sku,
+                     unidades: Number(t.unidades), receita: Number(t.receita) };
+          }),
+      };
+    });
+
+    return res.status(200).json({ dias: dias, categorias: resposta });
+  }
+
   // ── Descoberta: o que a API do ML devolve sobre tendências de categoria ──────
   // A tela "Tendências por categoria" é do Seller Center; nem tudo que aparece lá
   // tem endpoint público. Antes de prometer a tela, esta rota pergunta à própria API

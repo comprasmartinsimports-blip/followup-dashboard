@@ -16,7 +16,7 @@ import {
   armazenamentoUsuarios,
   ErroPersistencia,
 } from "./_lib/auth.js";
-import { dbEnabled, syncGet, syncSet, upsertConexaoMl, listConexoesMl, listCacheListings, listCacheOrders, getConexaoMl } from "./_lib/db.js";
+import { dbEnabled, syncGet, syncSet, upsertConexaoMl, listConexoesMl, listCacheListings, listCacheOrders, getConexaoMl, sqlClient } from "./_lib/db.js";
 import { syncListings, syncOrders, garantirToken, syncOneListing, syncOneOrder } from "./_lib/mlsync.js";
 
 // A sincronização do cache do ML (/_sync_ml) puxa centenas de itens — pede mais tempo que o
@@ -324,6 +324,74 @@ export default async function handler(req, res) {
     } catch (e) {
       return res.status(500).json({ error: (e && e.message) || "Falha ao sincronizar" });
     }
+  }
+
+  // ── Descoberta: o que a API do ML devolve sobre tendências de categoria ──────
+  // A tela "Tendências por categoria" é do Seller Center; nem tudo que aparece lá
+  // tem endpoint público. Antes de prometer a tela, esta rota pergunta à própria API
+  // o que existe, usando as categorias em que a conta realmente anuncia. Só leitura.
+  if (path === "/_descobrir_tendencias" || path.startsWith("/_descobrir_tendencias?")) {
+    if (!sessao.admin) return res.status(403).json({ error: "Apenas administradores." });
+
+    const ck = Object.fromEntries(
+      (req.headers.cookie || "").split(";").map(function(c){ const p = c.trim().split("="); return [p[0], p.slice(1).join("=")]; })
+    );
+    let token = ck.ml_access_token || null;
+    if (!token) {
+      const meu = await kvGet("mlmargem_ml_token_" + sessao.uid);
+      if (meu && meu.accessToken) token = meu.accessToken;
+    }
+    if (!token) return res.status(401).json({ error: "Sem token do ML. Reconecte ao Mercado Livre." });
+
+    // Categorias onde a conta mais anuncia — testar com categoria real evita
+    // conclusão errada por causa de um id inventado.
+    let categorias = [];
+    try {
+      const sql = sqlClient();
+      if (sql) {
+        const rows = await sql`
+          select raw->>'category_id' as categoria, count(*)::int as n
+          from flow.ml_listing where raw->>'category_id' is not null
+          group by 1 order by n desc limit 2
+        `;
+        categorias = rows.map(function(r) { return r.categoria; });
+      }
+    } catch (e) {}
+    const qsTend = new URLSearchParams(path.split("?")[1] || "");
+    if (qsTend.get("categoria")) categorias = [qsTend.get("categoria")];
+    if (!categorias.length) categorias = ["MLB1747"];
+
+    const cat = categorias[0];
+    const candidatos = [
+      { rotulo: "Buscas em alta no site",        caminho: "/trends/MLB" },
+      { rotulo: "Buscas em alta na categoria",   caminho: "/trends/MLB/" + cat },
+      { rotulo: "Mais vendidos da categoria",    caminho: "/highlights/MLB/category/" + cat },
+      { rotulo: "Dados da categoria",            caminho: "/categories/" + cat },
+      { rotulo: "Busca na categoria (agregados)",caminho: "/sites/MLB/search?category=" + cat + "&limit=1" },
+      { rotulo: "Mais vendidos por busca",       caminho: "/sites/MLB/search?category=" + cat + "&sort=sold_quantity_desc&limit=1" },
+    ];
+
+    const achados = [];
+    for (const c of candidatos) {
+      try {
+        const r = await fetch("https://api.mercadolibre.com" + c.caminho, {
+          headers: { Authorization: "Bearer " + token, Accept: "application/json" },
+          signal: AbortSignal.timeout(12000),
+        });
+        const texto = await r.text();
+        let amostra = texto.slice(0, 600);
+        let chaves = null;
+        try {
+          const j = JSON.parse(texto);
+          chaves = Array.isArray(j) ? ["(lista de " + j.length + ")"].concat(Object.keys(j[0] || {})) : Object.keys(j);
+          amostra = JSON.stringify(Array.isArray(j) ? j.slice(0, 2) : j).slice(0, 600);
+        } catch (e) {}
+        achados.push({ rotulo: c.rotulo, caminho: c.caminho, status: r.status, ok: r.ok, chaves: chaves, amostra: amostra });
+      } catch (e) {
+        achados.push({ rotulo: c.rotulo, caminho: c.caminho, erro: (e && e.message) || "falha" });
+      }
+    }
+    return res.status(200).json({ categoriaTestada: cat, categoriasDaConta: categorias, achados });
   }
 
   // ── Rota de sincronização de dados de negócio — exige sessão do app ──

@@ -7,7 +7,7 @@ import { verificarSessao } from "./_lib/auth.js";
 import { dbEnabled } from "./_lib/db.js";
 import {
   blingConfigurado, urlAutorizacao, trocarCodigoPorToken, lerConexao, apagarConexao,
-  chamarBling, garantirToken, ENTIDADES, checarRede, comPrazo,
+  chamarBling, garantirToken, ENTIDADES, checarRede, comPrazo, chamarBlingBruto,
 } from "./_lib/bling.js";
 import { sincronizarTudo } from "./_lib/blingsync.js";
 import { sqlClient } from "./_lib/db.js";
@@ -32,6 +32,28 @@ function faltaConfig(res) {
 
 export default async function handler(req, res) {
   const caminho = req.url.replace(/^\/api\/bling/, "").split("?")[0] || "/";
+
+  // ── Sincronização agendada ────────────────────────────────────────────────
+  // Chamada pelo agendador (pg_cron), não por um navegador: não há sessão, a
+  // autenticação é o CRON_SECRET. É o que faz uma baixa registrada no Bling
+  // aparecer aqui sozinha, sem ninguém clicar em Sincronizar.
+  if (caminho === "/_cron_sync") {
+    const segredo = req.headers["x-cron-secret"] || (req.headers.authorization || "").replace("Bearer ", "");
+    if (!process.env.CRON_SECRET || segredo !== process.env.CRON_SECRET) {
+      return res.status(403).json({ error: "Proibido." });
+    }
+    if (!dbEnabled() || !blingConfigurado()) {
+      return res.status(200).json({ ok: false, motivo: "Bling ou banco não configurado no servidor." });
+    }
+    try {
+      // Se o Bling não estiver conectado, não é erro do agendador: só não há o que fazer.
+      await garantirToken();
+    } catch (e) {
+      return res.status(200).json({ ok: false, motivo: (e && e.message) || "sem conexão com o Bling" });
+    }
+    const relatorio = await sincronizarTudo(null);
+    return res.status(200).json({ ok: true, relatorio });
+  }
 
   // O retorno do Bling chega pelo navegador do usuário, direto da autorização.
   // Trata antes da checagem de sessão para poder redirecionar com a mensagem certa.
@@ -154,6 +176,36 @@ export default async function handler(req, res) {
       }
     }
     return res.status(200).json({ token: true, testes });
+  }
+
+  // Descobre COMO o Bling recebe uma baixa, sem alterar nada: cada tentativa usa um
+  // id de conta que não existe. Se a rota não existir, o Bling responde de um jeito;
+  // se existir, responde "conta não encontrada" — e é isso que queremos saber antes
+  // de escrever qualquer coisa de verdade no ERP.
+  if (caminho === "/descobrir-baixa") {
+    if (!sessao.admin) return res.status(403).json({ error: "Apenas administradores." });
+    const falta = faltaConfig(res); if (falta) return falta;
+    const token = await garantirToken();
+    const ID_INEXISTENTE = "1";
+    const candidatos = [
+      { metodo: "POST", caminho: "/contas/pagar/" + ID_INEXISTENTE + "/baixar" },
+      { metodo: "POST", caminho: "/contas/pagar/" + ID_INEXISTENTE + "/baixas" },
+      { metodo: "POST", caminho: "/contas/pagar/baixas" },
+      { metodo: "GET",  caminho: "/contas/pagar/" + ID_INEXISTENTE },
+    ];
+    const resultados = [];
+    for (const c of candidatos) {
+      try {
+        const r = await chamarBlingBruto(c.metodo, c.caminho, token);
+        resultados.push(Object.assign({ existe: r.status !== 404 || /conta/i.test(r.corpo) }, c, r));
+      } catch (e) {
+        resultados.push(Object.assign({ erro: (e && e.message) || "falha" }, c));
+      }
+    }
+    return res.status(200).json({
+      aviso: "Nenhuma conta real foi tocada: todas as tentativas usam um id inexistente.",
+      resultados,
+    });
   }
 
   return res.status(404).json({ error: "Rota não encontrada: /api/bling" + caminho });

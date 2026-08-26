@@ -298,3 +298,22 @@ export async function checarRede() {
 
   return resultado;
 }
+
+// Chamada crua, sem interpretar a resposta: devolve status e corpo como vieram.
+// Serve para descobrir se um caminho existe antes de confiar nele — em especial
+// os de ESCRITA, onde errar significa gravar coisa errada no ERP do cliente.
+export async function chamarBlingBruto(metodo, caminho, token, corpo) {
+  const acesso = token || (await garantirToken());
+  await esperarVez();
+  const opcoes = {
+    method: metodo || "GET",
+    headers: { Authorization: "Bearer " + acesso, Accept: "application/json" },
+  };
+  if (corpo !== undefined && corpo !== null) {
+    opcoes.headers["Content-Type"] = "application/json";
+    opcoes.body = JSON.stringify(corpo);
+  }
+  const res = await fetchComPrazo(BLING.api + caminho, opcoes, 15000);
+  const texto = await res.text();
+  return { status: res.status, corpo: (texto || "").slice(0, 400) };
+}

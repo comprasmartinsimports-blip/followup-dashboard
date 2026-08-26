@@ -29,6 +29,28 @@ export const ENTIDADES = {
 // recebe uma tela de erro genérica em vez do motivo real.
 export const TEMPO_LIMITE_MS = 8000;
 
+// A API do Bling limita requisições por segundo. Sem ritmo, a sincronização dispara
+// as páginas em rajada e leva HTTP 429 já na primeira. 400ms entre chamadas fica
+// com folga abaixo do limite.
+const INTERVALO_ENTRE_CHAMADAS_MS = 400;
+let proximaVaga = 0;
+
+async function esperarVez() {
+  const agora = Date.now();
+  const quando = Math.max(agora, proximaVaga);
+  proximaVaga = quando + INTERVALO_ENTRE_CHAMADAS_MS;
+  const espera = quando - agora;
+  if (espera > 0) await new Promise(function(r) { setTimeout(r, espera); });
+}
+
+function esperaDoCabecalho(res) {
+  const bruto = res.headers && res.headers.get && res.headers.get("retry-after");
+  const segundos = parseFloat(bruto);
+  // Respeita o que o servidor pedir, com teto para não segurar a função até o limite.
+  if (isFinite(segundos) && segundos > 0) return Math.min(segundos * 1000, 5000);
+  return null;
+}
+
 // Prazo para QUALQUER operação, inclusive as do banco. A resposta ao usuário nunca
 // deve depender de algo que pode não terminar: sem isto, a função morre por tempo
 // esgotado e o navegador mostra uma tela de 504 sem explicação nenhuma.
@@ -178,10 +200,11 @@ export async function garantirToken() {
 
 // Uma chamada à API já autenticada. Devolve o JSON; lança ErroBling com a
 // mensagem do próprio Bling quando a resposta não é 2xx.
-export async function chamarBling(caminho, params, token) {
+export async function chamarBling(caminho, params, token, tentativa) {
   const acesso = token || (await garantirToken());
   const q = new URLSearchParams(params || {});
   const url = BLING.api + caminho + (q.toString() ? "?" + q.toString() : "");
+  await esperarVez();
   const res = await fetchComPrazo(url, {
     headers: { Authorization: "Bearer " + acesso, Accept: "application/json" },
   }, 15000);
@@ -189,10 +212,22 @@ export async function chamarBling(caminho, params, token) {
   let dados = null;
   try { dados = texto ? JSON.parse(texto) : null; } catch { /* tratado abaixo */ }
   if (!res.ok) {
+    // 429 = pedimos rápido demais. Espera o que o servidor mandar (ou um pouco mais
+    // a cada tentativa) e insiste, em vez de derrubar a entidade inteira por isso.
+    const vez = tentativa || 1;
+    if (res.status === 429 && vez <= 3) {
+      const espera = esperaDoCabecalho(res) || vez * 1200;
+      await new Promise(function(r) { setTimeout(r, espera); });
+      return await chamarBling(caminho, params, acesso, vez + 1);
+    }
     const erro = dados && dados.error;
     const detalhe = (erro && (erro.description || erro.message || erro.type)) ||
       (texto ? texto.slice(0, 300) : "sem detalhes");
-    throw new ErroBling(caminho + " respondeu HTTP " + res.status + ": " + detalhe, res.status);
+    throw new ErroBling(
+      caminho + " respondeu HTTP " + res.status + ": " + detalhe +
+      (res.status === 429 ? " (já tentei de novo " + (vez - 1) + "x com pausa)" : ""),
+      res.status
+    );
   }
   if (dados == null) throw new ErroBling(caminho + " devolveu uma resposta vazia ou inválida.", res.status);
   return dados;
@@ -200,20 +235,27 @@ export async function chamarBling(caminho, params, token) {
 
 // Percorre as páginas de um endpoint de listagem. Para quando a página vem vazia,
 // quando o total pedido é atingido ou no teto de páginas — nunca em laço infinito.
+// Percorre as páginas respeitando um prazo. Quando o tempo acaba antes do fim da
+// lista, devolve o que trouxe e a próxima página — a sincronização seguinte continua
+// dali, em vez de recomeçar do zero e gastar o limite de requisições de novo.
 export async function listarPaginado(caminho, params, opcoes) {
   const cfg = opcoes || {};
-  const maxPaginas = cfg.maxPaginas || 50;
   const limite = cfg.limite || 100;
+  const ate = cfg.ate || (Date.now() + 40000);
   const token = await garantirToken();
   const itens = [];
-  let pagina = 1;
-  for (; pagina <= maxPaginas; pagina++) {
+  let pagina = cfg.desdePagina || 1;
+  let acabou = false;
+  while (true) {
     const resposta = await chamarBling(caminho, Object.assign({}, params, { pagina, limite }), token);
     const lote = Array.isArray(resposta.data) ? resposta.data : [];
     itens.push(...lote);
-    if (lote.length < limite) break;
+    if (lote.length < limite) { acabou = true; pagina++; break; }
+    pagina++;
+    // Só continua se ainda houver tempo para mais uma volta com folga.
+    if (Date.now() > ate - 3000) break;
   }
-  return { itens, paginas: Math.min(pagina, maxPaginas), truncado: pagina > maxPaginas };
+  return { itens, acabou, proximaPagina: acabou ? 1 : pagina, truncado: !acabou };
 }
 
 // Checagem de infraestrutura, sem depender de estar conectado: mede se o servidor

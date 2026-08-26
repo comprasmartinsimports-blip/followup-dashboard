@@ -1482,7 +1482,8 @@ function IntegracoesTab({ token, user, lastUpdate }) {
                   {r.ok
                     ? (r.registros + " registro(s)"
                        + (r.ignorados ? " · " + r.ignorados + " do Bling ignorado(s) por não existirem no cadastro daqui" : "")
-                       + (r.truncado ? " — houve mais páginas do que o limite; rode de novo" : ""))
+                       + (r.desdePagina > 1 ? " · continuou da página " + r.desdePagina : "")
+                       + (r.truncado ? " — ainda há mais para trazer: clique em Sincronizar agora outra vez para continuar de onde parou" : ""))
                     : r.erro}
                 </span>
               </div>

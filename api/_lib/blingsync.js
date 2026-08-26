@@ -41,6 +41,26 @@ function texto(v) {
   return v === null || v === undefined ? null : String(v);
 }
 
+// ── Onde cada entidade parou ─────────────────────────────────────────────────
+// A API limita requisições por segundo e a função tem tempo máximo. Em vez de
+// recomeçar do zero a cada clique (e bater no limite de novo), cada entidade guarda
+// a próxima página a buscar.
+
+async function lerCursor(entidade) {
+  const sql = sqlClient();
+  const rows = await sql`select proxima_pagina from flow.bling_sync_estado where entidade = ${entidade}`;
+  return rows.length ? rows[0].proxima_pagina : 1;
+}
+
+async function gravarCursor(entidade, pagina) {
+  const sql = sqlClient();
+  await sql`
+    insert into flow.bling_sync_estado (entidade, proxima_pagina, atualizado_em)
+    values (${entidade}, ${pagina}, now())
+    on conflict (entidade) do update set proxima_pagina = excluded.proxima_pagina, atualizado_em = now()
+  `;
+}
+
 // ── Produtos ─────────────────────────────────────────────────────────────────
 // O Bling é fonte de INFORMAÇÃO, não de cadastro: só entram os produtos cujo código
 // já existe no cadastro do Flow. Um produto que existe no Bling e não no Flow é
@@ -63,7 +83,7 @@ export async function skusDoFlow() {
   return new Set(rows.map(function(r) { return r.sku; }));
 }
 
-export async function sincronizarProdutos() {
+export async function sincronizarProdutos(ate) {
   const sql = sqlClient();
   const skus = await skusDoFlow();
   // Sem catálogo lido não dá para filtrar. Parar aqui é proposital: seguir em frente
@@ -74,7 +94,9 @@ export async function sincronizarProdutos() {
       "produtos que já existem aqui, então não há o que atualizar.", 0
     );
   }
-  const { itens, truncado } = await listarPaginado(ENTIDADES.produtos.caminho, {});
+  const desdePagina = await lerCursor("produtos");
+  const { itens, acabou, proximaPagina, truncado } =
+    await listarPaginado(ENTIDADES.produtos.caminho, {}, { ate, desdePagina });
   let ignorados = 0;
   for (const p of itens) {
     const id = texto(valor(p, ["id"]));
@@ -100,13 +122,14 @@ export async function sincronizarProdutos() {
         situacao = excluded.situacao, raw = excluded.raw, atualizado_em = now()
     `;
   }
-  return { registros: itens.length - ignorados, ignorados, truncado };
+  await gravarCursor("produtos", proximaPagina);
+  return { registros: itens.length - ignorados, ignorados, truncado, acabou, desdePagina };
 }
 
 // ── Estoque ──────────────────────────────────────────────────────────────────
 // O endpoint de saldos pede os ids dos produtos, então usa o que já foi importado.
 
-export async function sincronizarEstoque() {
+export async function sincronizarEstoque(ate) {
   const sql = sqlClient();
   const produtos = await sql`select id from flow.bling_produto order by id`;
   if (!produtos.length) {
@@ -116,7 +139,10 @@ export async function sincronizarEstoque() {
   const ids = produtos.map(function(r) { return String(r.id); });
   let gravados = 0;
   // Em lotes: a consulta de saldos recebe vários produtos de uma vez.
+  let parou = false;
   for (let i = 0; i < ids.length; i += 50) {
+    // Respeita o tempo da função: o que sobrar entra na próxima sincronização.
+    if (ate && Date.now() > ate - 3000) { parou = true; break; }
     const lote = ids.slice(i, i + 50);
     const params = new URLSearchParams();
     lote.forEach(function(id) { params.append("idsProdutos[]", id); });
@@ -145,15 +171,17 @@ export async function sincronizarEstoque() {
       }
     }
   }
-  return { registros: gravados, truncado: false };
+  return { registros: gravados, truncado: parou };
 }
 
 // ── Contas a pagar ───────────────────────────────────────────────────────────
 
 // Só contas a PAGAR. Contas a receber não são buscadas em lugar nenhum deste arquivo.
-export async function sincronizarContasPagar() {
+export async function sincronizarContasPagar(ate) {
   const sql = sqlClient();
-  const { itens, truncado } = await listarPaginado(ENTIDADES.contas_pagar.caminho, {});
+  const desdePagina = await lerCursor("contas_pagar");
+  const { itens, proximaPagina, truncado } =
+    await listarPaginado(ENTIDADES.contas_pagar.caminho, {}, { ate, desdePagina });
   for (const c of itens) {
     const id = texto(valor(c, ["id"]));
     if (!id) continue;
@@ -172,7 +200,8 @@ export async function sincronizarContasPagar() {
         valor = excluded.valor, contato = excluded.contato, raw = excluded.raw, atualizado_em = now()
     `;
   }
-  return { registros: itens.length, truncado };
+  await gravarCursor("contas_pagar", proximaPagina);
+  return { registros: itens.length, truncado, desdePagina };
 }
 
 // ── Sincronização completa ───────────────────────────────────────────────────
@@ -185,17 +214,26 @@ const TAREFAS = [
   { chave: "contas_pagar", rotulo: "Contas a pagar", executar: sincronizarContasPagar },
 ];
 
+// A função tem tempo máximo no Vercel; 45s deixa margem para responder. O prazo é
+// repartido entre as entidades que ainda faltam, para nenhuma monopolizar o tempo.
+const PRAZO_TOTAL_MS = 45000;
+
 export async function sincronizarTudo(somente) {
   const alvo = Array.isArray(somente) && somente.length
     ? TAREFAS.filter(function(t) { return somente.includes(t.chave); })
     : TAREFAS;
+  const fimGeral = Date.now() + PRAZO_TOTAL_MS;
   const relatorio = [];
+  let restantes = alvo.length;
   for (const tarefa of alvo) {
+    const fatia = Math.max(6000, Math.floor((fimGeral - Date.now()) / restantes));
+    restantes--;
     try {
-      const r = await tarefa.executar();
+      const r = await tarefa.executar(Math.min(fimGeral, Date.now() + fatia));
       relatorio.push({
         chave: tarefa.chave, rotulo: tarefa.rotulo, ok: true,
         registros: r.registros, ignorados: r.ignorados || 0, truncado: !!r.truncado,
+        desdePagina: r.desdePagina || 1,
       });
     } catch (e) {
       relatorio.push({

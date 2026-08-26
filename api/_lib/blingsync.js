@@ -219,10 +219,13 @@ export async function sincronizarEstoque(ate) {
 
 // O Bling manda a situação como número. 1 e 2 saíram dos próprios dados: o código 1
 // concentra as contas a vencer (inclusive com vencimento anos à frente) e o 2 é 99%
-// vencido — em aberto e pago, respectivamente. O 3 aparece em pouquíssimas contas e
-// está como "cancelada" por inferência, aguardando conferência no Bling.
+// vencido — em aberto e pago. O 3 foi confirmado no Bling: são contas com baixa
+// PARCIAL de pagamento.
+// ATENÇÃO para quem for usar estes dados: nas parciais o campo valor continua sendo
+// o valor ORIGINAL da conta, não o saldo devedor. Quem somar valor achando que é o
+// que falta pagar vai superestimar a dívida.
 // Código desconhecido vira "código N" em vez de receber um rótulo errado.
-const SITUACAO_CONTA = { "1": "em aberto", "2": "pago", "3": "cancelada" };
+const SITUACAO_CONTA = { "1": "em aberto", "2": "pago", "3": "parcialmente pago" };
 
 function situacaoTexto(codigo) {
   const c = texto(codigo);

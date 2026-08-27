@@ -3,9 +3,9 @@
 // SOMENTE no servidor (variável de ambiente do Vercel) e o endpoint exige sessão
 // do aplicativo — sem isso qualquer visitante poderia consumir a chave.
 //
-// Motor: OpenAI (ChatGPT). A Anthropic continua aceita como reserva, para o caso
-// de OPENAI_API_KEY ainda não estar configurada — assim a troca não deixa a tela
-// sem análise no intervalo entre publicar e configurar a chave.
+// Motor: escolhido por AI_MOTOR ("claude" ou "chatgpt"). Sem AI_MOTOR, usa o que
+// tiver chave — ChatGPT primeiro, Claude como reserva. Deixar a escolha explícita
+// evita o caso de o motor mudar sozinho só porque alguém definiu a outra chave.
 //
 // A RESPOSTA sai sempre no mesmo formato ({ content: [{ type, text }] }),
 // independente de qual motor respondeu: a tela não precisa saber quem atendeu.
@@ -15,6 +15,9 @@ import { verificarSessao } from "./_lib/auth.js";
 // Trocável por variável de ambiente sem mexer no código. gpt-4o é o padrão por
 // ser amplamente disponível; se a conta tiver outro modelo, basta definir OPENAI_MODEL.
 const MODELO_OPENAI = process.env.OPENAI_MODEL || "gpt-4o";
+// Haiku 4.5 é o mais barato da linha e dá conta de pontuar anúncio — a análise é
+// um pedido curto, com resposta curta. Trocável por ANTHROPIC_MODEL sem mexer aqui.
+const MODELO_ANTHROPIC = process.env.ANTHROPIC_MODEL || "claude-haiku-4-5";
 
 function respostaDeTexto(texto) {
   return { content: [{ type: "text", text: texto }] };
@@ -87,7 +90,7 @@ async function chamarAnthropic(system, messages, maxTokens) {
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
+      model: MODELO_ANTHROPIC,
       max_tokens: maxTokens,
       system: system,
       messages: messages,
@@ -120,15 +123,24 @@ export default async function handler(req, res) {
 
   const temOpenAI = !!process.env.OPENAI_API_KEY;
   const temAnthropic = !!process.env.ANTHROPIC_API_KEY;
+  // Preferência explícita vence a ordem padrão, mas só se a chave dela existir:
+  // apontar para um motor sem chave não faria a análise funcionar, apenas falharia
+  // mais adiante e com uma mensagem pior.
+  const preferido = String(process.env.AI_MOTOR || "").trim().toLowerCase();
+  const usarClaude = preferido === "claude" ? temAnthropic : !temOpenAI;
 
   // GET = diagnóstico: qual motor ESTÁ configurado neste servidor. Não gasta chamada
-  // nem revela a chave — só responde "por que a análise não usou o ChatGPT?" sem chute.
+  // nem revela a chave — só responde "qual motor atendeu a análise?" sem chute.
   if (req.method === "GET") {
     return res.status(200).json({
-      motorAtivo: temOpenAI ? "chatgpt" : (temAnthropic ? "claude (reserva)" : "nenhum"),
+      motorAtivo: (temOpenAI || temAnthropic)
+        ? (usarClaude ? "claude" : "chatgpt") + (preferido ? " (escolhido por AI_MOTOR)" : " (padrão)")
+        : "nenhum",
       OPENAI_API_KEY: temOpenAI ? "definida" : "NÃO definida",
       ANTHROPIC_API_KEY: temAnthropic ? "definida" : "NÃO definida",
+      AI_MOTOR: preferido || "(não definida)",
       modeloChatgpt: MODELO_OPENAI,
+      modeloClaude: MODELO_ANTHROPIC,
     });
   }
   if (!temOpenAI && !temAnthropic) {
@@ -145,21 +157,23 @@ export default async function handler(req, res) {
   if (!messages.length) return res.status(400).json({ error: "Nenhuma mensagem enviada." });
 
   try {
-    const texto = temOpenAI
-      ? await chamarOpenAI(corpo.system, messages, maxTokens)
-      : await chamarAnthropic(corpo.system, messages, maxTokens);
+    const texto = usarClaude
+      ? await chamarAnthropic(corpo.system, messages, maxTokens)
+      : await chamarOpenAI(corpo.system, messages, maxTokens);
     return res.status(200).json(respostaDeTexto(texto));
   } catch (err) {
     const abortou = err && (err.name === "TimeoutError" || err.name === "AbortError");
     let mensagem = abortou
       ? "A análise demorou mais de 60s e foi interrompida."
       : (err && err.message) || "Falha ao gerar a análise.";
-    // Sem esta linha, um erro do Claude quando o pedido era "usar o ChatGPT" parece
-    // um problema do ChatGPT. Diz de quem é a recusa E por que o outro motor entrou.
-    if (!temOpenAI) {
-      mensagem += " Esta análise NÃO usou o ChatGPT: a variável OPENAI_API_KEY não está " +
-        "definida nas variáveis de ambiente do Vercel, então o pedido caiu no motor reserva " +
-        "(Claude). Defina OPENAI_API_KEY no Vercel e publique de novo para a análise usar o ChatGPT.";
+    // Sem esta linha, um erro do motor reserva parece um problema do motor pedido.
+    // Diz qual motor de fato respondeu e por quê.
+    if (preferido === "claude" && !temAnthropic) {
+      mensagem += " AI_MOTOR pede o Claude, mas ANTHROPIC_API_KEY não está definida no Vercel, " +
+        "então a análise foi para o ChatGPT.";
+    } else if (preferido !== "claude" && usarClaude) {
+      mensagem += " Esta análise NÃO usou o ChatGPT: OPENAI_API_KEY não está definida no Vercel, " +
+        "então o pedido foi para o Claude. Para fixar o Claude de propósito, defina AI_MOTOR=claude.";
     }
     return res.status(abortou ? 504 : (err && err.status) || 502).json({ error: mensagem });
   }

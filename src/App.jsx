@@ -170,25 +170,269 @@ function calcMargin(salePrice, cost, feeRate = 0.12, freteSeller = 0, opts = {})
   return { fee: mlFee, feeFixa, imposto, custosFixos, revenue, profit, margin, feeRate };
 }
 
-function calcQualityScore(listing) {
-  const checks = [
-    { key: "title_length", label: "Título com 60+ caracteres", pass: listing.title?.length >= 60, weight: 15 },
-    { key: "photos_count", label: "6+ fotos", pass: (listing.pictures?.length ?? 0) >= 6, weight: 20 },
-    { key: "description", label: "Descrição detalhada (100+ chars)", pass: (listing.description?.plain_text?.length ?? 0) >= 100, weight: 20 },
-    { key: "free_shipping", label: "Frete grátis ao comprador", pass: listing.shipping?.free_shipping === true, weight: 15 },
-    { key: "attributes", label: "4+ atributos preenchidos", pass: (listing.attributes?.length ?? 0) >= 4, weight: 20 },
-    { key: "condition", label: "Condição informada", pass: !!listing.condition, weight: 10 },
-  ];
-  const total = checks.reduce((s, c) => s + (c.pass ? c.weight : 0), 0);
-  const max = checks.reduce((s, c) => s + c.weight, 0);
-  return { score: Math.round((total / max) * 100), checks };
+// ── Regras da análise de anúncios ──────────────────────────────────────────
+// Duas coisas diferentes, guardadas juntas porque o usuário as pensa juntas:
+//  1. CRITÉRIOS — o que dá para conferir sozinho, olhando os dados do anúncio.
+//     Viram a nota de 0 a 100, sem gastar nada com IA.
+//  2. INSTRUÇÕES — o que só a IA consegue julgar (tom, o que a descrição precisa
+//     conter, o que nunca prometer). Vão junto no pedido ao modelo.
+// Ficam separados de propósito: misturar os dois faria a nota depender de uma
+// chamada paga e de uma resposta que muda a cada vez.
+const CRITERIOS_QUALIDADE = [
+  { key:"title_length",  tipo:"titulo_min",     valor:60,  peso:15, ativo:true,  rotulo:function(v){ return "Título com " + v + "+ caracteres"; } },
+  { key:"photos_count",  tipo:"fotos_min",      valor:6,   peso:20, ativo:true,  rotulo:function(v){ return v + "+ fotos"; } },
+  { key:"description",   tipo:"descricao_min",  valor:100, peso:20, ativo:true,  rotulo:function(v){ return "Descrição com " + v + "+ caracteres"; } },
+  { key:"free_shipping", tipo:"frete_gratis",   valor:null,peso:15, ativo:true,  rotulo:function(){ return "Frete grátis ao comprador"; } },
+  { key:"attributes",    tipo:"atributos_min",  valor:4,   peso:20, ativo:true,  rotulo:function(v){ return v + "+ atributos preenchidos"; } },
+  { key:"condition",     tipo:"condicao",       valor:null,peso:10, ativo:true,  rotulo:function(){ return "Condição informada"; } },
+  // Desligados por padrão: ligá-los muda a nota de todos os anúncios de uma vez,
+  // e isso tem de ser uma decisão de quem usa, não um efeito colateral da atualização.
+  { key:"video",         tipo:"video",          valor:null,peso:10, ativo:false, rotulo:function(){ return "Anúncio com vídeo"; } },
+  { key:"garantia",      tipo:"garantia",       valor:null,peso:10, ativo:false, rotulo:function(){ return "Garantia informada"; } },
+  { key:"full",          tipo:"envio_full",     valor:null,peso:10, ativo:false, rotulo:function(){ return "Envio pelo Full"; } },
+];
+
+function configQualidadePadrao() {
+  return {
+    instrucoes: "",
+    criterios: CRITERIOS_QUALIDADE.map(function(c){
+      return { key:c.key, valor:c.valor, peso:c.peso, ativo:c.ativo };
+    }),
+  };
 }
 
-function scoreColor(s) { return s >= 80 ? "#0a9d4e" : s >= 50 ? "#FFC107" : "#FF5252"; }
-function scoreBg(s) { return s >= 80 ? "rgba(0,200,83,.12)" : s >= 50 ? "rgba(255,193,7,.12)" : "rgba(255,82,82,.12)"; }
-function scoreLabel(s) { return s >= 80 ? "Ótimo" : s >= 50 ? "Regular" : "Fraco"; }
+// Cópia em memória da configuração. calcQualityScore roda para centenas de anúncios
+// a cada render; reler e reinterpretar o localStorage a cada chamada custaria caro.
+// Quem grava a configuração chama aplicarConfigQualidade e mantém as duas em dia.
+let _configQualidade = configQualidadePadrao();
+function aplicarConfigQualidade(cfg) {
+  var base = configQualidadePadrao();
+  if (!cfg || typeof cfg !== "object") { _configQualidade = base; return base; }
+  var porChave = {};
+  (Array.isArray(cfg.criterios) ? cfg.criterios : []).forEach(function(c){ if (c && c.key) porChave[c.key] = c; });
+  _configQualidade = {
+    instrucoes: typeof cfg.instrucoes === "string" ? cfg.instrucoes : "",
+    // Percorre a lista PADRÃO, não a salva: um critério novo lançado numa
+    // atualização precisa aparecer para quem já tinha configuração gravada.
+    criterios: base.criterios.map(function(pad){
+      var salvo = porChave[pad.key];
+      if (!salvo) return pad;
+      return {
+        key: pad.key,
+        valor: salvo.valor == null ? pad.valor : (parseInt(salvo.valor, 10) || pad.valor),
+        peso: salvo.peso == null ? pad.peso : Math.max(0, parseInt(salvo.peso, 10) || 0),
+        ativo: salvo.ativo !== false,
+      };
+    }),
+  };
+  return _configQualidade;
+}
+function lerConfigQualidade() { return _configQualidade; }
+
+// Cada critério sabe olhar o anúncio por conta própria. Um tipo desconhecido
+// devolve null e o critério é ignorado, em vez de contar como reprovado — não
+// saber conferir não é o mesmo que estar errado.
+function avaliarCriterio(tipo, valor, l) {
+  var atrs = l.attributes || [];
+  if (tipo === "titulo_min")    return (l.title || "").length >= valor;
+  if (tipo === "fotos_min")     return (l.pictures || []).length >= valor;
+  if (tipo === "descricao_min") return ((l.description && l.description.plain_text) || "").length >= valor;
+  if (tipo === "atributos_min") return atrs.length >= valor;
+  if (tipo === "frete_gratis")  return !!(l.shipping && l.shipping.free_shipping);
+  if (tipo === "condicao")      return !!l.condition;
+  if (tipo === "video")         return !!(l.video_id || l.videos || l.video);
+  if (tipo === "garantia")      return atrs.some(function(a){ return /warranty|garantia/i.test(String(a.id || a.name || "")) && a.value_name; });
+  if (tipo === "envio_full")    return /fulfillment/i.test(String((l.shipping && l.shipping.logistic_type) || l.logistic_type || ""));
+  return null;
+}
+
+function calcQualityScore(listing) {
+  var cfg = lerConfigQualidade();
+  var porChave = {};
+  cfg.criterios.forEach(function(c){ porChave[c.key] = c; });
+  var checks = [];
+  CRITERIOS_QUALIDADE.forEach(function(def){
+    var c = porChave[def.key] || def;
+    if (!c.ativo) return;
+    var passou = avaliarCriterio(def.tipo, c.valor, listing || {});
+    if (passou === null) return;
+    checks.push({ key: def.key, label: def.rotulo(c.valor), pass: passou, weight: c.peso });
+  });
+  const total = checks.reduce((s, c) => s + (c.pass ? c.weight : 0), 0);
+  const max = checks.reduce((s, c) => s + c.weight, 0);
+  // Sem critério ativo não existe nota. Devolver 0 diria "seus anúncios são
+  // péssimos" quando a verdade é "não há nada configurado para medir".
+  return { score: max > 0 ? Math.round((total / max) * 100) : null, checks };
+}
+
+// Tela onde o vendedor define o que a análise cobra dos anúncios.
+function AnaliseIATab({ config, salvar, enriched }) {
+  const [rascunho, setRascunho] = useState(function(){ return JSON.parse(JSON.stringify(config)); });
+  const [salvo, setSalvo] = useState(false);
+  var porChave = {}; rascunho.criterios.forEach(function(c){ porChave[c.key] = c; });
+  function mudar(key, campo, valor){
+    setSalvo(false);
+    setRascunho(function(r){
+      return Object.assign({}, r, { criterios: r.criterios.map(function(c){
+        return c.key === key ? Object.assign({}, c, { [campo]: valor }) : c;
+      }) });
+    });
+  }
+  function aplicar(){ salvar(rascunho); setSalvo(true); }
+  function restaurar(){
+    if (!window.confirm("Voltar todos os critérios e instruções ao padrão?")) return;
+    var pad = configQualidadePadrao(); setRascunho(pad); salvar(pad); setSalvo(true);
+  }
+  var alterado = JSON.stringify(rascunho) !== JSON.stringify(config);
+  var ativos = rascunho.criterios.filter(function(c){ return c.ativo; });
+  var somaPesos = ativos.reduce(function(a,c){ return a + (parseInt(c.peso,10)||0); }, 0);
+
+  // Prévia sobre os anúncios reais: mostra o efeito da mudança antes de salvar,
+  // em vez de exigir salvar para depois descobrir que a nota despencou.
+  var previa = null;
+  if ((enriched || []).length) {
+    var antes = configQualidadePadrao();
+    var salvoAtual = lerConfigQualidade();
+    aplicarConfigQualidade(rascunho);
+    var notas = (enriched || []).map(function(l){ return calcQualityScore(l).score; }).filter(function(n){ return n != null; });
+    aplicarConfigQualidade(salvoAtual);
+    if (notas.length) {
+      previa = {
+        media: Math.round(notas.reduce(function(a,b){ return a+b; },0) / notas.length),
+        bons: notas.filter(function(n){ return n >= 80; }).length,
+        fracos: notas.filter(function(n){ return n < 50; }).length,
+        total: notas.length,
+      };
+    }
+  }
+
+  var cartao = { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"18px 20px", marginBottom:14 };
+  var tit = { fontSize:14, fontWeight:600, color:"var(--text-strong)", marginBottom:4 };
+  var sub = { fontSize:12, color:"var(--text-3)", lineHeight:1.5, marginBottom:14 };
+  var num = { width:78, background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"6px 9px", borderRadius:7, fontSize:13 };
+
+  return (
+    <div style={{ padding:2, maxWidth:900 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14, flexWrap:"wrap" }}>
+        <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Análise de anúncios</div>
+        <div style={{ flex:1 }} />
+        <button onClick={restaurar} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"9px 16px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Restaurar padrão</button>
+        <button onClick={aplicar} disabled={!alterado}
+          style={{ background: alterado ? "var(--ui-accent)" : "var(--surface)", border: alterado ? "none" : "1px solid var(--border)",
+                   color: alterado ? "var(--ui-accent-text)" : "var(--text-4)", fontWeight:600, padding:"9px 26px", borderRadius:9,
+                   cursor: alterado ? "pointer" : "default", fontSize:13 }}>Salvar</button>
+      </div>
+      {salvo && !alterado && <div style={{ background:"rgba(10,157,78,.12)", border:"1px solid #0a9d4e", color:"#0a9d4e", borderRadius:10, padding:"10px 14px", fontSize:12.5, marginBottom:14 }}>Regras salvas. As notas da aba Anúncios já usam os novos critérios.</div>}
+
+      <div style={cartao}>
+        <div style={tit}>Critérios da nota (0 a 100)</div>
+        <div style={sub}>
+          Conferidos aqui mesmo, a partir dos dados do anúncio — não gastam nada de IA e valem
+          para todos os anúncios de uma vez. O peso é relativo: a nota é quanto o anúncio somou
+          dividido pela soma dos pesos ativos.
+        </div>
+        <div style={_tableWrap}>
+          <table style={_table}>
+            <thead><tr>{["Ativo","Critério","Exigência","Peso"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+            <tbody>
+              {CRITERIOS_QUALIDADE.map(function(def){
+                var c = porChave[def.key];
+                var temValor = def.valor != null;
+                return <tr key={def.key} style={{ opacity: c.ativo ? 1 : .5 }}>
+                  <td style={{ ..._td, width:52 }}>
+                    <input type="checkbox" checked={!!c.ativo} onChange={function(e){ mudar(def.key, "ativo", e.target.checked); }} />
+                  </td>
+                  <td style={{ ..._td, color:"var(--text-strong)" }}>{def.rotulo(c.valor)}</td>
+                  <td style={_td}>
+                    {temValor
+                      ? <input type="number" min="1" value={c.valor} disabled={!c.ativo}
+                          onChange={function(e){ mudar(def.key, "valor", Math.max(1, parseInt(e.target.value,10) || 1)); }} style={num} />
+                      : <span style={{ color:"var(--text-4)" }}>sim/não</span>}
+                  </td>
+                  <td style={_td}>
+                    <input type="number" min="0" value={c.peso} disabled={!c.ativo}
+                      onChange={function(e){ mudar(def.key, "peso", Math.max(0, parseInt(e.target.value,10) || 0)); }} style={num} />
+                  </td>
+                </tr>;
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ fontSize:12, color: somaPesos > 0 ? "var(--text-3)" : "#FF5252", marginTop:10 }}>
+          {somaPesos > 0
+            ? ativos.length + " critério(s) ativo(s), somando " + somaPesos + " pontos."
+            : "Nenhum critério ativo — sem isso não existe nota, e a aba Anúncios mostra “—” no lugar dela."}
+        </div>
+        {previa && <div style={{ display:"flex", gap:22, flexWrap:"wrap", marginTop:14, paddingTop:12, borderTop:"1px solid var(--border-soft)" }}>
+          <div><div style={{ fontSize:11, color:"var(--text-3)" }}>Nota média com estas regras</div>
+            <div style={{ fontSize:20, fontWeight:600, color:scoreColor(previa.media) }}>{previa.media}</div></div>
+          <div><div style={{ fontSize:11, color:"var(--text-3)" }}>Anúncios acima de 80</div>
+            <div style={{ fontSize:20, fontWeight:600, color:"#0a9d4e" }}>{previa.bons}</div></div>
+          <div><div style={{ fontSize:11, color:"var(--text-3)" }}>Anúncios abaixo de 50</div>
+            <div style={{ fontSize:20, fontWeight:600, color:"#FF5252" }}>{previa.fracos}</div></div>
+          <div><div style={{ fontSize:11, color:"var(--text-3)" }}>Anúncios avaliados</div>
+            <div style={{ fontSize:20, fontWeight:600, color:"var(--text-2)" }}>{previa.total}</div></div>
+        </div>}
+        {previa && alterado && <div style={{ fontSize:11.5, color:"var(--text-3)", marginTop:8 }}>Prévia sobre os seus anúncios de verdade, ainda não salva.</div>}
+      </div>
+
+      <div style={cartao}>
+        <div style={tit}>Regras para a IA</div>
+        <div style={sub}>
+          Escreva aqui o que a IA precisa saber do seu negócio e o que deve checar além dos
+          critérios acima — coisas que só um texto consegue dizer. Este bloco vai junto em
+          <b> toda</b> análise, e a IA é instruída a seguir estas regras antes de qualquer
+          recomendação genérica.
+        </div>
+        <textarea
+          value={rascunho.instrucoes}
+          onChange={function(e){ setSalvo(false); setRascunho(Object.assign({}, rascunho, { instrucoes: e.target.value })); }}
+          rows={12}
+          placeholder={"Exemplos do que escrever aqui:\n\n" +
+            "- Vendemos autopeças para caminhonetes. O título deve sempre trazer a peça, a marca do veículo, o modelo e os anos de compatibilidade.\n" +
+            "- Toda descrição precisa terminar com o prazo de garantia e o que está incluso na caixa.\n" +
+            "- Nunca prometa entrega em prazo específico nem use “original de fábrica” se a peça for paralela.\n" +
+            "- Avise se o título passar de 60 caracteres, porque o Mercado Livre corta.\n" +
+            "- Verifique se a compatibilidade de anos está no título e nos atributos."}
+          style={{ width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)",
+                   padding:"12px 14px", borderRadius:10, fontSize:13, outline:"none", resize:"vertical",
+                   fontFamily:"inherit", lineHeight:1.6, boxSizing:"border-box" }} />
+        <div style={{ fontSize:11.5, color:"var(--text-3)", marginTop:8 }}>
+          {String(rascunho.instrucoes||"").length} caracteres. Texto longo encarece um pouco cada
+          análise, porque vai no pedido todas as vezes — mas o efeito é pequeno perto do resto do anúncio.
+        </div>
+      </div>
+
+      <div style={{ ...cartao, marginBottom:0 }}>
+        <div style={tit}>Como as duas coisas se encaixam</div>
+        <div style={{ ...sub, marginBottom:0 }}>
+          A <b>nota</b> sai só dos critérios acima e aparece em toda a aba Anúncios, de graça e
+          na hora. A <b>IA</b> entra apenas quando você clica em <b>Analisar</b> num anúncio: ela
+          recebe o anúncio, os critérios ativos com o resultado de cada um, e as suas regras — e
+          devolve título, descrição e atributos já prontos para colar. Mudar os critérios aqui
+          muda as duas coisas ao mesmo tempo.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function scoreColor(s) { if (s == null) return "var(--text-4)"; return s >= 80 ? "#0a9d4e" : s >= 50 ? "#FFC107" : "#FF5252"; }
+function scoreBg(s) { if (s == null) return "var(--surface-3)"; return s >= 80 ? "rgba(0,200,83,.12)" : s >= 50 ? "rgba(255,193,7,.12)" : "rgba(255,82,82,.12)"; }
+function scoreLabel(s) { if (s == null) return "Sem critérios"; return s >= 80 ? "Ótimo" : s >= 50 ? "Regular" : "Fraco"; }
 
 async function analyzeWithAI(listing) {
+  var cfg = lerConfigQualidade();
+  var ativos = calcQualityScore(listing).checks;
+  // O modelo recebe os MESMOS critérios que geraram a nota. Sem isso ele sugeriria
+  // melhorias que a nota não cobra, e cobraria coisas que a nota não mede.
+  var blocoCriterios = ativos.length
+    ? "\n\nCritérios de qualidade usados por este vendedor (peso entre parênteses) e como este anúncio está em cada um:\n" +
+      ativos.map(function(c){ return "- " + c.label + " (peso " + c.weight + "): " + (c.pass ? "OK" : "NÃO ATENDE"); }).join("\n")
+    : "";
+  var blocoInstrucoes = String(cfg.instrucoes || "").trim()
+    ? "\n\nREGRAS DO VENDEDOR — siga-as acima de qualquer recomendação genérica:\n" + String(cfg.instrucoes).trim()
+    : "";
   const prompt = `Você é especialista em anúncios do Mercado Livre Brasil. Analise o anúncio abaixo e, para CADA melhoria, entregue o CONTEÚDO JÁ PRONTO para o vendedor copiar e colar — não apenas dizer o que fazer.
 
 Retorne APENAS um objeto JSON válido, sem texto extra, sem markdown, com esta estrutura:
@@ -217,7 +461,7 @@ Dados do anúncio:
 - Frete grátis: ${listing.shipping?.free_shipping ? "Sim" : "Não"}
 - Descrição atual: ${(listing.description?.plain_text ?? "").slice(0, 400) || "vazia"}
 - Atributos atuais: ${listing.attributes?.filter(a => a.value_name).slice(0, 12).map(a => a.name + ": " + a.value_name).join(", ") || "nenhum"}
-- Vendidos: ${listing.sold_quantity ?? 0}
+- Vendidos: ${listing.sold_quantity ?? 0}${blocoCriterios}${blocoInstrucoes}
 
 Retorne SOMENTE o JSON, começando com { e terminando com }.`;
 
@@ -3634,6 +3878,7 @@ function HomeTab({ enrichedOrders, currentUser, setTab }){
     { titulo:"Configuração", itens:[
       perm.includes("admin") && { key:"admin", label:"Equipe", desc:"Usuários e permissões" },
       { key:"impostos", label:"Impostos", desc:"ICMS por destino, IRPJ, CSLL e custos fixos" },
+      { key:"analise_ia", label:"Análise de anúncios", desc:"Critérios da nota e regras para a IA" },
       { key:"integracoes", label:"Integrações", desc:"Conexões e marketplaces" },
     ]},
   ];
@@ -4394,7 +4639,7 @@ function AIPanel({ listing, onClose }) {
         <div style={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 12, padding: "16px 20px", marginBottom: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 14 }}>
             <div style={{ width: 52, height: 52, borderRadius: 12, background: scoreBg(score), display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-              <span style={{ fontSize: 18, fontWeight: 600, color: scoreColor(score) }}>{score}</span>
+              <span style={{ fontSize: 18, fontWeight: 600, color: scoreColor(score) }}>{score == null ? "—" : score}</span>
               <span style={{ fontSize: 9, color: scoreColor(score), fontWeight: 600 }}>/100</span>
             </div>
             <div>
@@ -4735,6 +4980,7 @@ const BACKUP_KEYS = [
   { key: "notas_fiscais_entrada",   label: "Notas Fiscais" },
   { key: "impostos_config",         label: "Impostos" },
   { key: "icms_regime_config",      label: "Regime de ICMS" },
+  { key: "analise_ia_config",       label: "Regras da análise de anúncios" },
   { key: "custos_fixos_config",     label: "Custos Fixos" },
   { key: "metaMensal",              label: "Meta Mensal" },
   { key: "ml_auth_users",           label: "Usuários do Sistema" },
@@ -8045,6 +8291,19 @@ export default function App() {
   // recalcule na hora a margem de anúncios e pedidos, sem recarregar a página.
   const [icmsRegime, setIcmsRegimeState] = useState(getIcmsRegime);
   function setIcmsRegime(cfg) { setIcmsRegimeState(cfg); saveIcmsRegime(cfg); }
+  // Regras da análise de anúncios. aplicarConfigQualidade atualiza a cópia em
+  // memória que calcQualityScore lê — sem isso a tela salvaria e as notas
+  // continuariam as antigas até recarregar a página.
+  const [configQualidade, setConfigQualidadeState] = useState(function(){
+    try { return aplicarConfigQualidade(JSON.parse(localStorage.getItem("analise_ia_config") || "{}")); }
+    catch { return aplicarConfigQualidade(null); }
+  });
+  function setConfigQualidade(cfg) {
+    var normal = aplicarConfigQualidade(cfg);
+    setConfigQualidadeState(normal);
+    try { localStorage.setItem("analise_ia_config", JSON.stringify(normal)); } catch(e) {}
+    try { kvSyncPush("analise_ia_config", normal); } catch(e) {}
+  }
   const [icmsTabela, setIcmsTabelaState] = useState(getIcmsConfig);
   function setIcmsTabela(cfg) { setIcmsTabelaState(cfg); saveIcmsConfig(cfg); }
   const [showNotif, setShowNotif] = useState(false);
@@ -8317,7 +8576,7 @@ export default function App() {
     "custos_fixos_config","impostos_config","irpj_csll_config","icms_por_estado","icms_regime_config","lancamentos",
     "mov_estoque","metaMensal","min_stock_anuncios","real_fees_config","pedidos_compra",
     "precificacao_extras","precos_pendentes_ml","custos_extras_config","depositos_estoque","estoque_depositos",
-    "envios_full","vendas_estoque_baixadas","sku_overrides",
+    "envios_full","vendas_estoque_baixadas","sku_overrides","analise_ia_config",
   ]).current;
   // Para os dados guardados como dicionário (chave→valor, ex: custo por anúncio), mesclar em
   // vez de substituir por inteiro — evita que um "pull" com dados parciais do servidor apague
@@ -8353,6 +8612,7 @@ export default function App() {
     real_fees_config: mesclarSetter(setRealFees),
     sku_overrides: mesclarSetter(setSkuOverrides),
     custos_extras_config: mesclarSetter(setCustosExtras),
+    analise_ia_config: function(v){ setConfigQualidade(v); },
   }).current;
   // Tipo esperado de cada chave — usado para blindar contra um valor no formato errado
   // (ex: um objeto onde deveria vir uma lista) travando a tela com "x.filter is not a function".
@@ -8365,7 +8625,7 @@ export default function App() {
     precos_venda_config: "object", precos_pendentes_ml: "object", irpj_csll_config: "object",
     icms_regime_config: "object", icms_por_estado: "object",
     min_stock_anuncios: "object", real_fees_config: "object", sku_overrides: "object",
-    custos_extras_config: "object",
+    custos_extras_config: "object", analise_ia_config: "object",
   }).current;
   const lastSyncRef = useRef({}); // key -> string JSON já sincronizado (evita reenviar/reaplicar sem necessidade)
 
@@ -9357,6 +9617,7 @@ export default function App() {
             { titulo:"Configuração", itens:[
               currentUser?.permissoes?.includes("admin") && { key:"admin", label:"Equipe" },
               { key:"impostos", label:"Impostos" },
+              { key:"analise_ia", label:"Análise de anúncios" },
               { key:"integracoes", label:"Integrações" },
             ]},
           ];
@@ -9942,6 +10203,7 @@ export default function App() {
         {tab === "dashboard" && (
           <DashboardTab enrichedOrders={enrichedOrders} produtos={produtos} user={user} metas={metas} salvarMetas={salvarMetas} sub={dashSub} setSub={setDashSub} />
         )}
+        {tab === "analise_ia" && <AnaliseIATab config={configQualidade} salvar={setConfigQualidade} enriched={enriched} />}
         {tab === "produtos" && <ProdutosTab produtos={produtos} salvar={salvarProdutos} fornecedores={fornecedores} enriched={enriched} />}
         {tab === "estoque" && <EstoqueTab produtos={produtos} />}
         {tab === "vincular" && <VincularTab enriched={enriched} produtos={produtos} salvar={salvarProdutos} />}

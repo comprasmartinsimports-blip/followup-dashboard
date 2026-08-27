@@ -558,6 +558,7 @@ export default async function handler(req, res) {
       const cache = await sql`
         select dados, atualizado_em from flow.ml_mercado
         where categoria = ${categoria} and atualizado_em > now() - interval '12 hours'
+          and dados->>'v' = '2'
       `;
       if (cache.length) {
         return res.status(200).json(Object.assign({}, cache[0].dados, {
@@ -594,9 +595,13 @@ export default async function handler(req, res) {
       ]);
 
       const conteudo = Array.isArray(destaque.content) ? destaque.content.slice(0, 20) : [];
+      // O ranking mistura dois tipos: ITEM (um anúncio) e PRODUCT (produto de
+      // catálogo, ids MLBU...). Cada tipo resolve o detalhe num endpoint diferente;
+      // o que falhar vira um aviso visível, não uma linha muda com traços.
+      const avisos = [];
       const idsItens = conteudo.filter(function(x){ return x.type === "ITEM"; }).map(function(x){ return x.id; });
+      const idsProdutos = conteudo.filter(function(x){ return x.type !== "ITEM"; }).map(function(x){ return x.id; });
 
-      // Detalhe dos itens do ranking (título, preço, vendedor) via multiget.
       const detalhes = {};
       for (let i = 0; i < idsItens.length; i += 20) {
         const lote = idsItens.slice(i, i + 20);
@@ -606,7 +611,29 @@ export default async function handler(req, res) {
           (Array.isArray(r) ? r : []).forEach(function(x) {
             if (x && x.body && x.body.id) detalhes[x.body.id] = x.body;
           });
-        } catch (e) { /* ranking segue com posição e id, sem o detalhe */ }
+        } catch (e) {
+          avisos.push("Detalhe dos anúncios: " + ((e && e.message) || "falhou"));
+        }
+      }
+      // Multiget indisponível ou parcial: tenta um a um, que é mais tolerante.
+      const semDetalhe = idsItens.filter(function(id){ return !detalhes[id]; }).slice(0, 10);
+      for (const id of semDetalhe) {
+        try { detalhes[id] = await ml("/items/" + id); }
+        catch (e) { avisos.push("Anúncio " + id + ": " + ((e && e.message) || "falhou")); }
+      }
+
+      // Produtos de catálogo: /products devolve o nome e o anúncio vencedor do
+      // catálogo (buy box), que é o concorrente real a comparar.
+      const produtosCat = {};
+      let erroProdutoJaAvisado = false;
+      for (const id of idsProdutos.slice(0, 20)) {
+        try { produtosCat[id] = await ml("/products/" + id); }
+        catch (e) {
+          if (!erroProdutoJaAvisado) {
+            avisos.push("Produtos de catálogo (" + id + "): " + ((e && e.message) || "falhou"));
+            erroProdutoJaAvisado = true;
+          }
+        }
       }
 
       // Para marcar o que é SEU no ranking: ids dos seus anúncios e das suas contas.
@@ -618,21 +645,38 @@ export default async function handler(req, res) {
       const meusSellers = new Set(minhasContas.map(function(r){ return String(r.seller_id); }));
 
       const maisVendidos = conteudo.map(function(x) {
-        const d = detalhes[x.id] || {};
+        if (x.type === "ITEM") {
+          const d = detalhes[x.id] || {};
+          return {
+            posicao: x.position, id: x.id, tipo: x.type,
+            titulo: d.title || null,
+            preco: typeof d.price === "number" ? d.price : null,
+            vendidos: typeof d.sold_quantity === "number" ? d.sold_quantity : null,
+            link: d.permalink || null,
+            itemComparar: x.id,
+            seu: meusIds.has(String(x.id)) || (d.seller_id != null && meusSellers.has(String(d.seller_id))),
+          };
+        }
+        const pr = produtosCat[x.id] || {};
+        const buyBox = pr.buy_box_winner || {};
+        const itemVencedor = buyBox.item_id ? String(buyBox.item_id) : null;
         return {
-          posicao: x.position,
-          id: x.id,
-          tipo: x.type,
-          titulo: d.title || (x.type === "PRODUCT" ? "(produto de catálogo)" : null),
-          preco: typeof d.price === "number" ? d.price : null,
-          vendidos: typeof d.sold_quantity === "number" ? d.sold_quantity : null,
-          link: d.permalink || null,
-          seu: meusIds.has(String(x.id)) || (d.seller_id != null && meusSellers.has(String(d.seller_id))),
+          posicao: x.position, id: x.id, tipo: x.type,
+          titulo: pr.name || null,
+          preco: typeof buyBox.price === "number" ? buyBox.price : null,
+          vendidos: null,
+          link: pr.permalink || ("https://www.mercadolivre.com.br/p/" + x.id),
+          // Comparar usa o anúncio vencedor do catálogo — é quem está levando a venda.
+          itemComparar: itemVencedor,
+          seu: (itemVencedor && meusIds.has(itemVencedor)) ||
+               (buyBox.seller_id != null && meusSellers.has(String(buyBox.seller_id))),
         };
       });
       const precos = maisVendidos.map(function(m){ return m.preco; }).filter(function(v){ return v != null; });
 
       const dados = {
+        v: "2",
+        avisos: avisos,
         categoria: {
           id: categoria,
           nome: cat.name || categoria,

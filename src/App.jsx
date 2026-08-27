@@ -1785,8 +1785,8 @@ function TendenciasTab({ setTab, setBuscaPrecificacao, enriched }) {
                                   {mv.link
                                     ? <a href={mv.link} target="_blank" rel="noreferrer" style={{ fontSize:11, color:"#0e7490", textDecoration:"none", flexShrink:0 }}>ver ↗</a>
                                     : <span style={{ width:32 }} />}
-                                  {!mv.seu && mv.tipo === "ITEM" && (
-                                    <button onClick={function(){ abrirComparacao(mv.id, c.id, null); }}
+                                  {!mv.seu && mv.itemComparar && (
+                                    <button onClick={function(){ abrirComparacao(mv.itemComparar, c.id, null); }}
                                       style={{ fontSize:11, fontWeight:600, color:"var(--text-2)", background:"var(--surface)", border:"1px solid var(--border)", padding:"4px 10px", borderRadius:7, cursor:"pointer", fontFamily:"inherit", flexShrink:0 }}>
                                       Comparar
                                     </button>
@@ -1797,6 +1797,11 @@ function TendenciasTab({ setTab, setBuscaPrecificacao, enriched }) {
                           </div>
                         )}
 
+                        {Array.isArray(d.avisos) && d.avisos.length > 0 && (
+                          <div style={{ fontSize:11, color:"#FF9800", marginTop:8, lineHeight:1.6 }}>
+                            {d.avisos.map(function(a, i){ return <div key={i}>⚠ {a}</div>; })}
+                          </div>
+                        )}
                         <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:8, lineHeight:1.5 }}>
                           Unidades vendidas e vendedores ativos do mercado inteiro não têm dados públicos na API — esses números só existem no painel do próprio ML.
                         </div>

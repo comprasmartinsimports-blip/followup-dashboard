@@ -154,16 +154,20 @@ function estimarTarifaFixaML(salePrice) {
 }
 
 // opts (opcional): { feeFixa: tarifa fixa em R$ a somar à comissão percentual,
-//                    impostoPct: alíquota efetiva de impostos sobre a venda, em % }
+//                    impostoPct: alíquota efetiva de impostos sobre a venda, em %,
+//                    custosFixosUnit: custos por unidade além do produto (etiqueta,
+//                    embalagem) — separados do custo do produto de propósito, para a
+//                    tela poder mostrar cada um em vez de um total sem explicação }
 function calcMargin(salePrice, cost, feeRate = 0.12, freteSeller = 0, opts = {}) {
   const feeFixa = parseFloat(opts.feeFixa) || 0;
   const impostoPct = parseFloat(opts.impostoPct) || 0;
+  const custosFixos = parseFloat(opts.custosFixosUnit) || 0;
   const mlFee = salePrice * feeRate + feeFixa;
   const imposto = salePrice * (impostoPct / 100);
   const revenue = salePrice - mlFee - freteSeller;
-  const profit = revenue - imposto - cost;
+  const profit = revenue - imposto - cost - custosFixos;
   const margin = cost > 0 ? profit / salePrice : null;
-  return { fee: mlFee, feeFixa, imposto, revenue, profit, margin, feeRate };
+  return { fee: mlFee, feeFixa, imposto, custosFixos, revenue, profit, margin, feeRate };
 }
 
 function calcQualityScore(listing) {
@@ -1138,8 +1142,12 @@ function ClientesTab({ rawOrders }) {
 function rotuloImposto(o) {
   var pct = parseFloat((o || {}).impostoPct);
   if (!isFinite(pct) || pct <= 0) return "Imposto";
-  var uf = String((o || {}).buyerUF || "").toUpperCase();
-  return "Imposto (" + pct.toFixed(2).replace(".", ",") + "%" + (uf ? " · " + uf : "") + ")";
+  // Quando o ICMS veio da Precificação daquele anúncio, dizer "UF" enganaria:
+  // a alíquota não saiu do destino, saiu do que foi preenchido no produto.
+  var origem = (o || {}).icmsProprio
+    ? "ICMS do anúncio"
+    : String((o || {}).buyerUF || "").toUpperCase();
+  return "Imposto (" + pct.toFixed(2).replace(".", ",") + "%" + (origem ? " · " + origem : "") + ")";
 }
 
 // Vendas: cada venda com custos/taxas do momento; clicar abre o painel com o detalhamento completo.
@@ -1150,8 +1158,11 @@ function VendasTab({ enrichedOrders }) {
     var q = o.qty || 1;
     var fat = (o.price || 0) * q, taxas = (o.fee || 0) * q, frete = o.freteSeller || 0;
     var custo = (o.cost || 0) * q, imposto = (o.imposto || 0) * q;
-    var repasse = fat - taxas - frete, lucro = repasse - custo - imposto;
-    return { q, fat, taxas, frete, custo, imposto, repasse, lucro, margem: fat ? lucro / fat * 100 : 0, rotuloImp: rotuloImposto(o) };
+    // Etiqueta e embalagem vêm da Precificação daquele anúncio e são por unidade.
+    var etiqueta = (o.etiqueta || 0) * q, embalagem = (o.embalagem || 0) * q;
+    var repasse = fat - taxas - frete, lucro = repasse - custo - imposto - etiqueta - embalagem;
+    return { q, fat, taxas, frete, custo, imposto, etiqueta, embalagem, repasse, lucro,
+             margem: fat ? lucro / fat * 100 : 0, rotuloImp: rotuloImposto(o) };
   }
   var lista = (enrichedOrders || []).filter(function(o){
     if (situacao === "ativas") return o.status !== "cancelled";
@@ -1222,6 +1233,8 @@ function VendasTab({ enrichedOrders }) {
             <div style={{ fontSize:11, fontWeight:500, color:"var(--text-3)", textTransform:"none", letterSpacing:.5, margin:"6px 0 2px" }}>Seus custos</div>
             {Linha("Custo do produto", "- " + fmt(c.custo), { cor:"#FFC107" })}
             {Linha(c.rotuloImp, "- " + fmt(c.imposto), { cor:"#FFC107" })}
+            {c.etiqueta > 0 && Linha("Etiqueta", "- " + fmt(c.etiqueta), { cor:"#FFC107" })}
+            {c.embalagem > 0 && Linha("Embalagem", "- " + fmt(c.embalagem), { cor:"#FFC107" })}
             <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"12px 14px", marginTop:12 }}>
               {Linha("Lucro líquido", fmt(c.lucro) + "  (" + c.margem.toFixed(1) + "%)", { forte:true, cor: c.lucro >= 0 ? "#0a9d4e" : "#FF5252" })}
             </div>
@@ -1242,7 +1255,9 @@ function PedidoDetalheDrawer({ pedido, onClose }) {
   var q = o.qty || 1;
   var fat = (o.price || 0) * q, taxas = (o.fee || 0) * q, frete = o.freteSeller || 0;
   var custo = (o.cost || 0) * q, imposto = (o.imposto || 0) * q;
-  var repasse = fat - taxas - frete, lucro = repasse - custo - imposto;
+  // Custos por unidade preenchidos na Precificação deste anúncio.
+  var etiqueta = (o.etiqueta || 0) * q, embalagem = (o.embalagem || 0) * q;
+  var repasse = fat - taxas - frete, lucro = repasse - custo - imposto - etiqueta - embalagem;
   var margem = fat ? lucro / fat * 100 : 0;
   function Linha(label, valor, opts){
     opts = opts || {};
@@ -1287,6 +1302,9 @@ function PedidoDetalheDrawer({ pedido, onClose }) {
       <div style={_secTit}>Seus custos</div>
       {Linha("Custo do produto", "- " + fmt(custo), { cor:"#FFC107" })}
       {Linha(rotuloImposto(o), "- " + fmt(imposto), { cor:"#FFC107" })}
+      {etiqueta > 0 && Linha("Etiqueta", "- " + fmt(etiqueta), { cor:"#FFC107" })}
+      {embalagem > 0 && Linha("Embalagem", "- " + fmt(embalagem), { cor:"#FFC107" })}
+      {etiqueta === 0 && embalagem === 0 && <div style={{ fontSize:11, color:"var(--text-3)", padding:"6px 0" }}>Etiqueta e embalagem: preencha em Precificação para entrarem nesta conta.</div>}
       <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"12px 14px", marginTop:12 }}>
         {Linha("Lucro líquido", fmt(lucro) + "  (" + margem.toFixed(1) + "%)", { forte:true, cor: lucro >= 0 ? "#0a9d4e" : "#FF5252" })}
       </div>
@@ -8630,22 +8648,32 @@ export default function App() {
     // Melhor fonte de tarifa, nesta ordem: (1) sale_fee real cobrado neste pedido,
     // (2) taxa real do anúncio via listing_prices, (3) tabela estimada + tarifa fixa.
     const pay = paymentData[String(o.id)];
+    // Custos preenchidos na Precificação para este anúncio: ICMS próprio, etiqueta
+    // e embalagem. Mesma chave dos custos acima — o código do anúncio.
+    const extrasDoAnuncio = custosExtras[o.listing_id] ?? {};
+    const etiquetaUnit = parseFloat(extrasDoAnuncio.etiqueta) || 0;
+    const embalagemUnit = parseFloat(extrasDoAnuncio.embalagem) || 0;
+    const icmsDoAnuncio = parseFloat(extrasDoAnuncio.icms) || 0;
     // ICMS conforme o destino: dentro da UF de origem vs. interestadual (ver Financeiro → Impostos).
-    const icmsPct = icmsPctParaUF(o.buyerUF, icmsRegime, icmsTabela);
+    // Um ICMS preenchido na Precificação vale para aquele anúncio, no lugar do regime.
+    const icmsPct = icmsDoAnuncio > 0 ? icmsDoAnuncio : icmsPctParaUF(o.buyerUF, icmsRegime, icmsTabela);
     const impostoPctPedido = impostoPctVenda + icmsPct;
+    const custosFixosUnit = etiquetaUnit + embalagemUnit;
     let base;
     if (pay && pay.tarifaML > 0 && !pay.isCalculated && o.price > 0) {
       const tarifaUnit = pay.tarifaML / (o.qty || 1);
-      base = calcMargin(o.price, cost, tarifaUnit / o.price, freteSeller, { impostoPct: impostoPctPedido });
+      base = calcMargin(o.price, cost, tarifaUnit / o.price, freteSeller, { impostoPct: impostoPctPedido, custosFixosUnit });
     } else {
       // Sem dados reais de tarifa do pedido → usa a taxa padrão por tipo (12%/17%).
       const feeRate = listing ? getRealFeeRate(listing) : 0.12;
       base = calcMargin(o.price, cost, feeRate, freteSeller, {
         feeFixa: 0,
         impostoPct: impostoPctPedido,
+        custosFixosUnit,
       });
     }
-    return { ...o, listing, ...base, cost, freteSeller, icmsPct, impostoPct: impostoPctPedido };
+    return { ...o, listing, ...base, cost, freteSeller, icmsPct, impostoPct: impostoPctPedido,
+             etiqueta: etiquetaUnit, embalagem: embalagemUnit, icmsProprio: icmsDoAnuncio > 0 };
   })
 
   // Receita líquida do mês corrente — base dos percentuais na tela de Impostos.

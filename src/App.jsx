@@ -217,7 +217,8 @@ Dados do anúncio:
 
 Retorne SOMENTE o JSON, começando com { e terminando com }.`;
 
-  // A chamada à Anthropic passa pelo proxy /api/ai-chat — a chave da API fica só no servidor
+  // A chamada ao modelo passa pelo proxy /api/ai-chat — a chave da API fica só no
+  // servidor, e é lá que se escolhe o motor (ChatGPT).
   const response = await fetch("/api/ai-chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

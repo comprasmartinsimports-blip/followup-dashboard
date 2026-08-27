@@ -460,6 +460,82 @@ export default async function handler(req, res) {
     return res.status(200).json({ dias: dias, categorias: resposta });
   }
 
+  // ── Comparação de anúncios (o seu x um concorrente) ─────────────────────────
+  // Busca o detalhe completo de até 3 anúncios — inclusive a descrição, que não vem
+  // no cache — e devolve os campos que alimentam a comparação e o score de
+  // qualidade. Anúncio do próprio usuário vem marcado.
+  if (path === "/_comparar" || path.startsWith("/_comparar?")) {
+    const sessao = await verificarSessao(req);
+    if (!sessao) return res.status(401).json({ error: "Não autenticado. Faça login no sistema." });
+    const sql = sqlClient();
+    if (!sql) return res.status(503).json({ error: "Banco não configurado (SUPABASE_DB_URL)." });
+    const qsC = new URLSearchParams(path.split("?")[1] || "");
+    const ids = (qsC.get("itens") || "").split(",").map(function(x){ return x.trim(); }).filter(Boolean);
+    if (!ids.length || ids.length > 3 || !ids.every(function(id){ return /^MLB\d+$/.test(id); })) {
+      return res.status(400).json({ error: "Informe de 1 a 3 anúncios (itens=MLB...,MLB...)." });
+    }
+
+    const ckC = Object.fromEntries(
+      (req.headers.cookie || "").split(";").map(function(c){ const p = c.trim().split("="); return [p[0], p.slice(1).join("=")]; })
+    );
+    let tokenC = ckC.ml_access_token || null;
+    if (!tokenC) {
+      const meu = await kvGet("mlmargem_ml_token_" + sessao.uid);
+      if (meu && meu.accessToken) tokenC = meu.accessToken;
+    }
+    if (!tokenC) return res.status(401).json({ error: "Sem token do ML. Reconecte ao Mercado Livre." });
+
+    async function mlC(caminho) {
+      const r = await fetch("https://api.mercadolibre.com" + caminho, {
+        headers: { Authorization: "Bearer " + tokenC, Accept: "application/json" },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!r.ok) throw new Error(caminho + " respondeu HTTP " + r.status);
+      return await r.json();
+    }
+
+    const [meusAnunciosC, minhasContasC] = await Promise.all([
+      sql`select id from flow.ml_listing`,
+      sql`select seller_id from flow.conexao_ml`,
+    ]);
+    const meusIdsC = new Set(meusAnunciosC.map(function(r){ return String(r.id); }));
+    const meusSellersC = new Set(minhasContasC.map(function(r){ return String(r.seller_id); }));
+
+    const anuncios = [];
+    for (const id of ids) {
+      try {
+        const [item, descricao] = await Promise.all([
+          mlC("/items/" + id),
+          // A descrição é chamada à parte na API; sem ela o score de qualidade
+          // acusaria "sem descrição" para um anúncio que tem.
+          mlC("/items/" + id + "/description").catch(function(){ return null; }),
+        ]);
+        anuncios.push({
+          id: item.id,
+          titulo: item.title || null,
+          preco: typeof item.price === "number" ? item.price : null,
+          precoOriginal: typeof item.original_price === "number" ? item.original_price : null,
+          vendidos: typeof item.sold_quantity === "number" ? item.sold_quantity : null,
+          condicao: item.condition || null,
+          fotos: Array.isArray(item.pictures) ? item.pictures.length : 0,
+          atributos: Array.isArray(item.attributes) ? item.attributes.length : 0,
+          freteGratis: !!(item.shipping && item.shipping.free_shipping),
+          tipoAnuncio: item.listing_type_id || null,
+          descricaoTamanho: descricao && descricao.plain_text ? descricao.plain_text.length : 0,
+          link: item.permalink || null,
+          foto: item.thumbnail || null,
+          status: item.status || null,
+          categoria: item.category_id || null,
+          seu: meusIdsC.has(String(item.id)) ||
+               (item.seller_id != null && meusSellersC.has(String(item.seller_id))),
+        });
+      } catch (e) {
+        anuncios.push({ id: id, erro: (e && e.message) || "não foi possível carregar" });
+      }
+    }
+    return res.status(200).json({ anuncios });
+  }
+
   // ── Painel de mercado de uma categoria ───────────────────────────────────────
   // Constrói o que a descoberta provou existir: mais vendidos da categoria
   // (/highlights), buscas em alta (/trends) e total de anúncios (/categories).

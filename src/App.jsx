@@ -1361,7 +1361,7 @@ function ExpedicaoTab({ rawOrders }) {
 //  operação de fato vendeu — e é sobre isso que se decide preço e compra.
 // ════════════════════════════════════════════════════════════
 
-function TendenciasTab({ setTab, setBuscaPrecificacao }) {
+function TendenciasTab({ setTab, setBuscaPrecificacao, enriched }) {
   const [dias, setDias] = useState(30);
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(true);
@@ -1389,6 +1389,61 @@ function TendenciasTab({ setTab, setBuscaPrecificacao }) {
         setMercadoCat(function(m){ return Object.assign({}, m, { [id]: { erro:"Sem conexão com o servidor." } }); });
       });
   }
+  // Comparação: um concorrente do ranking contra um anúncio do usuário.
+  const [comparacao, setComparacao] = useState(null); // { concorrenteId, categoriaId, meuId, carregando, dados, erro }
+
+  function meusDaCategoria(categoriaId) {
+    var lista = (enriched || []).filter(function(l){ return l.status === "active"; });
+    var daCategoria = lista.filter(function(l){ return l.category_id === categoriaId; });
+    // Sem anúncio na mesma categoria, oferece todos — comparar com algo parecido
+    // ainda é melhor que não comparar.
+    var candidatos = daCategoria.length ? daCategoria : lista;
+    return candidatos.slice().sort(function(a,b){ return (b.sold_quantity||0) - (a.sold_quantity||0); });
+  }
+
+  function abrirComparacao(concorrenteId, categoriaId, meuId) {
+    var meus = meusDaCategoria(categoriaId);
+    var meu = meuId || (meus[0] && meus[0].id);
+    if (!meu) {
+      setComparacao({ concorrenteId, categoriaId, erro: "Você não tem anúncio ativo para comparar." });
+      return;
+    }
+    setComparacao({ concorrenteId, categoriaId, meuId: meu, carregando: true });
+    fetch("/api/ml/_comparar?itens=" + concorrenteId + "," + meu)
+      .then(function(r){
+        return r.json()
+          .then(function(d){ return { ok:r.ok, d:d }; })
+          .catch(function(){ return { ok:false, d:{ error:"O servidor respondeu com erro (HTTP " + r.status + ")." } }; });
+      })
+      .then(function(x){
+        setComparacao(function(c){
+          if (!c || c.concorrenteId !== concorrenteId) return c;
+          return x.ok
+            ? { concorrenteId, categoriaId, meuId: meu, dados: x.d.anuncios }
+            : { concorrenteId, categoriaId, meuId: meu, erro: x.d.error || "Falhou." };
+        });
+      })
+      .catch(function(){
+        setComparacao(function(c){
+          if (!c || c.concorrenteId !== concorrenteId) return c;
+          return { concorrenteId, categoriaId, meuId: meu, erro: "Sem conexão com o servidor." };
+        });
+      });
+  }
+
+  // Score de qualidade com os mesmos critérios da tela de Anúncios, alimentado
+  // pelos campos que a comparação traz (a descrição vem como tamanho em caracteres).
+  function scoreComparacao(a) {
+    return calcQualityScore({
+      title: a.titulo || "",
+      pictures: new Array(a.fotos || 0),
+      description: { plain_text: "x".repeat(a.descricaoTamanho || 0) },
+      shipping: { free_shipping: a.freteGratis },
+      attributes: new Array(a.atributos || 0),
+      condition: a.condicao,
+    });
+  }
+
   // Descoberta do que a API do ML oferece de dados de MERCADO (além dos seus
   // próprios números). Fica aqui, num botão, em vez de exigir abrir um endereço
   // solto no navegador para depois copiar o resultado.
@@ -1518,6 +1573,108 @@ function TendenciasTab({ setTab, setBuscaPrecificacao }) {
         </div>
       )}
 
+      {comparacao && (function(){
+        var cmp = comparacao;
+        var meus = meusDaCategoria(cmp.categoriaId);
+        var colunas = cmp.dados || [];
+        var concorrente = colunas.find(function(a){ return !a.seu; });
+        var meu = colunas.find(function(a){ return a.seu; }) || colunas[1];
+        function Linha(rotulo, f, destaqueMelhor) {
+          var va = concorrente ? f(concorrente) : null;
+          var vb = meu ? f(meu) : null;
+          return (
+            <div style={{ display:"grid", gridTemplateColumns:"140px 1fr 1fr", gap:10, padding:"8px 0", borderBottom:"1px solid var(--border-soft)", fontSize:12.5, alignItems:"center" }}>
+              <span style={{ color:"var(--text-3)" }}>{rotulo}</span>
+              <span style={{ color:"var(--text-strong)" }}>{va == null || va === "" ? "—" : va}</span>
+              <span style={{ color:"var(--text-strong)" }}>{vb == null || vb === "" ? "—" : vb}</span>
+            </div>
+          );
+        }
+        return (
+          <div onClick={function(){ setComparacao(null); }}
+            style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.55)", backdropFilter:"blur(3px)", zIndex:700, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+            <div onClick={function(e){ e.stopPropagation(); }}
+              style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:16, width:760, maxWidth:"100%", maxHeight:"90vh", overflowY:"auto", padding:"20px 24px" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
+                <div style={{ fontWeight:600, fontSize:16, color:"var(--text-strong)" }}>⚖️ Comparar anúncios</div>
+                <button onClick={function(){ setComparacao(null); }}
+                  style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", width:30, height:30, borderRadius:8, cursor:"pointer", fontSize:15 }}>✕</button>
+              </div>
+
+              <div style={{ display:"flex", alignItems:"center", gap:8, margin:"8px 0 14px", flexWrap:"wrap" }}>
+                <span style={{ fontSize:12, color:"var(--text-3)" }}>Comparar com o meu anúncio:</span>
+                <select value={cmp.meuId || ""} onChange={function(e){ abrirComparacao(cmp.concorrenteId, cmp.categoriaId, e.target.value); }}
+                  style={{ flex:1, minWidth:220, background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"7px 10px", borderRadius:8, fontSize:12.5, outline:"none", cursor:"pointer" }}>
+                  {meus.map(function(l){
+                    return <option key={l.id} value={l.id}>{(l.title || l.id).slice(0, 70)}</option>;
+                  })}
+                </select>
+              </div>
+
+              {cmp.carregando && <div style={{ padding:"24px 0", textAlign:"center", color:"var(--text-3)", fontSize:13 }}>Buscando os dois anúncios no ML…</div>}
+              {cmp.erro && <div style={{ padding:"12px 0", color:"#FF5252", fontSize:12.5 }}>{cmp.erro}</div>}
+
+              {!cmp.carregando && !cmp.erro && concorrente && meu && (function(){
+                var problema = concorrente.erro || meu.erro;
+                if (problema) return <div style={{ padding:"12px 0", color:"#FF5252", fontSize:12.5 }}>{problema}</div>;
+                var sa = scoreComparacao(concorrente), sb = scoreComparacao(meu);
+                var difPreco = (concorrente.preco != null && meu.preco != null) ? meu.preco - concorrente.preco : null;
+                return (
+                  <>
+                    <div style={{ display:"grid", gridTemplateColumns:"140px 1fr 1fr", gap:10, padding:"6px 0 10px", fontSize:12, fontWeight:700 }}>
+                      <span />
+                      <span style={{ color:"#FFC107" }}>CONCORRENTE</span>
+                      <span style={{ color:"#0a9d4e" }}>SEU ANÚNCIO</span>
+                    </div>
+                    {Linha("Título", function(a){ return a.titulo; })}
+                    {Linha("Preço", function(a){ return a.preco != null ? fmt(a.preco) : null; })}
+                    {difPreco != null && (
+                      <div style={{ fontSize:12, padding:"7px 0", color: difPreco > 0 ? "#FF9800" : "#0a9d4e", borderBottom:"1px solid var(--border-soft)" }}>
+                        {difPreco > 0
+                          ? "O seu está " + fmt(Math.abs(difPreco)) + " mais caro que este concorrente."
+                          : difPreco < 0
+                            ? "O seu está " + fmt(Math.abs(difPreco)) + " mais barato que este concorrente."
+                            : "Mesmo preço."}
+                      </div>
+                    )}
+                    {Linha("Vendidos", function(a){ return a.vendidos != null ? a.vendidos.toLocaleString("pt-BR") : null; })}
+                    {Linha("Fotos", function(a){ return a.fotos; })}
+                    {Linha("Atributos", function(a){ return a.atributos; })}
+                    {Linha("Frete grátis", function(a){ return a.freteGratis ? "Sim" : "Não"; })}
+                    {Linha("Descrição", function(a){ return a.descricaoTamanho ? a.descricaoTamanho.toLocaleString("pt-BR") + " caracteres" : "sem descrição"; })}
+                    {Linha("Tipo de anúncio", function(a){ return a.tipoAnuncio === "gold_pro" ? "Premium" : a.tipoAnuncio === "gold_special" ? "Clássico" : a.tipoAnuncio; })}
+                    {Linha("Score de qualidade", function(a){
+                      var sc = a === concorrente ? sa : sb;
+                      return sc.score + "/100";
+                    })}
+
+                    <div style={{ marginTop:14 }}>
+                      <div style={{ fontSize:10.5, color:"var(--text-3)", fontWeight:600, marginBottom:6 }}>ONDE O SEU ANÚNCIO PERDE PARA ESTE CONCORRENTE</div>
+                      {(function(){
+                        var perdendo = sb.checks.filter(function(chk, i){ return !chk.pass && sa.checks[i] && sa.checks[i].pass; });
+                        if (!perdendo.length) return <div style={{ fontSize:12.5, color:"#0a9d4e" }}>Nenhum critério — seu anúncio está igual ou melhor em tudo que o score mede.</div>;
+                        return perdendo.map(function(chk){
+                          return <div key={chk.key} style={{ fontSize:12.5, color:"var(--text-2)", padding:"4px 0" }}>✕ {chk.label}</div>;
+                        });
+                      })()}
+                    </div>
+
+                    <div style={{ display:"flex", gap:8, marginTop:16, flexWrap:"wrap" }}>
+                      {concorrente.link && <a href={concorrente.link} target="_blank" rel="noreferrer"
+                        style={{ fontSize:12, fontWeight:600, color:"var(--text-2)", background:"var(--bg-2)", border:"1px solid var(--border)", padding:"8px 14px", borderRadius:8, textDecoration:"none" }}>
+                        Ver concorrente no ML ↗</a>}
+                      {meu.link && <a href={meu.link} target="_blank" rel="noreferrer"
+                        style={{ fontSize:12, fontWeight:600, color:"var(--text-2)", background:"var(--bg-2)", border:"1px solid var(--border)", padding:"8px 14px", borderRadius:8, textDecoration:"none" }}>
+                        Ver o meu no ML ↗</a>}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        );
+      })()}
+
       {!carregando && !erro && dados && dados.categorias.map(function(c){
         var expandida = aberta === c.id;
         return (
@@ -1628,6 +1785,12 @@ function TendenciasTab({ setTab, setBuscaPrecificacao }) {
                                   {mv.link
                                     ? <a href={mv.link} target="_blank" rel="noreferrer" style={{ fontSize:11, color:"#0e7490", textDecoration:"none", flexShrink:0 }}>ver ↗</a>
                                     : <span style={{ width:32 }} />}
+                                  {!mv.seu && mv.tipo === "ITEM" && (
+                                    <button onClick={function(){ abrirComparacao(mv.id, c.id, null); }}
+                                      style={{ fontSize:11, fontWeight:600, color:"var(--text-2)", background:"var(--surface)", border:"1px solid var(--border)", padding:"4px 10px", borderRadius:7, cursor:"pointer", fontFamily:"inherit", flexShrink:0 }}>
+                                      Comparar
+                                    </button>
+                                  )}
                                 </div>
                               );
                             })}
@@ -9161,7 +9324,7 @@ export default function App() {
         {tab === "contas_pagar" && <ContasPagarTab contas={contasPagar} salvar={salvarContasPagar} />}
         {tab === "compras" && <ComprasTab produtos={produtos} pedidos={pedidosCompra} salvar={salvarPedidosCompra} />}
         {tab === "clientes" && <ClientesTab rawOrders={rawOrders} />}
-        {tab === "tendencias" && <TendenciasTab setTab={setTab} setBuscaPrecificacao={setBuscaPrecificacao} />}
+        {tab === "tendencias" && <TendenciasTab setTab={setTab} setBuscaPrecificacao={setBuscaPrecificacao} enriched={enriched} />}
         {tab === "integracoes" && <IntegracoesTab token={token} user={user} lastUpdate={lastUpdate} />}
         {tab === "impostos" && (
           <ImpostosTab

@@ -345,39 +345,374 @@ const _tdMono = { padding:"9px 12px", borderBottom:"1px solid var(--border-soft)
 function nomeProd(p){ return p.titulo || p.nome || "—"; }
 function qtdAnuncios(p){ return (p.mlbsVinculados || []).length || (p.mlbVinculado ? 1 : 0); }
 
-// Modal de cadastro/edição de produto.
-function ProdutoModal({ produto, onSave, onClose }) {
-  const [f, setF] = useState(function(){ return Object.assign({ nome:"", sku:"", precoCusto:"", precoVenda:"", estoqueAtual:"", estoqueMinimo:"", fornecedor:"" }, produto || {}); });
-  function set(k,v){ setF(function(s){ return Object.assign({}, s, { [k]:v }); }); }
+// Campos do cadastro de produto. Ficam FORA do componente de propósito: definidos
+// dentro dele, o React os trataria como um tipo novo a cada tecla digitada,
+// remontaria o input e o campo perderia o foco a cada caractere.
+const _pCampo = { width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 11px", borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box" };
+const _pLbl = { fontSize:11, color:"var(--text-3)", fontWeight:600, letterSpacing:.3, marginBottom:4, display:"block" };
+function PC(props){
+  return <div>
+    <label style={_pLbl}>{props.label}</label>
+    {props.children}
+    {props.dica && <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:3 }}>{props.dica}</div>}
+  </div>;
+}
+function PTxt(props){
+  var v = props.f[props.k];
+  return <PC label={props.label} dica={props.dica}>
+    <input value={v == null ? "" : v} onChange={function(e){ props.set(props.k, e.target.value); }}
+      type={props.tipo || "text"} step={props.tipo === "number" ? (props.step || "0.01") : undefined}
+      placeholder={props.ph || ""} list={props.list} style={_pCampo} />
+  </PC>;
+}
+function PSel(props){
+  var v = props.f[props.k];
+  return <PC label={props.label} dica={props.dica}>
+    <select value={v == null ? "" : v} onChange={function(e){ props.set(props.k, e.target.value); }} style={_pCampo}>
+      {props.opcoes.map(function(o){
+        var val = Array.isArray(o) ? o[0] : o, txt = Array.isArray(o) ? o[1] : o;
+        return <option key={val} value={val}>{txt}</option>;
+      })}
+    </select>
+  </PC>;
+}
+
+// ── Cadastro de produto em página inteira ───────────────────────────────────
+// Substituiu o modal de 8 campos: um cadastro de produto de verdade tem mais
+// informação do que cabe numa caixinha, e boa parte dela (peso, NCM, dimensões)
+// só serve quando está toda junta. As abas separam por assunto para a tela não
+// virar um formulário de 50 campos empilhados.
+const _abasProduto = [
+  { key:"geral",     label:"Dados gerais" },
+  { key:"precos",    label:"Preços" },
+  { key:"estoque",   label:"Estoque" },
+  { key:"dimensoes", label:"Dimensões e peso" },
+  { key:"fiscal",    label:"Fiscal" },
+  { key:"fornec",    label:"Fornecedor" },
+  { key:"anuncios",  label:"Anúncios" },
+  { key:"imagens",   label:"Imagens" },
+  { key:"obs",       label:"Observações" },
+];
+
+// Campos que a sincronização do Mercado Livre reescreve a cada "Atualizar".
+// Editar um deles à mão num produto vindo do ML só vale até a próxima sincronização
+// — dizer isso na tela é mais honesto do que deixar a edição sumir sem aviso.
+const _camposSobrescritosPeloML = ["Descrição", "Preço de venda", "Estoque atual", "Situação", "Código (SKU)", "Imagens"];
+
+function ProdutoPagina({ produto, produtos, fornecedores, enriched, onSave, onClose, onExcluir }) {
+  const base = {
+    nome:"", sku:"", codigo:"", gtin:"", marca:"", categoria:"", tipo:"simples", unidade:"UN",
+    status:"Ativo", descricaoCurta:"", tags:"",
+    precoCusto:"", precoVenda:"", precoPromocional:"",
+    controlarEstoque:true, estoqueAtual:"", estoqueMinimo:"", estoqueMaximo:"", localizacao:"", deposito:"",
+    pesoLiquido:"", pesoBruto:"", largura:"", altura:"", profundidade:"", volumes:"", tipoEmbalagem:"",
+    ncm:"", cest:"", origem:"0", cfop:"", icmsPct:"", ipiPct:"", pisPct:"", cofinsPct:"", tipoItem:"Mercadoria para revenda",
+    fornecedor:"", codigoFornecedor:"", prazoEntrega:"", custoCompra:"", ultimaCompra:"", obsCompra:"",
+    imagens:[], obs:"", descricaoComplementar:"",
+  };
+  const [f, setF] = useState(function(){ return Object.assign({}, base, produto || {}); });
+  const [aba, setAba] = useState("geral");
+  const [novaImagem, setNovaImagem] = useState("");
+  const [erro, setErro] = useState("");
+  function set(k, v){ setF(function(s){ return Object.assign({}, s, { [k]: v }); }); }
   var novo = !produto || !produto.id;
+
+  // Estado inicial guardado para saber se há edição pendente. Um formulário desta
+  // altura fecha com um Esc distraído; perder tudo em silêncio seria pior que perguntar.
+  const inicial = useRef(JSON.stringify(Object.assign({}, base, produto || {})));
+  function fechar(){
+    if (JSON.stringify(f) !== inicial.current &&
+        !window.confirm("Há alterações não salvas neste produto. Sair mesmo assim?")) return;
+    onClose();
+  }
+  useEffect(function(){
+    function aoTeclar(e){ if (e.key === "Escape") fechar(); }
+    window.addEventListener("keydown", aoTeclar);
+    return function(){ window.removeEventListener("keydown", aoTeclar); };
+  });
+
   function salvar(){
     var p = Object.assign({}, f);
-    if (!p.nome && !p.titulo) { alert("Informe o nome do produto."); return; }
+    var nome = String(p.nome || p.titulo || "").trim();
+    if (!nome) { setErro("Informe a descrição do produto — é o único campo obrigatório."); setAba("geral"); return; }
+    // SKU repetido quebra o vínculo com os anúncios (a ligação é feita pelo SKU),
+    // então é melhor barrar aqui do que descobrir depois na tela de Vincular.
+    var sku = String(p.sku || "").trim().toLowerCase();
+    if (sku) {
+      var conflito = (produtos || []).find(function(x){
+        return x.id !== p.id && String(x.sku || "").trim().toLowerCase() === sku;
+      });
+      if (conflito) { setErro('O SKU "' + p.sku + '" já é usado por "' + nomeProd(conflito) + '". Cada produto precisa de um SKU próprio.'); setAba("geral"); return; }
+    }
     if (!p.id) p.id = "prod_" + Date.now() + "_" + Math.floor(Math.random()*1000);
     onSave(p);
   }
-  var campo = { width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"10px 12px", borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box" };
-  var lbl = { fontSize:11, color:"var(--text-3)", fontWeight:600, textTransform:"none", letterSpacing:.4, marginBottom:4, display:"block" };
+
+  // Margem sobre o preço de venda: mesma conta da Precificação, sem taxas nem
+  // imposto — aqui é só a diferença entre custo e preço, e a tela diz isso.
+  var custoN = parseFloat(f.precoCusto) || 0, vendaN = parseFloat(f.precoVenda) || 0;
+  var margemBruta = vendaN > 0 ? ((vendaN - custoN) / vendaN) * 100 : null;
+  var markup = custoN > 0 ? ((vendaN - custoN) / custoN) * 100 : null;
+  // Peso cubado: o que as transportadoras cobram quando o volume pesa mais que a balança.
+  var cubado = (parseFloat(f.largura)||0) * (parseFloat(f.altura)||0) * (parseFloat(f.profundidade)||0) / 6000;
+
+  var mlbs = (f.mlbsVinculados || []).slice();
+  if (f.mlbVinculado && mlbs.indexOf(f.mlbVinculado) < 0) mlbs.unshift(f.mlbVinculado);
+
+  var campo = { width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 11px", borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box" };
+  var lbl = { fontSize:11, color:"var(--text-3)", fontWeight:600, letterSpacing:.3, marginBottom:4, display:"block" };
+  var grid2 = { display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))", gap:14 };
+  var cartao = { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"18px 20px", marginBottom:14 };
+  var tituloSec = { fontSize:13, fontWeight:600, color:"var(--text-strong)", marginBottom:14 };
+  var dica = { fontSize:11.5, color:"var(--text-3)", lineHeight:1.5, marginTop:10 };
+
   return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:600, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }} onClick={onClose}>
-      <div onClick={function(e){ e.stopPropagation(); }} style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:14, width:460, maxWidth:"100%", maxHeight:"90vh", overflowY:"auto", padding:22 }}>
-        <div style={{ fontWeight:600, fontSize:17, color:"var(--text-strong)", marginBottom:16 }}>{novo ? "Novo produto" : "Editar produto"}</div>
-        <div style={{ marginBottom:10 }}><label style={lbl}>Nome</label><input value={f.nome || f.titulo || ""} onChange={function(e){ set("nome", e.target.value); }} style={campo} /></div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
-          <div><label style={lbl}>SKU</label><input value={f.sku || ""} onChange={function(e){ set("sku", e.target.value); }} style={campo} /></div>
-          <div><label style={lbl}>Fornecedor</label><input value={f.fornecedor || ""} onChange={function(e){ set("fornecedor", e.target.value); }} style={campo} /></div>
+    <div style={{ position:"fixed", inset:0, background:"var(--bg)", zIndex:700, display:"flex", flexDirection:"column" }}>
+      {/* Cabeçalho fixo: identidade do produto + as duas ações que importam */}
+      <div style={{ borderBottom:"1px solid var(--border)", background:"var(--bg-2)", padding:"14px 22px", display:"flex", alignItems:"center", gap:14, flexWrap:"wrap" }}>
+        <button onClick={fechar} title="Voltar (Esc)" style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", width:34, height:34, borderRadius:9, cursor:"pointer", fontSize:16 }}>←</button>
+        <div style={{ minWidth:0 }}>
+          <div style={{ fontWeight:600, fontSize:17, color:"var(--text-strong)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"52vw" }}>
+            {novo ? "Novo produto" : (String(f.nome || f.titulo || "").trim() || "Produto sem descrição")}
+          </div>
+          <div style={{ fontSize:11.5, color:"var(--text-3)", marginTop:2 }}>
+            {f.sku ? "SKU " + f.sku : "sem SKU"}
+            {mlbs.length ? " · " + mlbs.length + " anúncio(s) vinculado(s)" : ""}
+            {f.syncML ? " · sincronizado com o Mercado Livre" : ""}
+          </div>
         </div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
-          <div><label style={lbl}>Custo (R$)</label><input type="number" step="0.01" value={f.precoCusto || ""} onChange={function(e){ set("precoCusto", e.target.value); }} style={campo} /></div>
-          <div><label style={lbl}>Preço venda (R$)</label><input type="number" step="0.01" value={f.precoVenda || ""} onChange={function(e){ set("precoVenda", e.target.value); }} style={campo} /></div>
-        </div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:18 }}>
-          <div><label style={lbl}>Estoque atual</label><input type="number" value={f.estoqueAtual || ""} onChange={function(e){ set("estoqueAtual", e.target.value); }} style={campo} /></div>
-          <div><label style={lbl}>Estoque mínimo</label><input type="number" value={f.estoqueMinimo || ""} onChange={function(e){ set("estoqueMinimo", e.target.value); }} style={campo} /></div>
-        </div>
-        <div style={{ display:"flex", gap:8 }}>
-          <button onClick={onClose} style={{ flex:1, background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"11px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
-          <button onClick={salvar} style={{ flex:2, background:"#768692", border:"none", color:"#fff", fontWeight:500, padding:"11px", borderRadius:10, cursor:"pointer" }}>Salvar</button>
+        <div style={{ flex:1 }} />
+        {!novo && onExcluir && (
+          <button onClick={function(){ onExcluir(f); }} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"#FF5252", fontWeight:600, padding:"9px 16px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Excluir</button>
+        )}
+        <button onClick={fechar} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"9px 18px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Cancelar</button>
+        <button onClick={salvar} style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"9px 26px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Salvar</button>
+      </div>
+
+      {/* Abas */}
+      <div className="scroll-x" style={{ borderBottom:"1px solid var(--border)", background:"var(--bg-2)", padding:"0 22px", display:"flex", gap:2 }}>
+        {_abasProduto.map(function(a){
+          var ativa = aba === a.key;
+          return <button key={a.key} onClick={function(){ setAba(a.key); }}
+            style={{ background:"none", border:"none", borderBottom: ativa ? "2px solid var(--ui-accent)" : "2px solid transparent",
+                     color: ativa ? "var(--text-strong)" : "var(--text-3)", fontWeight: ativa ? 600 : 500,
+                     padding:"11px 14px", cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>{a.label}</button>;
+        })}
+      </div>
+
+      <div style={{ flex:1, overflowY:"auto", padding:"18px 22px 40px" }}>
+        <div style={{ maxWidth:960, margin:"0 auto" }}>
+          {erro && <div style={{ background:"rgba(255,82,82,.12)", border:"1px solid #FF5252", color:"#FF5252", borderRadius:10, padding:"11px 14px", fontSize:12.5, marginBottom:14 }}>{erro}</div>}
+
+          {f.syncML && (
+            <div style={{ background:"rgba(255,193,7,.10)", border:"1px solid rgba(255,193,7,.5)", borderRadius:10, padding:"11px 14px", fontSize:12, color:"var(--text-2)", marginBottom:14, lineHeight:1.5 }}>
+              Este produto vem do Mercado Livre. A cada <b>Atualizar</b>, a sincronização reescreve{" "}
+              {_camposSobrescritosPeloML.join(", ")} com o que estiver no anúncio — mudanças manuais nesses
+              campos não sobrevivem. Os demais (custo, fiscal, dimensões, fornecedor, estoque mínimo) são só seus.
+            </div>
+          )}
+
+          {aba === "geral" && <>
+            <div style={cartao}>
+              <div style={tituloSec}>Identificação</div>
+              <div style={{ marginBottom:14 }}>
+                <label style={lbl}>Descrição *</label>
+                <input value={f.nome || f.titulo || ""} onChange={function(e){ set("nome", e.target.value); set("titulo", e.target.value); }} style={campo} placeholder="Nome do produto como aparece no anúncio" />
+              </div>
+              <div style={grid2}>
+                <PTxt f={f} set={set} k="sku" label="Código (SKU)" dica="É por ele que o produto se liga aos anúncios." />
+                <PTxt f={f} set={set} k="codigo" label="Código interno" dica="Opcional — usado só nos relatórios." />
+                <PTxt f={f} set={set} k="gtin" label="Código de barras (GTIN/EAN)" />
+                <PTxt f={f} set={set} k="marca" label="Marca" list="lista-marcas" />
+                <PTxt f={f} set={set} k="categoria" label="Categoria" list="lista-categorias" />
+                <PSel f={f} set={set} k="tipo" label="Tipo" opcoes={[["simples","Simples"],["kit","Kit / composição"],["variacao","Com variações"],["materia","Matéria-prima"],["servico","Serviço"]]} />
+                <PSel f={f} set={set} k="unidade" label="Unidade" opcoes={["UN","PC","CX","KG","G","L","ML","M","M²","PAR","JG"]} />
+                <PSel f={f} set={set} k="status" label="Situação" opcoes={["Ativo","Inativo"]} />
+              </div>
+              <datalist id="lista-marcas">{Array.from(new Set((produtos||[]).map(function(p){ return p.marca; }).filter(Boolean))).map(function(m){ return <option key={m} value={m} />; })}</datalist>
+              <datalist id="lista-categorias">{Array.from(new Set((produtos||[]).map(function(p){ return p.categoria; }).filter(Boolean))).map(function(c){ return <option key={c} value={c} />; })}</datalist>
+            </div>
+            <div style={cartao}>
+              <div style={tituloSec}>Descrição curta e etiquetas</div>
+              <div style={{ marginBottom:14 }}>
+                <label style={lbl}>Descrição curta</label>
+                <textarea value={f.descricaoCurta || ""} onChange={function(e){ set("descricaoCurta", e.target.value); }} rows={3} style={{ ...campo, resize:"vertical", fontFamily:"inherit" }} />
+              </div>
+              <PTxt f={f} set={set} k="tags" label="Etiquetas" ph="promoção, importado, frágil" dica="Separe por vírgula. Servem para filtrar a lista de produtos." />
+            </div>
+          </>}
+
+          {aba === "precos" && <div style={cartao}>
+            <div style={tituloSec}>Preços</div>
+            <div style={grid2}>
+              <PTxt f={f} set={set} k="precoCusto" label="Preço de custo (R$)" tipo="number" dica="Alimenta a margem das telas de Vendas e Precificação." />
+              <PTxt f={f} set={set} k="precoVenda" label="Preço de venda (R$)" tipo="number" />
+              <PTxt f={f} set={set} k="precoPromocional" label="Preço promocional (R$)" tipo="number" dica="Referência sua — não altera o preço no Mercado Livre." />
+            </div>
+            <div style={{ display:"flex", gap:22, flexWrap:"wrap", marginTop:16, paddingTop:14, borderTop:"1px solid var(--border-soft)" }}>
+              <div><div style={{ fontSize:11, color:"var(--text-3)" }}>Margem bruta</div>
+                <div style={{ fontSize:19, fontWeight:600, color: margemBruta == null ? "var(--text-4)" : (margemBruta >= 0 ? "#0a9d4e" : "#FF5252") }}>
+                  {margemBruta == null ? "—" : margemBruta.toFixed(1) + "%"}</div></div>
+              <div><div style={{ fontSize:11, color:"var(--text-3)" }}>Markup sobre o custo</div>
+                <div style={{ fontSize:19, fontWeight:600, color:"var(--text-2)" }}>{markup == null ? "—" : markup.toFixed(1) + "%"}</div></div>
+              <div><div style={{ fontSize:11, color:"var(--text-3)" }}>Lucro por unidade</div>
+                <div style={{ fontSize:19, fontWeight:600, color:"var(--text-2)" }}>{vendaN > 0 ? fmt(vendaN - custoN) : "—"}</div></div>
+            </div>
+            <div style={dica}>Esta margem é só preço menos custo. Ela <b>não</b> desconta comissão do marketplace,
+              frete, imposto, etiqueta nem embalagem — a margem real de cada anúncio está na tela de Precificação.</div>
+          </div>}
+
+          {aba === "estoque" && <div style={cartao}>
+            <div style={tituloSec}>Estoque</div>
+            <label style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:"var(--text-2)", marginBottom:16, cursor:"pointer" }}>
+              <input type="checkbox" checked={f.controlarEstoque !== false} onChange={function(e){ set("controlarEstoque", e.target.checked); }} />
+              Controlar estoque deste produto
+            </label>
+            <div style={grid2}>
+              <PTxt f={f} set={set} k="estoqueAtual" label="Estoque atual" tipo="number" step="1" />
+              <PTxt f={f} set={set} k="estoqueMinimo" label="Estoque mínimo" tipo="number" step="1" dica="Abaixo disso o produto aparece como reposição na tela de Estoque." />
+              <PTxt f={f} set={set} k="estoqueMaximo" label="Estoque máximo" tipo="number" step="1" />
+              <PTxt f={f} set={set} k="localizacao" label="Localização física" ph="Corredor 3, prateleira B" />
+              <PTxt f={f} set={set} k="deposito" label="Depósito" />
+            </div>
+          </div>}
+
+          {aba === "dimensoes" && <div style={cartao}>
+            <div style={tituloSec}>Dimensões e peso</div>
+            <div style={grid2}>
+              <PTxt f={f} set={set} k="pesoLiquido" label="Peso líquido (kg)" tipo="number" step="0.001" />
+              <PTxt f={f} set={set} k="pesoBruto" label="Peso bruto (kg)" tipo="number" step="0.001" dica="É o peso que o Mercado Livre usa para calcular o frete." />
+              <PTxt f={f} set={set} k="largura" label="Largura (cm)" tipo="number" step="0.1" />
+              <PTxt f={f} set={set} k="altura" label="Altura (cm)" tipo="number" step="0.1" />
+              <PTxt f={f} set={set} k="profundidade" label="Profundidade (cm)" tipo="number" step="0.1" />
+              <PTxt f={f} set={set} k="volumes" label="Volumes" tipo="number" step="1" />
+              <PSel f={f} set={set} k="tipoEmbalagem" label="Tipo de embalagem" opcoes={[["","—"],["envelope","Envelope"],["caixa","Caixa"],["pacote","Pacote / saco"],["rolo","Rolo / cilindro"]]} />
+            </div>
+            <div style={{ marginTop:16, paddingTop:14, borderTop:"1px solid var(--border-soft)" }}>
+              <div style={{ fontSize:11, color:"var(--text-3)" }}>Peso cubado (L × A × P ÷ 6000)</div>
+              <div style={{ fontSize:19, fontWeight:600, color:"var(--text-2)" }}>{cubado > 0 ? cubado.toFixed(3) + " kg" : "—"}</div>
+              <div style={dica}>Transportadora cobra pelo maior entre o peso real e o cubado. Se o cubado
+                estiver acima do peso bruto, o frete se define pelo tamanho da caixa, não pela balança.</div>
+            </div>
+          </div>}
+
+          {aba === "fiscal" && <div style={cartao}>
+            <div style={tituloSec}>Tributação</div>
+            <div style={grid2}>
+              <PTxt f={f} set={set} k="ncm" label="NCM" ph="8708.29.99" dica="8 dígitos. Define a tributação do produto na nota." />
+              <PTxt f={f} set={set} k="cest" label="CEST" ph="01.001.00" />
+              <PSel f={f} set={set} k="origem" label="Origem da mercadoria" opcoes={[
+                ["0","0 — Nacional"],["1","1 — Estrangeira, importação direta"],["2","2 — Estrangeira, mercado interno"],
+                ["3","3 — Nacional, conteúdo importado > 40%"],["4","4 — Nacional, processos produtivos básicos"],
+                ["5","5 — Nacional, conteúdo importado ≤ 40%"],["6","6 — Estrangeira, importação direta, sem similar"],
+                ["7","7 — Estrangeira, mercado interno, sem similar"],["8","8 — Nacional, conteúdo importado > 70%"]]} />
+              <PTxt f={f} set={set} k="cfop" label="CFOP padrão de venda" ph="5102" />
+              <PSel f={f} set={set} k="tipoItem" label="Tipo do item" opcoes={["Mercadoria para revenda","Matéria-prima","Embalagem","Produto em processo","Produto acabado","Uso e consumo","Ativo imobilizado","Serviço","Outros insumos"]} />
+            </div>
+            <div style={{ ...tituloSec, marginTop:22 }}>Alíquotas (%)</div>
+            <div style={grid2}>
+              <PTxt f={f} set={set} k="icmsPct" label="ICMS" tipo="number" dica="Deixe vazio para usar o regime de Financeiro → Impostos (4% fora de SP, 0% em SP)." />
+              <PTxt f={f} set={set} k="ipiPct" label="IPI" tipo="number" />
+              <PTxt f={f} set={set} k="pisPct" label="PIS" tipo="number" />
+              <PTxt f={f} set={set} k="cofinsPct" label="COFINS" tipo="number" />
+            </div>
+            <div style={dica}>Estes valores ficam guardados no cadastro para a emissão de nota e conferência.
+              Quem manda na margem das telas de Vendas e Precificação é o ICMS por anúncio da tela de Precificação
+              e o regime geral de Financeiro → Impostos.</div>
+          </div>}
+
+          {aba === "fornec" && <div style={cartao}>
+            <div style={tituloSec}>Fornecedor</div>
+            <div style={grid2}>
+              <PTxt f={f} set={set} k="fornecedor" label="Fornecedor" list="lista-fornecedores" />
+              <PTxt f={f} set={set} k="codigoFornecedor" label="Código no fornecedor" dica="Como o produto é chamado no catálogo dele." />
+              <PTxt f={f} set={set} k="custoCompra" label="Custo de compra (R$)" tipo="number" />
+              <PTxt f={f} set={set} k="prazoEntrega" label="Prazo de entrega (dias)" tipo="number" step="1" />
+              <PTxt f={f} set={set} k="ultimaCompra" label="Última compra" tipo="date" />
+            </div>
+            <datalist id="lista-fornecedores">
+              {(fornecedores || []).map(function(x, i){ var n = x.nome || x.razaoSocial || x.fantasia || String(x); return <option key={i} value={n} />; })}
+            </datalist>
+            <div style={{ marginTop:14 }}>
+              <label style={lbl}>Observações de compra</label>
+              <textarea value={f.obsCompra || ""} onChange={function(e){ set("obsCompra", e.target.value); }} rows={3} style={{ ...campo, resize:"vertical", fontFamily:"inherit" }} />
+            </div>
+          </div>}
+
+          {aba === "anuncios" && <div style={cartao}>
+            <div style={tituloSec}>Anúncios vinculados</div>
+            {mlbs.length === 0 && <div style={{ fontSize:13, color:"var(--text-3)" }}>
+              Nenhum anúncio ligado a este produto. A ligação é feita pelo SKU na tela <b>Operação → Vincular anúncios</b>.
+            </div>}
+            {mlbs.length > 0 && <div style={_tableWrap}>
+              <table style={_table}>
+                <thead><tr>{["Código MLB","Anúncio","Preço","Situação",""].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+                <tbody>{mlbs.map(function(m){
+                  var l = (enriched || []).find(function(x){ return x.id === m; });
+                  return <tr key={m}>
+                    <td style={_tdMono}>{m}</td>
+                    <td style={{ ..._td, maxWidth:340 }}>{l ? l.title : <span style={{ color:"var(--text-4)" }}>anúncio não está na lista carregada</span>}</td>
+                    <td style={_td}>{l ? fmt(l.price) : "—"}</td>
+                    <td style={_td}>{l ? (l.status === "active" ? "Ativo" : l.status) : "—"}</td>
+                    <td style={{ ..._td, textAlign:"right" }}>
+                      <button onClick={function(){
+                        setF(function(s){
+                          return Object.assign({}, s, {
+                            mlbsVinculados: (s.mlbsVinculados || []).filter(function(x){ return x !== m; }),
+                            mlbVinculado: s.mlbVinculado === m ? null : s.mlbVinculado,
+                          });
+                        });
+                      }} style={{ background:"none", border:"none", color:"#FF5252", cursor:"pointer", fontSize:12 }}>Desvincular</button>
+                    </td>
+                  </tr>;
+                })}</tbody>
+              </table>
+            </div>}
+            <div style={dica}>Desvincular aqui só vale depois de Salvar. Se o SKU do produto for igual ao do
+              anúncio, a sincronização volta a ligar os dois na próxima atualização.</div>
+          </div>}
+
+          {aba === "imagens" && <div style={cartao}>
+            <div style={tituloSec}>Imagens</div>
+            <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+              <input value={novaImagem} onChange={function(e){ setNovaImagem(e.target.value); }} placeholder="Cole o endereço (URL) da imagem" style={{ ...campo, flex:1 }} />
+              <button onClick={function(){
+                var u = novaImagem.trim(); if (!u) return;
+                set("imagens", (f.imagens || []).concat([u])); setNovaImagem("");
+              }} style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>Adicionar</button>
+            </div>
+            {(f.imagens || []).length === 0 && <div style={{ fontSize:13, color:"var(--text-3)" }}>Nenhuma imagem. Produtos vindos do Mercado Livre já trazem as fotos do anúncio.</div>}
+            <div style={{ display:"flex", flexWrap:"wrap", gap:12 }}>
+              {(f.imagens || []).map(function(src, i){
+                return <div key={i} style={{ width:130, border:"1px solid var(--border)", borderRadius:10, overflow:"hidden", background:"var(--bg)" }}>
+                  <img src={src} alt="" style={{ width:"100%", height:110, objectFit:"cover", display:"block" }} />
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 7px", fontSize:11 }}>
+                    <span style={{ color: i === 0 ? "var(--ui-accent)" : "var(--text-4)" }}>{i === 0 ? "principal" : "#" + (i+1)}</span>
+                    <span style={{ display:"flex", gap:6 }}>
+                      {i > 0 && <button title="Tornar principal" onClick={function(){
+                        var arr = (f.imagens || []).slice(); var [x] = arr.splice(i, 1); arr.unshift(x); set("imagens", arr);
+                      }} style={{ background:"none", border:"none", color:"var(--text-3)", cursor:"pointer", fontSize:12 }}>↑</button>}
+                      <button title="Remover" onClick={function(){
+                        set("imagens", (f.imagens || []).filter(function(_, j){ return j !== i; }));
+                      }} style={{ background:"none", border:"none", color:"#FF5252", cursor:"pointer", fontSize:12 }}>×</button>
+                    </span>
+                  </div>
+                </div>;
+              })}
+            </div>
+          </div>}
+
+          {aba === "obs" && <div style={cartao}>
+            <div style={tituloSec}>Observações</div>
+            <div style={{ marginBottom:14 }}>
+              <label style={lbl}>Descrição complementar</label>
+              <textarea value={f.descricaoComplementar || ""} onChange={function(e){ set("descricaoComplementar", e.target.value); }} rows={6} style={{ ...campo, resize:"vertical", fontFamily:"inherit" }} />
+            </div>
+            <div>
+              <label style={lbl}>Observações internas</label>
+              <textarea value={f.obs || ""} onChange={function(e){ set("obs", e.target.value); }} rows={5} style={{ ...campo, resize:"vertical", fontFamily:"inherit" }} placeholder="Anotações que ficam só aqui dentro." />
+            </div>
+          </div>}
         </div>
       </div>
     </div>
@@ -385,7 +720,7 @@ function ProdutoModal({ produto, onSave, onClose }) {
 }
 
 // Catálogo de produtos: importar CSV, novo produto e clicar para editar. Grava via salvar().
-function ProdutosTab({ produtos, salvar }) {
+function ProdutosTab({ produtos, salvar, fornecedores, enriched }) {
   const [busca, setBusca] = useState("");
   const [editando, setEditando] = useState(null);
   const [mostrarFiltros, setMostrarFiltros] = useState(true);
@@ -397,6 +732,16 @@ function ProdutosTab({ produtos, salvar }) {
   const [fEstoque, setFEstoque] = useState("todos");
   const [fMarca, setFMarca] = useState("");
   const [fFornecedor, setFFornecedor] = useState("");
+  // Filtros que antes ficavam acinzentados "porque só existem no ERP". Agora os
+  // campos existem no cadastro daqui, então filtrar por eles é filtrar dado real.
+  const [fCategoria, setFCategoria] = useState("");
+  const [fTipo, setFTipo] = useState("todos");
+  const [fAtivo, setFAtivo] = useState("todos");
+  const [fNcm, setFNcm] = useState("");
+  const [fTags, setFTags] = useState("");
+  const [fImagens, setFImagens] = useState("todos");
+  const [fAnuncios, setFAnuncios] = useState("todos");
+  const [fCodForn, setFCodForn] = useState("");
   const fileRef = useRef(null);
   const lista = (produtos || []).filter(function(p){
     var q = busca.trim().toLowerCase();
@@ -409,22 +754,48 @@ function ProdutosTab({ produtos, salvar }) {
     if (fEstoque === "abaixo" && !(min > 0 && est < min)) return false;
     if (fMarca && String(p.marca||"").toLowerCase().indexOf(fMarca.toLowerCase()) < 0) return false;
     if (fFornecedor && String(p.fornecedor||"").toLowerCase().indexOf(fFornecedor.toLowerCase()) < 0) return false;
+    if (fCategoria && String(p.categoria||"").toLowerCase().indexOf(fCategoria.toLowerCase()) < 0) return false;
+    if (fTipo !== "todos" && String(p.tipo || "simples") !== fTipo) return false;
+    if (fAtivo === "ativos" && String(p.status || "Ativo") !== "Ativo") return false;
+    if (fAtivo === "inativos" && String(p.status || "Ativo") === "Ativo") return false;
+    if (fNcm && String(p.ncm||"").indexOf(fNcm) < 0) return false;
+    if (fTags && String(p.tags||"").toLowerCase().indexOf(fTags.toLowerCase()) < 0) return false;
+    if (fImagens === "com" && !((p.imagens||[]).length)) return false;
+    if (fImagens === "sem" && (p.imagens||[]).length) return false;
+    if (fAnuncios === "com" && !qtdAnuncios(p)) return false;
+    if (fAnuncios === "sem" && qtdAnuncios(p)) return false;
+    if (fCodForn && String(p.codigoFornecedor||"").toLowerCase().indexOf(fCodForn.toLowerCase()) < 0) return false;
     return true;
   });
   const total = (produtos || []).length;
-  function limparFiltros(){ setFSituacao("todos"); setFEstoque("todos"); setFMarca(""); setFFornecedor(""); }
-  var temFiltro = fSituacao!=="todos" || fEstoque!=="todos" || fMarca || fFornecedor;
+  function limparFiltros(){
+    setFSituacao("todos"); setFEstoque("todos"); setFMarca(""); setFFornecedor("");
+    setFCategoria(""); setFTipo("todos"); setFAtivo("todos"); setFNcm(""); setFTags("");
+    setFImagens("todos"); setFAnuncios("todos"); setFCodForn("");
+  }
+  var temFiltro = fSituacao!=="todos" || fEstoque!=="todos" || fMarca || fFornecedor ||
+    fCategoria || fTipo!=="todos" || fAtivo!=="todos" || fNcm || fTags ||
+    fImagens!=="todos" || fAnuncios!=="todos" || fCodForn;
   const idsSel = Object.keys(sel).filter(function(k){ return sel[k]; });
   function toggleSel(id){ setSel(function(s){ var n=Object.assign({},s); if(n[id]) delete n[id]; else n[id]=true; return n; }); }
   function toggleTodos(){ if (idsSel.length === lista.length) setSel({}); else { var n={}; lista.forEach(function(p){ n[p.id]=true; }); setSel(n); } }
   function excluir(id){ if(!window.confirm("Excluir este produto?")) return; salvar((produtos||[]).filter(function(p){ return p.id!==id; })); setMenuRow(null); }
   function excluirSelecionados(){ if(!idsSel.length) return; if(!window.confirm("Excluir "+idsSel.length+" produto(s)?")) return; salvar((produtos||[]).filter(function(p){ return !sel[p.id]; })); setSel({}); }
-  function duplicar(p){ var novo = Object.assign({}, p, { id:"prod_"+Date.now(), nome: nomeProd(p)+" (cópia)", sku:"" }); salvar([novo].concat(produtos||[])); setMenuRow(null); }
-  function exportarPlanilha(){
+    // nomeProd lê titulo antes de nome; sem limpar titulo o "(cópia)" nunca apareceria.
+  function duplicar(p){ var novo = Object.assign({}, p, { id:"prod_"+Date.now(), titulo: nomeProd(p)+" (cópia)", nome: nomeProd(p)+" (cópia)", sku:"", mlbVinculado:null, mlbsVinculados:[], syncML:false }); salvar([novo].concat(produtos||[])); setMenuRow(null); }
+  // Uma definição só para planilha e impressão. Antes o botão Imprimir chamava
+  // cols/rowsExport, que não existiam neste componente — ele quebrava ao ser clicado.
+  var cols = ["Código","Descrição","GTIN","Categoria","NCM","Estoque","Estoque mínimo","Marca","Fornecedor","Preço de custo","Preço de venda","Anúncios","Situação"];
+  function rowsExport(){
     var base = idsSel.length ? (produtos||[]).filter(function(p){ return sel[p.id]; }) : lista;
-    baixarCSV("produtos", ["Código","Descrição","GTIN","Estoque","Estoque mínimo","Marca","Fornecedor","Preço de custo","Preço de venda"],
-      base.map(function(p){ return [p.codigo||p.sku||"", nomeProd(p), p.gtin||"", parseInt(p.estoqueAtual)||0, parseInt(p.estoqueMinimo)||0, p.marca||"", p.fornecedor||"", (parseFloat(p.precoCusto)||0).toFixed(2), (parseFloat(p.precoVenda)||0).toFixed(2)]; }));
+    return base.map(function(p){
+      return [p.codigo||p.sku||"", nomeProd(p), p.gtin||"", p.categoria||"", p.ncm||"",
+        parseInt(p.estoqueAtual)||0, parseInt(p.estoqueMinimo)||0, p.marca||"", p.fornecedor||"",
+        (parseFloat(p.precoCusto)||0).toFixed(2), (parseFloat(p.precoVenda)||0).toFixed(2),
+        qtdAnuncios(p), p.status || "Ativo"];
+    });
   }
+  function exportarPlanilha(){ baixarCSV("produtos", cols, rowsExport()); }
   function copiar(txt){ try { navigator.clipboard.writeText(String(txt)); } catch(e){} }
   function salvarProduto(p){
     var arr = (produtos || []).slice();
@@ -500,8 +871,16 @@ function ProdutosTab({ produtos, salvar }) {
             <Campo label="Estoque"><select value={fEstoque} onChange={function(e){ setFEstoque(e.target.value); }} style={selFiltro}><option value="todos">Todos</option><option value="com">Com estoque</option><option value="sem">Sem estoque</option><option value="abaixo">Abaixo do mínimo</option></select></Campo>
             <Campo label="Marca"><input value={fMarca} onChange={function(e){ setFMarca(e.target.value); }} placeholder="Marca" style={selFiltro} /></Campo>
             <Campo label="Fornecedor"><input value={fFornecedor} onChange={function(e){ setFFornecedor(e.target.value); }} placeholder="Fornecedor" style={selFiltro} /></Campo>
-            {["Imagens","Lote","Tags","Categoria","NCM","Classificação","Tipo","Lojas virtuais","Cód fornecedor"].map(function(l){ return <Campo key={l} label={l}><select disabled style={{ ...selFiltro, opacity:.45, cursor:"not-allowed" }}><option>—</option></select></Campo>; })}
-            <div style={{ fontSize:10, color:"var(--text-4)", lineHeight:1.4 }}>Filtros acinzentados dependem de dados que só existem no ERP (Bling).</div>
+            <Campo label="Categoria"><input value={fCategoria} onChange={function(e){ setFCategoria(e.target.value); }} placeholder="Categoria" list="filtro-categorias" style={selFiltro} /></Campo>
+            <datalist id="filtro-categorias">{Array.from(new Set((produtos||[]).map(function(p){ return p.categoria; }).filter(Boolean))).map(function(c){ return <option key={c} value={c} />; })}</datalist>
+            <Campo label="Tipo"><select value={fTipo} onChange={function(e){ setFTipo(e.target.value); }} style={selFiltro}><option value="todos">Todos</option><option value="simples">Simples</option><option value="kit">Kit / composição</option><option value="variacao">Com variações</option><option value="materia">Matéria-prima</option><option value="servico">Serviço</option></select></Campo>
+            <Campo label="Ativo/Inativo"><select value={fAtivo} onChange={function(e){ setFAtivo(e.target.value); }} style={selFiltro}><option value="todos">Todos</option><option value="ativos">Ativos</option><option value="inativos">Inativos</option></select></Campo>
+            <Campo label="Anúncios"><select value={fAnuncios} onChange={function(e){ setFAnuncios(e.target.value); }} style={selFiltro}><option value="todos">Todos</option><option value="com">Com anúncio vinculado</option><option value="sem">Sem anúncio</option></select></Campo>
+            <Campo label="Imagens"><select value={fImagens} onChange={function(e){ setFImagens(e.target.value); }} style={selFiltro}><option value="todos">Todas</option><option value="com">Com imagem</option><option value="sem">Sem imagem</option></select></Campo>
+            <Campo label="NCM"><input value={fNcm} onChange={function(e){ setFNcm(e.target.value); }} placeholder="8708" style={selFiltro} /></Campo>
+            <Campo label="Etiquetas"><input value={fTags} onChange={function(e){ setFTags(e.target.value); }} placeholder="Etiqueta" style={selFiltro} /></Campo>
+            <Campo label="Cód. fornecedor"><input value={fCodForn} onChange={function(e){ setFCodForn(e.target.value); }} placeholder="Código" style={selFiltro} /></Campo>
+            <div style={{ fontSize:10, color:"var(--text-4)", lineHeight:1.4 }}>Todos estes filtros leem o cadastro do produto desta tela. Um filtro vazio de resultados costuma significar que o campo ainda não foi preenchido — abra o produto e complete o cadastro.</div>
           </div>
         )}
 
@@ -518,19 +897,35 @@ function ProdutosTab({ produtos, salvar }) {
             <table style={_table}>
               <thead><tr>
                 <th style={{ ..._th, width:34 }}><input type="checkbox" checked={lista.length>0 && idsSel.length===lista.length} onChange={toggleTodos} /></th>
-                {["Descrição","Código","Estoque","Marca","Preço de custo",""].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}
+                {["Descrição","Código","Estoque","Marca","Preço de custo","Preço de venda","Anúncios","Situação",""].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}
               </tr></thead>
               <tbody>
                 {lista.slice(0,500).map(function(p,i){
                   var cod = p.codigo || p.sku || "—";
-                  return <tr key={p.id||i}>
-                    <td style={_td}><input type="checkbox" checked={!!sel[p.id]} onChange={function(){ toggleSel(p.id); }} /></td>
-                    <td style={{ ..._td, maxWidth:340, color:"var(--text-strong)", fontWeight:500 }}><span style={{ display:"inline-block", maxWidth:"100%", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", verticalAlign:"middle" }}>{nomeProd(p)}</span></td>
-                    <td style={_tdMono}>{cod} <button className="copy-btn" onClick={function(){ copiar(cod); }}>⎘</button></td>
+                  var nAnuncios = qtdAnuncios(p);
+                  var ativo = String(p.status || "Ativo") === "Ativo";
+                  var img = (p.imagens || [])[0] || null;
+                  // A linha inteira abre o produto. Só a coluna de seleção e a do menu
+                  // param o clique — nelas o alvo é o controle, não o produto.
+                  function abrir(){ setEditando(p); }
+                  return <tr key={p.id||i} onClick={abrir} style={{ cursor:"pointer" }} title="Abrir cadastro do produto">
+                    <td style={_td} onClick={function(e){ e.stopPropagation(); }}><input type="checkbox" checked={!!sel[p.id]} onChange={function(){ toggleSel(p.id); }} /></td>
+                    <td style={{ ..._td, maxWidth:340, color:"var(--text-strong)", fontWeight:500 }}>
+                      <span style={{ display:"flex", alignItems:"center", gap:9, minWidth:0 }}>
+                        {img
+                          ? <img src={img} alt="" style={{ width:28, height:28, borderRadius:5, objectFit:"cover", flexShrink:0 }} />
+                          : <span style={{ width:28, height:28, borderRadius:5, background:"var(--surface-3)", flexShrink:0 }} />}
+                        <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{nomeProd(p)}</span>
+                      </span>
+                    </td>
+                    <td style={_tdMono}>{cod} <button className="copy-btn" onClick={function(e){ e.stopPropagation(); copiar(cod); }}>⎘</button></td>
                     <td style={_td}>{parseInt(p.estoqueAtual)||0}</td>
                     <td style={_td}>{p.marca || "—"}</td>
                     <td style={_td}>{parseFloat(p.precoCusto)>0 ? fmt(parseFloat(p.precoCusto)) : <span style={{ color:"#FFC107" }}>0,00</span>}</td>
-                    <td style={{ ..._td, position:"relative", textAlign:"right", width:44 }}>
+                    <td style={_td}>{parseFloat(p.precoVenda)>0 ? fmt(parseFloat(p.precoVenda)) : "—"}</td>
+                    <td style={_td}>{nAnuncios ? nAnuncios : <span style={{ color:"var(--text-4)" }}>—</span>}</td>
+                    <td style={{ ..._td, color: ativo ? "#0a9d4e" : "var(--text-4)" }}>{ativo ? "Ativo" : "Inativo"}</td>
+                    <td style={{ ..._td, position:"relative", textAlign:"right", width:44 }} onClick={function(e){ e.stopPropagation(); }}>
                       <button onClick={function(){ setMenuRow(menuRow===p.id?null:p.id); }} style={{ background:"none", border:"none", color:"var(--text-3)", cursor:"pointer", fontSize:16, padding:"0 6px" }}>⋮</button>
                       {menuRow===p.id && (
                         <div style={{ position:"absolute", right:8, top:"100%", zIndex:50, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, boxShadow:"0 8px 24px rgba(0,0,0,.18)", padding:4, minWidth:130, display:"flex", flexDirection:"column" }}>
@@ -572,7 +967,14 @@ function ProdutosTab({ produtos, salvar }) {
           </div>
         )}
       </div>
-      {editando && <ProdutoModal produto={editando} onSave={salvarProduto} onClose={function(){ setEditando(null); }} />}
+      {editando && <ProdutoPagina
+        produto={editando.id ? editando : null}
+        produtos={produtos}
+        fornecedores={fornecedores}
+        enriched={enriched}
+        onSave={salvarProduto}
+        onExcluir={function(p){ if (!window.confirm("Excluir este produto?")) return; salvar((produtos||[]).filter(function(x){ return x.id !== p.id; })); setEditando(null); }}
+        onClose={function(){ setEditando(null); }} />}
     </div>
   );
 }
@@ -9540,7 +9942,7 @@ export default function App() {
         {tab === "dashboard" && (
           <DashboardTab enrichedOrders={enrichedOrders} produtos={produtos} user={user} metas={metas} salvarMetas={salvarMetas} sub={dashSub} setSub={setDashSub} />
         )}
-        {tab === "produtos" && <ProdutosTab produtos={produtos} salvar={salvarProdutos} />}
+        {tab === "produtos" && <ProdutosTab produtos={produtos} salvar={salvarProdutos} fornecedores={fornecedores} enriched={enriched} />}
         {tab === "estoque" && <EstoqueTab produtos={produtos} />}
         {tab === "vincular" && <VincularTab enriched={enriched} produtos={produtos} salvar={salvarProdutos} />}
         {tab === "relatorios" && <RelatoriosTab enrichedOrders={enrichedOrders} />}

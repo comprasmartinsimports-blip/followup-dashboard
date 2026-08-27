@@ -7403,6 +7403,18 @@ export default function App() {
   const [shipmentAddresses, setShipmentAddresses] = useState(function(){ try { var v = JSON.parse(localStorage.getItem("ml_ship_addr") || "{}"); return (v && typeof v === "object") ? v : {}; } catch(e){ return {}; } });
   useEffect(function(){ try { if (shipmentAddresses && Object.keys(shipmentAddresses).length) localStorage.setItem("ml_ship_addr", JSON.stringify(shipmentAddresses)); } catch(e){} }, [shipmentAddresses]);
   const [promos, setPromos] = useState({});
+  // Promoções verificadas pelo servidor. Guardadas separadas do enriquecimento do
+  // navegador porque aqui existe um terceiro estado que importa: "ainda não
+  // verificado" — que NÃO é o mesmo que "sem promoção".
+  const [promoServidor, setPromoServidor] = useState({ carregado: false, itens: {} });
+  useEffect(function(){
+    let vivo = true;
+    fetch("/api/ml/cache_promocoes")
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){ if (vivo && d && d.cache) setPromoServidor({ carregado: true, itens: d.itens || {} }); })
+      .catch(function(){});
+    return function(){ vivo = false; };
+  }, []);
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
   // ── Auth ──────────────────────────────────────────────────
@@ -8286,11 +8298,19 @@ export default function App() {
     // Taxa ML padronizada por tipo de anúncio: Clássico 12% / Premium 17%.
     const feeRate = getRealFeeRate(l);
     const realFeeInfo = realFees[l.id] || null;
-    const promoData = promosData[l.id];
+    // Ordem de confiança: o que o servidor verificou > o que o navegador buscou.
+    const doServidor = promoServidor.itens[l.id];
+    const promoData = doServidor && doServidor.tem
+      ? { salePrice: doServidor.promocional, originalPrice: doServidor.original || l.price }
+      : promosData[l.id];
     const { salePrice: salePriceApi, originalPrice: originalPriceApi, hasPromo: hasPromoApi } = getPrices(l);
     const salePrice = promoData ? promoData.salePrice : salePriceApi;
     const originalPrice = promoData ? promoData.originalPrice : originalPriceApi;
     const hasPromo = promoData ? true : hasPromoApi;
+    // Só é "sem promoção" de verdade quando alguém checou e não achou. Sem
+    // verificação, o certo é não afirmar nada — era isso que enchia o filtro
+    // "Sem promoção" de anúncios que estavam em promoção.
+    const promoVerificada = hasPromo || !!doServidor || !!promosData[l.id];
     const freteSeller = shippingData[l.id] ?? 0;
     // Taxa padronizada 12%/17% sobre o preço — sem somar tarifa fixa por faixa.
     const margin = calcMargin(salePrice, cost, feeRate, freteSeller, {
@@ -8302,7 +8322,7 @@ export default function App() {
     const skuOverride = skuOverrides[l.id] && String(skuOverrides[l.id]).trim();
     const sku = skuOverride || getSku(l);
     const youReceive = salePrice - margin.fee - freteSeller;
-    return { ...l, seller_sku: skuOverride || l.seller_sku, ...margin, cost, sku, salePrice, originalPrice, hasPromo, freteSeller, youReceive, totalProfit: margin.profit * (l.sold_quantity ?? 0), score, checks, feeIsReal: !!realFeeInfo };
+    return { ...l, seller_sku: skuOverride || l.seller_sku, ...margin, cost, sku, salePrice, originalPrice, hasPromo, promoVerificada, freteSeller, youReceive, totalProfit: margin.profit * (l.sold_quantity ?? 0), score, checks, feeIsReal: !!realFeeInfo };
   });
 
   const filteredListings = useMemo(() => {
@@ -8330,7 +8350,9 @@ export default function App() {
     if (statusFilter === "paused") results = results.filter(l => l.status === "paused");
     if (filterListingExtra === "sem_custo")  results = results.filter(l => l.id === editandoCustoId || !(costs[l.id] > 0));
     if (filterListingExtra === "com_promo")  results = results.filter(l => l.hasPromo);
-    if (filterListingExtra === "sem_promo")  results = results.filter(l => !l.hasPromo);
+    // Não verificado fica de fora: melhor uma lista menor e correta do que uma
+    // lista cheia que inclui anúncio em promoção.
+    if (filterListingExtra === "sem_promo")  results = results.filter(l => l.promoVerificada && !l.hasPromo);
     if (filterListingExtra === "sem_atacado") {
       // Anúncios sem preço de atacado (ML chama de "Preço por Quantidade") preenchido.
       // Segundo a documentação oficial do ML, publicações com esse preço configurado
@@ -8886,6 +8908,20 @@ export default function App() {
                         onClick={function(){setFilterListingExtra(f.k);setPaginaAnuncios(1);}} />;
                     })}
                   </FiltroGrupo>
+                  {(function(){
+                    // Quantos anúncios ativos ainda não tiveram a promoção verificada.
+                    // Sem esse aviso, a lista aparece menor e ninguém sabe por quê.
+                    var naoVerificados = enriched.filter(function(l){
+                      return l.status === "active" && !l.promoVerificada;
+                    }).length;
+                    if (!naoVerificados || (filterListingExtra !== "sem_promo" && filterListingExtra !== "com_promo")) return null;
+                    return (
+                      <div style={{ fontSize:11, color:"#FFC107", marginTop:8, lineHeight:1.5 }}>
+                        {naoVerificados} anúncio(s) ainda sem verificação de promoção — ficam fora deste filtro
+                        até o servidor conferir. O desconto de campanha não vem no anúncio; é consultado um a um.
+                      </div>
+                    );
+                  })()}
                   <FiltroGrupo titulo="Ordenar">
                     {[
                       {k:"score",      l:"⚠ Pior score"},

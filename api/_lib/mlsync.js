@@ -183,3 +183,88 @@ export async function syncOneOrder(sellerId, token, orderId) {
   await upsertLote(sql, "ml_order", [buildOrderRow(sellerId, o)], COLS_ORDER, UPD_ORDER);
   return true;
 }
+
+// ── Promoções por anúncio ────────────────────────────────────────────────────
+// O payload do item NÃO traz o desconto de campanha: um anúncio a R$ 122,24 em
+// promoção por R$ 116,12 chega aqui com price 122,24 e original_price vazio. O
+// desconto só aparece em /seller-promotions, que é por item. Buscar isso no
+// navegador (516 itens) demorava e, enquanto não terminava, "não verificado"
+// virava "sem promoção" no filtro — mostrando anúncio em promoção na lista de
+// quem não tem. Aqui roda no servidor e fica guardado.
+
+const INTERVALO_ML_MS = 120; // ~8 req/s: folga confortável no limite do ML
+
+async function mlGetStatus(path, token) {
+  const r = await fetch(ML + path, {
+    headers: { Authorization: "Bearer " + token, Accept: "application/json" },
+    signal: AbortSignal.timeout(8000),
+  });
+  let corpo = null;
+  try { corpo = await r.json(); } catch (e) { /* resposta não-JSON */ }
+  return { status: r.status, ok: r.ok, corpo: corpo };
+}
+
+// Lê a promoção ativa de um item. Devolve sempre um resultado — inclusive
+// "sem promoção" e "falhou" — para a diferença entre os três casos sobreviver.
+export async function lerPromocaoDoItem(itemId, token) {
+  const r = await mlGetStatus("/seller-promotions/items/" + itemId + "?app_version=v2", token);
+  if (!r.ok) {
+    // 404 aqui significa "este item não está em promoção nenhuma", não uma falha.
+    if (r.status === 404) return { tem: false, origem: "seller-promotions" };
+    return { erro: "HTTP " + r.status };
+  }
+  const lista = Array.isArray(r.corpo) ? r.corpo : (r.corpo && Array.isArray(r.corpo.results) ? r.corpo.results : []);
+  const ativas = lista.filter(function(p) {
+    const preco = parseFloat(p.price != null ? p.price : p.new_price);
+    return (p.status === "started" || p.status === "active") && isFinite(preco) && preco > 0;
+  });
+  if (!ativas.length) return { tem: false, origem: "seller-promotions" };
+  const melhor = ativas.reduce(function(min, p) {
+    const a = parseFloat(p.price != null ? p.price : p.new_price);
+    const b = parseFloat(min.price != null ? min.price : min.new_price);
+    return a < b ? p : min;
+  }, ativas[0]);
+  const promocional = parseFloat(melhor.price != null ? melhor.price : melhor.new_price);
+  const original = parseFloat(melhor.original_price || melhor.regular_price || 0) || null;
+  return { tem: true, promocional: promocional, original: original, origem: "seller-promotions" };
+}
+
+// Verifica os anúncios ativos cuja promoção não é conhecida ou está velha.
+// Respeita um prazo: o que não couber entra na próxima passada do cron.
+export async function syncPromocoes(sellerId, token, ate) {
+  const sql = sqlClient();
+  if (!sql) return { verificados: 0, comPromocao: 0, faltando: 0 };
+  const limite = ate || (Date.now() + 30000);
+
+  const pendentes = await sql`
+    select l.id
+    from flow.ml_listing l
+    left join flow.ml_promocao p on p.item_id = l.id
+    where l.seller_id = ${String(sellerId)}
+      and coalesce(l.raw->>'status', '') = 'active'
+      and (p.item_id is null or p.verificado_em < now() - interval '6 hours')
+    order by p.verificado_em nulls first
+    limit 400
+  `;
+
+  let verificados = 0, comPromocao = 0;
+  for (const linha of pendentes) {
+    if (Date.now() > limite - 2000) break;
+    let r;
+    try { r = await lerPromocaoDoItem(linha.id, token); }
+    catch (e) { r = { erro: (e && e.message) || "falha de rede" }; }
+    await sql`
+      insert into flow.ml_promocao (item_id, tem_promocao, preco_promocional, preco_original, origem, erro, verificado_em)
+      values (${linha.id}, ${!!r.tem}, ${r.promocional ?? null}, ${r.original ?? null}, ${r.origem ?? null}, ${r.erro ?? null}, now())
+      on conflict (item_id) do update set
+        tem_promocao = excluded.tem_promocao,
+        preco_promocional = excluded.preco_promocional,
+        preco_original = excluded.preco_original,
+        origem = excluded.origem, erro = excluded.erro, verificado_em = now()
+    `;
+    verificados++;
+    if (r.tem) comPromocao++;
+    await new Promise(function(res) { setTimeout(res, INTERVALO_ML_MS); });
+  }
+  return { verificados, comPromocao, faltando: Math.max(0, pendentes.length - verificados) };
+}

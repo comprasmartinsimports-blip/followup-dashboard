@@ -17,7 +17,7 @@ import {
   ErroPersistencia,
 } from "./_lib/auth.js";
 import { dbEnabled, syncGet, syncSet, upsertConexaoMl, listConexoesMl, listCacheListings, listCacheOrders, getConexaoMl, sqlClient } from "./_lib/db.js";
-import { syncListings, syncOrders, garantirToken, syncOneListing, syncOneOrder } from "./_lib/mlsync.js";
+import { syncListings, syncOrders, garantirToken, syncOneListing, syncOneOrder, syncPromocoes } from "./_lib/mlsync.js";
 
 // A sincronização do cache do ML (/_sync_ml) puxa centenas de itens — pede mais tempo que o
 // padrão de 10s. O Vercel limita ao teto do plano se este valor for maior.
@@ -282,7 +282,10 @@ export default async function handler(req, res) {
         if (!token) { resultados.push({ seller: c.seller_id, erro: "sem token" }); continue; }
         const rl = await syncListings(c.seller_id, token);
         const ro = await syncOrders(c.seller_id, token);
-        resultados.push({ seller: c.seller_id, listings: rl.upserted, orders: ro.upserted });
+        // Promoções por último e com prazo: é a parte longa (uma consulta por
+        // anúncio) e o que não couber agora entra na próxima passada.
+        const rp = await syncPromocoes(c.seller_id, token, Date.now() + 25000);
+        resultados.push({ seller: c.seller_id, listings: rl.upserted, orders: ro.upserted, promocoes: rp });
       } catch (e) {
         resultados.push({ seller: c.seller_id, erro: (e && e.message) || "falha" });
       }
@@ -323,6 +326,35 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, seller: String(sellerId), listings: rl, orders: ro });
     } catch (e) {
       return res.status(500).json({ error: (e && e.message) || "Falha ao sincronizar" });
+    }
+  }
+
+  // ── Promoções conhecidas (cache do servidor) ────────────────────────────────
+  // A tela precisa distinguir três estados: em promoção, sem promoção e AINDA NÃO
+  // VERIFICADO. Tratar o terceiro como o segundo é o que fazia o filtro "sem
+  // promoção" listar anúncio que estava em promoção.
+  if (path === "/cache_promocoes" || path.startsWith("/cache_promocoes?")) {
+    const sessao = await verificarSessao(req);
+    if (!sessao) return res.status(401).json({ error: "Não autenticado. Faça login no sistema." });
+    const sql = sqlClient();
+    if (!sql) return res.status(200).json({ cache: false, itens: {} });
+    try {
+      const linhas = await sql`
+        select item_id, tem_promocao, preco_promocional, preco_original, erro
+        from flow.ml_promocao
+      `;
+      const itens = {};
+      linhas.forEach(function(r) {
+        itens[r.item_id] = {
+          tem: r.tem_promocao === true,
+          promocional: r.preco_promocional != null ? Number(r.preco_promocional) : null,
+          original: r.preco_original != null ? Number(r.preco_original) : null,
+          erro: r.erro || null,
+        };
+      });
+      return res.status(200).json({ cache: true, itens: itens });
+    } catch (e) {
+      return res.status(200).json({ cache: false, itens: {}, erro: (e && e.message) || "falha ao ler" });
     }
   }
 

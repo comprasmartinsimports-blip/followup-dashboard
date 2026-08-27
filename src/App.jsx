@@ -5679,7 +5679,7 @@ function NovoProdutoPrecForm({ onSave, onClose, marketplaceInicial, shopeeDoc })
   );
 }
 
-function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFretesAndSave, descontosConfig, setDescontosAndSave, precosVendaConfig, setPrecosVendaAndSave, pendentesAtualizacao, setPendentesAndSave, setSkuOverridesAndSave, rawOrders, icmsPct, buscaInicial }) {
+function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFretesAndSave, descontosConfig, setDescontosAndSave, precosVendaConfig, setPrecosVendaAndSave, pendentesAtualizacao, setPendentesAndSave, setSkuOverridesAndSave, rawOrders, icmsPct, buscaInicial, custosExtras, setCustosExtrasAndSave }) {
   // ICMS projetado da venda (Financeiro → Impostos). Aqui ainda não há comprador, então vale a
   // alíquota interestadual — o cenário da maior parte das vendas e o mais conservador no preço.
   var icmsVendaPct = parseFloat(icmsPct) || 0;
@@ -5700,6 +5700,34 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
   }
   const [selectedId, setSelectedId] = useState(null);
   const [editingFreteId, setEditingFreteId] = useState(null);
+  const [editingCustoExtra, setEditingCustoExtra] = useState(null); // "<id>|icms" | "<id>|etiqueta" | "<id>|embalagem"
+  // Seleção para exclusão em massa. Só produtos precificados aqui (extras) podem
+  // ser excluídos — anúncio do ML vem do marketplace e não se apaga por aqui.
+  const [selecionados, setSelecionados] = useState([]);
+
+  function alternarSelecao(id) {
+    setSelecionados(function(atual) {
+      return atual.includes(id) ? atual.filter(function(x){ return x !== id; }) : atual.concat([id]);
+    });
+  }
+  function custoExtraDe(id) {
+    var c = (custosExtras || {})[id] || {};
+    return {
+      icms: parseFloat(c.icms) || 0,
+      etiqueta: parseFloat(c.etiqueta) || 0,
+      embalagem: parseFloat(c.embalagem) || 0,
+    };
+  }
+  function salvarCustoExtra(id, campo, valor) {
+    setCustosExtrasAndSave(function(prev) {
+      var atual = Object.assign({}, prev[id] || {});
+      if (valor > 0) atual[campo] = valor; else delete atual[campo];
+      var next = Object.assign({}, prev);
+      // Sem nenhum dos três, a entrada sai do mapa em vez de virar objeto vazio.
+      if (Object.keys(atual).length) next[id] = atual; else delete next[id];
+      return next;
+    });
+  }
   const [editingDescId, setEditingDescId] = useState(null);
   const [editingSkuId, setEditingSkuId] = useState(null);
   const [custosLocais, setCustosLocais] = useState({});
@@ -5889,7 +5917,6 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
           <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)", marginBottom:4 }}>💲 Precificação</div>
           <div style={{ fontSize:13, color:"var(--text-2)" }}>
             Calcule o preço ideal para cada anúncio com base na margem desejada
-            {icmsVendaPct > 0 && <> · <span style={{ color:"#FF5252" }}>ICMS de {icmsVendaPct.toFixed(2).replace(".", ",")}% já descontado</span></>}
           </div>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:7, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 16px" }}>
@@ -6067,18 +6094,58 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
       )}
 
       {/* Produtos extras (ainda não anunciados) */}
+      {selecionados.length > 0 && (
+        <div style={{ display:"flex", alignItems:"center", gap:12, background:"rgba(255,82,82,.10)", border:"1px solid rgba(255,82,82,.35)", borderRadius:10, padding:"9px 14px", marginBottom:10, flexWrap:"wrap" }}>
+          <span style={{ fontSize:13, fontWeight:600, color:"var(--text-strong)" }}>
+            {selecionados.length} precificação(ões) selecionada(s)
+          </span>
+          <button onClick={function(){
+              if (!window.confirm("Excluir " + selecionados.length + " precificação(ões)? Isso não mexe nos anúncios do Mercado Livre.")) return;
+              var apagar = selecionados;
+              saveProdutosExtras(produtosExtras.filter(function(x){ return apagar.indexOf(x.id) === -1; }));
+              setSelecionados([]);
+            }}
+            style={{ background:"rgba(255,82,82,.15)", border:"1px solid rgba(255,82,82,.5)", color:"#FF5252", padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:12.5, fontWeight:600, fontFamily:"inherit" }}>
+            ✕ Excluir selecionados
+          </button>
+          <button onClick={function(){ setSelecionados([]); }}
+            style={{ background:"none", border:"none", color:"var(--text-3)", cursor:"pointer", fontSize:12, fontFamily:"inherit", textDecoration:"underline" }}>
+            limpar seleção
+          </button>
+          <span style={{ fontSize:11, color:"var(--text-3)", marginLeft:"auto" }}>
+            Só produtos precificados aqui entram na seleção — anúncio do ML não se apaga por esta tela.
+          </span>
+        </div>
+      )}
+
       {/* Tabela */}
       <div className="scroll-x" style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, overflow:"auto" }}>
         <table style={{ borderCollapse:"collapse", width:"100%", minWidth:900 }}>
           <thead>
             <tr style={{ background:"var(--bg-2)" }}>
               {[
-                "SKU","MLB","Tipo","Anúncio",
-                "Custo","Preço Atual","Frete Real","Frete Config.",
+                "sel","SKU","MLB","Tipo","Anúncio",
+                "Custo","ICMS %","Etiqueta","Embalagem",
+                "Preço Atual","Frete Real","Frete Config.",
                 "💡 Vender por → Anunciar por","🏷 % Desc. Promoção",
                 "Taxa ML (s/ desconto)",
                 "Lucro Simulado","Margem Simulada","Ação"
               ].map(function(h){
+                if (h === "sel") {
+                  var extrasVisiveis = listsFiltrados.slice(0,200).filter(function(x){ return x._isExtra; });
+                  var todosMarcados = extrasVisiveis.length > 0 &&
+                    extrasVisiveis.every(function(x){ return selecionados.includes(x.id); });
+                  return (
+                    <th key="sel" style={{ padding:"8px 10px", borderBottom:"1px solid var(--border)", width:30 }}>
+                      <input type="checkbox" checked={todosMarcados} title="Selecionar todos os produtos precificados desta lista"
+                        onChange={function(e){
+                          var ids = extrasVisiveis.map(function(x){ return x.id; });
+                          setSelecionados(e.target.checked ? ids : []);
+                        }}
+                        style={{ cursor:"pointer" }} />
+                    </th>
+                  );
+                }
                 var isSimul = ["💡 Vender por → Anunciar por","Lucro Simulado","Margem Simulada","Taxa ML (s/ desconto)"].includes(h);
                 return <th key={h} style={{ fontSize:10, color: isSimul?"#768592":"var(--text-2)", fontWeight:600, textTransform:"none", padding:"8px 10px", borderBottom:"1px solid var(--border)", textAlign:"left", whiteSpace:"nowrap", background: isSimul?"rgba(118,133,146,.12)":"transparent" }}>{h}</th>;
               })}
@@ -6118,8 +6185,16 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                 feeRate = (_tipo === "gold_premium" || _tipo === "gold_pro") ? 0.17 : 0.12;
                 taxaSobreDesc = precoComDesc * feeRate;
               }
-              // Lucro e margem com desconto e frete
-              var lucroFinal = precoComDesc - custo - frete - taxaSobreDesc;
+              // Custos preenchidos nesta tela: ICMS (% sobre o preço) e os fixos por peça.
+              // O ICMS da linha, quando preenchido, vale no lugar do regime geral —
+              // é uma exceção declarada para aquele produto, não um acréscimo.
+              var extras = custoExtraDe(l.id);
+              var icmsLinhaPct = extras.icms > 0 ? extras.icms : icmsVendaPct;
+              var icmsValorLinha = precoComDesc * (icmsLinhaPct / 100);
+              var custosFixosLinha = extras.etiqueta + extras.embalagem;
+
+              // Lucro e margem com desconto, frete, ICMS e custos de embalagem/etiqueta
+              var lucroFinal = precoComDesc - custo - frete - taxaSobreDesc - icmsValorLinha - custosFixosLinha;
               var margemFinal = precoComDesc > 0 ? (lucroFinal/precoComDesc)*100 : 0;
               var mCor = margemFinal >= margemAlvo ? "#0a9d4e" : margemFinal >= margemAlvo*0.6 ? "#FFC107" : "#FF5252";
               var isEditing = selectedId === l.id;
@@ -6127,7 +6202,19 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
               var isPremium = t==="gold_premium"||t==="gold_pro";
 
               return (
-                <tr key={l.id} style={{ borderBottom:"1px solid var(--border)", background:i%2===0?"var(--surface)":"var(--bg-2)" }}>
+                <tr key={l.id} style={{ borderBottom:"1px solid var(--border)", background: selecionados.includes(l.id) ? "rgba(255,82,82,.08)" : (i%2===0?"var(--surface)":"var(--bg-2)") }}>
+
+                  {/* Seleção — só o que dá para excluir por aqui */}
+                  <td style={{ padding:"6px 10px", width:30 }}>
+                    {l._isExtra ? (
+                      <input type="checkbox" checked={selecionados.includes(l.id)}
+                        onChange={function(){ alternarSelecao(l.id); }}
+                        style={{ cursor:"pointer" }} />
+                    ) : (
+                      <span title="Anúncio do Mercado Livre — não é excluído por esta tela"
+                        style={{ color:"var(--text-4)", fontSize:11 }}>—</span>
+                    )}
+                  </td>
 
                   {/* SKU — editável */}
                   <td style={{ padding:"6px 8px" }}>
@@ -6189,6 +6276,58 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                         style={{ cursor:"pointer", fontSize:12, fontWeight:600, color:custo>0?"var(--text-2)":"#FF5252",
                           background:custo>0?"transparent":"rgba(255,82,82,.12)", padding:custo>0?"0":"2px 6px", borderRadius:4 }}>
                         {custo>0?"R$ "+custo.toFixed(2).replace(".",","): "✎ Sem custo"}
+                      </span>
+                    )}
+                  </td>
+
+                  {/* ICMS % — editável por anúncio */}
+                  <td style={{ padding:"6px 8px" }}>
+                    {editingCustoExtra === l.id + "|icms" ? (
+                      <input type="number" step="0.01" min="0" defaultValue={extras.icms || ""} placeholder="0,00" autoFocus
+                        onBlur={function(e){ salvarCustoExtra(l.id, "icms", parseFloat(e.target.value)||0); setEditingCustoExtra(null); }}
+                        style={{ width:58, background:"var(--surface)", border:"1px solid #0e7490", color:"var(--text-strong)", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
+                    ) : (
+                      <span onClick={function(){ setEditingCustoExtra(l.id + "|icms"); }}
+                        title={extras.icms > 0 ? "ICMS deste produto" : "Sem valor aqui, vale o ICMS configurado em Impostos (" + icmsVendaPct.toFixed(2).replace(".",",") + "%)"}
+                        style={{ cursor:"pointer", fontSize:12, fontWeight:600,
+                          color: extras.icms > 0 ? "#FF5252" : "var(--text-3)",
+                          background: extras.icms > 0 ? "transparent" : "var(--bg-2)",
+                          padding: extras.icms > 0 ? "0" : "2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
+                        {extras.icms > 0 ? extras.icms.toFixed(2).replace(".",",")+"%" : "✎ definir"}
+                      </span>
+                    )}
+                  </td>
+
+                  {/* Custo de etiqueta — editável por anúncio */}
+                  <td style={{ padding:"6px 8px" }}>
+                    {editingCustoExtra === l.id + "|etiqueta" ? (
+                      <input type="number" step="0.01" min="0" defaultValue={extras.etiqueta || ""} placeholder="0,00" autoFocus
+                        onBlur={function(e){ salvarCustoExtra(l.id, "etiqueta", parseFloat(e.target.value)||0); setEditingCustoExtra(null); }}
+                        style={{ width:64, background:"var(--surface)", border:"1px solid #0e7490", color:"var(--text-strong)", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
+                    ) : (
+                      <span onClick={function(){ setEditingCustoExtra(l.id + "|etiqueta"); }} title="Custo de etiqueta por peça"
+                        style={{ cursor:"pointer", fontSize:12, fontWeight:600,
+                          color: extras.etiqueta > 0 ? "#FFC107" : "var(--text-3)",
+                          background: extras.etiqueta > 0 ? "transparent" : "var(--bg-2)",
+                          padding: extras.etiqueta > 0 ? "0" : "2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
+                        {extras.etiqueta > 0 ? "R$ "+extras.etiqueta.toFixed(2).replace(".",",") : "✎ definir"}
+                      </span>
+                    )}
+                  </td>
+
+                  {/* Custo de embalagem — editável por anúncio */}
+                  <td style={{ padding:"6px 8px" }}>
+                    {editingCustoExtra === l.id + "|embalagem" ? (
+                      <input type="number" step="0.01" min="0" defaultValue={extras.embalagem || ""} placeholder="0,00" autoFocus
+                        onBlur={function(e){ salvarCustoExtra(l.id, "embalagem", parseFloat(e.target.value)||0); setEditingCustoExtra(null); }}
+                        style={{ width:64, background:"var(--surface)", border:"1px solid #0e7490", color:"var(--text-strong)", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
+                    ) : (
+                      <span onClick={function(){ setEditingCustoExtra(l.id + "|embalagem"); }} title="Custo de embalagem por peça"
+                        style={{ cursor:"pointer", fontSize:12, fontWeight:600,
+                          color: extras.embalagem > 0 ? "#FFC107" : "var(--text-3)",
+                          background: extras.embalagem > 0 ? "transparent" : "var(--bg-2)",
+                          padding: extras.embalagem > 0 ? "0" : "2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
+                        {extras.embalagem > 0 ? "R$ "+extras.embalagem.toFixed(2).replace(".",",") : "✎ definir"}
                       </span>
                     )}
                   </td>
@@ -7287,6 +7426,20 @@ export default function App() {
   const [pendentesAtualizacao, setPendentesAtualizacao] = useState(function() {
     try { return JSON.parse(localStorage.getItem("precos_pendentes_ml") || "{}"); } catch { return {}; }
   });
+  // Custos por anúncio preenchidos na Precificação: ICMS (%), etiqueta e embalagem (R$).
+  // Um objeto por anúncio ({ icms, etiqueta, embalagem }) em vez de três chaves soltas —
+  // uma chave de sincronização só, e os três nascem e morrem juntos.
+  const [custosExtras, setCustosExtras] = useState(function() {
+    try { return JSON.parse(localStorage.getItem("custos_extras_config") || "{}"); } catch { return {}; }
+  });
+  function setCustosExtrasAndSave(updater) {
+    setCustosExtras(function(prev) {
+      var next = typeof updater === "function" ? updater(prev) : updater;
+      try { localStorage.setItem("custos_extras_config", JSON.stringify(next)); } catch {}
+      kvSyncPush("custos_extras_config", next);
+      return next;
+    });
+  }
   // SKU editado manualmente pelo usuário na Precificação (por anúncio) — sobrepõe o SKU do ML.
   const [skuOverrides, setSkuOverrides] = useState(function() {
     try { return JSON.parse(localStorage.getItem("sku_overrides") || "{}"); } catch { return {}; }
@@ -7743,7 +7896,7 @@ export default function App() {
     "produtos_cadastro","fornecedores_cadastro","contas_pagar","contas_bancarias","categorias_pagar",
     "custos_fixos_config","impostos_config","irpj_csll_config","icms_por_estado","icms_regime_config","lancamentos",
     "mov_estoque","metaMensal","min_stock_anuncios","real_fees_config","pedidos_compra",
-    "precificacao_extras","precos_pendentes_ml","depositos_estoque","estoque_depositos",
+    "precificacao_extras","precos_pendentes_ml","custos_extras_config","depositos_estoque","estoque_depositos",
     "envios_full","vendas_estoque_baixadas","sku_overrides",
   ]).current;
   // Para os dados guardados como dicionário (chave→valor, ex: custo por anúncio), mesclar em
@@ -7779,6 +7932,7 @@ export default function App() {
     min_stock_anuncios: mesclarSetter(setMinStock),
     real_fees_config: mesclarSetter(setRealFees),
     sku_overrides: mesclarSetter(setSkuOverrides),
+    custos_extras_config: mesclarSetter(setCustosExtras),
   }).current;
   // Tipo esperado de cada chave — usado para blindar contra um valor no formato errado
   // (ex: um objeto onde deveria vir uma lista) travando a tela com "x.filter is not a function".
@@ -7791,6 +7945,7 @@ export default function App() {
     precos_venda_config: "object", precos_pendentes_ml: "object", irpj_csll_config: "object",
     icms_regime_config: "object", icms_por_estado: "object",
     min_stock_anuncios: "object", real_fees_config: "object", sku_overrides: "object",
+    custos_extras_config: "object",
   }).current;
   const lastSyncRef = useRef({}); // key -> string JSON já sincronizado (evita reenviar/reaplicar sem necessidade)
 
@@ -9324,6 +9479,7 @@ export default function App() {
 
         {tab === "precificacao" && currentUser?.permissoes?.includes("listings") && (
           <PrecificacaoTab
+            custosExtras={custosExtras} setCustosExtrasAndSave={setCustosExtrasAndSave}
             buscaInicial={buscaPrecificacao}
             icmsPct={icmsPctProjetado}
             enriched={enriched}

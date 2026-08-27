@@ -48,11 +48,13 @@ ICMS do lucro e o inclui no cálculo do preço alvo, e mostra no topo a alíquot
 | Variável | Obrigatória | Descrição |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Para usar IA | Chave da Anthropic — fica **somente no servidor** (proxy `/api/ai-chat`). **Nunca** use `VITE_ANTHROPIC_KEY`: qualquer variável `VITE_*` é embutida no JavaScript público e visível para qualquer visitante. Se você já usou `VITE_ANTHROPIC_KEY` antes, **revogue essa chave** no console da Anthropic e gere uma nova. |
+| `AI_MOTOR` | Opcional | `claude` ou `chatgpt` — fixa qual motor atende a análise de anúncios. Sem ela, usa o ChatGPT se `OPENAI_API_KEY` existir e o Claude caso contrário. A preferência só vale se a chave do motor escolhido estiver definida. |
+| `ANTHROPIC_MODEL` / `OPENAI_MODEL` | Opcional | Modelo de cada motor. Padrões: `claude-haiku-4-5` e `gpt-4o`. `GET /api/ai-chat` (logado) mostra qual motor e modelo estão ativos. |
+| `OPENAI_API_KEY` | Para usar o ChatGPT | Chave da OpenAI, se o motor da análise for o ChatGPT. Como a da Anthropic, fica só no servidor. |
 | `KV_REST_API_URL` / `KV_REST_API_TOKEN` | Opcional | Vercel KV / Upstash. Reserva: sem `SUPABASE_DB_URL`, é aqui que usuários e dados sincronizados são gravados. Com o banco configurado, serve só de espelho. |
 | `SESSION_SECRET` | Recomendada | Segredo para assinar o cookie de sessão do app (qualquer string longa e aleatória). Sem ela, um segredo é gerado e salvo no KV. |
 | `ADMIN_INITIAL_PASSWORD` | Recomendada | Senha inicial do usuário `admin` na primeira execução (padrão: `admin123` — troque no primeiro acesso). |
 | `ML_APP_ID` / `ML_APP_SECRET` / `ML_REDIRECT_URI` | Para conectar ao ML | Credenciais OAuth do app no Mercado Livre. |
-| `BLING_CLIENT_ID` / `BLING_CLIENT_SECRET` / `BLING_REDIRECT_URI` | Para conectar ao Bling | Credenciais OAuth do aplicativo criado no Bling (API v3). O redirect precisa ser exatamente `https://flowmarketplaces.vercel.app/api/bling/callback`, igual ao cadastrado no Bling. |
 | `SUPABASE_DB_URL` | Recomendada | Connection string do Postgres do Supabase (pooler de transação). É o armazenamento principal: usuários (`flow.usuario`), dados de negócio (`flow.sync_store`) e o cache de anúncios/pedidos do ML. Sem ela o sistema cai no Vercel KV. |
 | `ADMIN_RECOVERY_PASSWORD` | Opcional | Acesso de emergência (break-glass): quem souber essa senha entra como admin, reativa a conta e redefine a senha dela para esse valor. Só habilite quando precisar recuperar o acesso, e remova a variável depois. |
 | `CRON_SECRET` | Para o cron | Segredo exigido pelo endpoint `/api/ml/_cron_sync`, que sincroniza o cache de todas as contas do ML. Sem ela o endpoint responde 403. Requer `SUPABASE_DB_URL`. |
@@ -68,20 +70,12 @@ respondia sucesso e o cadastro se perdia, e o usuário não conseguia entrar dep
 ## Integrações
 
 - **Mercado Livre** — conexão por OAuth; traz anúncios, pedidos, frete e tarifas reais.
-- **Bling** — conexão por OAuth 2.0 (API v3). O botão *Conectar* leva à autorização do Bling; o
-  servidor troca o código pelo token, guarda em `flow.conexao_bling` e renova sozinho pelo refresh
-  token. Nenhuma credencial passa pelo navegador. O botão *Sincronizar agora* traz, para as tabelas
-  `flow.bling_*`, e mostra um relatório por entidade — uma que falhe não impede as outras:
-  - **Produtos** (custo, preço, situação) **apenas dos SKUs já cadastrados no Flow**. Produto que
-    existe no Bling e não aqui é ignorado: a importação nunca cria cadastro novo. Sem catálogo local
-    legível, a importação de produtos falha de propósito, em vez de trazer o Bling inteiro.
-  - **Estoque** dos produtos importados, por depósito.
-  - **Contas a pagar**.
+- **Análise de anúncios** — a nota de qualidade é calculada aqui mesmo, de graça, pelos critérios
+  definidos em *Configuração → Análise de anúncios* (quais critérios valem, a exigência de cada um e
+  o peso). O botão *Analisar* de um anúncio chama a IA pelo proxy `/api/ai-chat`, enviando o anúncio,
+  os critérios ativos com o resultado de cada um, e as regras que o vendedor escreveu naquela tela.
 
-  Ficam **de fora por escopo**: contas a receber, notas fiscais (entrada e saída) e histórico de
-  vendas. Nenhum endpoint desses é chamado, e `flow.bling_conta` só aceita `tipo = 'pagar'`.
-
-  `GET /api/bling/diagnostico` (admin) testa cada endpoint da API e diz qual respondeu o quê.
+O Bling foi removido: o sistema sincroniza **apenas** com o Mercado Livre.
 
 ## Como subir no Vercel
 

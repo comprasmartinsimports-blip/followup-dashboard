@@ -562,7 +562,7 @@ const ABA_INFO = {
   notas_fiscais:["📄","Notas fiscais","Emissão e gestão de NF-e a partir das vendas."],
   dre:["⚖️","DRE e conciliação","Demonstrativo de resultado e conciliação financeira."],
   relatorios:["📈","Relatórios","Relatórios e análises do negócio."],
-  integracoes:["🔌","Integrações","Conexões com marketplaces, Bling, e outros sistemas."],
+  integracoes:["🔌","Integrações","Conexões com marketplaces e outros sistemas."],
 };
 function EmConstrucao({ tab }) {
   var info = ABA_INFO[tab] || ["🚧", tab, ""];
@@ -1201,7 +1201,7 @@ function ProdutosTab({ produtos, salvar, fornecedores, enriched }) {
                 <button onClick={exportarPlanilha} style={acaoSub}>Exportar dados para planilha</button>
                 <div style={{ fontSize:11, color:"var(--text-4)", margin:"8px 0 3px" }}>Edição</div>
                 <button onClick={excluirSelecionados} style={{ ...acaoSub, color: idsSel.length?"#FF5252":"var(--text-4)" }}>Excluir selecionados</button>
-                <div style={{ fontSize:10, color:"var(--text-4)", marginTop:8, lineHeight:1.4 }}>Reajuste em massa, tags, categorias, multiloja e listas de preço são recursos de ERP (Bling) — não disponíveis aqui.</div>
+                <div style={{ fontSize:10, color:"var(--text-4)", marginTop:8, lineHeight:1.4 }}>Reajuste em massa, tags, categorias, multiloja e listas de preço são recursos de ERP — não disponíveis aqui.</div>
               </div>}
             </div>
             <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"12px 14px" }}>
@@ -2524,89 +2524,11 @@ function TendenciasTab({ setTab, setBuscaPrecificacao, enriched }) {
 
 // Integrações: status das conexões do sistema.
 function IntegracoesTab({ token, user, lastUpdate }) {
-  // A conexão com o Bling é OAuth: o token vive no servidor (flow.conexao_bling) e o
-  // navegador só pergunta a situação. Nenhuma credencial passa por aqui.
-  const [bling, setBling] = useState(null);      // resposta de /api/bling/status
-  const [blingErro, setBlingErro] = useState("");
-  const [sincronizando, setSincronizando] = useState(false);
-  const [relatorio, setRelatorio] = useState(null);
   var mins = lastUpdate ? Math.round((Date.now() - parseInt(lastUpdate)) / 60000) : null;
-
-  function carregarBling(){
-    return fetch("/api/bling/status")
-      .then(function(r){ return r.json(); })
-      .then(function(d){ setBling(d); setBlingErro(d && d.erro ? d.erro : ""); })
-      .catch(function(){ setBlingErro("Não foi possível falar com o servidor para saber a situação do Bling."); });
-  }
-
-  useEffect(function(){
-    carregarBling();
-    // Retorno da autorização: /?bling=ok ou /?bling=erro&msg=...
-    try {
-      var q = new URLSearchParams(window.location.search);
-      var r = q.get("bling");
-      if (r === "erro") setBlingErro(q.get("msg") || "A autorização no Bling falhou.");
-      if (r === "ok" || r === "erro") {
-        q.delete("bling"); q.delete("msg");
-        var resto = q.toString();
-        window.history.replaceState({}, "", window.location.pathname + (resto ? "?" + resto : ""));
-      }
-    } catch(e) {}
-  }, []);
-
-  var blingConectado = !!(bling && bling.conectado);
-
-  function conectarBling(){
-    if (bling && !bling.credenciaisConfiguradas) {
-      alert("O servidor ainda não tem as credenciais do Bling.\n\nDefina BLING_CLIENT_ID, BLING_CLIENT_SECRET e BLING_REDIRECT_URI nas variáveis de ambiente do Vercel e publique de novo.");
-      return;
-    }
-    window.location.href = "/api/bling/login";
-  }
-
-  function desconectarBling(){
-    if (!window.confirm("Desconectar o Bling? A autorização guardada no servidor será removida.")) return;
-    fetch("/api/bling/desconectar", { method:"POST" })
-      .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(d){ return { ok:r.ok, d:d }; }); })
-      .then(function(x){
-        if (!x.ok) { alert("Não foi possível desconectar: " + (x.d.error || "erro no servidor")); return; }
-        carregarBling(); setRelatorio(null);
-      })
-      .catch(function(){ alert("Não foi possível falar com o servidor."); });
-  }
-
-  function sincronizarBling(){
-    setSincronizando(true); setRelatorio(null); setBlingErro("");
-    fetch("/api/bling/sincronizar", { method:"POST", headers:{"Content-Type":"application/json"}, body:"{}" })
-      .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(d){ return { ok:r.ok, d:d }; }); })
-      .then(function(x){
-        if (x.d && Array.isArray(x.d.relatorio)) setRelatorio(x.d.relatorio);
-        else setBlingErro((x.d && x.d.error) || "A sincronização falhou no servidor.");
-        return carregarBling();
-      })
-      .catch(function(){ setBlingErro("Não foi possível falar com o servidor durante a sincronização."); })
-      .finally(function(){ setSincronizando(false); });
-  }
   var badgeStatus = { conectado:["#0a9d4e","rgba(0,200,83,.14)","● Conectado"], disponivel:["#768692","rgba(118,134,146,.14)","Disponível"], construcao:["#FFC107","rgba(255,193,7,.14)","🚧 Em construção"] };
   var cards = [
     { nome:"Mercado Livre", desc:"Anúncios, pedidos, taxas e repasses — sincronizados automaticamente.", status: token ? "conectado" : "disponivel", extra: token && user && user.nickname ? ("Conta: " + user.nickname + (mins != null ? " · última sync há " + mins + " min" : "")) : null,
       acao: token ? { label:"Reconectar", onClick:function(){ window.location.href="/api/auth/login"; }, tipo:"sec" } : { label:"Conectar ML", onClick:function(){ window.location.href="/api/auth/login"; }, tipo:"pri" } },
-    { nome:"Bling", desc:"ERP: atualiza custo e estoque dos produtos já cadastrados aqui, e traz as contas a pagar.",
-      status: blingConectado ? "conectado" : "disponivel",
-      extra: (function(){
-        if (!bling) return "Verificando...";
-        if (!bling.credenciaisConfiguradas) return "⚠️ Faltam BLING_CLIENT_ID, BLING_CLIENT_SECRET e BLING_REDIRECT_URI no servidor.";
-        if (!blingConectado) return "Autorize o acesso à sua conta do Bling para importar os dados.";
-        if (bling.avisoContagem) return bling.avisoContagem;
-        var c = bling.contagens || {};
-        return "Importados: " + (c.produtos||0) + " produtos · " + (c.estoque||0) + " saldos · " +
-               (c.contas_pagar||0) + " contas a pagar"
-               + (c.contas_sem_fornecedor ? " (" + c.contas_sem_fornecedor + " ainda sem o nome do fornecedor)" : "");
-      })(),
-      acao: blingConectado
-        ? { label: sincronizando ? "Sincronizando..." : "Sincronizar agora", onClick:sincronizarBling, tipo:"pri" }
-        : { label:"Conectar", onClick:conectarBling, tipo:"pri" },
-      acaoSec: blingConectado ? { label:"Desconectar", onClick:desconectarBling, tipo:"del" } : null },
     { nome:"Amazon", desc:"Marketplace Amazon (anúncios e pedidos).", status:"construcao", extra:null, acao:null },
     { nome:"Shopee", desc:"Marketplace Shopee (anúncios e pedidos).", status:"construcao", extra:null, acao:null },
   ];
@@ -2629,49 +2551,12 @@ function IntegracoesTab({ token, user, lastUpdate }) {
             <div style={{ fontSize:13, color:"var(--text-2)", lineHeight:1.5 }}>{c.desc}</div>
             {c.extra && <div style={{ fontSize:11, color:"var(--text-3)", marginTop:6 }}>{c.extra}</div>}
             <div style={{ display:"flex", gap:8, marginTop:12, flexWrap:"wrap" }}>
-              {c.acao && <button onClick={c.acao.onClick} disabled={sincronizando && c.nome==="Bling"} style={{ ...btnEstilo(c.acao.tipo), padding:"8px 16px", borderRadius:8, cursor: sincronizando && c.nome==="Bling" ? "wait" : "pointer", fontSize:13 }}>{c.acao.label}</button>}
-              {c.acaoSec && <button onClick={c.acaoSec.onClick} style={{ ...btnEstilo(c.acaoSec.tipo), padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13 }}>{c.acaoSec.label}</button>}
+              {c.acao && <button onClick={c.acao.onClick} style={{ ...btnEstilo(c.acao.tipo), padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13 }}>{c.acao.label}</button>}
             </div>
           </div>;
         })}
       </div>
 
-      {blingErro && (
-        <div style={{ marginTop:14, background:"rgba(255,82,82,.10)", border:"1px solid rgba(255,82,82,.4)", borderRadius:10, padding:"11px 14px", fontSize:12.5, color:"var(--text-2)", lineHeight:1.5 }}>
-          <b style={{ color:"#FF5252" }}>Bling:</b> {blingErro}
-        </div>
-      )}
-
-      {relatorio && (
-        <div style={{ marginTop:14, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"12px 16px" }}>
-          <div style={{ fontWeight:600, fontSize:13.5, color:"var(--text-strong)", marginBottom:8 }}>Resultado da sincronização</div>
-          {relatorio.map(function(r){
-            return (
-              <div key={r.chave} style={{ display:"flex", alignItems:"flex-start", gap:8, padding:"6px 0", borderBottom:"1px solid var(--border-soft)", fontSize:12.5 }}>
-                <span style={{ flexShrink:0 }}>{r.ok ? "✓" : "✕"}</span>
-                <span style={{ width:130, flexShrink:0, color:"var(--text-strong)" }}>{r.rotulo}</span>
-                <span style={{ color: r.ok ? "var(--text-2)" : "#FF5252", lineHeight:1.5 }}>
-                  {r.ok
-                    ? (r.registros + " registro(s)"
-                       + (r.ignorados ? " · " + r.ignorados + " do Bling ignorado(s) por não existirem no cadastro daqui" : "")
-                       + (r.desdePagina > 1 ? " · continuou da página " + r.desdePagina : "")
-                       + (r.truncado
-                            ? (r.chave === "contatos"
-                                ? " — ainda faltam fornecedores; clique em Sincronizar agora outra vez"
-                                : " — ainda há mais para trazer: clique em Sincronizar agora outra vez para continuar de onde parou")
-                            : ""))
-                    : r.erro}
-                </span>
-              </div>
-            );
-          })}
-          <div style={{ fontSize:11, color:"var(--text-3)", marginTop:8, lineHeight:1.5 }}>
-            Cada linha é independente: uma que falha não impede as outras de importar.
-            <br />O Bling só atualiza produtos que já existem no cadastro daqui — nenhum produto novo é criado.
-            Contas a receber, notas fiscais e histórico de vendas não são buscados.
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -2963,7 +2848,7 @@ function ContasPagarTab({ contas, salvar }) {
 }
 
 // Modal de pedido de compra.
-// Novo pedido de compra — formulário em TELA CHEIA (estilo Bling).
+// Novo pedido de compra — formulário em TELA CHEIA.
 function PedidoCompraModal({ pedido, onSave, onClose }) {
   const [f, setF] = useState(function(){ return Object.assign({ fornecedor:"", data:new Date().toISOString().slice(0,10), dataPrevista:"", numero:"", ordem:"", condicao:"", categoria:"Compras de fornecedores", desconto:"0", frete:"", transportador:"", freteConta:"CIF", obs:"", obsInterna:"", status:"aberto" }, pedido || {}); });
   const [itens, setItens] = useState(function(){ if (pedido && Array.isArray(pedido.itensList) && pedido.itensList.length) return pedido.itensList; return [{ nome:"", codigo:"", un:"UN", qtd:"", precoUn:"" }]; });

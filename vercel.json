@@ -5,10 +5,6 @@
       "destination": "/api/ml"
     },
     {
-      "source": "/api/bling/:path*",
-      "destination": "/api/bling"
-    },
-    {
       "source": "/api/auth/login",
       "destination": "/api/auth/login"
     },

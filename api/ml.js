@@ -329,6 +329,32 @@ export default async function handler(req, res) {
     }
   }
 
+  // ── Verificação de promoções, agendada ──────────────────────────────────────
+  // Separada do /_cron_sync de propósito: lá, anúncios e pedidos consomem quase
+  // todo o tempo da função e sobram poucos segundos para as promoções — 10 itens
+  // por rodada, o que levaria horas para cobrir o catálogo. Aqui o tempo inteiro
+  // é só para isso.
+  if (path === "/_cron_promocoes" || path.startsWith("/_cron_promocoes?")) {
+    const segredoP = req.headers["x-cron-secret"] || (req.headers.authorization || "").replace("Bearer ", "");
+    if (!process.env.CRON_SECRET || segredoP !== process.env.CRON_SECRET) {
+      return res.status(403).json({ error: "Proibido." });
+    }
+    if (!dbEnabled()) return res.status(200).json({ ok: false, motivo: "Banco não configurado." });
+    const conexoesP = await listConexoesMl();
+    const saida = [];
+    for (const c of conexoesP) {
+      try {
+        const tk = await garantirToken(c);
+        if (!tk) { saida.push({ seller: c.seller_id, erro: "sem token" }); continue; }
+        const r = await syncPromocoes(c.seller_id, tk, Date.now() + 50000);
+        saida.push({ seller: c.seller_id, ...r });
+      } catch (e) {
+        saida.push({ seller: c.seller_id, erro: (e && e.message) || "falha" });
+      }
+    }
+    return res.status(200).json({ ok: true, resultado: saida });
+  }
+
   // ── Promoções conhecidas (cache do servidor) ────────────────────────────────
   // A tela precisa distinguir três estados: em promoção, sem promoção e AINDA NÃO
   // VERIFICADO. Tratar o terceiro como o segundo é o que fazia o filtro "sem

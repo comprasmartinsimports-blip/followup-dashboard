@@ -460,6 +460,128 @@ export default async function handler(req, res) {
     return res.status(200).json({ dias: dias, categorias: resposta });
   }
 
+  // ── Painel de mercado de uma categoria ───────────────────────────────────────
+  // Constrói o que a descoberta provou existir: mais vendidos da categoria
+  // (/highlights), buscas em alta (/trends) e total de anúncios (/categories).
+  // Os agregados do Seller Center (unidades do mercado, vendedores ativos) não têm
+  // endpoint público — a busca respondeu 403 — então NÃO são estimados aqui: número
+  // inventado é pior que número ausente.
+  if (path === "/_mercado" || path.startsWith("/_mercado?")) {
+    const sessao = await verificarSessao(req);
+    if (!sessao) return res.status(401).json({ error: "Não autenticado. Faça login no sistema." });
+    const sql = sqlClient();
+    if (!sql) return res.status(503).json({ error: "Banco não configurado (SUPABASE_DB_URL)." });
+    const qsM = new URLSearchParams(path.split("?")[1] || "");
+    const categoria = qsM.get("categoria") || "";
+    if (!/^MLB\d+$/.test(categoria)) return res.status(400).json({ error: "Categoria inválida." });
+    const forcar = qsM.get("atualizar") === "1";
+
+    // Cache de 12h: o ranking de mais vendidos não muda a cada minuto, e rebuscar
+    // a cada abertura da tela gastaria a cota da API à toa.
+    if (!forcar) {
+      const cache = await sql`
+        select dados, atualizado_em from flow.ml_mercado
+        where categoria = ${categoria} and atualizado_em > now() - interval '12 hours'
+      `;
+      if (cache.length) {
+        return res.status(200).json(Object.assign({}, cache[0].dados, {
+          atualizadoEm: new Date(cache[0].atualizado_em).toISOString(), deCache: true,
+        }));
+      }
+    }
+
+    const ckM = Object.fromEntries(
+      (req.headers.cookie || "").split(";").map(function(c){ const p = c.trim().split("="); return [p[0], p.slice(1).join("=")]; })
+    );
+    let tokenM = ckM.ml_access_token || null;
+    if (!tokenM) {
+      const meu = await kvGet("mlmargem_ml_token_" + sessao.uid);
+      if (meu && meu.accessToken) tokenM = meu.accessToken;
+    }
+    if (!tokenM) return res.status(401).json({ error: "Sem token do ML. Reconecte ao Mercado Livre." });
+
+    async function ml(caminho) {
+      const r = await fetch("https://api.mercadolibre.com" + caminho, {
+        headers: { Authorization: "Bearer " + tokenM, Accept: "application/json" },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!r.ok) throw new Error(caminho + " respondeu HTTP " + r.status);
+      return await r.json();
+    }
+
+    try {
+      // As três fontes em paralelo; cada uma falhando vira campo vazio, não erro geral.
+      const [altas, destaque, cat] = await Promise.all([
+        ml("/trends/MLB/" + categoria).catch(function(){ return []; }),
+        ml("/highlights/MLB/category/" + categoria).catch(function(){ return { content: [] }; }),
+        ml("/categories/" + categoria).catch(function(){ return {}; }),
+      ]);
+
+      const conteudo = Array.isArray(destaque.content) ? destaque.content.slice(0, 20) : [];
+      const idsItens = conteudo.filter(function(x){ return x.type === "ITEM"; }).map(function(x){ return x.id; });
+
+      // Detalhe dos itens do ranking (título, preço, vendedor) via multiget.
+      const detalhes = {};
+      for (let i = 0; i < idsItens.length; i += 20) {
+        const lote = idsItens.slice(i, i + 20);
+        try {
+          const r = await ml("/items?ids=" + lote.join(",") +
+            "&attributes=id,title,price,permalink,sold_quantity,seller_id,thumbnail");
+          (Array.isArray(r) ? r : []).forEach(function(x) {
+            if (x && x.body && x.body.id) detalhes[x.body.id] = x.body;
+          });
+        } catch (e) { /* ranking segue com posição e id, sem o detalhe */ }
+      }
+
+      // Para marcar o que é SEU no ranking: ids dos seus anúncios e das suas contas.
+      const [meusAnuncios, minhasContas] = await Promise.all([
+        sql`select id from flow.ml_listing`,
+        sql`select seller_id from flow.conexao_ml`,
+      ]);
+      const meusIds = new Set(meusAnuncios.map(function(r){ return String(r.id); }));
+      const meusSellers = new Set(minhasContas.map(function(r){ return String(r.seller_id); }));
+
+      const maisVendidos = conteudo.map(function(x) {
+        const d = detalhes[x.id] || {};
+        return {
+          posicao: x.position,
+          id: x.id,
+          tipo: x.type,
+          titulo: d.title || (x.type === "PRODUCT" ? "(produto de catálogo)" : null),
+          preco: typeof d.price === "number" ? d.price : null,
+          vendidos: typeof d.sold_quantity === "number" ? d.sold_quantity : null,
+          link: d.permalink || null,
+          seu: meusIds.has(String(x.id)) || (d.seller_id != null && meusSellers.has(String(d.seller_id))),
+        };
+      });
+      const precos = maisVendidos.map(function(m){ return m.preco; }).filter(function(v){ return v != null; });
+
+      const dados = {
+        categoria: {
+          id: categoria,
+          nome: cat.name || categoria,
+          totalAnuncios: typeof cat.total_items_in_this_category === "number" ? cat.total_items_in_this_category : null,
+        },
+        buscasEmAlta: (Array.isArray(altas) ? altas : []).slice(0, 15).map(function(t){
+          return { termo: t.keyword, url: t.url };
+        }),
+        maisVendidos: maisVendidos,
+        precoMedioTop: precos.length ? precos.reduce(function(a,b){ return a+b; }, 0) / precos.length : null,
+        // O que NÃO existe aqui, de propósito: unidades vendidas e vendedores ativos
+        // do mercado. A API pública não fornece (busca respondeu 403).
+      };
+
+      await sql`
+        insert into flow.ml_mercado (categoria, dados, atualizado_em)
+        values (${categoria}, ${sql.json(dados)}, now())
+        on conflict (categoria) do update set dados = excluded.dados, atualizado_em = now()
+      `;
+      return res.status(200).json(Object.assign({}, dados, { atualizadoEm: new Date().toISOString(), deCache: false }));
+    } catch (e) {
+      return res.status(502).json({ error: (e && e.message) || "Falha ao consultar o mercado no ML." });
+    }
+  }
+
   // ── Descoberta: o que a API do ML devolve sobre tendências de categoria ──────
   // A tela "Tendências por categoria" é do Seller Center; nem tudo que aparece lá
   // tem endpoint público. Antes de prometer a tela, esta rota pergunta à própria API

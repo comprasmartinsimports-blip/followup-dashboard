@@ -1367,6 +1367,28 @@ function TendenciasTab({ setTab, setBuscaPrecificacao }) {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
   const [aberta, setAberta] = useState(null);
+  // Painel de mercado por categoria: { carregando, dados, erro } por id.
+  const [mercadoCat, setMercadoCat] = useState({});
+  const [mercadoAberto, setMercadoAberto] = useState(null);
+
+  function carregarMercado(id, forcar) {
+    setMercadoAberto(id);
+    setMercadoCat(function(m){ return Object.assign({}, m, { [id]: { carregando:true } }); });
+    fetch("/api/ml/_mercado?categoria=" + id + (forcar ? "&atualizar=1" : ""))
+      .then(function(r){
+        return r.json()
+          .then(function(d){ return { ok:r.ok, d:d }; })
+          .catch(function(){ return { ok:false, d:{ error:"O servidor respondeu com erro (HTTP " + r.status + ")." } }; });
+      })
+      .then(function(x){
+        setMercadoCat(function(m){
+          return Object.assign({}, m, { [id]: x.ok ? { dados:x.d } : { erro: x.d.error || "Falhou." } });
+        });
+      })
+      .catch(function(){
+        setMercadoCat(function(m){ return Object.assign({}, m, { [id]: { erro:"Sem conexão com o servidor." } }); });
+      });
+  }
   // Descoberta do que a API do ML oferece de dados de MERCADO (além dos seus
   // próprios números). Fica aqui, num botão, em vez de exigir abrir um endereço
   // solto no navegador para depois copiar o resultado.
@@ -1526,12 +1548,101 @@ function TendenciasTab({ setTab, setBuscaPrecificacao }) {
               </div>
               <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:6 }}>
                 <Variacao pct={c.variacaoUnidades} />
-                <button onClick={function(){ setAberta(expandida ? null : c.id); }}
-                  style={{ fontSize:11.5, color:"var(--text-2)", background:"var(--bg-2)", border:"1px solid var(--border)", padding:"4px 10px", borderRadius:7, cursor:"pointer", fontFamily:"inherit" }}>
-                  {expandida ? "▲ Fechar" : "▼ Produtos"}
-                </button>
+                <div style={{ display:"flex", gap:6 }}>
+                  <button onClick={function(){ setAberta(expandida ? null : c.id); }}
+                    style={{ fontSize:11.5, color:"var(--text-2)", background:"var(--bg-2)", border:"1px solid var(--border)", padding:"4px 10px", borderRadius:7, cursor:"pointer", fontFamily:"inherit" }}>
+                    {expandida ? "▲ Fechar" : "▼ Produtos"}
+                  </button>
+                  <button onClick={function(){
+                      if (mercadoAberto === c.id) { setMercadoAberto(null); return; }
+                      if (mercadoCat[c.id] && mercadoCat[c.id].dados) setMercadoAberto(c.id);
+                      else carregarMercado(c.id, false);
+                    }}
+                    style={{ fontSize:11.5, fontWeight:600, color:"#0e7490", background:"rgba(0,240,255,.08)", border:"1px solid rgba(0,240,255,.35)", padding:"4px 10px", borderRadius:7, cursor:"pointer", fontFamily:"inherit" }}>
+                    {mercadoAberto === c.id ? "▲ Mercado" : "▼ Mercado"}
+                  </button>
+                </div>
               </div>
             </div>
+
+            {mercadoAberto === c.id && (function(){
+              var m = mercadoCat[c.id] || {};
+              return (
+                <div style={{ borderTop:"1px solid var(--border-soft)", padding:"12px 18px 14px", background:"var(--bg-2)" }}>
+                  {m.carregando && <div style={{ fontSize:12.5, color:"var(--text-3)", padding:"8px 0" }}>Consultando o mercado no ML…</div>}
+                  {m.erro && <div style={{ fontSize:12.5, color:"#FF5252", padding:"8px 0" }}>Mercado: {m.erro}</div>}
+                  {m.dados && (function(){
+                    var d = m.dados;
+                    var meuPreco = c.precoMedio;
+                    return (
+                      <>
+                        <div style={{ display:"flex", gap:20, flexWrap:"wrap", alignItems:"center", marginBottom:10 }}>
+                          <div style={{ fontWeight:600, fontSize:13, color:"var(--text-strong)" }}>🌎 Mercado — {d.categoria.nome}</div>
+                          {d.categoria.totalAnuncios != null && (
+                            <div style={{ fontSize:12, color:"var(--text-2)" }}>
+                              <b>{d.categoria.totalAnuncios.toLocaleString("pt-BR")}</b> anúncios concorrendo na categoria
+                            </div>
+                          )}
+                          {d.precoMedioTop != null && (
+                            <div style={{ fontSize:12, color:"var(--text-2)" }}>
+                              Preço médio do top vendas: <b>{fmt(d.precoMedioTop)}</b>
+                              {meuPreco != null && (
+                                <span style={{ marginLeft:6, color: meuPreco <= d.precoMedioTop ? "#0a9d4e" : "#FF9800" }}>
+                                  (o seu: {fmt(meuPreco)})
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          <button onClick={function(){ carregarMercado(c.id, true); }}
+                            style={{ fontSize:10.5, color:"var(--text-3)", background:"none", border:"1px solid var(--border)", padding:"3px 9px", borderRadius:6, cursor:"pointer", fontFamily:"inherit", marginLeft:"auto" }}>
+                            ↻ Atualizar{d.deCache ? " (dados de cache)" : ""}
+                          </button>
+                        </div>
+
+                        {d.buscasEmAlta.length > 0 && (
+                          <div style={{ marginBottom:12 }}>
+                            <div style={{ fontSize:10.5, color:"var(--text-3)", marginBottom:5, fontWeight:600 }}>O QUE ESTÃO BUSCANDO NESTA CATEGORIA</div>
+                            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                              {d.buscasEmAlta.map(function(t, i){
+                                return <a key={i} href={t.url} target="_blank" rel="noreferrer"
+                                  style={{ fontSize:11.5, color:"var(--text-2)", background:"var(--surface)", border:"1px solid var(--border)", padding:"4px 10px", borderRadius:20, textDecoration:"none" }}>
+                                  {t.termo}
+                                </a>;
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {d.maisVendidos.length > 0 && (
+                          <div>
+                            <div style={{ fontSize:10.5, color:"var(--text-3)", marginBottom:2, fontWeight:600 }}>MAIS VENDIDOS DA CATEGORIA (RANKING DO ML)</div>
+                            {d.maisVendidos.map(function(mv){
+                              return (
+                                <div key={mv.posicao + "-" + mv.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 0", borderBottom:"1px solid var(--border-soft)", flexWrap:"wrap" }}>
+                                  <span style={{ width:26, fontSize:12, fontWeight:700, color: mv.posicao <= 3 ? "#FFC107" : "var(--text-3)", flexShrink:0 }}>{mv.posicao}º</span>
+                                  <div style={{ flex:"1 1 260px", minWidth:0, fontSize:12.5, color:"var(--text-strong)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                                    {mv.titulo || mv.id}
+                                    {mv.seu && <span style={{ marginLeft:8, fontSize:10, fontWeight:700, color:"#0a9d4e", background:"rgba(10,157,78,.12)", padding:"2px 7px", borderRadius:20 }}>SEU ANÚNCIO</span>}
+                                  </div>
+                                  <div style={{ width:96, textAlign:"right", fontSize:12.5, fontWeight:600, color:"var(--text-strong)" }}>{mv.preco != null ? fmt(mv.preco) : "—"}</div>
+                                  {mv.link
+                                    ? <a href={mv.link} target="_blank" rel="noreferrer" style={{ fontSize:11, color:"#0e7490", textDecoration:"none", flexShrink:0 }}>ver ↗</a>
+                                    : <span style={{ width:32 }} />}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:8, lineHeight:1.5 }}>
+                          Unidades vendidas e vendedores ativos do mercado inteiro não têm dados públicos na API — esses números só existem no painel do próprio ML.
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              );
+            })()}
 
             {expandida && (
               <div style={{ borderTop:"1px solid var(--border-soft)", padding:"6px 18px 14px" }}>

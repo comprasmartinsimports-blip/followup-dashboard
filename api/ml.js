@@ -332,6 +332,8 @@ export default async function handler(req, res) {
   // não de uma estimativa de mercado. Compara o período escolhido com o anterior
   // de mesmo tamanho, que é o que transforma número em tendência.
   if (path === "/_tendencias" || path.startsWith("/_tendencias?")) {
+    const sessao = await verificarSessao(req);
+    if (!sessao) return res.status(401).json({ error: "Não autenticado. Faça login no sistema." });
     const sql = sqlClient();
     if (!sql) return res.status(503).json({ error: "Banco não configurado (SUPABASE_DB_URL)." });
     const qsT = new URLSearchParams(path.split("?")[1] || "");
@@ -463,6 +465,8 @@ export default async function handler(req, res) {
   // tem endpoint público. Antes de prometer a tela, esta rota pergunta à própria API
   // o que existe, usando as categorias em que a conta realmente anuncia. Só leitura.
   if (path === "/_descobrir_tendencias" || path.startsWith("/_descobrir_tendencias?")) {
+    const sessao = await verificarSessao(req);
+    if (!sessao) return res.status(401).json({ error: "Não autenticado. Faça login no sistema." });
     if (!sessao.admin) return res.status(403).json({ error: "Apenas administradores." });
 
     const ck = Object.fromEntries(
@@ -504,11 +508,16 @@ export default async function handler(req, res) {
     ];
 
     const achados = [];
+    const fimDescoberta = Date.now() + 40000;
     for (const c of candidatos) {
+      if (Date.now() > fimDescoberta) {
+        achados.push({ rotulo: c.rotulo, caminho: c.caminho, erro: "não coube no tempo — rode de novo" });
+        continue;
+      }
       try {
         const r = await fetch("https://api.mercadolibre.com" + c.caminho, {
           headers: { Authorization: "Bearer " + token, Accept: "application/json" },
-          signal: AbortSignal.timeout(12000),
+          signal: AbortSignal.timeout(8000),
         });
         const texto = await r.text();
         let amostra = texto.slice(0, 600);

@@ -1376,7 +1376,11 @@ function TendenciasTab({ setTab, setBuscaPrecificacao }) {
   function checarMercado() {
     setChecandoMercado(true); setMercado(null);
     fetch("/api/ml/_descobrir_tendencias")
-      .then(function(r){ return r.json().then(function(d){ return { ok:r.ok, d:d }; }); })
+      .then(function(r){
+        return r.json()
+          .then(function(d){ return { ok:r.ok, d:d }; })
+          .catch(function(){ return { ok:false, d:{ error:"O servidor respondeu com erro (HTTP " + r.status + ")." } }; });
+      })
       .then(function(x){ setMercado(x.ok ? x.d : { erro: x.d.error || "Falhou." }); })
       .catch(function(){ setMercado({ erro: "Sem conexão com o servidor." }); })
       .finally(function(){ setChecandoMercado(false); });

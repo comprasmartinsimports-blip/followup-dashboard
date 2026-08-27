@@ -242,7 +242,10 @@ export async function syncPromocoes(sellerId, token, ate) {
     left join flow.ml_promocao p on p.item_id = l.id
     where l.seller_id = ${String(sellerId)}
       and coalesce(l.raw->>'status', '') = 'active'
-      and (p.item_id is null or p.verificado_em < now() - interval '6 hours')
+      -- Revisita de 1h para acompanhar o agendamento horário: com 6h, a passada de
+      -- hora em hora encontraria tudo "já verificado" e não faria nada. Como o
+      -- catálogo ativo cabe numa passada, revisitar mais vezes não pesa.
+      and (p.item_id is null or p.verificado_em < now() - interval '1 hour')
     order by p.verificado_em nulls first
     limit 400
   `;

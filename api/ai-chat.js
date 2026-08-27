@@ -109,7 +109,9 @@ async function chamarAnthropic(system, messages, maxTokens) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+  if (req.method !== "POST" && req.method !== "GET") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
 
   const sessao = await verificarSessao(req);
   if (!sessao) {
@@ -118,6 +120,17 @@ export default async function handler(req, res) {
 
   const temOpenAI = !!process.env.OPENAI_API_KEY;
   const temAnthropic = !!process.env.ANTHROPIC_API_KEY;
+
+  // GET = diagnóstico: qual motor ESTÁ configurado neste servidor. Não gasta chamada
+  // nem revela a chave — só responde "por que a análise não usou o ChatGPT?" sem chute.
+  if (req.method === "GET") {
+    return res.status(200).json({
+      motorAtivo: temOpenAI ? "chatgpt" : (temAnthropic ? "claude (reserva)" : "nenhum"),
+      OPENAI_API_KEY: temOpenAI ? "definida" : "NÃO definida",
+      ANTHROPIC_API_KEY: temAnthropic ? "definida" : "NÃO definida",
+      modeloChatgpt: MODELO_OPENAI,
+    });
+  }
   if (!temOpenAI && !temAnthropic) {
     return res.status(503).json({
       error: "Nenhuma chave de IA configurada no servidor: defina OPENAI_API_KEY nas variáveis " +
@@ -138,8 +151,17 @@ export default async function handler(req, res) {
     return res.status(200).json(respostaDeTexto(texto));
   } catch (err) {
     const abortou = err && (err.name === "TimeoutError" || err.name === "AbortError");
-    return res.status(abortou ? 504 : (err && err.status) || 502).json({
-      error: abortou ? "A análise demorou mais de 60s e foi interrompida." : (err && err.message) || "Falha ao gerar a análise.",
-    });
+    let mensagem = abortou
+      ? "A análise demorou mais de 60s e foi interrompida."
+      : (err && err.message) || "Falha ao gerar a análise.";
+    // Sem esta linha, um erro do Claude quando o pedido era "usar o ChatGPT" parece
+    // um problema do ChatGPT. Diz de quem é a recusa E por que o outro motor entrou.
+    if (!temOpenAI) {
+      mensagem += " Esta análise NÃO usou o ChatGPT: a variável OPENAI_API_KEY não está " +
+        "definida nas variáveis de ambiente do Vercel, então o pedido caiu no motor reserva " +
+        "(Claude). Defina OPENAI_API_KEY no Vercel e publique de novo para a análise usar o ChatGPT.";
+    }
+    return res.status(abortou ? 504 : (err && err.status) || 502).json({ error: mensagem });
   }
 }
+

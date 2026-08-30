@@ -7,7 +7,10 @@ import {
 import { BR_VIEWBOX, BR_ESTADOS } from "./brazilMap.js";
 
 const ML = (path) => `/api/ml${path}`;
-const fmt = (n) => `R$ ${Number(n).toFixed(2).replace(".", ",")}`;
+// Separador de milhar importa numa tela de dinheiro: "R$ 10100,00" e
+// "R$ 101000,00" se confundem de relance, "R$ 10.100,00" não. Só exibição —
+// nada lê de volta o texto que sai daqui (CSV e cálculos usam o número cru).
+const fmt = (n) => "R$ " + (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtPct = (n) => `${(n * 100).toFixed(1)}%`;
 
 function fmtDate(dateStr) {
@@ -556,6 +559,7 @@ const ABA_INFO = {
   compras:["🛒","Compras","Pedidos de compra e reposição de estoque."],
   estoque:["📦","Estoque","Saldo por depósito, baixa automática e estoque mínimo."],
   contas_pagar:["⬇️","Contas a pagar","Despesas, vencimentos e baixas."],
+  prioridade_pagamento:["🎯","Prioridade de pagamento","Que contas pagar primeiro, com o caixa que você tem."],
   contas_receber:["⬆️","Contas a receber","Recebíveis criados a partir do repasse dos marketplaces."],
   clientes:["👥","Clientes","Cadastro de clientes e histórico."],
   fornecedores:["🏭","Fornecedores","Cadastro de fornecedores e condições."],
@@ -2735,6 +2739,434 @@ function ContaModal({ conta, onSave, onClose }) {
   );
 }
 // Contas a pagar: KPIs, busca, filtro de situação e cadastro/baixa de contas.
+// ── Prioridade de pagamento ────────────────────────────────────────────────
+// Divisão proposital de trabalho: TODA conta em dinheiro é feita aqui, no
+// código. A IA só classifica e explica. Um plano de pagamento com aritmética
+// inventada por um modelo seria pior que nenhum plano — daria a confiança sem
+// a exatidão.
+const RISCO_CATEGORIA_PADRAO = {
+  "Impostos":    { peso: 10, nota: "Atraso gera multa, juros Selic e risco de negativação." },
+  "Funcionário": { peso: 10, nota: "Obrigação trabalhista — atraso tem consequência legal." },
+  "Aluguel":     { peso: 8,  nota: "Contrato com cláusula de despejo." },
+  "Fornecedor":  { peso: 7,  nota: "Pode cortar o fornecimento e travar as vendas." },
+  "Frete":       { peso: 6,  nota: "Atraso trava a expedição dos pedidos." },
+  "Marketing":   { peso: 3,  nota: "Pode ser pausado sem parar a operação." },
+  "Outros":      { peso: 5,  nota: "" },
+};
+
+function configPrioridadePadrao() {
+  var riscos = {};
+  Object.keys(RISCO_CATEGORIA_PADRAO).forEach(function(k){ riscos[k] = RISCO_CATEGORIA_PADRAO[k].peso; });
+  return { instrucoes: "", riscos: riscos, caixa: "", aReceber7d: "" };
+}
+
+function diasEntre(deIso, ateIso) {
+  var a = new Date(deIso + "T00:00:00"), b = new Date(ateIso + "T00:00:00");
+  return Math.round((b - a) / 86400000);
+}
+
+// Custo de adiar uma conta por N dias, em reais. A multa só entra se a conta
+// ainda NÃO está vencida — quem já atrasou, já pagou a multa; adiar mais um dia
+// custa só juros. Juros vem como "% ao mês" na tela de contas, então vira dia
+// dividindo por 30.
+function custoDeAtrasar(c, diasParaVencer, dias) {
+  var valor = parseFloat(c.valor) || 0;
+  var multaPct = parseFloat(c.multa) || 0;
+  var jurosMesPct = parseFloat(c.juros) || 0;
+  var multa = (diasParaVencer >= 0 && diasParaVencer < dias) ? valor * (multaPct / 100) : 0;
+  var juros = valor * (jurosMesPct / 100) * (dias / 30);
+  return multa + juros;
+}
+
+// Ordena as contas em aberto por urgência. A nota é explicável de propósito:
+// cada parcela aparece na tela, para o usuário poder discordar com fundamento.
+function ranquearContas(contas, riscos, hojeIso) {
+  var abertas = (contas || []).filter(function(c){
+    return c.status !== "paga" && c.status !== "cancelada" && (parseFloat(c.valor) || 0) > 0;
+  });
+  var itens = abertas.map(function(c){
+    var venc = c.vencimento || "";
+    var dias = venc ? diasEntre(hojeIso, venc) : 999; // sem vencimento = sem pressa conhecida
+    var cat = c.categoria || "Outros";
+    var pesoRisco = riscos && riscos[cat] != null ? riscos[cat] : (RISCO_CATEGORIA_PADRAO[cat] ? RISCO_CATEGORIA_PADRAO[cat].peso : 5);
+    // Prazo: vencida pontua alto e cresce com o atraso; a vencer decai até 30 dias.
+    var pontosPrazo = dias < 0 ? Math.min(50, 30 + Math.abs(dias)) : Math.max(0, 30 - dias);
+    var pontosRisco = pesoRisco * 3;                       // 0 a 30
+    var custo7 = custoDeAtrasar(c, dias, 7);
+    var valor = parseFloat(c.valor) || 0;
+    // O que o atraso custa em relação ao próprio valor da conta. Uma conta
+    // pequena com juros alto sobe; uma grande sem juros nenhum não sobe só por
+    // ser grande — pagar antes o que não cobra nada por esperar é desperdício.
+    var pontosCusto = valor > 0 ? Math.min(20, (custo7 / valor) * 400) : 0;
+    return {
+      conta: c,
+      id: c.id,
+      descricao: c.descricao || "(sem fornecedor)",
+      categoria: cat,
+      vencimento: venc,
+      dias: venc ? dias : null,
+      vencida: !!venc && dias < 0,
+      valor: valor,
+      custo7: custo7,
+      pesoRisco: pesoRisco,
+      notaRisco: RISCO_CATEGORIA_PADRAO[cat] ? RISCO_CATEGORIA_PADRAO[cat].nota : "",
+      pontosPrazo: pontosPrazo,
+      pontosRisco: pontosRisco,
+      pontosCusto: pontosCusto,
+      urgencia: Math.round(pontosPrazo + pontosRisco + pontosCusto),
+    };
+  });
+  itens.sort(function(a,b){
+    if (b.urgencia !== a.urgencia) return b.urgencia - a.urgencia;
+    if (a.vencimento && b.vencimento && a.vencimento !== b.vencimento) return a.vencimento.localeCompare(b.vencimento);
+    return b.valor - a.valor;
+  });
+  return itens;
+}
+
+// Distribui o caixa pela ordem de urgência, seguindo em frente quando uma conta
+// não cabe: parar na primeira que não cabe deixaria dinheiro parado enquanto
+// contas menores vencem. O efeito colateral é que uma conta menos urgente pode
+// ser paga na frente de uma mais urgente que não coube — por isso a tela marca
+// quais entraram e mostra o que ficou de fora, em vez de só devolver uma lista.
+function planoDeCaixa(ranking, caixa) {
+  var restante = caixa, cabem = [], naoCabem = [];
+  ranking.forEach(function(it){
+    if (it.valor <= restante) { restante -= it.valor; cabem.push(it); }
+    else naoCabem.push(it);
+  });
+  var falta = naoCabem.reduce(function(s,i){ return s + i.valor; }, 0);
+  var custoSemanaAdiado = naoCabem.reduce(function(s,i){ return s + i.custo7; }, 0);
+  return { cabem: cabem, naoCabem: naoCabem, sobra: restante, falta: falta, custoSemanaAdiado: custoSemanaAdiado };
+}
+
+// Manda o RANKING (já calculado) para a IA e recebe de volta só decisão e
+// texto. Nenhum valor em reais volta do modelo: os números da tela continuam
+// sendo os do código.
+async function analisarPrioridadeIA(ranking, plano, cfg, caixa, aReceber) {
+  var linhas = ranking.slice(0, 40).map(function(i){
+    return "- id=" + i.id + " | " + i.descricao + " | " + i.categoria +
+      " | vence " + (i.vencimento || "sem data") +
+      " (" + (i.dias == null ? "sem data" : (i.dias < 0 ? Math.abs(i.dias) + " dias VENCIDA" : "em " + i.dias + " dias")) + ")" +
+      " | R$ " + i.valor.toFixed(2) +
+      " | custo de adiar 7 dias: R$ " + i.custo7.toFixed(2) +
+      " | urgência calculada: " + i.urgencia;
+  }).join("\n");
+
+  var regras = String(cfg.instrucoes || "").trim()
+    ? "\n\nREGRAS DA EMPRESA — valem acima de qualquer recomendação genérica:\n" + String(cfg.instrucoes).trim()
+    : "";
+
+  var prompt = "Você é um analista financeiro de uma empresa que vende no Mercado Livre. " +
+    "Decida a ordem de pagamento das contas abaixo.\n\n" +
+    "Caixa disponível hoje: R$ " + caixa.toFixed(2) + "\n" +
+    "Previsão de entrada nos próximos 7 dias (informada pelo usuário): R$ " + aReceber.toFixed(2) + "\n" +
+    "Total em aberto: R$ " + ranking.reduce(function(s,i){ return s+i.valor; },0).toFixed(2) + "\n" +
+    "Pela ordem de urgência calculada, o caixa cobre " + plano.cabem.length + " de " + ranking.length +
+    " contas; ficam de fora R$ " + plano.falta.toFixed(2) + ".\n\n" +
+    "Contas em aberto:\n" + linhas + regras + "\n\n" +
+    "Retorne APENAS um objeto JSON válido, sem markdown:\n" +
+    "{\n" +
+    ' "resumo":"2 a 3 frases sobre a situação de caixa e a estratégia da semana",\n' +
+    ' "decisoes":[{"id":"o id exato da conta","acao":"pagar|negociar|adiar","motivo":"1 frase objetiva","comoNegociar":"o que pedir ao credor, ou string vazia"}],\n' +
+    ' "alertas":["riscos concretos de seguir este plano"],\n' +
+    ' "seFaltarCaixa":"o que fazer para cobrir o buraco, em 1 ou 2 frases"\n' +
+    "}\n\n" +
+    "Regras da resposta:\n" +
+    "- Inclua TODAS as contas listadas em decisoes, uma vez cada, usando o id EXATO.\n" +
+    "- Não invente contas, valores nem ids.\n" +
+    "- NÃO escreva valores em reais nos textos: os números são calculados pelo sistema.\n" +
+    "- 'negociar' é para o que vale tentar prazo ou parcelamento; 'adiar' é o que aguenta esperar.\n" +
+    "- Justifique pelo risco e pelo custo do atraso, não pelo tamanho da conta.\n\n" +
+    "Retorne SOMENTE o JSON.";
+
+  var r = await fetch("/api/ai-chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ max_tokens: 3000, messages: [{ role: "user", content: prompt }] }),
+  });
+  var data = await r.json();
+  if (data.error) throw new Error(data.error.message || data.error);
+  var txt = (data.content || []).map(function(b){ return b.text || ""; }).join("");
+  var limpo = txt.replace(/```json|```/g, "").trim();
+  var i0 = limpo.indexOf("{"), i1 = limpo.lastIndexOf("}");
+  if (i0 < 0 || i1 < 0) throw new Error("A IA não devolveu um JSON válido.");
+  var bruto = JSON.parse(limpo.slice(i0, i1 + 1));
+
+  // Conferência antes de mostrar. O modelo pode citar um id que não existe ou
+  // esquecer uma conta; nos dois casos a tela precisa dizer, não encobrir.
+  var validos = {};
+  ranking.forEach(function(i){ validos[i.id] = true; });
+  var porId = {}, inventados = [];
+  (Array.isArray(bruto.decisoes) ? bruto.decisoes : []).forEach(function(d){
+    if (!d || !d.id) return;
+    if (!validos[d.id]) { inventados.push(String(d.id)); return; }
+    if (porId[d.id]) return; // primeira decisão vale; repetição é ruído
+    porId[d.id] = {
+      acao: ["pagar","negociar","adiar"].indexOf(d.acao) >= 0 ? d.acao : "adiar",
+      motivo: String(d.motivo || ""),
+      comoNegociar: String(d.comoNegociar || ""),
+    };
+  });
+  var semDecisao = ranking.filter(function(i){ return !porId[i.id]; }).map(function(i){ return i.id; });
+  return {
+    resumo: String(bruto.resumo || ""),
+    alertas: Array.isArray(bruto.alertas) ? bruto.alertas.map(String) : [],
+    seFaltarCaixa: String(bruto.seFaltarCaixa || ""),
+    porId: porId,
+    inventados: inventados,
+    semDecisao: semDecisao,
+  };
+}
+
+// Tela: ordena as contas em aberto e monta um plano de pagamento para o caixa
+// que o usuário informar. A IA é opcional — o ranking e o plano funcionam sem ela.
+function PrioridadePagamentoTab({ contas, salvarContas, config, salvarConfig }) {
+  const [analise, setAnalise] = useState(null);
+  const [estado, setEstado] = useState("idle"); // idle | loading | done | error
+  const [erro, setErro] = useState("");
+  const [mostrarRegras, setMostrarRegras] = useState(false);
+  const [rascunho, setRascunho] = useState(function(){ return JSON.parse(JSON.stringify(config)); });
+  var hoje = new Date().toISOString().slice(0, 10);
+
+  var caixa = parseFloat(config.caixa) || 0;
+  var aReceber = parseFloat(config.aReceber7d) || 0;
+  var ranking = ranquearContas(contas, config.riscos, hoje);
+  var plano = planoDeCaixa(ranking, caixa);
+  var totalAberto = ranking.reduce(function(s,i){ return s + i.valor; }, 0);
+  var vencidas = ranking.filter(function(i){ return i.vencida; });
+  var vence7 = ranking.filter(function(i){ return !i.vencida && i.dias != null && i.dias <= 7; });
+  var custoSemana = ranking.reduce(function(s,i){ return s + i.custo7; }, 0);
+
+  function setCampo(k, v){ salvarConfig(Object.assign({}, config, { [k]: v })); }
+
+  async function analisar(){
+    setEstado("loading"); setErro("");
+    try { setAnalise(await analisarPrioridadeIA(ranking, plano, config, caixa, aReceber)); setEstado("done"); }
+    catch (e) { setErro((e && e.message) || "Falha ao analisar."); setEstado("error"); }
+  }
+  function marcarPaga(it){
+    salvarContas((contas || []).map(function(x){
+      return x.id === it.id ? Object.assign({}, x, { status:"paga", pago_em: hoje }) : x;
+    }));
+  }
+
+  var cartao = { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"18px 20px", marginBottom:14 };
+  var tit = { fontSize:14, fontWeight:600, color:"var(--text-strong)", marginBottom:4 };
+  var sub = { fontSize:12, color:"var(--text-3)", lineHeight:1.5, marginBottom:14 };
+  var campoNum = { width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"10px 12px", borderRadius:8, fontSize:15, outline:"none", boxSizing:"border-box", fontWeight:600 };
+  var corAcao = { pagar:"#0a9d4e", negociar:"#FFC107", adiar:"var(--text-3)" };
+  var rotuloAcao = { pagar:"Pagar", negociar:"Negociar", adiar:"Adiar" };
+
+  if (!ranking.length) {
+    return <div style={{ padding:2, maxWidth:900 }}>
+      <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)", marginBottom:14 }}>Prioridade de pagamento</div>
+      <div style={{ ...cartao, textAlign:"center", padding:"56px 20px" }}>
+        <div style={{ fontSize:38, marginBottom:10 }}>🗎</div>
+        <div style={{ fontWeight:600, fontSize:16, color:"var(--text-strong)" }}>Nenhuma conta em aberto para priorizar.</div>
+        <div style={{ fontSize:13, color:"var(--text-3)", marginTop:6, lineHeight:1.6 }}>
+          Esta tela lê as contas de <b>Financeiro → Contas a pagar</b> que não estão pagas nem canceladas.<br />
+          Cadastre as contas lá — com <b>vencimento</b>, <b>categoria</b> e, quando houver, <b>juros e multa</b>,
+          que são o que permite calcular quanto custa adiar cada uma.
+        </div>
+      </div>
+    </div>;
+  }
+
+  return (
+    <div style={{ padding:2, maxWidth:1180 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14, flexWrap:"wrap" }}>
+        <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Prioridade de pagamento</div>
+        <div style={{ flex:1 }} />
+        <button onClick={function(){ setRascunho(JSON.parse(JSON.stringify(config))); setMostrarRegras(function(v){ return !v; }); }}
+          style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"9px 16px", borderRadius:9, cursor:"pointer", fontSize:13 }}>
+          {mostrarRegras ? "Fechar regras" : "⚙ Regras e pesos"}
+        </button>
+        <button onClick={analisar} disabled={estado === "loading"}
+          style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"9px 24px", borderRadius:9, cursor: estado==="loading"?"wait":"pointer", fontSize:13 }}>
+          {estado === "loading" ? "Analisando..." : "Analisar com IA"}
+        </button>
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))", gap:12, marginBottom:14 }}>
+        {[
+          ["Total em aberto", fmt(totalAberto), "var(--text-strong)", ranking.length + " conta(s)"],
+          ["Vencidas", fmt(vencidas.reduce(function(s,i){ return s+i.valor; },0)), "#FF5252", vencidas.length + " conta(s)"],
+          ["Vencem em 7 dias", fmt(vence7.reduce(function(s,i){ return s+i.valor; },0)), "#FFC107", vence7.length + " conta(s)"],
+          ["Custo de adiar tudo 7 dias", fmt(custoSemana), custoSemana > 0 ? "#FF5252" : "var(--text-3)", "juros + multa"],
+        ].map(function(k,i){
+          return <div key={i} style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 16px" }}>
+            <div style={{ fontSize:11.5, color:"var(--text-3)" }}>{k[0]}</div>
+            <div style={{ fontSize:20, fontWeight:600, color:k[2], marginTop:2 }}>{k[1]}</div>
+            <div style={{ fontSize:11, color:"var(--text-4)", marginTop:2 }}>{k[3]}</div>
+          </div>;
+        })}
+      </div>
+
+      {mostrarRegras && (
+        <div style={cartao}>
+          <div style={tit}>Regras e pesos</div>
+          <div style={sub}>
+            O peso de cada categoria diz o quanto atrasar aquele tipo de conta machuca — não o
+            quanto ela custa. Vale de 0 a 10.
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))", gap:12, marginBottom:16 }}>
+            {Object.keys(RISCO_CATEGORIA_PADRAO).map(function(cat){
+              return <div key={cat}>
+                <label style={{ fontSize:11.5, color:"var(--text-3)", fontWeight:600, display:"block", marginBottom:4 }}>{cat}</label>
+                <input type="number" min="0" max="10" value={rascunho.riscos[cat] == null ? "" : rascunho.riscos[cat]}
+                  onChange={function(e){
+                    var v = Math.max(0, Math.min(10, parseInt(e.target.value, 10) || 0));
+                    setRascunho(function(r){ return Object.assign({}, r, { riscos: Object.assign({}, r.riscos, { [cat]: v }) }); });
+                  }}
+                  style={{ width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"8px 10px", borderRadius:7, fontSize:13, boxSizing:"border-box" }} />
+                {RISCO_CATEGORIA_PADRAO[cat].nota && <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:3, lineHeight:1.4 }}>{RISCO_CATEGORIA_PADRAO[cat].nota}</div>}
+              </div>;
+            })}
+          </div>
+          <div style={tit}>Regras para a IA</div>
+          <div style={sub}>
+            O que a IA precisa saber e os números não dizem: quem corta o fornecimento, com quem dá
+            para negociar, o que nunca pode atrasar. Vai em toda análise.
+          </div>
+          <textarea value={rascunho.instrucoes}
+            onChange={function(e){ setRascunho(Object.assign({}, rascunho, { instrucoes: e.target.value })); }}
+            rows={7}
+            placeholder={"Exemplos:\n- O fornecedor Auto Peças SP corta o fornecimento com 1 dia de atraso; nunca adiar.\n" +
+                         "- Imposto e folha nunca entram em 'adiar'.\n" +
+                         "- A transportadora aceita parcelar em 2x sem juros; pode negociar.\n" +
+                         "- Marketing pode esperar até o dia 20 sem prejuízo."}
+            style={{ width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)",
+                     padding:"12px 14px", borderRadius:10, fontSize:13, outline:"none", resize:"vertical",
+                     fontFamily:"inherit", lineHeight:1.6, boxSizing:"border-box", marginBottom:12 }} />
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={function(){ salvarConfig(Object.assign({}, config, { riscos: rascunho.riscos, instrucoes: rascunho.instrucoes })); setMostrarRegras(false); }}
+              style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"9px 24px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Salvar regras</button>
+            <button onClick={function(){ var p = configPrioridadePadrao(); setRascunho(Object.assign({}, p, { caixa: config.caixa, aReceber7d: config.aReceber7d })); }}
+              style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"9px 16px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Restaurar padrão</button>
+          </div>
+        </div>
+      )}
+
+      <div style={cartao}>
+        <div style={tit}>Quanto você tem para pagar</div>
+        <div style={sub}>
+          O sistema <b>não</b> sabe o seu saldo — não há conexão com banco aqui. Informe os valores
+          e o plano abaixo se ajusta na hora. Sem isso, a ordem continua valendo, mas o corte de
+          "o que cabe" não.
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))", gap:14 }}>
+          <div>
+            <label style={{ fontSize:11.5, color:"var(--text-3)", fontWeight:600, display:"block", marginBottom:4 }}>Caixa disponível hoje (R$)</label>
+            <input type="number" step="0.01" value={config.caixa} onChange={function(e){ setCampo("caixa", e.target.value); }} placeholder="0,00" style={campoNum} />
+          </div>
+          <div>
+            <label style={{ fontSize:11.5, color:"var(--text-3)", fontWeight:600, display:"block", marginBottom:4 }}>Previsão de entrada em 7 dias (R$)</label>
+            <input type="number" step="0.01" value={config.aReceber7d} onChange={function(e){ setCampo("aReceber7d", e.target.value); }} placeholder="0,00" style={campoNum} />
+            <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:3 }}>Estimativa sua — o sistema não projeta repasses do Mercado Livre.</div>
+          </div>
+        </div>
+        {caixa > 0 && (
+          <div style={{ marginTop:16, paddingTop:14, borderTop:"1px solid var(--border-soft)" }}>
+            <div style={{ display:"flex", gap:24, flexWrap:"wrap" }}>
+              <div><div style={{ fontSize:11, color:"var(--text-3)" }}>O caixa cobre</div>
+                <div style={{ fontSize:19, fontWeight:600, color:"#0a9d4e" }}>{plano.cabem.length} de {ranking.length} contas</div></div>
+              <div><div style={{ fontSize:11, color:"var(--text-3)" }}>Sobra depois de pagar</div>
+                <div style={{ fontSize:19, fontWeight:600, color:"var(--text-2)" }}>{fmt(plano.sobra)}</div></div>
+              <div><div style={{ fontSize:11, color:"var(--text-3)" }}>Fica de fora</div>
+                <div style={{ fontSize:19, fontWeight:600, color: plano.falta > 0 ? "#FF5252" : "var(--text-3)" }}>{fmt(plano.falta)}</div></div>
+              <div><div style={{ fontSize:11, color:"var(--text-3)" }}>Custa adiar o que ficou</div>
+                <div style={{ fontSize:19, fontWeight:600, color: plano.custoSemanaAdiado > 0 ? "#FFC107" : "var(--text-3)" }}>{fmt(plano.custoSemanaAdiado)}<span style={{ fontSize:12, fontWeight:400 }}> /semana</span></div></div>
+            </div>
+            {plano.falta > 0 && aReceber > 0 && (
+              <div style={{ fontSize:12, color:"var(--text-3)", marginTop:10 }}>
+                Com a entrada prevista de {fmt(aReceber)}, {aReceber >= plano.falta
+                  ? "o buraco fecha dentro dos 7 dias."
+                  : "ainda faltariam " + fmt(plano.falta - aReceber) + " para cobrir tudo."}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {estado === "error" && (
+        <div style={{ background:"rgba(255,82,82,.12)", border:"1px solid #FF5252", color:"#FF5252", borderRadius:10, padding:"11px 14px", fontSize:12.5, marginBottom:14 }}>{erro}</div>
+      )}
+
+      {analise && (
+        <div style={cartao}>
+          <div style={tit}>Leitura da IA</div>
+          {analise.resumo && <div style={{ fontSize:13.5, color:"var(--text-2)", lineHeight:1.6, marginBottom:12 }}>{analise.resumo}</div>}
+          {analise.alertas.length > 0 && (
+            <div style={{ background:"rgba(255,193,7,.10)", border:"1px solid rgba(255,193,7,.45)", borderRadius:10, padding:"11px 14px", marginBottom:10 }}>
+              {analise.alertas.map(function(a,i){ return <div key={i} style={{ fontSize:12.5, color:"var(--text-2)", lineHeight:1.6 }}>⚠ {a}</div>; })}
+            </div>
+          )}
+          {analise.seFaltarCaixa && plano.falta > 0 && (
+            <div style={{ fontSize:12.5, color:"var(--text-2)", lineHeight:1.6 }}><b>Se faltar caixa:</b> {analise.seFaltarCaixa}</div>
+          )}
+          {(analise.inventados.length > 0 || analise.semDecisao.length > 0) && (
+            <div style={{ marginTop:12, fontSize:11.5, color:"var(--text-3)", lineHeight:1.6, borderTop:"1px solid var(--border-soft)", paddingTop:10 }}>
+              {analise.inventados.length > 0 && <div>A IA citou {analise.inventados.length} conta(s) que não existem na sua lista; foram descartadas.</div>}
+              {analise.semDecisao.length > 0 && <div>{analise.semDecisao.length} conta(s) ficaram sem opinião da IA e aparecem abaixo só com a ordem calculada.</div>}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={_tableWrap}>
+        <table style={_table}>
+          <thead><tr>{["#","Urgência","Fornecedor","Categoria","Vencimento","Valor","Custo/semana","IA","Motivo",""].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+          <tbody>
+            {ranking.map(function(it, i){
+              var d = analise ? analise.porId[it.id] : null;
+              var cabe = caixa > 0 && plano.cabem.indexOf(it) >= 0;
+              return <tr key={it.id || i} style={{ background: cabe ? "rgba(10,157,78,.05)" : "transparent" }}>
+                <td style={{ ..._td, color:"var(--text-4)", width:34 }}>{i+1}</td>
+                <td style={_td}>
+                  <span title={"prazo " + it.pontosPrazo + " + risco " + it.pontosRisco + " + custo do atraso " + Math.round(it.pontosCusto)}
+                    style={{ fontSize:12, fontWeight:700, color: it.urgencia >= 60 ? "#FF5252" : it.urgencia >= 40 ? "#FFC107" : "var(--text-3)" }}>{it.urgencia}</span>
+                </td>
+                <td style={{ ..._td, color:"var(--text-strong)", maxWidth:230 }}>{it.descricao}</td>
+                <td style={_td}>{it.categoria}</td>
+                <td style={_td}>
+                  {it.vencimento ? (fmtDate(it.vencimento) || it.vencimento) : <span style={{ color:"var(--text-4)" }}>sem data</span>}
+                  {it.dias != null && <div style={{ fontSize:10.5, color: it.vencida ? "#FF5252" : "var(--text-4)" }}>
+                    {it.vencida ? Math.abs(it.dias) + " dias vencida" : (it.dias === 0 ? "vence hoje" : "em " + it.dias + " dias")}
+                  </div>}
+                </td>
+                <td style={{ ..._tdMono, fontWeight:600 }}>{fmt(it.valor)}</td>
+                <td style={_tdMono}>{it.custo7 > 0 ? <span style={{ color:"#FFC107" }}>{fmt(it.custo7)}</span> : <span style={{ color:"var(--text-4)" }}>—</span>}</td>
+                <td style={_td}>
+                  {d ? <span style={{ fontSize:11, fontWeight:700, padding:"2px 9px", borderRadius:20, background:"var(--surface-3)", color:corAcao[d.acao] }}>{rotuloAcao[d.acao]}</span>
+                     : <span style={{ color:"var(--text-4)", fontSize:11 }}>—</span>}
+                </td>
+                <td style={{ ..._td, fontSize:12, maxWidth:300, color:"var(--text-3)" }}>
+                  {d ? d.motivo : ""}
+                  {d && d.comoNegociar && <div style={{ marginTop:3, color:"#FFC107" }}>{d.comoNegociar}</div>}
+                </td>
+                <td style={{ ..._td, textAlign:"right" }}>
+                  <button onClick={function(){ marcarPaga(it); }}
+                    style={{ background:"rgba(10,157,78,.12)", border:"none", color:"var(--ui-accent)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer", whiteSpace:"nowrap" }}>Pagar</button>
+                </td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ fontSize:11.5, color:"var(--text-3)", marginTop:10, lineHeight:1.6 }}>
+        A urgência é calculada aqui, sem IA: <b>prazo</b> (0 a 50, cresce com o atraso) +
+        <b> risco da categoria</b> (0 a 30, os pesos acima) + <b>custo do atraso</b> (0 a 20, juros e
+        multa da própria conta em relação ao valor dela). Passe o mouse no número para ver as três parcelas.
+        O <b>custo por semana</b> usa a multa da conta — só quando ela ainda não venceu — mais os juros
+        mensais proporcionais a 7 dias. Todos os valores em reais são calculados pelo sistema; a IA só
+        classifica e escreve os motivos.
+      </div>
+    </div>
+  );
+}
+
 function ContasPagarTab({ contas, salvar }) {
   const [modal, setModal] = useState(null);
   const [busca, setBusca] = useState("");
@@ -3748,6 +4180,7 @@ function HomeTab({ enrichedOrders, currentUser, setTab }){
     ]},
     { titulo:"Financeiro", itens:[
       { key:"contas_pagar", label:"Contas a pagar", desc:"Despesas e vencimentos" },
+      { key:"prioridade_pagamento", label:"Prioridade de pagamento", desc:"Que contas pagar primeiro com o caixa que você tem" },
       { key:"contas_receber", label:"Contas a receber", desc:"Recebíveis dos marketplaces" },
       { key:"dre", label:"DRE e conciliação", desc:"Demonstrativo de resultado" },
     ]},
@@ -4857,6 +5290,7 @@ function SinoNotificacoes({ notificacoes, setNotificacoes, darkMode }) {
 
 const BACKUP_KEYS = [
   { key: "contas_pagar",            label: "Contas a Pagar" },
+  { key: "prioridade_pagamento_config", label: "Regras de prioridade de pagamento" },
   { key: "contas_bancarias",        label: "Caixas e Bancos" },
   { key: "lancamentos",             label: "Lançamentos Financeiros" },
   { key: "categorias_pagar",        label: "Categorias" },
@@ -8225,6 +8659,20 @@ export default function App() {
     try { localStorage.setItem("pedidos_compra", JSON.stringify(lista)); } catch(e) {}
     try { kvSyncPush("pedidos_compra", lista); } catch(e) {}
   }
+  // Regras e caixa da tela de Prioridade de pagamento. O caixa fica aqui junto
+  // das regras porque é informado à mão e vale entre visitas à tela.
+  const [configPrioridade, setConfigPrioridadeState] = useState(function(){
+    try {
+      var v = JSON.parse(localStorage.getItem("prioridade_pagamento_config") || "{}");
+      var pad = configPrioridadePadrao();
+      return Object.assign(pad, v || {}, { riscos: Object.assign(pad.riscos, (v && v.riscos) || {}) });
+    } catch { return configPrioridadePadrao(); }
+  });
+  function setConfigPrioridade(cfg) {
+    setConfigPrioridadeState(cfg);
+    try { localStorage.setItem("prioridade_pagamento_config", JSON.stringify(cfg)); } catch(e) {}
+    try { kvSyncPush("prioridade_pagamento_config", cfg); } catch(e) {}
+  }
   const [contasBancarias, setContasBancarias] = useState(() => {
     try { var v = JSON.parse(localStorage.getItem("contas_bancarias") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
   });
@@ -8461,7 +8909,7 @@ export default function App() {
     "custos_fixos_config","impostos_config","irpj_csll_config","icms_por_estado","icms_regime_config","lancamentos",
     "mov_estoque","metaMensal","min_stock_anuncios","real_fees_config","pedidos_compra",
     "precificacao_extras","precos_pendentes_ml","custos_extras_config","depositos_estoque","estoque_depositos",
-    "envios_full","vendas_estoque_baixadas","sku_overrides","analise_ia_config",
+    "envios_full","vendas_estoque_baixadas","sku_overrides","analise_ia_config","prioridade_pagamento_config",
   ]).current;
   // Para os dados guardados como dicionário (chave→valor, ex: custo por anúncio), mesclar em
   // vez de substituir por inteiro — evita que um "pull" com dados parciais do servidor apague
@@ -8498,6 +8946,7 @@ export default function App() {
     sku_overrides: mesclarSetter(setSkuOverrides),
     custos_extras_config: mesclarSetter(setCustosExtras),
     analise_ia_config: function(v){ setConfigQualidade(v); },
+    prioridade_pagamento_config: mesclarSetter(setConfigPrioridadeState),
   }).current;
   // Tipo esperado de cada chave — usado para blindar contra um valor no formato errado
   // (ex: um objeto onde deveria vir uma lista) travando a tela com "x.filter is not a function".
@@ -8511,6 +8960,7 @@ export default function App() {
     icms_regime_config: "object", icms_por_estado: "object",
     min_stock_anuncios: "object", real_fees_config: "object", sku_overrides: "object",
     custos_extras_config: "object", analise_ia_config: "object",
+    prioridade_pagamento_config: "object",
   }).current;
   const lastSyncRef = useRef({}); // key -> string JSON já sincronizado (evita reenviar/reaplicar sem necessidade)
 
@@ -9487,6 +9937,7 @@ export default function App() {
             ]},
             { titulo:"Financeiro", itens:[
               { key:"contas_pagar", label:"Contas a pagar" },
+              { key:"prioridade_pagamento", label:"Prioridade de pagamento" },
               { key:"contas_receber", label:"Contas a receber" },
               { key:"dre", label:"DRE e conciliação" },
             ]},
@@ -10097,6 +10548,7 @@ export default function App() {
         {tab === "notas_fiscais" && <EmConstrucao tab="notas_fiscais" />}
         {tab === "contas_receber" && <ContasReceberTab enrichedOrders={enrichedOrders} paymentData={paymentData} />}
         {tab === "contas_pagar" && <ContasPagarTab contas={contasPagar} salvar={salvarContasPagar} />}
+        {tab === "prioridade_pagamento" && <PrioridadePagamentoTab contas={contasPagar} salvarContas={salvarContasPagar} config={configPrioridade} salvarConfig={setConfigPrioridade} />}
         {tab === "compras" && <ComprasTab produtos={produtos} pedidos={pedidosCompra} salvar={salvarPedidosCompra} />}
         {tab === "clientes" && <ClientesTab rawOrders={rawOrders} />}
         {tab === "tendencias" && <TendenciasTab setTab={setTab} setBuscaPrecificacao={setBuscaPrecificacao} enriched={enriched} />}

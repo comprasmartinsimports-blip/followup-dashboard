@@ -8349,8 +8349,8 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
     return (
       <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 0", borderBottom:"1px solid var(--border-soft)" }}>
         <div style={{ flex:1, fontSize:13, color:"var(--text-strong)", fontWeight:500 }}>{item.nome}</div>
-        <div style={{ fontSize:13, fontWeight:500, color:"var(--text-2)" }}>{item.tipo==="%" ? item.valor+"%" : "R$ "+parseFloat(item.valor).toFixed(2).replace(".",",")}</div>
-        <div style={{ fontSize:12, color:"var(--text-3)" }}>= R$ {calcValor(item, faturamentoMes).toFixed(2).replace(".",",")}</div>
+        <div style={{ fontSize:13, fontWeight:500, color:"var(--text-2)" }}>{item.tipo==="%" ? item.valor+"%" : fmt(parseFloat(item.valor)||0)}</div>
+        <div style={{ fontSize:12, color:"var(--text-3)" }}>= {fmt(calcValor(item, faturamentoMes))}</div>
         <button onClick={function(){ onRemove(item.id); }} style={{ background:"rgba(255,82,82,.12)", border:"none", color:"#FF5252", width:24, height:24, borderRadius:6, cursor:"pointer", fontSize:11, flexShrink:0 }}>✕</button>
       </div>
     );
@@ -8360,15 +8360,15 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
 
       {/* ── IMPOSTOS — Lucro Real ── */}
-      <div style={{ background:"var(--surface)", border:"1px solid rgba(255,82,82,.35)", borderRadius:14, overflow:"hidden" }}>
-        <div style={{ background:"rgba(255,82,82,.12)", padding:"10px 14px", borderBottom:"1px solid rgba(255,82,82,.35)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+      <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden" }}>
+        <div style={{ background:"var(--surface-3)", padding:"10px 14px", borderBottom:"1px solid var(--border)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
-            <div style={{ fontWeight:500, fontSize:14, color:"#FF5252" }}>📋 Impostos — Regime Lucro Real</div>
+            <div style={{ fontWeight:600, fontSize:14, color:"var(--text-strong)" }}>Impostos — Regime Lucro Real</div>
             <div style={{ fontSize:11, color:"var(--text-3)", marginTop:1 }}>ICMS sobre a venda, IRPJ e CSLL</div>
           </div>
           <div style={{ textAlign:"right" }}>
             <div style={{ fontSize:11, color:"var(--text-3)" }}>IRPJ+CSLL s/ faturamento</div>
-            <div style={{ fontSize:17, fontWeight:600, color:"#FF5252" }}>R$ {totalImpFixo.toFixed(2).replace(".",",")}</div>
+            <div style={{ fontSize:17, fontWeight:600, color: totalImpFixo > 0 ? FIN_COR.saida : "var(--text-3)" }}>{fmt(totalImpFixo)}</div>
           </div>
         </div>
 
@@ -8430,9 +8430,9 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
               return (
                 <button key={m[0]} onClick={function(){ setRegimeCampo("modo", m[0]); }}
                   style={{ flex:1, fontSize:11, fontWeight:600, padding:"7px 10px", borderRadius:8, cursor:"pointer",
-                    background: ativo ? "rgba(255,82,82,.12)" : "var(--bg-2)",
-                    border: "1px solid " + (ativo ? "rgba(255,82,82,.45)" : "var(--border)"),
-                    color: ativo ? "#FF5252" : "var(--text-2)" }}>
+                    background: ativo ? "#768692" : "var(--bg-2)",
+                    border: "1px solid " + (ativo ? "#768692" : "var(--border)"),
+                    color: ativo ? "#fff" : "var(--text-2)" }}>
                   {m[1]}
                 </button>
               );
@@ -8472,14 +8472,14 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
               <div style={{ fontSize:11, color:"var(--text-3)", marginTop:10, lineHeight:1.5 }}>
                 {regime.ativo === false
                   ? "ICMS desligado — nenhuma alíquota é descontada da margem."
-                  : <>Venda entregue em <b style={{ color:"var(--text-2)" }}>{ufOrigem}</b>: <b style={{ color:"#FF5252" }}>{(parseFloat(regime.aliqInterna) || 0).toFixed(2).replace(".", ",")}%</b> · venda para <b style={{ color:"var(--text-2)" }}>qualquer outro estado</b>: <b style={{ color:"#FF5252" }}>{(parseFloat(regime.aliqInterestadual) || 0).toFixed(2).replace(".", ",")}%</b>. Anúncios e Precificação, que ainda não têm comprador, projetam pela alíquota interestadual.</>}
+                  : <>Venda entregue em <b style={{ color:"var(--text-2)" }}>{ufOrigem}</b>: <b style={{ color: (parseFloat(regime.aliqInterna) || 0) > 0 ? FIN_COR.saida : "var(--text-3)" }}>{(parseFloat(regime.aliqInterna) || 0).toFixed(2).replace(".", ",")}%</b> · venda para <b style={{ color:"var(--text-2)" }}>qualquer outro estado</b>: <b style={{ color: (parseFloat(regime.aliqInterestadual) || 0) > 0 ? FIN_COR.saida : "var(--text-3)" }}>{(parseFloat(regime.aliqInterestadual) || 0).toFixed(2).replace(".", ",")}%</b>. Anúncios e Precificação, que ainda não têm comprador, projetam pela alíquota interestadual.</>}
               </div>
             </div>
           ) : !showIcmsTable ? (
             <>
             <div style={{ display:"flex", justifyContent:"flex-end", gap:6, marginBottom:8 }}>
               <button onClick={resetIcmsPadrao}
-                style={{ fontSize:10, color:"#0e7490", background:"rgba(0,240,255,.10)", border:"1px solid rgba(0,240,255,.35)", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontWeight:600 }}>
+                style={{ fontSize:10, color:"var(--text-2)", background:"var(--surface)", border:"1px solid var(--border)", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontWeight:600 }}>
                 ↺ Usar alíquotas padrão
               </button>
               <button onClick={function(){ setShowIcmsTable(function(v){return !v;}); }}
@@ -8495,7 +8495,7 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
               <div style={{ width:1, height:28, background:"var(--surface-3)" }} />
               <div>
                 <div style={{ fontSize:10, color:"var(--text-3)" }}>Alíquota média configurada</div>
-                <div style={{ fontSize:16, fontWeight:600, color:"#FF5252" }}>{icmsMedioRef.toFixed(2)}%</div>
+                <div style={{ fontSize:16, fontWeight:600, color: icmsMedioRef > 0 ? FIN_COR.saida : "var(--text-3)" }}>{icmsMedioRef.toFixed(2)}%</div>
               </div>
               {ufsConfigurados.length===0 && (
                 <div style={{ fontSize:11, color:"#FFC107", marginLeft:"auto" }}>⚠️ Clique em "Usar alíquotas padrão" para começar</div>
@@ -8506,7 +8506,7 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
             <>
             <div style={{ display:"flex", justifyContent:"flex-end", gap:6, marginBottom:8 }}>
               <button onClick={resetIcmsPadrao}
-                style={{ fontSize:10, color:"#0e7490", background:"rgba(0,240,255,.10)", border:"1px solid rgba(0,240,255,.35)", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontWeight:600 }}>
+                style={{ fontSize:10, color:"var(--text-2)", background:"var(--surface)", border:"1px solid var(--border)", padding:"3px 8px", borderRadius:6, cursor:"pointer", fontWeight:600 }}>
                 ↺ Usar alíquotas padrão
               </button>
               <button onClick={function(){ setShowIcmsTable(function(v){return !v;}); }}
@@ -8536,15 +8536,15 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
       </div>
 
       {/* ── CUSTOS FIXOS DETALHADOS ── */}
-      <div style={{ background:"var(--surface)", border:"1px solid rgba(255,193,7,.35)", borderRadius:14, overflow:"hidden" }}>
-        <div style={{ background:"rgba(255,193,7,.12)", padding:"10px 14px", borderBottom:"1px solid rgba(255,193,7,.35)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+      <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden" }}>
+        <div style={{ background:"var(--surface-3)", padding:"10px 14px", borderBottom:"1px solid var(--border)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
-            <div style={{ fontWeight:500, fontSize:14, color:"#FFC107" }}>🏢 Custos Fixos Detalhados</div>
+            <div style={{ fontWeight:600, fontSize:14, color:"var(--text-strong)" }}>Custos fixos</div>
             <div style={{ fontSize:11, color:"var(--text-3)", marginTop:1 }}>Aluguel, salários, assinaturas, sistemas...</div>
           </div>
           <div style={{ textAlign:"right" }}>
             <div style={{ fontSize:11, color:"var(--text-3)" }}>Total mensal</div>
-            <div style={{ fontSize:17, fontWeight:600, color:"#FFC107" }}>R$ {totalFix.toFixed(2).replace(".",",")}</div>
+            <div style={{ fontSize:17, fontWeight:600, color: totalFix > 0 ? FIN_COR.saida : "var(--text-3)" }}>{fmt(totalFix)}</div>
           </div>
         </div>
         <div style={{ padding:"12px 18px" }}>

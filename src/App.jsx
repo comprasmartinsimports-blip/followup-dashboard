@@ -4460,15 +4460,81 @@ function DreTab({ enrichedOrders, contasPagar, custosFixos, recebiveisBaixados, 
   );
 }
 
+// Soma meses preservando o dia do vencimento. Dia 31 em mês de 30 cai no
+// último dia do mês, não vira o dia 1 do seguinte — que é o que o Date faz
+// sozinho e jogaria a conta para fora do mês a que pertence.
+function somarMeses(iso, n) {
+  var p = String(iso).slice(0,10).split("-");
+  var ano = parseInt(p[0],10), mes = parseInt(p[1],10) - 1 + n, dia = parseInt(p[2],10);
+  var d = new Date(Date.UTC(ano, mes, 1));
+  var ultimo = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  d.setUTCDate(Math.min(dia, ultimo));
+  return d.toISOString().slice(0,10);
+}
+
+// Expande uma conta recorrente nas contas do periodo. Cada uma e uma conta
+// inteira e independente: pode ser paga, editada ou excluida sozinha. Ficam
+// ligadas por serieId so para a tela saber dizer de que serie vieram.
+var MAX_SERIE = 120;   // teto de seguranca: 10 anos de mensal
+function expandirRecorrencia(base) {
+  if (base.ocorrencia !== "mensal" && base.ocorrencia !== "parcelada") return [base];
+  var venc = base.vencimento;
+  if (!venc) return [base];
+  var serie = "sr_" + Date.now() + "_" + Math.floor(Math.random()*1000);
+  var datas = [];
+  if (base.ocorrencia === "parcelada") {
+    var n = Math.max(1, Math.min(MAX_SERIE, parseInt(base.parcelas, 10) || 1));
+    for (var i = 0; i < n; i++) datas.push(somarMeses(venc, i));
+  } else {
+    var ate = base.recorrenciaAte || "";
+    if (!ate) return [base];                       // sem limite nao se gera nada
+    for (var k = 0; k < MAX_SERIE; k++) {
+      var d = somarMeses(venc, k);
+      if (d > ate) break;
+      datas.push(d);
+    }
+  }
+  var valorUn = parseFloat(base.valor) || 0;
+  if (base.ocorrencia === "parcelada" && base.baseValor === "total" && datas.length > 0) {
+    valorUn = Math.round((valorUn / datas.length) * 100) / 100;
+  }
+  return datas.map(function(d, i){
+    return Object.assign({}, base, {
+      id: "cp_" + Date.now() + "_" + i + "_" + Math.floor(Math.random()*1000),
+      vencimento: d,
+      valor: String(valorUn),
+      valorTotal: valorUn * (1 + ((parseFloat(base.juros)||0) + (parseFloat(base.multa)||0)) / 100),
+      serieId: serie, parcela: i + 1, parcelas: datas.length,
+      status: "pendente",
+    });
+  });
+}
+
 // Modal de conta a pagar.
-function ContaModal({ conta, onSave, onClose, contasBancarias }) {
+function ContaModal({ conta, onSave, onClose, contasBancarias, categorias, fornecedores }) {
   var hoje = new Date().toISOString().slice(0,10);
-  const [f, setF] = useState(function(){ return Object.assign({ descricao:"", categoria:"", emissao:hoje, competencia:hoje, vencimento:"", valor:"", historico:"", forma:"", conta:"", ndoc:"", juros:"0", multa:"0", ocorrencia:"unica", status:"pendente" }, conta || {}); });
+  const [f, setF] = useState(function(){ return Object.assign({ descricao:"", categoria:"", emissao:hoje, competencia:hoje, vencimento:"", valor:"", historico:"", forma:"", conta:"", ndoc:"", juros:"0", multa:"0", ocorrencia:"unica", recorrenciaAte:"", parcelas:"12", baseValor:"cada", status:"pendente" }, conta || {}); });
   const [aba, setAba] = useState("pagamento");
   function set(k,v){ setF(function(s){ return Object.assign({}, s, { [k]:v }); }); }
   var valorNum = parseFloat(f.valor)||0, jurosPct = parseFloat(f.juros)||0, multaPct = parseFloat(f.multa)||0;
   var jurosVal = valorNum*jurosPct/100, multaVal = valorNum*multaPct/100, totalVal = valorNum + jurosVal + multaVal;
-  function salvar(baixa){ var p = Object.assign({}, f, { valorTotal: totalVal }); if (!p.descricao){ alert("Informe o fornecedor."); return; } if (!p.id) p.id = "cp_"+Date.now(); if (baixa){ p.status="paga"; p.pago_em=hoje; } onSave(p); }
+  // Uma conta ja existente nunca vira serie: editar a parcela de marco nao pode
+  // recriar o ano inteiro. A recorrencia so expande na criacao.
+  var editando = !!(conta && conta.id);
+  var previa = editando ? [] : expandirRecorrencia(Object.assign({}, f, { valorTotal: totalVal }));
+  function salvar(baixa){
+    var p = Object.assign({}, f, { valorTotal: totalVal });
+    if (!p.descricao){ alert("Informe o fornecedor."); return; }
+    if (!editando && (f.ocorrencia === "mensal") && !f.recorrenciaAte) {
+      alert("Informe até quando a conta se repete, na aba Ocorrência.\n\nSem uma data limite não dá para saber quantas contas criar."); return;
+    }
+    if (!p.id) p.id = "cp_"+Date.now();
+    if (baixa){ p.status="paga"; p.pago_em=hoje; }
+    if (editando || f.ocorrencia === "unica") { onSave(p); return; }
+    var serie = expandirRecorrencia(p);
+    if (baixa && serie.length) { serie[0].status = "paga"; serie[0].pago_em = hoje; }
+    onSave(serie);
+  }
   var campo = { width:"100%", background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 11px", borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box" };
   var lbl = { fontSize:11.5, color:"var(--text-3)", fontWeight:600, marginBottom:4, display:"block" };
   var req = <span style={{ color:"#FF5252" }}> *</span>;
@@ -4477,12 +4543,23 @@ function ContaModal({ conta, onSave, onClose, contasBancarias }) {
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:600, display:"flex", alignItems:"flex-start", justifyContent:"center", padding:"24px 16px", overflowY:"auto" }} onClick={onClose}>
       <div onClick={function(e){ e.stopPropagation(); }} style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:14, width:780, maxWidth:"100%", display:"flex", flexDirection:"column", maxHeight:"92vh" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"18px 22px 6px" }}>
-          <div style={{ fontWeight:600, fontSize:18, color:"var(--text-strong)" }}>Conta a pagar</div>
+          <div>
+            <div style={{ fontWeight:600, fontSize:18, color:"var(--text-strong)" }}>Conta a pagar</div>
+            {editando && conta && conta.serieId && (
+              <div style={{ fontSize:11.5, color:"var(--text-3)", marginTop:2 }}>
+                Parcela <b>{conta.parcela} de {conta.parcelas}</b> de uma série — a alteração vale só para ela.
+              </div>
+            )}
+          </div>
           <button onClick={onClose} style={{ background:"none", border:"none", color:"var(--text-3)", fontSize:22, cursor:"pointer" }}>×</button>
         </div>
         <div style={{ padding:"6px 22px", overflowY:"auto" }}>
           <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:12, marginBottom:12 }}>
-            <div><label style={lbl}>Fornecedor{req}</label><input value={f.descricao||""} onChange={function(e){ set("descricao", e.target.value); }} placeholder="Nome do fornecedor" style={campo} /></div>
+            <div><label style={lbl}>Fornecedor{req}</label>
+              <input value={f.descricao||""} onChange={function(e){ set("descricao", e.target.value); }} placeholder="Nome do fornecedor" list="lista-forn-conta" style={campo} />
+              <datalist id="lista-forn-conta">{(fornecedores||[]).map(function(x,i){ var n = x.nome || x.razaoSocial || x.fantasia || String(x); return <option key={i} value={n} />; })}</datalist>
+              <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:3 }}>Fornecedor novo entra no cadastro ao salvar.</div>
+            </div>
             <div><label style={lbl}>Valor (R$){req}</label><input type="number" step="0.01" value={f.valor||""} onChange={function(e){ set("valor", e.target.value); }} placeholder="0,00" style={campo} /></div>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:12 }}>
@@ -4504,7 +4581,11 @@ function ContaModal({ conta, onSave, onClose, contasBancarias }) {
                 </select>
                 <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:3 }}>Sem isso, a baixa não desconta de nenhum saldo.</div>
               </div>
-              <div><label style={lbl}>Categoria</label><input value={f.categoria||""} onChange={function(e){ set("categoria", e.target.value); }} placeholder="Sem categoria" style={campo} /></div>
+              <div><label style={lbl}>Categoria</label>
+                <input value={f.categoria||""} onChange={function(e){ set("categoria", e.target.value); }} placeholder="Sem categoria" list="lista-cat-conta" style={campo} />
+                <datalist id="lista-cat-conta">{(categorias||[]).map(function(c){ return <option key={c} value={c} />; })}</datalist>
+                <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:3 }}>Categoria nova entra na lista ao salvar.</div>
+              </div>
               <div><label style={lbl}>Nº documento</label><input value={f.ndoc||""} onChange={function(e){ set("ndoc", e.target.value); }} style={campo} /></div>
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
@@ -4512,7 +4593,54 @@ function ContaModal({ conta, onSave, onClose, contasBancarias }) {
               <div><label style={lbl}>Multa (%)</label><input type="number" step="0.01" value={f.multa||""} onChange={function(e){ set("multa", e.target.value); }} style={campo} /></div>
             </div>
           </>}
-          {aba==="ocorrencia" && <div><label style={lbl}>Ocorrência</label><select value={f.ocorrencia||"unica"} onChange={function(e){ set("ocorrencia", e.target.value); }} style={{ ...campo, maxWidth:360 }}><option value="unica">Única</option><option value="mensal">Mensal (recorrente)</option><option value="parcelada">Parcelada</option></select></div>}
+          {aba==="ocorrencia" && <div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))", gap:12 }}>
+              <div><label style={lbl}>Ocorrência</label>
+                <select value={f.ocorrencia||"unica"} onChange={function(e){ set("ocorrencia", e.target.value); }} style={campo} disabled={editando}>
+                  <option value="unica">Única</option>
+                  <option value="mensal">Mensal (recorrente)</option>
+                  <option value="parcelada">Parcelada</option>
+                </select>
+              </div>
+              {f.ocorrencia === "mensal" && (
+                <div><label style={lbl}>Repetir até{req}</label>
+                  <input type="date" value={f.recorrenciaAte||""} onChange={function(e){ set("recorrenciaAte", e.target.value); }} style={campo} disabled={editando} />
+                  <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:3 }}>Última data em que a conta se repete.</div>
+                </div>
+              )}
+              {f.ocorrencia === "parcelada" && <>
+                <div><label style={lbl}>Número de parcelas</label>
+                  <input type="number" min="1" max="120" value={f.parcelas||""} onChange={function(e){ set("parcelas", e.target.value); }} style={campo} disabled={editando} />
+                </div>
+                <div><label style={lbl}>O valor informado é</label>
+                  <select value={f.baseValor||"cada"} onChange={function(e){ set("baseValor", e.target.value); }} style={campo} disabled={editando}>
+                    <option value="cada">de cada parcela</option>
+                    <option value="total">o total, a dividir</option>
+                  </select>
+                </div>
+              </>}
+            </div>
+            {editando ? (
+              <div style={{ marginTop:14, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"11px 14px", fontSize:12.5, color:"var(--text-3)", lineHeight:1.6 }}>
+                Esta conta já existe, então a alteração vale <b>só para ela</b>.
+                {conta && conta.serieId ? " Ela faz parte de uma série (parcela " + conta.parcela + " de " + conta.parcelas + "); as outras não mudam." : " Para criar uma série, cadastre uma conta nova."}
+              </div>
+            ) : f.ocorrencia !== "unica" && (
+              <div style={{ marginTop:14, background: previa.length > 1 ? "rgba(10,157,78,.10)" : "rgba(255,193,7,.10)",
+                            border:"1px solid " + (previa.length > 1 ? "rgba(10,157,78,.4)" : "rgba(255,193,7,.45)"),
+                            borderRadius:10, padding:"11px 14px", fontSize:12.5, color:"var(--text-2)", lineHeight:1.6 }}>
+                {previa.length > 1
+                  ? <>Serão criadas <b>{previa.length} contas</b>, de {fmtDate(previa[0].vencimento)||previa[0].vencimento} até {fmtDate(previa[previa.length-1].vencimento)||previa[previa.length-1].vencimento},
+                      de {fmt(parseFloat(previa[0].valor)||0)} cada — total {fmt(previa.reduce(function(a,c){ return a + (parseFloat(c.valor)||0); },0))}.
+                      Cada uma pode ser paga, editada ou excluída sozinha.</>
+                  : f.ocorrencia === "mensal" && !f.recorrenciaAte
+                    ? "Informe até quando a conta se repete para o sistema saber quantas criar."
+                    : !f.vencimento
+                      ? "Informe o vencimento da primeira, na aba Pagamento."
+                      : "Com estes valores sai só uma conta."}
+              </div>
+            )}
+          </div>}
           {aba==="anexos" && <div style={{ border:"1px dashed var(--border)", borderRadius:10, padding:"28px", textAlign:"center", color:"var(--text-3)", fontSize:13 }}>📎 Anexos ficam disponíveis com a integração de arquivos.</div>}
 
           <div style={{ display:"flex", flexWrap:"wrap", gap:18, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"12px 16px", marginTop:16 }}>
@@ -5430,7 +5558,7 @@ function PrioridadePagamentoTab({ contas, salvarContas, config, salvarConfig, sa
   );
 }
 
-function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab }) {
+function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categorias, salvarCategorias, fornecedores, salvarFornecedores }) {
   const [modal, setModal] = useState(null);
   const [importando, setImportando] = useState(false);
   const [resultadoImp, setResultadoImp] = useState(null);
@@ -5439,11 +5567,25 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab }) {
   const [mostrarFiltros, setMostrarFiltros] = useState(true);
   const [mostrarAcoes, setMostrarAcoes] = useState(true);
   const [fCategoria, setFCategoria] = useState("");
+  const [de, setDe] = useState("");
+  const [ate, setAte] = useState("");
   var hoje = new Date().toISOString().slice(0, 10);
+  // Atalhos: um clique cobre o que se pergunta todo dia, sem digitar duas datas.
+  function periodoRapido(qual){
+    var d = new Date(), a = new Date();
+    if (qual === "mes")      { d = new Date(a.getFullYear(), a.getMonth(), 1); a = new Date(a.getFullYear(), a.getMonth()+1, 0); }
+    else if (qual === "prox"){ d = new Date(a.getFullYear(), a.getMonth()+1, 1); a = new Date(a.getFullYear(), a.getMonth()+2, 0); }
+    else if (qual === "30")  { a.setDate(a.getDate()+30); }
+    else if (qual === "vencidas") { setDe(""); setAte(new Date(Date.now()-86400000).toISOString().slice(0,10)); return; }
+    else { setDe(""); setAte(""); return; }
+    setDe(d.toISOString().slice(0,10)); setAte(a.toISOString().slice(0,10));
+  }
   function statusReal(c){ if (c.status === "paga") return "paga"; if (c.status === "cancelada") return "cancelada"; if (c.vencimento && c.vencimento < hoje) return "vencida"; return "pendente"; }
   var lista = (contas || []).filter(function(c){
     if (sit !== "todas" && statusReal(c) !== sit) return false;
     if (fCategoria && String(c.categoria||"").toLowerCase().indexOf(fCategoria.toLowerCase()) < 0) return false;
+    if (de && (c.vencimento || "") < de) return false;
+    if (ate && (c.vencimento || "") > ate) return false;
     if (busca.trim()){ var q = busca.trim().toLowerCase(); if (!((c.descricao||"").toLowerCase().indexOf(q)>=0 || (c.categoria||"").toLowerCase().indexOf(q)>=0)) return false; }
     return true;
   }).slice().sort(function(a,b){ return (a.vencimento || "").localeCompare(b.vencimento || ""); });
@@ -5455,17 +5597,49 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab }) {
     { l:"Pagas", v:fmt(soma(function(c){ return statusReal(c) === "paga"; })), c:"#0a9d4e" },
     { l:"Canceladas", v:fmt(soma(function(c){ return statusReal(c) === "cancelada"; })), c:"var(--text-3)" },
   ];
-  function salvarConta(c){ var arr = (contas || []).slice(); var i = arr.findIndex(function(x){ return x.id === c.id; }); if (i >= 0) arr[i] = c; else arr.push(c); salvar(arr); setModal(null); }
+  // Recebe uma conta ou a série inteira que o modal expandiu.
+  function salvarConta(c){
+    var novas = Array.isArray(c) ? c : [c];
+    var arr = (contas || []).slice();
+    novas.forEach(function(n){
+      var i = arr.findIndex(function(x){ return x.id === n.id; });
+      if (i >= 0) arr[i] = n; else arr.push(n);
+    });
+    salvar(arr);
+    // O que foi digitado uma vez fica no sistema: a próxima conta já sugere.
+    var cat = String(novas[0].categoria || "").trim();
+    if (cat && salvarCategorias && (categorias || []).indexOf(cat) < 0) {
+      salvarCategorias((categorias || []).concat([cat]));
+    }
+    var forn = String(novas[0].descricao || "").trim();
+    if (forn && salvarFornecedores) {
+      var jaTem = (fornecedores || []).some(function(x){
+        return String(x.nome || x.razaoSocial || x.fantasia || x).trim().toLowerCase() === forn.toLowerCase();
+      });
+      if (!jaTem) salvarFornecedores((fornecedores || []).concat([{ id:"fn_"+Date.now(), nome:forn, origem:"contas a pagar" }]));
+    }
+    setModal(null);
+    if (novas.length > 1) setResultadoImp(novas.length + " contas criadas — a série inteira já está na lista.");
+  }
   function baixar(c){ salvar((contas || []).map(function(x){ return x.id === c.id ? Object.assign({}, x, { status:"paga", pago_em:hoje }) : x; })); }
-  function excluir(c){ if (!window.confirm("Excluir esta conta?")) return; salvar((contas || []).filter(function(x){ return x.id !== c.id; })); }
+  function excluir(c){
+    var daSerie = c.serieId ? (contas || []).filter(function(x){ return x.serieId === c.serieId && x.status !== "paga"; }) : [];
+    if (daSerie.length > 1) {
+      var todas = window.confirm("Esta conta faz parte de uma série de " + c.parcelas + " parcelas.\n\n" +
+        "OK = excluir as " + daSerie.length + " parcelas em aberto da série.\n" +
+        "Cancelar = excluir só esta.");
+      if (todas) { salvar((contas || []).filter(function(x){ return !(x.serieId === c.serieId && x.status !== "paga"); })); return; }
+    } else if (!window.confirm("Excluir esta conta?")) return;
+    salvar((contas || []).filter(function(x){ return x.id !== c.id; }));
+  }
   var badge = { pendente:["var(--text-2)","var(--surface-3)","Pendente"], vencida:["#FF5252","rgba(255,82,82,.14)","Vencida"], paga:["#0a9d4e","rgba(10,157,78,.14)","Paga"], cancelada:["var(--text-3)","var(--surface-3)","Cancelada"] };
   var sits = [["todas","Todas"],["pendente","Pendentes"],["vencida","Vencidas"],["paga","Pagas"],["cancelada","Canceladas"]];
   var selFiltro = { width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"7px 9px", borderRadius:8, fontSize:12.5 };
   var filtBtn = { background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"9px 12px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" };
-  function limpar(){ setSit("todas"); setFCategoria(""); setBusca(""); }
+  function limpar(){ setSit("todas"); setFCategoria(""); setBusca(""); setDe(""); setAte(""); }
   function exportar(){ baixarCSV("contas-pagar", ["Vencimento","Fornecedor","Categoria","Valor","Situação"], lista.map(function(c){ return [c.vencimento||"", c.descricao||"", c.categoria||"", (parseFloat(c.valor)||0).toFixed(2), statusReal(c)]; })); }
   function imprimir(){ baixarPDF("contas-a-pagar", ["Vencimento","Fornecedor","Categoria","Valor","Situação"], lista.map(function(c){ return [c.vencimento?(fmtDate(c.vencimento)||c.vencimento):"—", c.descricao||"", c.categoria||"", fmt(parseFloat(c.valor)||0), statusReal(c)]; })); }
-  var temFiltro = sit!=="todas" || fCategoria || busca;
+  var temFiltro = sit!=="todas" || fCategoria || busca || de || ate;
   // O número grande responde à pergunta da tela: aqui é "o que me aperta agora",
   // não o total histórico.
   var venc7 = (contas||[]).filter(function(c){ var st=statusReal(c); return st==="pendente" && c.vencimento && c.vencimento <= new Date(Date.now()+7*864e5).toISOString().slice(0,10); });
@@ -5507,7 +5681,22 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab }) {
               {temFiltro && <button onClick={limpar} style={{ background:"none", border:"none", color:"#768592", cursor:"pointer", fontSize:12 }}>Limpar</button>}
             </div>
             <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Opção</div><select value={sit} onChange={function(e){ setSit(e.target.value); }} style={selFiltro}>{sits.map(function(s){ return <option key={s[0]} value={s[0]}>{s[1]}</option>; })}</select></div>
-            <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Categoria</div><input value={fCategoria} onChange={function(e){ setFCategoria(e.target.value); }} placeholder="Todas categorias" style={selFiltro} /></div>
+            <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Categoria</div>
+              <input value={fCategoria} onChange={function(e){ setFCategoria(e.target.value); }} placeholder="Todas categorias" list="filtro-cat-pagar" style={selFiltro} />
+              <datalist id="filtro-cat-pagar">{(categorias||[]).map(function(x){ return <option key={x} value={x} />; })}</datalist>
+            </div>
+            <div>
+              <div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Vencimento</div>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginBottom:6 }}>
+                {[["mes","Este mês"],["prox","Próximo"],["30","30 dias"],["vencidas","Vencidas"],["","Tudo"]].map(function(o){
+                  return <button key={o[0]} onClick={function(){ periodoRapido(o[0]); }}
+                    style={{ fontSize:10.5, fontWeight:600, padding:"3px 8px", borderRadius:6, cursor:"pointer",
+                             border:"1px solid var(--border)", background:"var(--surface)", color:"var(--text-3)" }}>{o[1]}</button>;
+                })}
+              </div>
+              <input type="date" value={de} onChange={function(e){ setDe(e.target.value); }} style={{ ...selFiltro, marginBottom:5 }} title="De" />
+              <input type="date" value={ate} onChange={function(e){ setAte(e.target.value); }} style={selFiltro} title="Até" />
+            </div>
             <button onClick={limpar} style={{ background:"none", border:"none", color:"var(--ui-accent)", fontWeight:600, cursor:"pointer", fontSize:12.5, textAlign:"left" }}>Limpar filtros</button>
           </div>
         )}
@@ -5529,7 +5718,10 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab }) {
                     var s = statusReal(c); var b = badge[s];
                     return <tr key={c.id || i}>
                       <td style={_td}>{c.vencimento ? (fmtDate(c.vencimento)||c.vencimento) : "—"}</td>
-                      <td style={{ ..._td, color:"var(--text-strong)" }}>{c.descricao || "—"}</td>
+                      <td style={{ ..._td, color:"var(--text-strong)" }}>
+                        {c.descricao || "—"}
+                        {c.serieId && <span style={{ marginLeft:7, fontSize:10, color:"var(--text-4)" }}>{c.parcela}/{c.parcelas}</span>}
+                      </td>
                       <td style={_td}>{c.categoria || "—"}</td>
                       <td style={{ ..._tdMono, fontWeight:600 }}>{fmt(parseFloat(c.valor) || 0)}</td>
                       <td style={_td}><span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
@@ -5562,7 +5754,7 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab }) {
           setResultadoImp(novas.length + " conta(s) importada(s).");
         }}
         onClose={function(){ setImportando(false); }} />}
-      {modal && <ContaModal conta={modal} onSave={salvarConta} onClose={function(){ setModal(null); }} contasBancarias={contasBancarias} />}
+      {modal && <ContaModal conta={modal.id ? modal : null} onSave={salvarConta} onClose={function(){ setModal(null); }} contasBancarias={contasBancarias} categorias={categorias} fornecedores={fornecedores} />}
     </FinanceiroShell>
   );
 }
@@ -11241,6 +11433,16 @@ export default function App() {
   const [fornecedores, setFornecedores] = useState(() => {
     try { var v = JSON.parse(localStorage.getItem("fornecedores_cadastro") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
   });
+  function salvarFornecedoresCad(lista) {
+    setFornecedores(lista);
+    try { localStorage.setItem("fornecedores_cadastro", JSON.stringify(lista)); } catch(e) {}
+    try { kvSyncPush("fornecedores_cadastro", lista); } catch(e) {}
+  }
+  function salvarCategoriasPagar(lista) {
+    setCategoriasPagar(lista);
+    try { localStorage.setItem("categorias_pagar", JSON.stringify(lista)); } catch(e) {}
+    try { kvSyncPush("categorias_pagar", lista); } catch(e) {}
+  }
   const [nfeSaida, setNfeSaida] = useState({});          // orderId -> dados da NF
   const [loadingNfe, setLoadingNfe] = useState(false);
   const [notasFiscais, setNotasFiscais] = useState(() => {
@@ -12927,7 +13129,9 @@ export default function App() {
         {tab === "notas_fiscais" && <EmConstrucao tab="notas_fiscais" />}
         {tab === "contas_receber" && <ContasReceberTab tab={tab} setTab={setTab} enrichedOrders={enrichedOrders} paymentData={paymentData}
           baixados={recebiveisBaixados} setBaixados={setRecebiveisBaixados} config={financeiroConfig} />}
-        {tab === "contas_pagar" && <ContasPagarTab tab={tab} setTab={setTab} contas={contasPagar} salvar={salvarContasPagar} contasBancarias={contasBancarias} />}
+        {tab === "contas_pagar" && <ContasPagarTab tab={tab} setTab={setTab} contas={contasPagar} salvar={salvarContasPagar} contasBancarias={contasBancarias}
+          categorias={categoriasPagar} salvarCategorias={salvarCategoriasPagar}
+          fornecedores={fornecedores} salvarFornecedores={salvarFornecedoresCad} />}
         {tab === "prioridade_pagamento" && <PrioridadePagamentoTab contas={contasPagar} salvarContas={salvarContasPagar} config={configPrioridade} salvarConfig={setConfigPrioridade} saldoEmCaixa={saldoEmCaixa} temContasBancarias={(contasBancarias||[]).length > 0} tab={tab} setTab={setTab} />}
         {tab === "fluxo_caixa" && <FluxoCaixaTab tab={tab} saldoEmCaixa={saldoEmCaixa} temContasBancarias={(contasBancarias||[]).length > 0}
           contasPagar={contasPagar} enrichedOrders={enrichedOrders} paymentData={paymentData}

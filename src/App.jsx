@@ -2700,32 +2700,184 @@ function IntegracoesTab({ token, user, lastUpdate }) {
   );
 }
 
-// Telas financeiras: estrutura (KPIs + colunas) pronta, porém SEM dados por escolha do usuário
-// (não conectadas a nenhuma fonte). Ficam prontas para receber dados/integração depois.
-const TELAS_FIN = {
-  fornecedores:   { titulo:"Fornecedores",       desc:"Cadastro de fornecedores e condições.",         kpis:[["Fornecedores","0"],["Ativos","0"]],                                          colunas:["Nome","Documento","Contato","Produtos"] },
-};
-function TelaEstruturada({ cfg }) {
+// Fornecedores: cadastro de verdade, no lugar da tela de exemplo com zeros
+// fixos. Ela existia sem ler nada, então um fornecedor gravado por Contas a
+// pagar era salvo e sumia — o dado estava certo, a tela é que não o buscava.
+function FornecedorModal({ fornecedor, onSave, onClose, onExcluir }) {
+  const [f, setF] = useState(function(){
+    return Object.assign({ nome:"", documento:"", contato:"", email:"", telefone:"",
+                           condicao:"", categoriaPadrao:"", obs:"", ativo:true }, fornecedor || {});
+  });
+  const [erro, setErro] = useState("");
+  function set(k,v){ setF(function(s){ return Object.assign({}, s, { [k]:v }); }); }
+  var novo = !fornecedor || !fornecedor.id;
+  function salvar(){
+    if (!String(f.nome||"").trim()) { setErro("Informe o nome do fornecedor."); return; }
+    var p = Object.assign({}, f);
+    if (!p.id) p.id = "fn_" + Date.now() + "_" + Math.floor(Math.random()*1000);
+    onSave(p);
+  }
+  var campo = { width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 11px", borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box" };
+  var lbl = { fontSize:11.5, color:"var(--text-3)", fontWeight:600, marginBottom:4, display:"block" };
   return (
-    <div style={{ padding:2 }}>
-      <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>{cfg.titulo}</div>
-      <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>{cfg.desc}</div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12, marginBottom:14 }}>
-        {cfg.kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k[0]}</div><div style={{ ..._kpiVal, color:"var(--text-strong)" }}>{k[1]}</div></div>; })}
-      </div>
-      <div style={_tableWrap}>
-        <table style={_table}>
-          <thead><tr>{cfg.colunas.map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
-          <tbody><tr><td style={{ ..._td, textAlign:"center", padding:"32px 12px", color:"var(--text-3)" }} colSpan={cfg.colunas.length}>Nenhum registro ainda.</td></tr></tbody>
-        </table>
-      </div>
-      <div style={{ marginTop:12, fontSize:12, color:"var(--text-3)", background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 14px" }}>
-        🗂 Estrutura pronta. Ainda sem dados — esta área será conectada a uma fonte financeira depois.
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:600, display:"flex", alignItems:"flex-start", justifyContent:"center", padding:"32px 16px", overflowY:"auto" }} onClick={onClose}>
+      <div onClick={function(e){ e.stopPropagation(); }} style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:14, width:640, maxWidth:"100%", padding:22 }}>
+        <div style={{ fontWeight:600, fontSize:17, color:"var(--text-strong)", marginBottom:16 }}>{novo ? "Novo fornecedor" : "Editar fornecedor"}</div>
+        {erro && <div style={{ background:"rgba(255,82,82,.12)", border:"1px solid #FF5252", color:"#FF5252", borderRadius:9, padding:"10px 13px", fontSize:12.5, marginBottom:14 }}>{erro}</div>}
+        <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:12, marginBottom:12 }}>
+          <div><label style={lbl}>Nome *</label><input value={f.nome} onChange={function(e){ set("nome", e.target.value); }} style={campo} /></div>
+          <div><label style={lbl}>CNPJ / CPF</label><input value={f.documento} onChange={function(e){ set("documento", e.target.value); }} style={campo} /></div>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:12 }}>
+          <div><label style={lbl}>Contato</label><input value={f.contato} onChange={function(e){ set("contato", e.target.value); }} style={campo} /></div>
+          <div><label style={lbl}>Telefone</label><input value={f.telefone} onChange={function(e){ set("telefone", e.target.value); }} style={campo} /></div>
+          <div><label style={lbl}>E-mail</label><input value={f.email} onChange={function(e){ set("email", e.target.value); }} style={campo} /></div>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>
+          <div><label style={lbl}>Condição de pagamento</label><input value={f.condicao} onChange={function(e){ set("condicao", e.target.value); }} placeholder="30/60/90 dias" style={campo} /></div>
+          <div><label style={lbl}>Categoria habitual</label><input value={f.categoriaPadrao} onChange={function(e){ set("categoriaPadrao", e.target.value); }} placeholder="Fornecedor, Serviços..." style={campo} /></div>
+        </div>
+        <div style={{ marginBottom:14 }}><label style={lbl}>Observações</label><textarea value={f.obs} onChange={function(e){ set("obs", e.target.value); }} rows={3} style={{ ...campo, resize:"vertical", fontFamily:"inherit" }} /></div>
+        <label style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:"var(--text-2)", cursor:"pointer", marginBottom:18 }}>
+          <input type="checkbox" checked={f.ativo !== false} onChange={function(e){ set("ativo", e.target.checked); }} /> Fornecedor ativo
+        </label>
+        <div style={{ display:"flex", gap:8 }}>
+          {!novo && onExcluir && <button onClick={function(){ onExcluir(f); }} style={{ background:"rgba(255,82,82,.1)", border:"1px solid rgba(255,82,82,.35)", color:"#FF5252", fontWeight:600, padding:"11px 18px", borderRadius:10, cursor:"pointer" }}>Excluir</button>}
+          <div style={{ flex:1 }} />
+          <button onClick={onClose} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"11px 20px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
+          <button onClick={salvar} style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"11px 30px", borderRadius:10, cursor:"pointer" }}>Salvar</button>
+        </div>
       </div>
     </div>
   );
 }
-// DRE (Demonstrativo de Resultado): estrutura zerada, sem dados por enquanto.
+
+function FornecedoresTab({ fornecedores, salvar, contasPagar, setTab }) {
+  const [modal, setModal] = useState(null);
+  const [busca, setBusca] = useState("");
+  function nomeDe(x){ return String((x && (x.nome || x.razaoSocial || x.fantasia)) || x || "").trim(); }
+
+  // O que cada fornecedor representa em dinheiro. Sem isto a tela seria só uma
+  // agenda de nomes; com isto ela responde "quanto eu devo a quem".
+  var porNome = {};
+  (contasPagar || []).forEach(function(c){
+    var k = String(c.descricao || "").trim().toLowerCase();
+    if (!k) return;
+    if (!porNome[k]) porNome[k] = { aberto:0, nAberto:0, pago:0, nPago:0, vencido:0 };
+    var v = parseFloat(c.valorTotal || c.valor) || 0;
+    if (c.status === "paga") { porNome[k].pago += v; porNome[k].nPago++; }
+    else if (c.status !== "cancelada") {
+      porNome[k].aberto += v; porNome[k].nAberto++;
+      if (c.vencimento && c.vencimento < new Date().toISOString().slice(0,10)) porNome[k].vencido += v;
+    }
+  });
+
+  var lista = (fornecedores || []).map(function(x, i){
+    var nome = nomeDe(x);
+    var d = porNome[nome.toLowerCase()] || { aberto:0, nAberto:0, pago:0, nPago:0, vencido:0 };
+    return Object.assign({}, typeof x === "object" ? x : { nome: nome }, { _i:i, nome:nome, mov:d });
+  }).filter(function(x){
+    var q = busca.trim().toLowerCase();
+    return !q || x.nome.toLowerCase().indexOf(q) >= 0 || String(x.documento||"").toLowerCase().indexOf(q) >= 0;
+  }).sort(function(a,b){ return b.mov.aberto - a.mov.aberto || a.nome.localeCompare(b.nome); });
+
+  var totalAberto = lista.reduce(function(s,x){ return s + x.mov.aberto; }, 0);
+  var totalVencido = lista.reduce(function(s,x){ return s + x.mov.vencido; }, 0);
+  var comAberto = lista.filter(function(x){ return x.mov.nAberto > 0; }).length;
+
+  function salvarForn(fn){
+    var arr = (fornecedores || []).map(function(x){ return typeof x === "object" ? x : { id:"fn_leg_"+nomeDe(x), nome:nomeDe(x) }; });
+    var i = arr.findIndex(function(x){ return x.id === fn.id; });
+    if (i >= 0) arr[i] = fn; else arr.push(fn);
+    salvar(arr); setModal(null);
+  }
+  function excluir(fn){
+    var d = porNome[String(fn.nome||"").toLowerCase()];
+    if (d && d.nAberto > 0 && !window.confirm("Este fornecedor tem " + d.nAberto + " conta(s) em aberto, somando " + fmt(d.aberto) +
+      ".\\n\\nExcluir o cadastro NÃO apaga as contas — elas continuam na lista de Contas a pagar. Excluir mesmo assim?")) return;
+    if (!d && !window.confirm("Excluir “" + fn.nome + "” do cadastro?")) return;
+    salvar((fornecedores || []).filter(function(x){ return (typeof x === "object" ? x.id : null) !== fn.id; }));
+    setModal(null);
+  }
+
+  var cartao = { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 16px" };
+  return (
+    <div style={{ padding:2, maxWidth:1180 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14, flexWrap:"wrap" }}>
+        <div>
+          <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Fornecedores</div>
+          <div style={{ fontSize:12.5, color:"var(--text-3)" }}>Quem você paga, e quanto deve a cada um. Fornecedor novo em Contas a pagar entra aqui sozinho.</div>
+        </div>
+        <div style={{ flex:1 }} />
+        <div style={{ position:"relative", minWidth:240 }}>
+          <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:"var(--text-3)", fontSize:13 }}>🔍</span>
+          <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Nome ou documento"
+            style={{ width:"100%", background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 12px 9px 34px", borderRadius:9, fontSize:13, outline:"none" }} />
+        </div>
+        <button onClick={function(){ setModal({}); }} style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"9px 22px", borderRadius:9, cursor:"pointer", fontSize:13 }}>+ Novo fornecedor</button>
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12, marginBottom:14 }}>
+        {[["Fornecedores", String(lista.length), "var(--text-strong)", (fornecedores||[]).length + " no cadastro"],
+          ["Com conta em aberto", String(comAberto), comAberto ? "#FFC107" : "var(--text-3)", "de " + lista.length],
+          ["Total em aberto", fmt(totalAberto), totalAberto ? "var(--text-strong)" : "var(--text-3)", "o que você deve"],
+          ["Vencido", fmt(totalVencido), totalVencido ? "#FF5252" : "var(--text-3)", "já passou do prazo"]].map(function(k,i){
+          return <div key={i} style={cartao}>
+            <div style={{ fontSize:11.5, color:"var(--text-3)" }}>{k[0]}</div>
+            <div style={{ fontSize:21, fontWeight:600, color:k[2], marginTop:2, fontVariantNumeric:"tabular-nums" }}>{k[1]}</div>
+            <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:2 }}>{k[3]}</div>
+          </div>;
+        })}
+      </div>
+
+      {lista.length === 0 ? (
+        <div style={{ ...cartao, textAlign:"center", padding:"54px 20px" }}>
+          <div style={{ fontSize:36, marginBottom:10 }}>🏭</div>
+          <div style={{ fontWeight:600, fontSize:16, color:"var(--text-strong)" }}>
+            {busca ? "Nenhum fornecedor com esse nome." : "Nenhum fornecedor cadastrado."}
+          </div>
+          <div style={{ fontSize:13.5, color:"var(--text-3)", marginTop:8, lineHeight:1.65, maxWidth:520, margin:"8px auto 0" }}>
+            {busca ? "Limpe a busca para ver todos." : <>Cadastre aqui, ou deixe que se cadastrem sozinhos: todo fornecedor digitado numa conta em <b>Financeiro → Contas a pagar</b> entra nesta lista ao salvar.</>}
+          </div>
+          {!busca && setTab && <button onClick={function(){ setTab("contas_pagar"); }}
+            style={{ marginTop:18, background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"10px 22px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Ir para Contas a pagar →</button>}
+        </div>
+      ) : (
+        <div style={_tableWrap}>
+          <table style={_table}>
+            <thead><tr>{["Fornecedor","Documento","Contato","Condição","Em aberto","Vencido","Já pago",""].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+            <tbody>
+              {lista.map(function(x){
+                var inativo = x.ativo === false;
+                return <tr key={x.id || x._i} onClick={function(){ setModal(x); }} style={{ cursor:"pointer", opacity: inativo ? .5 : 1 }} title="Abrir cadastro">
+                  <td style={{ ..._td, color:"var(--text-strong)", fontWeight:500 }}>
+                    {x.nome}
+                    {x.origem && <span style={{ marginLeft:7, fontSize:10, color:"var(--text-4)" }}>via {x.origem}</span>}
+                    {inativo && <span style={{ marginLeft:7, fontSize:10.5, color:"var(--text-4)" }}>inativo</span>}
+                  </td>
+                  <td style={_tdMono}>{x.documento || "—"}</td>
+                  <td style={_td}>{x.contato || x.email || x.telefone || "—"}</td>
+                  <td style={_td}>{x.condicao || "—"}</td>
+                  <td style={{ ..._tdMono, fontWeight:600, color: x.mov.aberto ? "var(--text-strong)" : "var(--text-4)" }}>
+                    {x.mov.aberto ? fmt(x.mov.aberto) : "—"}
+                    {x.mov.nAberto > 0 && <div style={{ fontSize:10, color:"var(--text-4)", fontWeight:400 }}>{x.mov.nAberto} conta(s)</div>}
+                  </td>
+                  <td style={_tdMono}>{x.mov.vencido ? <span style={{ color:"#FF5252" }}>{fmt(x.mov.vencido)}</span> : <span style={{ color:"var(--text-4)" }}>—</span>}</td>
+                  <td style={_tdMono}>{x.mov.pago ? <span style={{ color:"#0a9d4e" }}>{fmt(x.mov.pago)}</span> : <span style={{ color:"var(--text-4)" }}>—</span>}</td>
+                  <td style={{ ..._td, textAlign:"right" }} onClick={function(e){ e.stopPropagation(); }}>
+                    <button onClick={function(){ setModal(x); }} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Editar</button>
+                  </td>
+                </tr>;
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {modal && <FornecedorModal fornecedor={modal.id ? modal : null} onSave={salvarForn} onExcluir={excluir} onClose={function(){ setModal(null); }} />}
+    </div>
+  );
+}
+
 // ── Conciliação bancária ───────────────────────────────────────────────────
 // Compara o extrato do banco com o que o sistema acha que aconteceu. O valor
 // está no que NÃO bate: repasse que veio menor, conta paga que o sistema não
@@ -4475,14 +4627,38 @@ function somarMeses(iso, n) {
 // Expande uma conta recorrente nas contas do periodo. Cada uma e uma conta
 // inteira e independente: pode ser paga, editada ou excluida sozinha. Ficam
 // ligadas por serieId so para a tela saber dizer de que serie vieram.
-var MAX_SERIE = 120;   // teto de seguranca: 10 anos de mensal
+var DIAS_SEMANA = [["1","Segunda-feira"],["2","Terça-feira"],["3","Quarta-feira"],["4","Quinta-feira"],["5","Sexta-feira"],["6","Sábado"],["0","Domingo"]];
+function somarDiasIso(iso, n) {
+  var d = new Date(String(iso).slice(0,10) + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0,10);
+}
+// Primeira data a partir de `iso` que cai no dia da semana pedido — inclusive o
+// próprio `iso`, se já for esse dia.
+function proximoDiaDaSemana(iso, dow) {
+  var d = new Date(String(iso).slice(0,10) + "T12:00:00Z");
+  var falta = (dow - d.getUTCDay() + 7) % 7;
+  return somarDiasIso(iso, falta);
+}
+
+var MAX_SERIE = 260;   // teto de seguranca: 5 anos de semanal, 10 de mensal
 function expandirRecorrencia(base) {
-  if (base.ocorrencia !== "mensal" && base.ocorrencia !== "parcelada") return [base];
+  var recorrentes = ["mensal", "semanal", "parcelada"];
+  if (recorrentes.indexOf(base.ocorrencia) < 0) return [base];
   var venc = base.vencimento;
   if (!venc) return [base];
   var serie = "sr_" + Date.now() + "_" + Math.floor(Math.random()*1000);
   var datas = [];
-  if (base.ocorrencia === "parcelada") {
+  if (base.ocorrencia === "semanal") {
+    var ate2 = base.recorrenciaAte || "";
+    if (!ate2) return [base];
+    // O vencimento informado define o começo; o dia da semana escolhido define
+    // o ritmo. Se os dois discordam, a primeira parcela anda para o dia certo
+    // em vez de a série inteira ficar fora do dia combinado.
+    var dow = base.diaSemana == null || base.diaSemana === "" ? null : parseInt(base.diaSemana, 10);
+    var atual = dow == null ? venc : proximoDiaDaSemana(venc, dow);
+    for (var w = 0; w < MAX_SERIE && atual <= ate2; w++) { datas.push(atual); atual = somarDiasIso(atual, 7); }
+  } else if (base.ocorrencia === "parcelada") {
     var n = Math.max(1, Math.min(MAX_SERIE, parseInt(base.parcelas, 10) || 1));
     for (var i = 0; i < n; i++) datas.push(somarMeses(venc, i));
   } else {
@@ -4513,7 +4689,7 @@ function expandirRecorrencia(base) {
 // Modal de conta a pagar.
 function ContaModal({ conta, onSave, onClose, contasBancarias, categorias, fornecedores }) {
   var hoje = new Date().toISOString().slice(0,10);
-  const [f, setF] = useState(function(){ return Object.assign({ descricao:"", categoria:"", emissao:hoje, competencia:hoje, vencimento:"", valor:"", historico:"", forma:"", conta:"", ndoc:"", juros:"0", multa:"0", ocorrencia:"unica", recorrenciaAte:"", parcelas:"12", baseValor:"cada", status:"pendente" }, conta || {}); });
+  const [f, setF] = useState(function(){ return Object.assign({ descricao:"", categoria:"", emissao:hoje, competencia:hoje, vencimento:"", valor:"", historico:"", forma:"", conta:"", ndoc:"", juros:"0", multa:"0", ocorrencia:"unica", recorrenciaAte:"", parcelas:"12", baseValor:"cada", diaSemana:"", status:"pendente" }, conta || {}); });
   const [aba, setAba] = useState("pagamento");
   function set(k,v){ setF(function(s){ return Object.assign({}, s, { [k]:v }); }); }
   var valorNum = parseFloat(f.valor)||0, jurosPct = parseFloat(f.juros)||0, multaPct = parseFloat(f.multa)||0;
@@ -4522,10 +4698,23 @@ function ContaModal({ conta, onSave, onClose, contasBancarias, categorias, forne
   // recriar o ano inteiro. A recorrencia so expande na criacao.
   var editando = !!(conta && conta.id);
   var previa = editando ? [] : expandirRecorrencia(Object.assign({}, f, { valorTotal: totalVal }));
-  function salvar(baixa){
+  // Editar uma parcela e quase sempre editar a regra, nao aquele mes: o valor do
+  // aluguel subiu, o fornecedor mudou de nome. Mas nem sempre — as vezes e um
+  // acerto pontual. Em vez de escolher pelo usuario, a tela pergunta, e so
+  // quando ha serie e algo mudou de fato.
+  const [alcance, setAlcance] = useState(null);
+  function houveMudanca(){
+    if (!conta) return true;
+    return ["descricao","categoria","valor","juros","multa","forma","conta","ndoc","historico"].some(function(k){
+      return String(f[k] == null ? "" : f[k]) !== String(conta[k] == null ? "" : conta[k]);
+    });
+  }
+  function salvar(baixa, escopo){
     var p = Object.assign({}, f, { valorTotal: totalVal });
     if (!p.descricao){ alert("Informe o fornecedor."); return; }
-    if (!editando && (f.ocorrencia === "mensal") && !f.recorrenciaAte) {
+    if (editando && conta.serieId && !escopo && !baixa && houveMudanca()) { setAlcance(true); return; }
+    if (escopo) { onSave({ conta: Object.assign({}, p), escopo: escopo, serieId: conta.serieId, vencimento: conta.vencimento }); return; }
+    if (!editando && (f.ocorrencia === "mensal" || f.ocorrencia === "semanal") && !f.recorrenciaAte) {
       alert("Informe até quando a conta se repete, na aba Ocorrência.\n\nSem uma data limite não dá para saber quantas contas criar."); return;
     }
     if (!p.id) p.id = "cp_"+Date.now();
@@ -4553,6 +4742,25 @@ function ContaModal({ conta, onSave, onClose, contasBancarias, categorias, forne
           </div>
           <button onClick={onClose} style={{ background:"none", border:"none", color:"var(--text-3)", fontSize:22, cursor:"pointer" }}>×</button>
         </div>
+        {alcance && (
+          <div style={{ margin:"6px 22px 0", background:"var(--surface)", border:"1px solid var(--ui-accent)", borderRadius:12, padding:"14px 16px" }}>
+            <div style={{ fontSize:13.5, fontWeight:600, color:"var(--text-strong)", marginBottom:4 }}>Aplicar a alteração em quais contas?</div>
+            <div style={{ fontSize:12, color:"var(--text-3)", marginBottom:12, lineHeight:1.55 }}>
+              Esta conta é a parcela {conta.parcela} de {conta.parcelas}. Contas já pagas nunca são alteradas.
+            </div>
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+              <button onClick={function(){ setAlcance(null); salvar(false, "uma"); }}
+                style={{ background:"var(--surface-3)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"9px 16px", borderRadius:9, cursor:"pointer", fontSize:12.5 }}>Só esta</button>
+              <button onClick={function(){ setAlcance(null); salvar(false, "proximas"); }}
+                style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"9px 16px", borderRadius:9, cursor:"pointer", fontSize:12.5 }}>Esta e as próximas</button>
+              <button onClick={function(){ setAlcance(null); salvar(false, "todas"); }}
+                style={{ background:"var(--surface-3)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"9px 16px", borderRadius:9, cursor:"pointer", fontSize:12.5 }}>Todas as em aberto</button>
+              <div style={{ flex:1 }} />
+              <button onClick={function(){ setAlcance(null); }}
+                style={{ background:"none", border:"none", color:"var(--text-3)", cursor:"pointer", fontSize:12.5 }}>Voltar</button>
+            </div>
+          </div>
+        )}
         <div style={{ padding:"6px 22px", overflowY:"auto" }}>
           <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:12, marginBottom:12 }}>
             <div><label style={lbl}>Fornecedor{req}</label>
@@ -4598,10 +4806,23 @@ function ContaModal({ conta, onSave, onClose, contasBancarias, categorias, forne
               <div><label style={lbl}>Ocorrência</label>
                 <select value={f.ocorrencia||"unica"} onChange={function(e){ set("ocorrencia", e.target.value); }} style={campo} disabled={editando}>
                   <option value="unica">Única</option>
+                  <option value="semanal">Semanal (recorrente)</option>
                   <option value="mensal">Mensal (recorrente)</option>
                   <option value="parcelada">Parcelada</option>
                 </select>
               </div>
+              {f.ocorrencia === "semanal" && <>
+                <div><label style={lbl}>Vence toda{req}</label>
+                  <select value={f.diaSemana||""} onChange={function(e){ set("diaSemana", e.target.value); }} style={campo} disabled={editando}>
+                    <option value="">— use o dia do vencimento —</option>
+                    {DIAS_SEMANA.map(function(d){ return <option key={d[0]} value={d[0]}>{d[1]}</option>; })}
+                  </select>
+                  <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:3 }}>A primeira parcela anda para o próximo dia escolhido, se preciso.</div>
+                </div>
+                <div><label style={lbl}>Repetir até{req}</label>
+                  <input type="date" value={f.recorrenciaAte||""} onChange={function(e){ set("recorrenciaAte", e.target.value); }} style={campo} disabled={editando} />
+                </div>
+              </>}
               {f.ocorrencia === "mensal" && (
                 <div><label style={lbl}>Repetir até{req}</label>
                   <input type="date" value={f.recorrenciaAte||""} onChange={function(e){ set("recorrenciaAte", e.target.value); }} style={campo} disabled={editando} />
@@ -4633,8 +4854,10 @@ function ContaModal({ conta, onSave, onClose, contasBancarias, categorias, forne
                   ? <>Serão criadas <b>{previa.length} contas</b>, de {fmtDate(previa[0].vencimento)||previa[0].vencimento} até {fmtDate(previa[previa.length-1].vencimento)||previa[previa.length-1].vencimento},
                       de {fmt(parseFloat(previa[0].valor)||0)} cada — total {fmt(previa.reduce(function(a,c){ return a + (parseFloat(c.valor)||0); },0))}.
                       Cada uma pode ser paga, editada ou excluída sozinha.</>
-                  : f.ocorrencia === "mensal" && !f.recorrenciaAte
-                    ? "Informe até quando a conta se repete para o sistema saber quantas criar."
+                  : (f.ocorrencia === "mensal" || f.ocorrencia === "semanal") && !f.recorrenciaAte
+                    ? (f.ocorrencia === "mensal" || f.ocorrencia === "semanal")
+                        ? "Informe até quando a conta se repete para o sistema saber quantas criar."
+                        : "Informe o número de parcelas."
                     : !f.vencimento
                       ? "Informe o vencimento da primeira, na aba Pagamento."
                       : "Com estes valores sai só uma conta."}
@@ -5597,8 +5820,10 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categori
     { l:"Pagas", v:fmt(soma(function(c){ return statusReal(c) === "paga"; })), c:"#0a9d4e" },
     { l:"Canceladas", v:fmt(soma(function(c){ return statusReal(c) === "cancelada"; })), c:"var(--text-3)" },
   ];
-  // Recebe uma conta ou a série inteira que o modal expandiu.
+  // Recebe uma conta, a série inteira que o modal expandiu, ou um pedido de
+  // edição em série: { conta, escopo, serieId, vencimento }.
   function salvarConta(c){
+    if (c && c.escopo) { aplicarNaSerie(c); return; }
     var novas = Array.isArray(c) ? c : [c];
     var arr = (contas || []).slice();
     novas.forEach(function(n){
@@ -5622,6 +5847,27 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categori
     if (novas.length > 1) setResultadoImp(novas.length + " contas criadas — a série inteira já está na lista.");
   }
   function baixar(c){ salvar((contas || []).map(function(x){ return x.id === c.id ? Object.assign({}, x, { status:"paga", pago_em:hoje }) : x; })); }
+  // Aplica a edição às contas da série conforme o alcance escolhido. O que muda
+  // é só o que o usuário mexeu — vencimento, status e a numeração da parcela
+  // continuam de cada conta, senão a série inteira colapsaria numa data só.
+  function aplicarNaSerie(pedido){
+    var base = pedido.conta;
+    var campos = ["descricao","categoria","valor","valorTotal","juros","multa","forma","conta","ndoc","historico"];
+    var n = 0;
+    var arr = (contas || []).map(function(x){
+      if (x.serieId !== pedido.serieId) return x;
+      if (x.status === "paga" || x.status === "cancelada") return x;   // pagas nunca mudam
+      if (pedido.escopo === "uma" && x.id !== base.id) return x;
+      if (pedido.escopo === "proximas" && (x.vencimento || "") < (pedido.vencimento || "")) return x;
+      var novo = Object.assign({}, x);
+      campos.forEach(function(k){ novo[k] = base[k]; });
+      n++;
+      return novo;
+    });
+    salvar(arr); setModal(null);
+    setResultadoImp(n + " conta(s) da série atualizada(s).");
+  }
+
   function excluir(c){
     var daSerie = c.serieId ? (contas || []).filter(function(x){ return x.serieId === c.serieId && x.status !== "paga"; }) : [];
     if (daSerie.length > 1) {
@@ -13160,7 +13406,7 @@ export default function App() {
         {tab === "dre" && <DreTab enrichedOrders={enrichedOrders} contasPagar={contasPagar} lancamentos={lancamentos}
           custosFixos={custosFixos} recebiveisBaixados={recebiveisBaixados} paymentData={paymentData}
           config={financeiroConfig} salvarConfig={setFinanceiroConfig} tab={tab} setTab={setTab} periodo={periodoFin} setPeriodo={setPeriodoFin} />}
-        {TELAS_FIN[tab] && <TelaEstruturada cfg={TELAS_FIN[tab]} />}
+        {tab === "fornecedores" && <FornecedoresTab fornecedores={fornecedores} salvar={salvarFornecedoresCad} contasPagar={contasPagar} setTab={setTab} />}
       </div>{/* fecha a coluna do conteúdo */}
 
       {showBackup && <PainelBackup onClose={() => setShowBackup(false)} />}

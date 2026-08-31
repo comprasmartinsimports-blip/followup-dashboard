@@ -1632,51 +1632,131 @@ function RelatoriosTab({ enrichedOrders }) {
 }
 
 // Contas a receber: recebíveis gerados automaticamente dos pedidos do Mercado Livre.
+// Função, não constante: FIN_COR é declarado adiante no arquivo, e um objeto
+// montado no carregamento do módulo tentaria lê-lo antes da hora.
+function rotuloReceb(estado) {
+  var m = {
+    a_receber: ["A receber", FIN_COR.atencao, "o ML ainda não liberou"],
+    liberado:  ["Liberado", FIN_COR.entrada, "o ML liberou · falta confirmar"],
+    recebido:  ["Recebido", FIN_COR.entrada, "confirmado por você"],
+    sem_dado:  ["Sem dado", FIN_COR.fraco, "o ML não informou o repasse"],
+  };
+  return m[estado] || ["—", FIN_COR.fraco, ""];
+}
+
 function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, config, tab, setTab }) {
   const [busca, setBusca] = useState("");
   const [mostrarFiltros, setMostrarFiltros] = useState(true);
   const [mostrarAcoes, setMostrarAcoes] = useState(true);
   const [fSituacao, setFSituacao] = useState("todas");
   var cfgFin = config || financeiroConfigPadrao();
-  function darBaixa(id){ var n = Object.assign({}, baixados); n[String(id)] = new Date().toISOString().slice(0,10); setBaixados(n); }
+  var hoje = new Date().toISOString().slice(0,10);
+  function darBaixa(id, quando){ var n = Object.assign({}, baixados); n[String(id)] = quando || hoje; setBaixados(n); }
   function estornar(id){ var n = Object.assign({}, baixados); delete n[String(id)]; setBaixados(n); }
+  const [corte, setCorte] = useState(function(){ var d = new Date(); d.setDate(d.getDate()-30); return d.toISOString().slice(0,10); });
+
+  // Quatro estados, não dois. Antes a tela só perguntava "você confirmou?", e
+  // com a resposta "não" para tudo o total a receber virava o faturamento
+  // histórico inteiro. O Mercado Livre já responde a pergunta que importa —
+  // money_release_status e money_release_date — e o sistema tinha esse dado
+  // guardado sem usar.
+  //
+  //   a_receber  o ML ainda NÃO liberou o dinheiro. É o contas a receber de verdade.
+  //   liberado   o ML já liberou e você ainda não confirmou que caiu na conta.
+  //   recebido   você confirmou.
+  //   sem_dado   o ML não devolveu informação de repasse deste pedido. Não é
+  //              "a receber" nem "recebido" — é não sabido, e some do total em
+  //              vez de inflá-lo.
+  function classificar(o, pay, baixa) {
+    if (baixa) return "recebido";
+    if (!pay || !pay.releaseDate) return "sem_dado";
+    return pay.isReleased ? "liberado" : "a_receber";
+  }
   var linhas = (enrichedOrders || []).filter(function(o){ return o.status !== "cancelled"; }).map(function(o){
     var pay = paymentData && paymentData[String(o.id)];
     var valor = pay && pay.netAmount ? pay.netAmount : (o.price || 0) * (o.qty || 1);
-    var previsao = pay && pay.releaseDate ? pay.releaseDate : (o.date || "");
     var baixaManual = baixados[String(o.id)] || null;
-    // Com "repasse só quando eu confirmo", a liberação anunciada pelo ML não
-    // basta: recebido é o que o usuário confirmou. É a mesma regra que o DRE
-    // aplica — as duas telas precisam mostrar o mesmo dinheiro.
-    var recebido = !!baixaManual || (cfgFin.repasse === "previsto" && !!(pay && pay.isReleased));
-    return { id:o.id, cliente:o.buyerName || "Cliente ML", origem:"Mercado Livre", previsao:previsao, valor:valor, recebido:recebido, baixaManual:baixaManual };
+    var estado = classificar(o, pay, baixaManual);
+    return {
+      id:o.id, cliente:o.buyerName || "Cliente ML", origem:"Mercado Livre",
+      previsao: pay && pay.releaseDate ? pay.releaseDate : "",
+      dataVenda: o.date || "", valor:valor, estado:estado, baixaManual:baixaManual,
+      recebido: estado === "recebido",
+    };
   });
+  function somaDe(est){ return linhas.filter(function(r){ return r.estado === est; }).reduce(function(s,r){ return s + r.valor; }, 0); }
+  function qtdDe(est){ return linhas.filter(function(r){ return r.estado === est; }).length; }
+  var aReceber = somaDe("a_receber"), liberado = somaDe("liberado");
+  var recebidoTot = somaDe("recebido"), semDado = somaDe("sem_dado");
+
   var lista = linhas.filter(function(r){
-    if (fSituacao==="aberto" && r.recebido) return false;
-    if (fSituacao==="recebido" && !r.recebido) return false;
+    if (fSituacao !== "todas" && r.estado !== fSituacao) return false;
     var q = busca.trim().toLowerCase(); return !q || (r.cliente||"").toLowerCase().indexOf(q) >= 0 || String(r.id).indexOf(q) >= 0;
   });
-  var aReceber = linhas.filter(function(r){ return !r.recebido; }).reduce(function(s,r){ return s + r.valor; }, 0);
-  var recebidoTot = linhas.filter(function(r){ return r.recebido; }).reduce(function(s,r){ return s + r.valor; }, 0);
   var valorLista = lista.reduce(function(s,r){ return s+r.valor; }, 0);
   var temFiltro = fSituacao!=="todas" || busca;
+
+  // ── As duas automações ───────────────────────────────────────────────────
+  // A data da baixa vale: é ela que o DRE em regime de caixa usa. Marcar tudo
+  // com a data de hoje jogaria meses de receita para um dia só.
+  function confirmarLiberados(){
+    var alvo = linhas.filter(function(r){ return r.estado === "liberado"; });
+    if (!alvo.length) return;
+    if (!window.confirm("Confirmar " + alvo.length + " repasse(s) que o Mercado Livre já liberou, somando " +
+        fmt(liberado) + "?\n\nCada um entra na data em que o ML liberou, não na data de hoje.")) return;
+    var n = Object.assign({}, baixados);
+    alvo.forEach(function(r){ n[String(r.id)] = r.previsao || r.dataVenda || hoje; });
+    setBaixados(n);
+  }
+  function confirmarAntigosSemDado(){
+    var alvo = linhas.filter(function(r){ return r.estado === "sem_dado" && (r.dataVenda || "") <= corte; });
+    if (!alvo.length) return;
+    if (!window.confirm("Considerar recebidos " + alvo.length + " pedido(s) vendidos até " + (fmtDate(corte)||corte) +
+        ", somando " + fmt(alvo.reduce(function(s,r){ return s+r.valor; },0)) +
+        "?\n\nO Mercado Livre não devolveu a data de repasse destes. Esta é uma decisão SUA, não uma informação do ML — cada um entra na data da venda.")) return;
+    var n = Object.assign({}, baixados);
+    alvo.forEach(function(r){ n[String(r.id)] = r.dataVenda || hoje; });
+    setBaixados(n);
+  }
   var selFiltro = { width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"7px 9px", borderRadius:8, fontSize:12.5 };
   var filtBtn = { background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"9px 12px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" };
   function limpar(){ setFSituacao("todas"); setBusca(""); }
-  function exportar(){ baixarCSV("contas-receber", ["Cliente","Origem","Nº pedido","Previsão","Valor","Situação"], lista.map(function(r){ return [r.cliente, r.origem, r.id, r.previsao||"", r.valor.toFixed(2), r.recebido?"Recebido":"A receber"]; })); }
-  function imprimir(){ baixarPDF("contas-a-receber", ["Cliente","Origem","Nº pedido","Previsão","Valor","Situação"], lista.map(function(r){ return [r.cliente, r.origem, "#"+r.id, r.previsao?(fmtDate(r.previsao)||r.previsao):"—", fmt(r.valor), r.recebido?"Recebido":"A receber"]; })); }
-  var nAberto = linhas.filter(function(r){ return !r.recebido; }).length;
+  function exportar(){ baixarCSV("contas-receber", ["Cliente","Origem","Nº pedido","Previsão","Valor","Situação"], lista.map(function(r){ return [r.cliente, r.origem, r.id, r.previsao||"", r.valor.toFixed(2), rotuloReceb(r.estado)[0]]; })); }
+  function imprimir(){ baixarPDF("contas-a-receber", ["Cliente","Origem","Nº pedido","Previsão","Valor","Situação"], lista.map(function(r){ return [r.cliente, r.origem, "#"+r.id, r.previsao?(fmtDate(r.previsao)||r.previsao):"—", fmt(r.valor), rotuloReceb(r.estado)[0]]; })); }
   return (
     <FinanceiroShell tab={tab} setTab={setTab} titulo="Contas a receber" largura={1400}
-      sub={cfgFin.repasse === "confirmado"
-        ? "Confirmar aqui é o que faz a venda virar receita no DRE e entrar no saldo dos bancos."
-        : "Repasses do Mercado Livre, pela data de liberação anunciada."}
+      sub="O que o Mercado Livre ainda não liberou é o seu contas a receber de verdade. O resto já é dinheiro seu."
       kpis={[
-        { rotulo:"A receber", valor:fmt(aReceber), cor: nAberto ? FIN_COR.atencao : FIN_COR.fraco, nota:nAberto + " pedido(s) em aberto" },
-        { rotulo:"Recebido", valor:fmt(recebidoTot), cor:FIN_COR.entrada, nota:(linhas.length - nAberto) + " confirmado(s)" },
-        { rotulo:"Total", valor:fmt(aReceber + recebidoTot), cor:FIN_COR.neutro, nota:linhas.length + " pedido(s)" },
+        { rotulo:"A receber de verdade", valor:fmt(aReceber), cor: qtdDe("a_receber") ? FIN_COR.atencao : FIN_COR.fraco,
+          nota: qtdDe("a_receber") + " pedido(s) · o ML ainda não liberou" },
+        { rotulo:"Liberado, falta confirmar", valor:fmt(liberado), cor: qtdDe("liberado") ? "#0a9d4e" : FIN_COR.fraco,
+          nota: qtdDe("liberado") + " pedido(s) · já é dinheiro seu" },
+        { rotulo:"Recebido", valor:fmt(recebidoTot), cor:FIN_COR.entrada, nota:qtdDe("recebido") + " confirmado(s)" },
+        { rotulo:"Sem dado de repasse", valor:fmt(semDado), cor: qtdDe("sem_dado") ? FIN_COR.fraco : FIN_COR.fraco,
+          nota: qtdDe("sem_dado") + " pedido(s) · fora das contas acima" },
       ]}
       acoes={<>
+        {qtdDe("liberado") > 0 && (
+          <AcaoFin tipo="pri" onClick={confirmarLiberados}>
+            ✓ Confirmar {qtdDe("liberado")} liberado(s)
+          </AcaoFin>
+        )}
+        {qtdDe("sem_dado") > 0 && (
+          <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"12px 14px" }}>
+            <div style={{ fontSize:12, fontWeight:600, color:"var(--text-strong)", marginBottom:4 }}>Pedidos sem dado de repasse</div>
+            <div style={{ fontSize:11.5, color:"var(--text-3)", lineHeight:1.55, marginBottom:8 }}>
+              O ML não devolveu a data de liberação de {qtdDe("sem_dado")} pedido(s). Eles ficam de fora
+              das contas acima. Se são vendas antigas que você já recebeu, marque de uma vez:
+            </div>
+            <label style={{ fontSize:11, color:"var(--text-3)", display:"block", marginBottom:3 }}>Vendidos até</label>
+            <input type="date" value={corte} onChange={function(e){ setCorte(e.target.value); }}
+              style={{ width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"7px 9px", borderRadius:7, fontSize:12.5, boxSizing:"border-box", marginBottom:8 }} />
+            <button onClick={confirmarAntigosSemDado}
+              style={{ width:"100%", background:"var(--surface-3)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"8px", borderRadius:8, cursor:"pointer", fontSize:12 }}>
+              Considerar recebidos
+            </button>
+          </div>
+        )}
         <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"6px", display:"flex", flexDirection:"column" }}>
           <button onClick={exportar} style={{ background:"none", border:"none", textAlign:"left", padding:"9px 10px", borderRadius:7, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" }}>Exportar para planilha</button>
           <button onClick={function(){ imprimir(); }} style={{ background:"none", border:"none", textAlign:"left", padding:"9px 10px", borderRadius:7, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" }}>Imprimir</button>
@@ -1686,9 +1766,7 @@ function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, 
           <div style={{ fontSize:18, fontWeight:600, color:"var(--text-strong)" }}>{fmt(valorLista)}</div>
           <div style={{ fontSize:11, color:"var(--text-4)", marginTop:2 }}>{lista.length} de {linhas.length} pedido(s)</div>
           <div style={{ fontSize:11, color:"var(--text-3)", marginTop:10, lineHeight:1.55, borderTop:"1px solid var(--border-soft)", paddingTop:8 }}>
-            {cfgFin.repasse === "confirmado"
-              ? "Enquanto não confirmado, o repasse não entra no DRE nem no saldo dos bancos."
-              : "A liberação anunciada pelo ML já conta como recebida."}
+            Confirmar é o que faz a venda virar receita no DRE e entrar no saldo dos bancos.
           </div>
         </div>
       </>}>
@@ -1706,7 +1784,13 @@ function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, 
               <span style={{ fontWeight:600, fontSize:14, color:"var(--text-strong)" }}>Filtrar</span>
               {temFiltro && <button onClick={limpar} style={{ background:"none", border:"none", color:"#768592", cursor:"pointer", fontSize:12 }}>Limpar</button>}
             </div>
-            <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Opção</div><select value={fSituacao} onChange={function(e){ setFSituacao(e.target.value); }} style={selFiltro}><option value="todas">Todas</option><option value="aberto">Em aberto</option><option value="recebido">Recebido</option></select></div>
+            <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Opção</div><select value={fSituacao} onChange={function(e){ setFSituacao(e.target.value); }} style={selFiltro}>
+              <option value="todas">Todas</option>
+              <option value="a_receber">A receber (ML não liberou)</option>
+              <option value="liberado">Liberado, falta confirmar</option>
+              <option value="recebido">Recebido</option>
+              <option value="sem_dado">Sem dado de repasse</option>
+            </select></div>
             <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Categoria</div><select disabled style={{ ...selFiltro, opacity:.45 }}><option>Todas categorias</option></select></div>
             <button onClick={limpar} style={{ background:"none", border:"none", color:"var(--ui-accent)", fontWeight:600, cursor:"pointer", fontSize:12.5, textAlign:"left" }}>Limpar filtros</button>
           </div>
@@ -1721,13 +1805,18 @@ function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, 
                     <td style={{ ..._td, color:"var(--text-strong)" }}>{r.cliente}</td>
                     <td style={_td}>{r.origem}</td>
                     <td style={_tdMono}>#{r.id}</td>
-                    <td style={_td}>{r.previsao ? (fmtDate(r.previsao)||r.previsao) : "—"}</td>
-                    <td style={{ ..._tdMono, fontWeight:600 }}>{fmt(r.valor)}</td>
-                    <td style={_td}><span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background: r.recebido ? "rgba(0,200,83,.14)" : "rgba(255,193,7,.14)", color: r.recebido ? "#0a9d4e" : "#FFC107" }}>{r.recebido ? "Recebido" : "A receber"}{r.baixaManual ? " (manual)" : ""}</span></td>
                     <td style={_td}>
-                      {r.baixaManual
+                      {r.previsao ? (fmtDate(r.previsao)||r.previsao) : <span style={{ color:"var(--text-4)" }}>não informada</span>}
+                      {r.estado === "recebido" && r.baixaManual && <div style={{ fontSize:10.5, color:"var(--text-4)" }}>confirmado em {fmtDate(r.baixaManual)||r.baixaManual}</div>}
+                    </td>
+                    <td style={{ ..._tdMono, fontWeight:600 }}>{fmt(r.valor)}</td>
+                    <td style={_td}>
+                      <span title={rotuloReceb(r.estado)[2]} style={{ fontSize:11, fontWeight:600, padding:"2px 9px", borderRadius:20, background:"var(--surface-3)", color:rotuloReceb(r.estado)[1] }}>{rotuloReceb(r.estado)[0]}</span>
+                    </td>
+                    <td style={{ ..._td, whiteSpace:"nowrap" }}>
+                      {r.estado === "recebido"
                         ? <button onClick={function(){ estornar(r.id); }} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Estornar</button>
-                        : (!r.recebido && <button onClick={function(){ darBaixa(r.id); }} style={{ background:"rgba(10,157,78,.12)", border:"none", color:"var(--ui-accent)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Dar baixa</button>)}
+                        : <button onClick={function(){ darBaixa(r.id, r.previsao || r.dataVenda); }} style={{ background:"rgba(10,157,78,.12)", border:"none", color:"var(--ui-accent)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Confirmar</button>}
                     </td>
                   </tr>;
                 })}

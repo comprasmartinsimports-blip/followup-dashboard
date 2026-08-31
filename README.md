@@ -48,7 +48,7 @@ ICMS do lucro e o inclui no cálculo do preço alvo, e mostra no topo a alíquot
 | Variável | Obrigatória | Descrição |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Para usar IA | Chave da Anthropic — fica **somente no servidor** (proxy `/api/ai-chat`). **Nunca** use `VITE_ANTHROPIC_KEY`: qualquer variável `VITE_*` é embutida no JavaScript público e visível para qualquer visitante. Se você já usou `VITE_ANTHROPIC_KEY` antes, **revogue essa chave** no console da Anthropic e gere uma nova. |
-| `AI_MOTOR` | Opcional | `claude` ou `chatgpt` — fixa qual motor atende a análise de anúncios. Sem ela, usa o ChatGPT se `OPENAI_API_KEY` existir e o Claude caso contrário. A preferência só vale se a chave do motor escolhido estiver definida. |
+| `AI_MOTOR` | Opcional | `claude` ou `chatgpt` — fixa qual motor atende a análise de anúncios. **Sem ela o padrão é o Claude**; o ChatGPT só entra se `ANTHROPIC_API_KEY` não existir. A preferência só vale se a chave do motor escolhido estiver definida. Ter as duas chaves não é problema: só o motor ativo é chamado. |
 | `ANTHROPIC_MODEL` / `OPENAI_MODEL` | Opcional | Modelo de cada motor. Padrões: `claude-haiku-4-5` e `gpt-4o`. `GET /api/ai-chat` (logado) mostra qual motor e modelo estão ativos. |
 | `OPENAI_API_KEY` | Para usar o ChatGPT | Chave da OpenAI, se o motor da análise for o ChatGPT. Como a da Anthropic, fica só no servidor. |
 | `KV_REST_API_URL` / `KV_REST_API_TOKEN` | Opcional | Vercel KV / Upstash. Reserva: sem `SUPABASE_DB_URL`, é aqui que usuários e dados sincronizados são gravados. Com o banco configurado, serve só de espelho. |

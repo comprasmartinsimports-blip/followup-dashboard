@@ -3,9 +3,14 @@
 // SOMENTE no servidor (variável de ambiente do Vercel) e o endpoint exige sessão
 // do aplicativo — sem isso qualquer visitante poderia consumir a chave.
 //
-// Motor: escolhido por AI_MOTOR ("claude" ou "chatgpt"). Sem AI_MOTOR, usa o que
-// tiver chave — ChatGPT primeiro, Claude como reserva. Deixar a escolha explícita
-// evita o caso de o motor mudar sozinho só porque alguém definiu a outra chave.
+// Motor: Claude por padrão, que foi a escolha do dono do sistema. AI_MOTOR
+// ("claude" ou "chatgpt") sobrepõe quando se quer o outro.
+//
+// O padrão já foi o ChatGPT, e isso deu exatamente o problema que este comentário
+// existe para não repetir: com as DUAS chaves definidas no servidor, a análise ia
+// para o ChatGPT — sem saldo — enquanto o Claude, pago e pronto, ficava parado. A
+// preferência tem de estar no código, não depender de alguém lembrar de apagar a
+// chave que sobrou.
 //
 // A RESPOSTA sai sempre no mesmo formato ({ content: [{ type, text }] }),
 // independente de qual motor respondeu: a tela não precisa saber quem atendeu.
@@ -123,11 +128,10 @@ export default async function handler(req, res) {
 
   const temOpenAI = !!process.env.OPENAI_API_KEY;
   const temAnthropic = !!process.env.ANTHROPIC_API_KEY;
-  // Preferência explícita vence a ordem padrão, mas só se a chave dela existir:
-  // apontar para um motor sem chave não faria a análise funcionar, apenas falharia
-  // mais adiante e com uma mensagem pior.
+  // A preferência só vale se a chave dela existir: apontar para um motor sem chave
+  // não faria a análise funcionar, apenas falharia adiante e com mensagem pior.
   const preferido = String(process.env.AI_MOTOR || "").trim().toLowerCase();
-  const usarClaude = preferido === "claude" ? temAnthropic : !temOpenAI;
+  const usarClaude = preferido === "chatgpt" ? !temOpenAI : temAnthropic;
 
   // GET = diagnóstico: qual motor ESTÁ configurado neste servidor. Não gasta chamada
   // nem revela a chave — só responde "qual motor atendeu a análise?" sem chute.
@@ -136,6 +140,10 @@ export default async function handler(req, res) {
       motorAtivo: (temOpenAI || temAnthropic)
         ? (usarClaude ? "claude" : "chatgpt") + (preferido ? " (escolhido por AI_MOTOR)" : " (padrão)")
         : "nenhum",
+      // Ter a chave do outro motor definida não muda nada: só o motor ativo é chamado.
+      observacao: temOpenAI && temAnthropic
+        ? "As duas chaves estão definidas. Só o motor ativo é usado; a outra chave fica ociosa."
+        : undefined,
       OPENAI_API_KEY: temOpenAI ? "definida" : "NÃO definida",
       ANTHROPIC_API_KEY: temAnthropic ? "definida" : "NÃO definida",
       AI_MOTOR: preferido || "(não definida)",
@@ -166,14 +174,15 @@ export default async function handler(req, res) {
     let mensagem = abortou
       ? "A análise demorou mais de 60s e foi interrompida."
       : (err && err.message) || "Falha ao gerar a análise.";
-    // Sem esta linha, um erro do motor reserva parece um problema do motor pedido.
-    // Diz qual motor de fato respondeu e por quê.
+    // Sem isto, o erro do motor que de fato respondeu parece um problema do outro.
+    // Só aparece quando o motor usado NÃO foi o pedido — no caminho normal a
+    // mensagem do próprio motor basta.
     if (preferido === "claude" && !temAnthropic) {
-      mensagem += " AI_MOTOR pede o Claude, mas ANTHROPIC_API_KEY não está definida no Vercel, " +
+      mensagem += " AI_MOTOR pede o Claude, mas ANTHROPIC_API_KEY não está definida no servidor, " +
         "então a análise foi para o ChatGPT.";
-    } else if (preferido !== "claude" && usarClaude) {
-      mensagem += " Esta análise NÃO usou o ChatGPT: OPENAI_API_KEY não está definida no Vercel, " +
-        "então o pedido foi para o Claude. Para fixar o Claude de propósito, defina AI_MOTOR=claude.";
+    } else if (preferido === "chatgpt" && usarClaude) {
+      mensagem += " AI_MOTOR pede o ChatGPT, mas OPENAI_API_KEY não está definida no servidor, " +
+        "então a análise foi para o Claude.";
     }
     return res.status(abortou ? 504 : (err && err.status) || 502).json({ error: mensagem });
   }

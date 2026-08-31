@@ -3952,7 +3952,7 @@ function ContaBancariaModal({ conta, onSave, onClose, onExcluir }) {
 
 // Caixas e bancos: onde o dinheiro está, com o saldo calculado a partir dos
 // movimentos — não digitado.
-function BancosTab({ contasBancarias, salvar, movimentos, setTab, tab }) {
+function BancosTab({ contasBancarias, salvar, movimentos, setTab, tab, estornar }) {
   const [modal, setModal] = useState(null);
   const [extratoDe, setExtratoDe] = useState(null);
   var semConta = movimentosSemConta(movimentos, contasBancarias);
@@ -4004,7 +4004,7 @@ function BancosTab({ contasBancarias, salvar, movimentos, setTab, tab }) {
         {comSaldo.length === 0
           ? <div style={{ ...cartao, textAlign:"center", padding:"46px 20px", color:"var(--text-3)", fontSize:13.5 }}>Nenhum movimento nesta conta desde a data do saldo inicial.</div>
           : <div style={_tableWrap}><table style={_table}>
-              <thead><tr>{["Data","Descrição","Categoria","Origem","Entrada","Saída","Saldo"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+              <thead><tr>{["Data","Descrição","Categoria","Origem","Entrada","Saída","Saldo",""].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
               <tbody>{comSaldo.map(function(m,i){
                 return <tr key={m.id||i}>
                   <td style={_td}>{fmtDate(m.data) || m.data}</td>
@@ -4014,6 +4014,15 @@ function BancosTab({ contasBancarias, salvar, movimentos, setTab, tab }) {
                   <td style={_tdMono}>{m.tipo === "entrada" ? <span style={{ color:"#0a9d4e" }}>{fmt(m.valor)}</span> : "—"}</td>
                   <td style={_tdMono}>{m.tipo === "saida" ? <span style={{ color:"#FF5252" }}>{fmt(m.valor)}</span> : "—"}</td>
                   <td style={{ ..._tdMono, fontWeight:600, color: m.saldo >= 0 ? "var(--text-strong)" : "#FF5252" }}>{fmt(m.saldo)}</td>
+                  <td style={{ ..._td, textAlign:"right", whiteSpace:"nowrap" }}>
+                    {estornar && <button onClick={function(){ estornar(m); }}
+                      title={m.origem === "conta_pagar" ? "Desfaz a baixa: a conta volta para Contas a pagar"
+                           : m.origem === "recebivel" ? "Desfaz a confirmação: volta para Contas a receber"
+                           : "Apaga o lançamento manual"}
+                      style={{ background:"rgba(255,82,82,.1)", border:"none", color:"#FF5252", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>
+                      {m.origem === "manual" ? "Excluir" : "Estornar"}
+                    </button>}
+                  </td>
                 </tr>;
               })}</tbody>
             </table></div>}
@@ -4148,7 +4157,7 @@ function LancamentoModal({ lancamento, contasBancarias, categorias, onSave, onCl
 }
 
 // Lançamentos: o extrato de tudo o que mexeu em dinheiro, de qualquer origem.
-function LancamentosTab({ lancamentos, salvar, movimentos, contasBancarias, categorias, tab, setTab, periodo, setPeriodo }) {
+function LancamentosTab({ lancamentos, salvar, movimentos, contasBancarias, categorias, tab, setTab, periodo, setPeriodo, estornar }) {
   const [modal, setModal] = useState(null);
   const [fTipo, setFTipo] = useState("todos");
   const [fConta, setFConta] = useState("");
@@ -4235,7 +4244,11 @@ function LancamentosTab({ lancamentos, salvar, movimentos, contasBancarias, cate
                     {editavel ? <>
                       <button onClick={function(){ setModal((lancamentos||[]).find(function(x){ return x.id === m.id; })); }} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", fontSize:11, fontWeight:600, padding:"4px 9px", borderRadius:6, cursor:"pointer", marginRight:6 }}>Editar</button>
                       <button onClick={function(){ excluir(m.id); }} style={{ background:"rgba(255,82,82,.1)", border:"none", color:"#FF5252", fontSize:11, fontWeight:600, padding:"4px 9px", borderRadius:6, cursor:"pointer" }}>Excluir</button>
-                    </> : <span style={{ fontSize:11, color:"var(--text-4)" }}>edite na origem</span>}
+                    </> : (estornar
+                      ? <button onClick={function(){ estornar(m); }}
+                          title={m.origem === "conta_pagar" ? "Desfaz a baixa: a conta volta para Contas a pagar" : "Desfaz a confirmação: volta para Contas a receber"}
+                          style={{ background:"rgba(255,82,82,.1)", border:"none", color:"#FF5252", fontSize:11, fontWeight:600, padding:"4px 9px", borderRadius:6, cursor:"pointer" }}>Estornar</button>
+                      : <span style={{ fontSize:11, color:"var(--text-4)" }}>edite na origem</span>)}
                   </td>
                 </tr>;
               })}
@@ -11394,6 +11407,42 @@ export default function App() {
     try { localStorage.setItem("pedidos_compra", JSON.stringify(lista)); } catch(e) {}
     try { kvSyncPush("pedidos_compra", lista); } catch(e) {}
   }
+  // Estornar um movimento e desfazer o que o criou, na origem. O extrato e
+  // calculado, entao nao existe "apagar a linha": o que se apaga e o fato que a
+  // produziu — a baixa da conta, a confirmacao do recebimento, o lancamento.
+  // Uma implementacao so, usada por Caixas e bancos e por Lancamentos, para as
+  // duas telas nunca desfazerem a mesma coisa de jeitos diferentes.
+  function estornarMovimento(m) {
+    if (!m) return;
+    if (m.origem === "conta_pagar") {
+      var c = (contasPagar || []).find(function(x){ return x.id === m.refId; });
+      if (!c) { window.alert("A conta de origem não está mais na lista — nada a estornar."); return; }
+      if (!window.confirm("Estornar o pagamento de “" + (c.descricao || "conta") + "”, de " + fmt(m.valor) + "?\n\n" +
+          "A conta volta para Contas a pagar como pendente, com o vencimento original (" +
+          (fmtDate(c.vencimento) || c.vencimento || "sem data") + "), e sai do saldo da conta bancária.")) return;
+      salvarContasPagar((contasPagar || []).map(function(x){
+        if (x.id !== m.refId) return x;
+        var v = Object.assign({}, x, { status:"pendente" });
+        delete v.pago_em;
+        return v;
+      }));
+      return;
+    }
+    if (m.origem === "recebivel") {
+      if (!window.confirm("Estornar o recebimento do pedido #" + m.refId + ", de " + fmt(m.valor) + "?\n\n" +
+          "Ele volta para Contas a receber como não confirmado, sai do saldo e deixa de contar como receita no DRE.")) return;
+      var n = Object.assign({}, recebiveisBaixados); delete n[String(m.refId)];
+      setRecebiveisBaixados(n);
+      return;
+    }
+    if (m.origem === "manual") {
+      if (!window.confirm("Excluir o lançamento “" + m.descricao + "”, de " + fmt(m.valor) + "?\n\n" +
+          "Lançamento manual não tem origem para onde voltar: ele é apagado.")) return;
+      salvarLancamentos((lancamentos || []).filter(function(x){ return x.id !== m.id; }));
+      return;
+    }
+  }
+
   const [extratoBancario, setExtratoBancarioState] = useState(function(){
     try { var v = JSON.parse(localStorage.getItem("extrato_bancario") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
   });
@@ -13387,8 +13436,8 @@ export default function App() {
           manuais={conciliacoesManuais} salvarManuais={salvarConciliacoesManuais}
           movimentos={movimentosCaixa} contasBancarias={contasBancarias}
           lancamentos={lancamentos} salvarLancamentos={salvarLancamentos} />}
-        {tab === "bancos" && <BancosTab tab={tab} contasBancarias={contasBancarias} salvar={salvarContasBancarias} movimentos={movimentosCaixa} setTab={setTab} />}
-        {tab === "lancamentos" && <LancamentosTab tab={tab} setTab={setTab} periodo={periodoFin} setPeriodo={setPeriodoFin} lancamentos={lancamentos} salvar={salvarLancamentos} movimentos={movimentosCaixa} contasBancarias={contasBancarias} categorias={categoriasPagar} />}
+        {tab === "bancos" && <BancosTab tab={tab} contasBancarias={contasBancarias} salvar={salvarContasBancarias} movimentos={movimentosCaixa} setTab={setTab} estornar={estornarMovimento} />}
+        {tab === "lancamentos" && <LancamentosTab tab={tab} setTab={setTab} periodo={periodoFin} setPeriodo={setPeriodoFin} lancamentos={lancamentos} salvar={salvarLancamentos} movimentos={movimentosCaixa} contasBancarias={contasBancarias} categorias={categoriasPagar} estornar={estornarMovimento} />}
         {tab === "compras" && <ComprasTab produtos={produtos} pedidos={pedidosCompra} salvar={salvarPedidosCompra} />}
         {tab === "clientes" && <ClientesTab rawOrders={rawOrders} />}
         {tab === "tendencias" && <TendenciasTab setTab={setTab} setBuscaPrecificacao={setBuscaPrecificacao} enriched={enriched} />}

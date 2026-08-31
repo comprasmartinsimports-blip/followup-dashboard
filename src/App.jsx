@@ -559,6 +559,8 @@ const ABA_INFO = {
   compras:["🛒","Compras","Pedidos de compra e reposição de estoque."],
   estoque:["📦","Estoque","Saldo por depósito, baixa automática e estoque mínimo."],
   contas_pagar:["⬇️","Contas a pagar","Despesas, vencimentos e baixas."],
+  bancos:["🏦","Caixas e bancos","Onde o dinheiro está, com saldo calculado."],
+  lancamentos:["📒","Lançamentos","Extrato de tudo o que entrou e saiu."],
   prioridade_pagamento:["🎯","Prioridade de pagamento","Que contas pagar primeiro, com o caixa que você tem."],
   contas_receber:["⬆️","Contas a receber","Recebíveis criados a partir do repasse dos marketplaces."],
   clientes:["👥","Clientes","Cadastro de clientes e histórico."],
@@ -2593,6 +2595,499 @@ function TelaEstruturada({ cfg }) {
   );
 }
 // DRE (Demonstrativo de Resultado): estrutura zerada, sem dados por enquanto.
+// ── Caixas, bancos e movimentos ────────────────────────────────────────────
+// O extrato NÃO é guardado. Ele é montado na hora a partir do que já existe:
+// contas a pagar quitadas, recebimentos confirmados e lançamentos manuais.
+// Gravar uma cópia de cada baixa criaria dois registros da mesma coisa, que
+// saem de sincronia no primeiro estorno.
+const TIPOS_CONTA_BANCARIA = [
+  ["banco", "Conta bancária"],
+  ["caixa", "Caixa / dinheiro"],
+  ["poupanca", "Poupança / reserva"],
+  ["cartao", "Cartão de crédito"],
+];
+
+function contaBancariaNova() {
+  return {
+    nome: "", tipo: "banco", banco: "", agencia: "", numero: "",
+    saldoInicial: "", dataSaldoInicial: new Date().toISOString().slice(0, 10),
+    recebeML: false, ativa: true, obs: "",
+  };
+}
+
+// Junta tudo o que mexeu em dinheiro num extrato só, em ordem de data.
+// Cada linha diz de onde veio: só a de origem "manual" pode ser editada aqui —
+// as outras se editam onde nasceram, e a tela diz isso.
+function movimentosConsolidados({ lancamentos, contasPagar, enrichedOrders, recebiveisBaixados, paymentData, contasBancarias }) {
+  var mov = [];
+  var contaML = (contasBancarias || []).find(function(c){ return c.recebeML; });
+
+  (lancamentos || []).forEach(function(l){
+    var v = parseFloat(l.valor) || 0;
+    if (!l.data || !v) return;
+    mov.push({
+      id: l.id, data: String(l.data).slice(0, 10), tipo: l.tipo === "entrada" ? "entrada" : "saida",
+      descricao: l.descricao || "(sem descrição)", categoria: l.categoria || "Outros",
+      valor: Math.abs(v), conta: l.conta || "", origem: "manual",
+    });
+  });
+
+  (contasPagar || []).forEach(function(c){
+    if (c.status !== "paga") return;
+    var d = String(c.pago_em || c.vencimento || "").slice(0, 10);
+    var v = parseFloat(c.valorTotal || c.valor) || 0;
+    if (!d || !v) return;
+    mov.push({
+      id: "cp:" + c.id, data: d, tipo: "saida",
+      descricao: c.descricao || "(sem fornecedor)", categoria: c.categoria || "Outros",
+      valor: v, conta: c.conta || "", origem: "conta_pagar", refId: c.id,
+    });
+  });
+
+  (enrichedOrders || []).forEach(function(o){
+    if (o.status === "cancelled") return;
+    var d = (recebiveisBaixados || {})[String(o.id)];
+    if (!d) return;
+    var pay = paymentData && paymentData[String(o.id)];
+    var v = pay && pay.netAmount ? pay.netAmount : (o.price || 0) * (o.qty || 1);
+    if (!v) return;
+    mov.push({
+      id: "rec:" + o.id, data: String(d).slice(0, 10), tipo: "entrada",
+      descricao: "Repasse ML · pedido #" + o.id, categoria: "Vendas",
+      valor: v, conta: contaML ? contaML.id : "", origem: "recebivel", refId: o.id,
+    });
+  });
+
+  mov.sort(function(a, b){ return b.data.localeCompare(a.data) || String(b.id).localeCompare(String(a.id)); });
+  return mov;
+}
+
+// Saldo de uma conta: o saldo inicial informado mais tudo o que se moveu nela
+// DEPOIS da data desse saldo. Movimento anterior é ignorado de propósito — já
+// está embutido no número que o usuário digitou, e somá-lo contaria duas vezes.
+function saldoDaConta(conta, movimentos) {
+  var base = parseFloat(conta.saldoInicial) || 0;
+  var desde = conta.dataSaldoInicial || "0000-00-00";
+  var delta = 0;
+  (movimentos || []).forEach(function(m){
+    if (m.conta !== conta.id) return;
+    if (m.data < desde) return;
+    delta += m.tipo === "entrada" ? m.valor : -m.valor;
+  });
+  return base + delta;
+}
+
+// Movimento que não foi atribuído a nenhuma conta existente. Não entra em saldo
+// nenhum — e por isso precisa ser mostrado, não descartado em silêncio.
+function movimentosSemConta(movimentos, contasBancarias) {
+  var existe = {};
+  (contasBancarias || []).forEach(function(c){ existe[c.id] = true; });
+  return (movimentos || []).filter(function(m){ return !m.conta || !existe[m.conta]; });
+}
+
+// Saldo somado das contas ativas. É o número que a Prioridade de pagamento usa
+// no lugar de perguntar quanto você tem.
+function saldoConsolidado(contasBancarias, movimentos) {
+  return (contasBancarias || [])
+    .filter(function(c){ return c.ativa !== false && c.tipo !== "cartao"; })
+    .reduce(function(s, c){ return s + saldoDaConta(c, movimentos); }, 0);
+}
+
+function ContaBancariaModal({ conta, onSave, onClose, onExcluir }) {
+  const [f, setF] = useState(function(){ return Object.assign(contaBancariaNova(), conta || {}); });
+  const [erro, setErro] = useState("");
+  function set(k, v){ setF(function(s){ return Object.assign({}, s, { [k]: v }); }); }
+  var novo = !conta || !conta.id;
+  function salvar(){
+    if (!String(f.nome || "").trim()) { setErro("Dê um nome à conta — é assim que ela aparece nas outras telas."); return; }
+    var p = Object.assign({}, f);
+    if (!p.id) p.id = "cb_" + Date.now() + "_" + Math.floor(Math.random()*1000);
+    onSave(p);
+  }
+  var campo = { width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 11px", borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box" };
+  var lbl = { fontSize:11.5, color:"var(--text-3)", fontWeight:600, marginBottom:4, display:"block" };
+  var ehCartao = f.tipo === "cartao";
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:600, display:"flex", alignItems:"flex-start", justifyContent:"center", padding:"32px 16px", overflowY:"auto" }} onClick={onClose}>
+      <div onClick={function(e){ e.stopPropagation(); }} style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:14, width:620, maxWidth:"100%", padding:22 }}>
+        <div style={{ fontWeight:600, fontSize:17, color:"var(--text-strong)", marginBottom:16 }}>{novo ? "Nova conta" : "Editar conta"}</div>
+        {erro && <div style={{ background:"rgba(255,82,82,.12)", border:"1px solid #FF5252", color:"#FF5252", borderRadius:9, padding:"10px 13px", fontSize:12.5, marginBottom:14 }}>{erro}</div>}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>
+          <div><label style={lbl}>Nome *</label><input value={f.nome} onChange={function(e){ set("nome", e.target.value); }} placeholder="Itaú principal" style={campo} /></div>
+          <div><label style={lbl}>Tipo</label>
+            <select value={f.tipo} onChange={function(e){ set("tipo", e.target.value); }} style={campo}>
+              {TIPOS_CONTA_BANCARIA.map(function(t){ return <option key={t[0]} value={t[0]}>{t[1]}</option>; })}
+            </select></div>
+        </div>
+        {f.tipo !== "caixa" && (
+          <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1.4fr", gap:12, marginBottom:12 }}>
+            <div><label style={lbl}>Banco</label><input value={f.banco} onChange={function(e){ set("banco", e.target.value); }} style={campo} /></div>
+            <div><label style={lbl}>Agência</label><input value={f.agencia} onChange={function(e){ set("agencia", e.target.value); }} style={campo} /></div>
+            <div><label style={lbl}>Conta</label><input value={f.numero} onChange={function(e){ set("numero", e.target.value); }} style={campo} /></div>
+          </div>
+        )}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>
+          <div><label style={lbl}>Saldo inicial (R$)</label><input type="number" step="0.01" value={f.saldoInicial} onChange={function(e){ set("saldoInicial", e.target.value); }} style={campo} /></div>
+          <div><label style={lbl}>Nesta data</label><input type="date" value={f.dataSaldoInicial} onChange={function(e){ set("dataSaldoInicial", e.target.value); }} style={campo} /></div>
+        </div>
+        <div style={{ fontSize:11.5, color:"var(--text-3)", lineHeight:1.6, marginBottom:14 }}>
+          O saldo atual é este valor mais tudo o que se moveu <b>depois</b> desta data. Movimento anterior
+          é ignorado — ele já está embutido no número que você digitou.
+        </div>
+        <label style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:"var(--text-2)", cursor:"pointer", marginBottom:10 }}>
+          <input type="checkbox" checked={!!f.recebeML} onChange={function(e){ set("recebeML", e.target.checked); }} />
+          Os repasses do Mercado Livre caem nesta conta
+        </label>
+        <label style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:"var(--text-2)", cursor:"pointer", marginBottom:16 }}>
+          <input type="checkbox" checked={f.ativa !== false} onChange={function(e){ set("ativa", e.target.checked); }} />
+          Conta ativa {ehCartao ? "" : "— entra no saldo consolidado"}
+        </label>
+        {ehCartao && <div style={{ fontSize:11.5, color:"var(--text-3)", marginBottom:16, lineHeight:1.6 }}>
+          Cartão de crédito fica <b>fora</b> do saldo consolidado: o limite não é dinheiro que você tem.
+        </div>}
+        <div style={{ display:"flex", gap:8 }}>
+          {!novo && onExcluir && <button onClick={function(){ onExcluir(f); }} style={{ background:"rgba(255,82,82,.1)", border:"1px solid rgba(255,82,82,.35)", color:"#FF5252", fontWeight:600, padding:"11px 18px", borderRadius:10, cursor:"pointer" }}>Excluir</button>}
+          <div style={{ flex:1 }} />
+          <button onClick={onClose} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"11px 20px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
+          <button onClick={salvar} style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"11px 30px", borderRadius:10, cursor:"pointer" }}>Salvar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Caixas e bancos: onde o dinheiro está, com o saldo calculado a partir dos
+// movimentos — não digitado.
+function BancosTab({ contasBancarias, salvar, movimentos, setTab }) {
+  const [modal, setModal] = useState(null);
+  const [extratoDe, setExtratoDe] = useState(null);
+  var semConta = movimentosSemConta(movimentos, contasBancarias);
+  var somaSemConta = semConta.reduce(function(s,m){ return s + (m.tipo === "entrada" ? m.valor : -m.valor); }, 0);
+  var consolidado = saldoConsolidado(contasBancarias, movimentos);
+  var temML = (contasBancarias || []).some(function(c){ return c.recebeML; });
+
+  function salvarConta(c){
+    var arr = (contasBancarias || []).slice();
+    // Só uma conta pode receber os repasses; marcar uma nova desmarca a anterior.
+    if (c.recebeML) arr = arr.map(function(x){ return Object.assign({}, x, { recebeML: x.id === c.id }); });
+    var i = arr.findIndex(function(x){ return x.id === c.id; });
+    if (i >= 0) arr[i] = c; else arr.push(c);
+    salvar(arr); setModal(null);
+  }
+  function excluir(c){
+    if (!window.confirm("Excluir a conta “" + c.nome + "”? Os movimentos ligados a ela ficam sem conta.")) return;
+    salvar((contasBancarias || []).filter(function(x){ return x.id !== c.id; })); setModal(null);
+  }
+
+  var cartao = { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"18px 20px" };
+
+  if (extratoDe) {
+    var conta = (contasBancarias || []).find(function(c){ return c.id === extratoDe; });
+    if (!conta) { setExtratoDe(null); return null; }
+    var doExtrato = (movimentos || []).filter(function(m){ return m.conta === conta.id && m.data >= (conta.dataSaldoInicial || "0000-00-00"); });
+    var corrido = parseFloat(conta.saldoInicial) || 0;
+    var comSaldo = doExtrato.slice().reverse().map(function(m){
+      corrido += m.tipo === "entrada" ? m.valor : -m.valor;
+      return Object.assign({}, m, { saldo: corrido });
+    }).reverse();
+    return (
+      <div style={{ padding:2, maxWidth:1050 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14 }}>
+          <button onClick={function(){ setExtratoDe(null); }} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", width:34, height:34, borderRadius:9, cursor:"pointer", fontSize:16 }}>←</button>
+          <div>
+            <div style={{ fontWeight:600, fontSize:19, color:"var(--text-strong)" }}>{conta.nome}</div>
+            <div style={{ fontSize:12, color:"var(--text-3)" }}>Extrato desde {fmtDate(conta.dataSaldoInicial) || conta.dataSaldoInicial} · saldo inicial {fmt(parseFloat(conta.saldoInicial)||0)}</div>
+          </div>
+          <div style={{ flex:1 }} />
+          <div style={{ textAlign:"right" }}>
+            <div style={{ fontSize:11, color:"var(--text-3)" }}>Saldo atual</div>
+            <div style={{ fontSize:22, fontWeight:600, color: saldoDaConta(conta, movimentos) >= 0 ? "#0a9d4e" : "#FF5252" }}>{fmt(saldoDaConta(conta, movimentos))}</div>
+          </div>
+        </div>
+        {comSaldo.length === 0
+          ? <div style={{ ...cartao, textAlign:"center", padding:"46px 20px", color:"var(--text-3)", fontSize:13.5 }}>Nenhum movimento nesta conta desde a data do saldo inicial.</div>
+          : <div style={_tableWrap}><table style={_table}>
+              <thead><tr>{["Data","Descrição","Categoria","Origem","Entrada","Saída","Saldo"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+              <tbody>{comSaldo.map(function(m,i){
+                return <tr key={m.id||i}>
+                  <td style={_td}>{fmtDate(m.data) || m.data}</td>
+                  <td style={{ ..._td, color:"var(--text-strong)", maxWidth:280 }}>{m.descricao}</td>
+                  <td style={_td}>{m.categoria}</td>
+                  <td style={{ ..._td, fontSize:11.5, color:"var(--text-3)" }}>{ROTULO_ORIGEM[m.origem] || m.origem}</td>
+                  <td style={_tdMono}>{m.tipo === "entrada" ? <span style={{ color:"#0a9d4e" }}>{fmt(m.valor)}</span> : "—"}</td>
+                  <td style={_tdMono}>{m.tipo === "saida" ? <span style={{ color:"#FF5252" }}>{fmt(m.valor)}</span> : "—"}</td>
+                  <td style={{ ..._tdMono, fontWeight:600, color: m.saldo >= 0 ? "var(--text-strong)" : "#FF5252" }}>{fmt(m.saldo)}</td>
+                </tr>;
+              })}</tbody>
+            </table></div>}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding:2, maxWidth:1050 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14, flexWrap:"wrap" }}>
+        <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Caixas e bancos</div>
+        <div style={{ flex:1 }} />
+        <button onClick={function(){ setModal({}); }} style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"9px 22px", borderRadius:9, cursor:"pointer", fontSize:13 }}>+ Nova conta</button>
+      </div>
+
+      <div style={{ ...cartao, marginBottom:14, display:"flex", alignItems:"baseline", gap:26, flexWrap:"wrap" }}>
+        <div>
+          <div style={{ fontSize:11.5, color:"var(--text-3)" }}>Saldo consolidado</div>
+          <div style={{ fontSize:30, fontWeight:700, color: consolidado >= 0 ? "#0a9d4e" : "#FF5252", letterSpacing:"-.01em" }}>{fmt(consolidado)}</div>
+          <div style={{ fontSize:11, color:"var(--text-4)" }}>soma das contas ativas, sem cartões</div>
+        </div>
+        <div style={{ flex:1 }} />
+        <div style={{ fontSize:12, color:"var(--text-3)", maxWidth:340, lineHeight:1.6 }}>
+          É este número que a <b>Prioridade de pagamento</b> passa a usar, no lugar de perguntar
+          quanto você tem.
+        </div>
+      </div>
+
+      {(contasBancarias || []).length === 0 ? (
+        <div style={{ ...cartao, textAlign:"center", padding:"54px 20px" }}>
+          <div style={{ fontSize:36, marginBottom:10 }}>🏦</div>
+          <div style={{ fontWeight:600, fontSize:16, color:"var(--text-strong)" }}>Nenhuma conta cadastrada.</div>
+          <div style={{ fontSize:13, color:"var(--text-3)", marginTop:6, lineHeight:1.6 }}>
+            Cadastre onde o seu dinheiro fica — banco, caixa, reserva. Informe o saldo de hoje e o
+            sistema mantém o resto a partir das contas pagas e dos recebimentos confirmados.
+          </div>
+        </div>
+      ) : (
+        <div style={_tableWrap}>
+          <table style={_table}>
+            <thead><tr>{["Conta","Tipo","Dados","Saldo inicial","Saldo atual",""].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+            <tbody>
+              {(contasBancarias || []).map(function(c){
+                var saldo = saldoDaConta(c, movimentos);
+                var inativa = c.ativa === false;
+                return <tr key={c.id} onClick={function(){ setExtratoDe(c.id); }} style={{ cursor:"pointer", opacity: inativa ? .5 : 1 }} title="Ver extrato">
+                  <td style={{ ..._td, color:"var(--text-strong)", fontWeight:500 }}>
+                    {c.nome}
+                    {c.recebeML && <span style={{ marginLeft:8, fontSize:10, fontWeight:600, padding:"2px 7px", borderRadius:20, background:"rgba(255,193,7,.16)", color:"#B8860B" }}>repasses ML</span>}
+                    {inativa && <span style={{ marginLeft:8, fontSize:10.5, color:"var(--text-4)" }}>inativa</span>}
+                  </td>
+                  <td style={_td}>{(TIPOS_CONTA_BANCARIA.find(function(t){ return t[0]===c.tipo; })||["","—"])[1]}</td>
+                  <td style={{ ..._td, fontSize:12, color:"var(--text-3)" }}>{c.banco ? c.banco + (c.agencia ? " · ag " + c.agencia : "") + (c.numero ? " · cc " + c.numero : "") : "—"}</td>
+                  <td style={_tdMono}>{fmt(parseFloat(c.saldoInicial)||0)}</td>
+                  <td style={{ ..._tdMono, fontWeight:700, color: saldo >= 0 ? "var(--text-strong)" : "#FF5252" }}>{fmt(saldo)}</td>
+                  <td style={{ ..._td, textAlign:"right" }} onClick={function(e){ e.stopPropagation(); }}>
+                    <button onClick={function(){ setModal(c); }} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Editar</button>
+                  </td>
+                </tr>;
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {(contasBancarias || []).length > 0 && !temML && (
+        <div style={{ marginTop:12, background:"rgba(255,193,7,.10)", border:"1px solid rgba(255,193,7,.45)", borderRadius:10, padding:"11px 14px", fontSize:12.5, color:"var(--text-2)", lineHeight:1.6 }}>
+          Nenhuma conta está marcada como a que recebe os repasses do Mercado Livre. Enquanto isso,
+          os recebimentos confirmados não entram em saldo nenhum. Edite a conta certa e marque a opção.
+        </div>
+      )}
+
+      {semConta.length > 0 && (
+        <div style={{ marginTop:12, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"11px 14px", fontSize:12.5, color:"var(--text-3)", lineHeight:1.6 }}>
+          <b>{semConta.length} movimento(s)</b> somando {fmt(Math.abs(somaSemConta))} não estão em nenhuma conta —
+          foram pagos ou recebidos sem dizer de onde saiu o dinheiro. Eles aparecem em Lançamentos, mas
+          não entram em saldo nenhum.
+          {setTab && <button onClick={function(){ setTab("lancamentos"); }} style={{ marginLeft:8, background:"none", border:"none", color:"var(--ui-accent)", cursor:"pointer", fontSize:12.5, fontWeight:600, padding:0 }}>Ver em Lançamentos →</button>}
+        </div>
+      )}
+
+      {modal && <ContaBancariaModal conta={modal.id ? modal : null} onSave={salvarConta} onExcluir={excluir} onClose={function(){ setModal(null); }} />}
+    </div>
+  );
+}
+
+var ROTULO_ORIGEM = { manual:"lançamento", conta_pagar:"conta a pagar", recebivel:"recebimento ML" };
+
+function LancamentoModal({ lancamento, contasBancarias, categorias, onSave, onClose }) {
+  const [f, setF] = useState(function(){
+    return Object.assign({
+      data: new Date().toISOString().slice(0,10), tipo:"saida", categoria:"", descricao:"", valor:"", conta:"", obs:"",
+    }, lancamento || {});
+  });
+  const [erro, setErro] = useState("");
+  function set(k,v){ setF(function(s){ return Object.assign({}, s, { [k]:v }); }); }
+  function salvar(){
+    if (!String(f.descricao||"").trim()) { setErro("Descreva o lançamento."); return; }
+    if (!(parseFloat(f.valor) > 0)) { setErro("Informe um valor maior que zero."); return; }
+    if (!f.data) { setErro("Informe a data."); return; }
+    var p = Object.assign({}, f);
+    if (!p.id) p.id = "lc_" + Date.now() + "_" + Math.floor(Math.random()*1000);
+    onSave(p);
+  }
+  var campo = { width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 11px", borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box" };
+  var lbl = { fontSize:11.5, color:"var(--text-3)", fontWeight:600, marginBottom:4, display:"block" };
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:600, display:"flex", alignItems:"flex-start", justifyContent:"center", padding:"32px 16px", overflowY:"auto" }} onClick={onClose}>
+      <div onClick={function(e){ e.stopPropagation(); }} style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:14, width:580, maxWidth:"100%", padding:22 }}>
+        <div style={{ fontWeight:600, fontSize:17, color:"var(--text-strong)", marginBottom:16 }}>{lancamento && lancamento.id ? "Editar lançamento" : "Novo lançamento"}</div>
+        {erro && <div style={{ background:"rgba(255,82,82,.12)", border:"1px solid #FF5252", color:"#FF5252", borderRadius:9, padding:"10px 13px", fontSize:12.5, marginBottom:14 }}>{erro}</div>}
+        <div style={{ display:"flex", gap:8, marginBottom:14 }}>
+          {[["saida","Saída","#FF5252"],["entrada","Entrada","#0a9d4e"]].map(function(t){
+            var on = f.tipo === t[0];
+            return <button key={t[0]} onClick={function(){ set("tipo", t[0]); }}
+              style={{ flex:1, padding:"10px", borderRadius:9, cursor:"pointer", fontSize:13, fontWeight:600,
+                       border:"1px solid " + (on ? t[2] : "var(--border)"),
+                       background: on ? t[2] : "var(--surface)", color: on ? "#fff" : "var(--text-3)" }}>{t[1]}</button>;
+          })}
+        </div>
+        <div style={{ marginBottom:12 }}><label style={lbl}>Descrição *</label><input value={f.descricao} onChange={function(e){ set("descricao", e.target.value); }} placeholder="Tarifa bancária, adiantamento, venda avulsa..." style={campo} /></div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>
+          <div><label style={lbl}>Valor (R$) *</label><input type="number" step="0.01" value={f.valor} onChange={function(e){ set("valor", e.target.value); }} style={campo} /></div>
+          <div><label style={lbl}>Data *</label><input type="date" value={f.data} onChange={function(e){ set("data", e.target.value); }} style={campo} /></div>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:14 }}>
+          <div><label style={lbl}>Categoria</label>
+            <input value={f.categoria} onChange={function(e){ set("categoria", e.target.value); }} list="lista-cat-lanc" placeholder="Outros" style={campo} />
+            <datalist id="lista-cat-lanc">{(categorias||[]).map(function(c){ return <option key={c} value={c} />; })}</datalist>
+          </div>
+          <div><label style={lbl}>Conta</label>
+            <select value={f.conta} onChange={function(e){ set("conta", e.target.value); }} style={campo}>
+              <option value="">— não definida —</option>
+              {(contasBancarias||[]).map(function(c){ return <option key={c.id} value={c.id}>{c.nome}</option>; })}
+            </select>
+            <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:3 }}>Sem conta, não entra em saldo nenhum.</div>
+          </div>
+        </div>
+        <div style={{ marginBottom:18 }}><label style={lbl}>Observação</label><input value={f.obs} onChange={function(e){ set("obs", e.target.value); }} style={campo} /></div>
+        <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+          <button onClick={onClose} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"11px 20px", borderRadius:10, cursor:"pointer" }}>Cancelar</button>
+          <button onClick={salvar} style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"11px 30px", borderRadius:10, cursor:"pointer" }}>Salvar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Lançamentos: o extrato de tudo o que mexeu em dinheiro, de qualquer origem.
+function LancamentosTab({ lancamentos, salvar, movimentos, contasBancarias, categorias }) {
+  const [modal, setModal] = useState(null);
+  const [periodo, setPeriodo] = useState("30");
+  const [fTipo, setFTipo] = useState("todos");
+  const [fConta, setFConta] = useState("");
+  const [fOrigem, setFOrigem] = useState("todas");
+  const [busca, setBusca] = useState("");
+  var cutoff = cutoffPeriodo(periodo);
+  var nomeConta = {}; (contasBancarias||[]).forEach(function(c){ nomeConta[c.id] = c.nome; });
+
+  var lista = (movimentos || []).filter(function(m){
+    if (m.data < cutoff) return false;
+    if (fTipo !== "todos" && m.tipo !== fTipo) return false;
+    if (fConta === "__sem__" ? !!m.conta && !!nomeConta[m.conta] : (fConta && m.conta !== fConta)) return false;
+    if (fOrigem !== "todas" && m.origem !== fOrigem) return false;
+    var q = busca.trim().toLowerCase();
+    if (q && (m.descricao||"").toLowerCase().indexOf(q) < 0 && (m.categoria||"").toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  });
+  var entradas = lista.filter(function(m){ return m.tipo === "entrada"; }).reduce(function(s,m){ return s+m.valor; }, 0);
+  var saidas = lista.filter(function(m){ return m.tipo === "saida"; }).reduce(function(s,m){ return s+m.valor; }, 0);
+
+  function salvarLanc(l){
+    var arr = (lancamentos || []).slice();
+    var i = arr.findIndex(function(x){ return x.id === l.id; });
+    if (i >= 0) arr[i] = l; else arr.push(l);
+    salvar(arr); setModal(null);
+  }
+  function excluir(id){
+    if (!window.confirm("Excluir este lançamento?")) return;
+    salvar((lancamentos || []).filter(function(x){ return x.id !== id; }));
+  }
+  var sel = { background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"8px 10px", borderRadius:8, fontSize:12.5 };
+
+  return (
+    <div style={{ padding:2, maxWidth:1180 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14, flexWrap:"wrap" }}>
+        <div>
+          <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Lançamentos</div>
+          <div style={{ fontSize:12.5, color:"var(--text-3)" }}>Tudo o que mexeu em dinheiro: contas pagas, recebimentos confirmados e lançamentos seus.</div>
+        </div>
+        <div style={{ flex:1 }} />
+        <button onClick={function(){ setModal({}); }} style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"9px 22px", borderRadius:9, cursor:"pointer", fontSize:13 }}>+ Novo lançamento</button>
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12, marginBottom:14 }}>
+        {[["Entradas", fmt(entradas), "#0a9d4e"], ["Saídas", fmt(saidas), "#FF5252"],
+          ["Resultado do período", fmt(entradas - saidas), entradas - saidas >= 0 ? "#0a9d4e" : "#FF5252"],
+          ["Movimentos", String(lista.length), "var(--text-strong)"]].map(function(k,i){
+          return <div key={i} style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 16px" }}>
+            <div style={{ fontSize:11.5, color:"var(--text-3)" }}>{k[0]}</div>
+            <div style={{ fontSize:20, fontWeight:600, color:k[2], marginTop:2 }}>{k[1]}</div>
+          </div>;
+        })}
+      </div>
+
+      <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap", alignItems:"center" }}>
+        {PERIODOS_REL.map(function(p){ var on = periodo===p[0];
+          return <button key={p[0]} onClick={function(){ setPeriodo(p[0]); }}
+            style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600,
+              background: on ? "#768692" : "var(--surface)", color: on ? "#fff" : "var(--text-3)" }}>{p[1]}</button>; })}
+        <select value={fTipo} onChange={function(e){ setFTipo(e.target.value); }} style={sel}>
+          <option value="todos">Entradas e saídas</option><option value="entrada">Só entradas</option><option value="saida">Só saídas</option>
+        </select>
+        <select value={fConta} onChange={function(e){ setFConta(e.target.value); }} style={sel}>
+          <option value="">Todas as contas</option>
+          {(contasBancarias||[]).map(function(c){ return <option key={c.id} value={c.id}>{c.nome}</option>; })}
+          <option value="__sem__">Sem conta definida</option>
+        </select>
+        <select value={fOrigem} onChange={function(e){ setFOrigem(e.target.value); }} style={sel}>
+          <option value="todas">Todas as origens</option>
+          <option value="manual">Lançamento manual</option>
+          <option value="conta_pagar">Conta a pagar</option>
+          <option value="recebivel">Recebimento ML</option>
+        </select>
+        <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Buscar por descrição ou categoria"
+          style={{ ...sel, flex:1, minWidth:200, color:"var(--text-strong)" }} />
+      </div>
+
+      {lista.length === 0 ? (
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"52px 20px", textAlign:"center" }}>
+          <div style={{ fontWeight:600, fontSize:15.5, color:"var(--text-strong)" }}>Nenhum movimento no período.</div>
+          <div style={{ fontSize:13, color:"var(--text-3)", marginTop:6, lineHeight:1.6 }}>
+            Esta tela mostra contas a pagar quitadas, recebimentos confirmados em Contas a receber, e
+            lançamentos que você criar aqui.
+          </div>
+        </div>
+      ) : (
+        <div style={_tableWrap}>
+          <table style={_table}>
+            <thead><tr>{["Data","Descrição","Categoria","Conta","Origem","Entrada","Saída",""].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+            <tbody>
+              {lista.slice(0,400).map(function(m,i){
+                var editavel = m.origem === "manual";
+                return <tr key={m.id||i}>
+                  <td style={_td}>{fmtDate(m.data) || m.data}</td>
+                  <td style={{ ..._td, color:"var(--text-strong)", maxWidth:280 }}>{m.descricao}</td>
+                  <td style={_td}>{m.categoria}</td>
+                  <td style={_td}>{m.conta && nomeConta[m.conta] ? nomeConta[m.conta] : <span style={{ color:"#FFC107", fontSize:12 }}>sem conta</span>}</td>
+                  <td style={{ ..._td, fontSize:11.5, color:"var(--text-3)" }}>{ROTULO_ORIGEM[m.origem] || m.origem}</td>
+                  <td style={_tdMono}>{m.tipo === "entrada" ? <span style={{ color:"#0a9d4e" }}>{fmt(m.valor)}</span> : "—"}</td>
+                  <td style={_tdMono}>{m.tipo === "saida" ? <span style={{ color:"#FF5252" }}>{fmt(m.valor)}</span> : "—"}</td>
+                  <td style={{ ..._td, textAlign:"right", whiteSpace:"nowrap" }}>
+                    {editavel ? <>
+                      <button onClick={function(){ setModal((lancamentos||[]).find(function(x){ return x.id === m.id; })); }} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", fontSize:11, fontWeight:600, padding:"4px 9px", borderRadius:6, cursor:"pointer", marginRight:6 }}>Editar</button>
+                      <button onClick={function(){ excluir(m.id); }} style={{ background:"rgba(255,82,82,.1)", border:"none", color:"#FF5252", fontSize:11, fontWeight:600, padding:"4px 9px", borderRadius:6, cursor:"pointer" }}>Excluir</button>
+                    </> : <span style={{ fontSize:11, color:"var(--text-4)" }}>edite na origem</span>}
+                  </td>
+                </tr>;
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {lista.length > 400 && <div style={{ fontSize:11.5, color:"var(--text-3)", marginTop:8 }}>Mostrando 400 de {lista.length} movimentos.</div>}
+
+      {modal && <LancamentoModal lancamento={modal.id ? modal : null} contasBancarias={contasBancarias}
+        categorias={categorias} onSave={salvarLanc} onClose={function(){ setModal(null); }} />}
+    </div>
+  );
+}
+
 // ── Regime financeiro ──────────────────────────────────────────────────────
 // Duas escolhas que mudam TODOS os números do Financeiro, guardadas num lugar
 // só para as telas não discordarem entre si:
@@ -2650,7 +3145,7 @@ function custosFixosNoPeriodo(custosFixos, faturamentoPeriodo, dias) {
   }, 0);
 }
 
-function DreTab({ enrichedOrders, contasPagar, custosFixos, recebiveisBaixados, paymentData, config, salvarConfig }) {
+function DreTab({ enrichedOrders, contasPagar, custosFixos, recebiveisBaixados, paymentData, config, salvarConfig, lancamentos }) {
   const [periodo, setPeriodo] = useState("30");
   const [mostrarAjustes, setMostrarAjustes] = useState(false);
   var cfg = config || financeiroConfigPadrao();
@@ -2690,6 +3185,20 @@ function DreTab({ enrichedOrders, contasPagar, custosFixos, recebiveisBaixados, 
     despesasPagas += v;
     porCategoria[cat] = (porCategoria[cat] || 0) + v;
   });
+  // Lançamento manual de saída é despesa que não passou por Contas a pagar.
+  // Os que vêm de conta a pagar não entram aqui: já foram somados acima, e
+  // contá-los de novo dobraria a despesa.
+  var lancSaida = 0;
+  (lancamentos || []).forEach(function(l){
+    if (l.tipo !== "saida") return;
+    var d = String(l.data || "").slice(0, 10);
+    if (!d || d < cutoff || d > hoje) return;
+    var v = parseFloat(l.valor) || 0;
+    lancSaida += v;
+    var cat = l.categoria || "Outros";
+    porCategoria[cat] = (porCategoria[cat] || 0) + v;
+  });
+  despesasPagas += lancSaida;
   var fixosPrevistos = custosFixosNoPeriodo(custosFixos, fat, dias);
   var despesas =
     cfg.origemDespesas === "configurados" ? fixosPrevistos :
@@ -2883,7 +3392,7 @@ function DreTab({ enrichedOrders, contasPagar, custosFixos, recebiveisBaixados, 
 }
 
 // Modal de conta a pagar.
-function ContaModal({ conta, onSave, onClose }) {
+function ContaModal({ conta, onSave, onClose, contasBancarias }) {
   var hoje = new Date().toISOString().slice(0,10);
   const [f, setF] = useState(function(){ return Object.assign({ descricao:"", categoria:"", emissao:hoje, competencia:hoje, vencimento:"", valor:"", historico:"", forma:"", conta:"", ndoc:"", juros:"0", multa:"0", ocorrencia:"unica", status:"pendente" }, conta || {}); });
   const [aba, setAba] = useState("pagamento");
@@ -2919,6 +3428,13 @@ function ContaModal({ conta, onSave, onClose }) {
           {aba==="pagamento" && <>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:12 }}>
               <div><label style={lbl}>Forma de pagamento</label><select value={f.forma||""} onChange={function(e){ set("forma", e.target.value); }} style={campo}><option value="">Selecione</option><option>Dinheiro</option><option>Pix</option><option>Cartão</option><option>Boleto</option><option>Transferência</option></select></div>
+              <div><label style={lbl}>Sai de qual conta</label>
+                <select value={f.conta||""} onChange={function(e){ set("conta", e.target.value); }} style={campo}>
+                  <option value="">— não definida —</option>
+                  {(contasBancarias||[]).map(function(cb){ return <option key={cb.id} value={cb.id}>{cb.nome}</option>; })}
+                </select>
+                <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:3 }}>Sem isso, a baixa não desconta de nenhum saldo.</div>
+              </div>
               <div><label style={lbl}>Categoria</label><input value={f.categoria||""} onChange={function(e){ set("categoria", e.target.value); }} placeholder="Sem categoria" style={campo} /></div>
               <div><label style={lbl}>Nº documento</label><input value={f.ndoc||""} onChange={function(e){ set("ndoc", e.target.value); }} style={campo} /></div>
             </div>
@@ -3596,7 +4112,7 @@ async function analisarPrioridadeIA(ranking, plano, cfg, caixa, aReceber) {
 
 // Tela: ordena as contas em aberto e monta um plano de pagamento para o caixa
 // que o usuário informar. A IA é opcional — o ranking e o plano funcionam sem ela.
-function PrioridadePagamentoTab({ contas, salvarContas, config, salvarConfig }) {
+function PrioridadePagamentoTab({ contas, salvarContas, config, salvarConfig, saldoEmCaixa, temContasBancarias }) {
   const [analise, setAnalise] = useState(null);
   const [estado, setEstado] = useState("idle"); // idle | loading | done | error
   const [erro, setErro] = useState("");
@@ -3604,7 +4120,11 @@ function PrioridadePagamentoTab({ contas, salvarContas, config, salvarConfig }) 
   const [rascunho, setRascunho] = useState(function(){ return JSON.parse(JSON.stringify(config)); });
   var hoje = new Date().toISOString().slice(0, 10);
 
-  var caixa = parseFloat(config.caixa) || 0;
+  // Com contas cadastradas, o saldo vem de Caixas e bancos. O campo continua
+  // aceitando um valor à mão para quem quer simular — mas o padrão deixa de ser
+  // digitar todo dia um número que o sistema já sabe.
+  var usaSaldoReal = temContasBancarias && config.usarSaldoReal !== false;
+  var caixa = usaSaldoReal ? (saldoEmCaixa || 0) : (parseFloat(config.caixa) || 0);
   var aReceber = parseFloat(config.aReceber7d) || 0;
   var ranking = ranquearContas(contas, config.riscos, hoje);
   var plano = planoDeCaixa(ranking, caixa);
@@ -3726,14 +4246,34 @@ function PrioridadePagamentoTab({ contas, salvarContas, config, salvarConfig }) 
       <div style={cartao}>
         <div style={tit}>Quanto você tem para pagar</div>
         <div style={sub}>
-          O sistema <b>não</b> sabe o seu saldo — não há conexão com banco aqui. Informe os valores
-          e o plano abaixo se ajusta na hora. Sem isso, a ordem continua valendo, mas o corte de
-          "o que cabe" não.
+          {usaSaldoReal
+            ? <>O saldo vem de <b>Caixas e bancos</b>: saldo inicial de cada conta mais as contas pagas e os
+               recebimentos confirmados. A previsão de entrada continua sendo estimativa sua.</>
+            : <>O sistema <b>não</b> sabe o seu saldo enquanto não houver conta em Caixas e bancos. Informe
+               os valores e o plano abaixo se ajusta na hora. Sem isso, a ordem continua valendo, mas o
+               corte de "o que cabe" não.</>}
         </div>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))", gap:14 }}>
           <div>
             <label style={{ fontSize:11.5, color:"var(--text-3)", fontWeight:600, display:"block", marginBottom:4 }}>Caixa disponível hoje (R$)</label>
-            <input type="number" step="0.01" value={config.caixa} onChange={function(e){ setCampo("caixa", e.target.value); }} placeholder="0,00" style={campoNum} />
+            {usaSaldoReal
+              ? <>
+                  <div style={{ ...campoNum, display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
+                    <span style={{ color: caixa >= 0 ? "#0a9d4e" : "#FF5252" }}>{fmt(caixa)}</span>
+                    <span style={{ fontSize:10.5, fontWeight:500, color:"var(--text-4)" }}>de Caixas e bancos</span>
+                  </div>
+                  <button onClick={function(){ setCampo("usarSaldoReal", false); }}
+                    style={{ background:"none", border:"none", color:"var(--ui-accent)", cursor:"pointer", fontSize:11.5, fontWeight:600, padding:"4px 0 0" }}>
+                    Informar outro valor
+                  </button>
+                </>
+              : <>
+                  <input type="number" step="0.01" value={config.caixa} onChange={function(e){ setCampo("caixa", e.target.value); }} placeholder="0,00" style={campoNum} />
+                  {temContasBancarias && <button onClick={function(){ setCampo("usarSaldoReal", true); }}
+                    style={{ background:"none", border:"none", color:"var(--ui-accent)", cursor:"pointer", fontSize:11.5, fontWeight:600, padding:"4px 0 0" }}>
+                    Voltar a usar o saldo de Caixas e bancos ({fmt(saldoEmCaixa || 0)})
+                  </button>}
+                </>}
           </div>
           <div>
             <label style={{ fontSize:11.5, color:"var(--text-3)", fontWeight:600, display:"block", marginBottom:4 }}>Previsão de entrada em 7 dias (R$)</label>
@@ -3842,7 +4382,7 @@ function PrioridadePagamentoTab({ contas, salvarContas, config, salvarConfig }) 
   );
 }
 
-function ContasPagarTab({ contas, salvar }) {
+function ContasPagarTab({ contas, salvar, contasBancarias }) {
   const [modal, setModal] = useState(null);
   const [importando, setImportando] = useState(false);
   const [resultadoImp, setResultadoImp] = useState(null);
@@ -3966,7 +4506,7 @@ function ContasPagarTab({ contas, salvar }) {
           setResultadoImp(novas.length + " conta(s) importada(s).");
         }}
         onClose={function(){ setImportando(false); }} />}
-      {modal && <ContaModal conta={modal} onSave={salvarConta} onClose={function(){ setModal(null); }} />}
+      {modal && <ContaModal conta={modal} onSave={salvarConta} onClose={function(){ setModal(null); }} contasBancarias={contasBancarias} />}
     </div>
   );
 }
@@ -4874,6 +5414,8 @@ function HomeTab({ enrichedOrders, currentUser, setTab }){
       { key:"contas_pagar", label:"Contas a pagar", desc:"Despesas e vencimentos" },
       { key:"prioridade_pagamento", label:"Prioridade de pagamento", desc:"Que contas pagar primeiro com o caixa que você tem" },
       { key:"contas_receber", label:"Contas a receber", desc:"Recebíveis dos marketplaces" },
+      { key:"bancos", label:"Caixas e bancos", desc:"Onde o dinheiro está e quanto tem" },
+      { key:"lancamentos", label:"Lançamentos", desc:"Extrato de tudo o que entrou e saiu" },
       { key:"dre", label:"DRE e conciliação", desc:"Demonstrativo de resultado" },
     ]},
     { titulo:"Cadastro", itens:[
@@ -5984,6 +6526,7 @@ const BACKUP_KEYS = [
   { key: "contas_pagar",            label: "Contas a Pagar" },
   { key: "prioridade_pagamento_config", label: "Regras de prioridade de pagamento" },
   { key: "financeiro_config",       label: "Regime financeiro" },
+  { key: "contas_bancarias",        label: "Caixas e bancos" },
   { key: "recebiveis_baixados",     label: "Recebimentos confirmados" },
   { key: "contas_bancarias",        label: "Caixas e Bancos" },
   { key: "lancamentos",             label: "Lançamentos Financeiros" },
@@ -9402,6 +9945,16 @@ export default function App() {
   const [lancamentos, setLancamentos] = useState(() => {
     try { var v = JSON.parse(localStorage.getItem("lancamentos") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
   });
+  function salvarLancamentos(lista) {
+    setLancamentos(lista);
+    try { localStorage.setItem("lancamentos", JSON.stringify(lista)); } catch(e) {}
+    try { kvSyncPush("lancamentos", lista); } catch(e) {}
+  }
+  function salvarContasBancarias(lista) {
+    setContasBancarias(lista);
+    try { localStorage.setItem("contas_bancarias", JSON.stringify(lista)); } catch(e) {}
+    try { kvSyncPush("contas_bancarias", lista); } catch(e) {}
+  }
   const [finTab, setFinTab] = useState("resumo");
 
   const [produtos, setProdutos] = useState(() => {
@@ -10435,6 +10988,19 @@ export default function App() {
     } catch(e) {}
   }, [currentUser, listings.length, (rawOrders||[]).length]); // eslint-disable-line
 
+  // Extrato de tudo o que mexeu em dinheiro. Fica na raiz porque Bancos,
+  // Lançamentos e Prioridade de pagamento precisam do MESMO extrato — cada tela
+  // recalculando do seu jeito daria saldos diferentes na mesma tela.
+  const movimentosCaixa = useMemo(function(){
+    return movimentosConsolidados({
+      lancamentos: lancamentos, contasPagar: contasPagar, enrichedOrders: enrichedOrders,
+      recebiveisBaixados: recebiveisBaixados, paymentData: paymentData, contasBancarias: contasBancarias,
+    });
+  }, [lancamentos, contasPagar, enrichedOrders, recebiveisBaixados, paymentData, contasBancarias]);
+  const saldoEmCaixa = useMemo(function(){
+    return saldoConsolidado(contasBancarias, movimentosCaixa);
+  }, [contasBancarias, movimentosCaixa]);
+
   const enrichedOrdersComEnvio = useMemo(function() {
     if (filterEnvio === "todos") return enrichedOrders;
     return enrichedOrders.filter(function(o) {
@@ -10662,6 +11228,8 @@ export default function App() {
               { key:"contas_pagar", label:"Contas a pagar" },
               { key:"prioridade_pagamento", label:"Prioridade de pagamento" },
               { key:"contas_receber", label:"Contas a receber" },
+              { key:"bancos", label:"Caixas e bancos" },
+              { key:"lancamentos", label:"Lançamentos" },
               { key:"dre", label:"DRE e conciliação" },
             ]},
             { titulo:"Cadastro", itens:[
@@ -11271,8 +11839,10 @@ export default function App() {
         {tab === "notas_fiscais" && <EmConstrucao tab="notas_fiscais" />}
         {tab === "contas_receber" && <ContasReceberTab enrichedOrders={enrichedOrders} paymentData={paymentData}
           baixados={recebiveisBaixados} setBaixados={setRecebiveisBaixados} config={financeiroConfig} />}
-        {tab === "contas_pagar" && <ContasPagarTab contas={contasPagar} salvar={salvarContasPagar} />}
-        {tab === "prioridade_pagamento" && <PrioridadePagamentoTab contas={contasPagar} salvarContas={salvarContasPagar} config={configPrioridade} salvarConfig={setConfigPrioridade} />}
+        {tab === "contas_pagar" && <ContasPagarTab contas={contasPagar} salvar={salvarContasPagar} contasBancarias={contasBancarias} />}
+        {tab === "prioridade_pagamento" && <PrioridadePagamentoTab contas={contasPagar} salvarContas={salvarContasPagar} config={configPrioridade} salvarConfig={setConfigPrioridade} saldoEmCaixa={saldoEmCaixa} temContasBancarias={(contasBancarias||[]).length > 0} />}
+        {tab === "bancos" && <BancosTab contasBancarias={contasBancarias} salvar={salvarContasBancarias} movimentos={movimentosCaixa} setTab={setTab} />}
+        {tab === "lancamentos" && <LancamentosTab lancamentos={lancamentos} salvar={salvarLancamentos} movimentos={movimentosCaixa} contasBancarias={contasBancarias} categorias={categoriasPagar} />}
         {tab === "compras" && <ComprasTab produtos={produtos} pedidos={pedidosCompra} salvar={salvarPedidosCompra} />}
         {tab === "clientes" && <ClientesTab rawOrders={rawOrders} />}
         {tab === "tendencias" && <TendenciasTab setTab={setTab} setBuscaPrecificacao={setBuscaPrecificacao} enriched={enriched} />}
@@ -11287,7 +11857,7 @@ export default function App() {
             faturamentoMes={faturamentoMesAtual}
           />
         )}
-        {tab === "dre" && <DreTab enrichedOrders={enrichedOrders} contasPagar={contasPagar}
+        {tab === "dre" && <DreTab enrichedOrders={enrichedOrders} contasPagar={contasPagar} lancamentos={lancamentos}
           custosFixos={custosFixos} recebiveisBaixados={recebiveisBaixados} paymentData={paymentData}
           config={financeiroConfig} salvarConfig={setFinanceiroConfig} />}
         {TELAS_FIN[tab] && <TelaEstruturada cfg={TELAS_FIN[tab]} />}

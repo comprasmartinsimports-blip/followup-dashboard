@@ -2739,6 +2739,476 @@ function ContaModal({ conta, onSave, onClose }) {
   );
 }
 // Contas a pagar: KPIs, busca, filtro de situação e cadastro/baixa de contas.
+// ── Leitura de planilhas ───────────────────────────────────────────────────
+// O importador de produtos quebra a linha com split(/[,;]/), o que corta
+// "Fornecedor, Ltda" no meio e desloca todas as colunas seguintes. Em contas a
+// pagar isso trocaria valor por data sem avisar, então aqui a leitura é feita
+// de verdade: aspas, separador dentro do campo, quebra de linha dentro do campo.
+function lerCSV(texto) {
+  var t = String(texto || "").replace(/^﻿/, "");   // BOM do Excel
+  if (!t.trim()) return [];
+  // Separador: conta as ocorrências FORA de aspas na primeira linha e escolhe a
+  // mais frequente. Ponto e vírgula é o padrão do Excel em português.
+  var primeira = "", dentro = false;
+  for (var i = 0; i < t.length; i++) {
+    var ch = t[i];
+    if (ch === '"') dentro = !dentro;
+    else if (!dentro && (ch === "\n" || ch === "\r")) break;
+    primeira += ch;
+  }
+  var cont = { ";":0, ",":0, "\t":0, "|":0 };
+  dentro = false;
+  for (var j = 0; j < primeira.length; j++) {
+    var c2 = primeira[j];
+    if (c2 === '"') dentro = !dentro;
+    else if (!dentro && cont[c2] != null) cont[c2]++;
+  }
+  var sep = Object.keys(cont).reduce(function(a,b){ return cont[b] > cont[a] ? b : a; }, ";");
+  if (!cont[sep]) sep = ";";
+
+  var linhas = [], campo = "", linha = [];
+  dentro = false;
+  for (var k = 0; k < t.length; k++) {
+    var ch2 = t[k];
+    if (dentro) {
+      if (ch2 === '"') {
+        if (t[k+1] === '"') { campo += '"'; k++; }  // aspas escapada
+        else dentro = false;
+      } else campo += ch2;
+      continue;
+    }
+    if (ch2 === '"') { dentro = true; continue; }
+    if (ch2 === sep) { linha.push(campo); campo = ""; continue; }
+    if (ch2 === "\r") continue;
+    if (ch2 === "\n") { linha.push(campo); linhas.push(linha); linha = []; campo = ""; continue; }
+    campo += ch2;
+  }
+  if (campo !== "" || linha.length) { linha.push(campo); linhas.push(linha); }
+  return linhas
+    .map(function(l){ return l.map(function(x){ return String(x).trim(); }); })
+    .filter(function(l){ return l.some(function(x){ return x !== ""; }); });
+}
+
+// Leitor de .xlsx sem biblioteca. Um .xlsx é um ZIP de XMLs; o navegador já sabe
+// descomprimir (DecompressionStream) e já sabe ler XML (DOMParser). Trazer uma
+// biblioteca de planilha para isso somaria mais de 1 MB ao que todo usuário baixa.
+async function lerXLSX(arrayBuffer) {
+  if (typeof DecompressionStream === "undefined") {
+    throw new Error("Este navegador não sabe abrir .xlsx aqui. Salve a planilha como CSV e importe de novo.");
+  }
+  var dv = new DataView(arrayBuffer), u8 = new Uint8Array(arrayBuffer);
+
+  // Fim do diretório central (EOCD): assinatura PK\5\6, procurada de trás para
+  // frente porque pode haver comentário depois dela.
+  var eocd = -1;
+  for (var p = dv.byteLength - 22; p >= 0 && p > dv.byteLength - 66000; p--) {
+    if (dv.getUint32(p, true) === 0x06054b50) { eocd = p; break; }
+  }
+  if (eocd < 0) throw new Error("Arquivo .xlsx inválido ou corrompido.");
+  var nEntradas = dv.getUint16(eocd + 10, true);
+  var inicioCD = dv.getUint32(eocd + 16, true);
+
+  async function inflar(comprimido, metodo) {
+    if (metodo === 0) return comprimido;                       // guardado sem compressão
+    if (metodo !== 8) throw new Error("Compressão não suportada no .xlsx (método " + metodo + ").");
+    var ds = new DecompressionStream("deflate-raw");
+    var stream = new Blob([comprimido]).stream().pipeThrough(ds);
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+
+  var arquivos = {}, off = inicioCD;
+  for (var e = 0; e < nEntradas; e++) {
+    if (dv.getUint32(off, true) !== 0x02014b50) break;
+    var metodo = dv.getUint16(off + 10, true);
+    var tamComp = dv.getUint32(off + 20, true);
+    var tamNome = dv.getUint16(off + 28, true);
+    var tamExtra = dv.getUint16(off + 30, true);
+    var tamCom = dv.getUint16(off + 32, true);
+    var offLocal = dv.getUint32(off + 42, true);
+    var nome = new TextDecoder().decode(u8.subarray(off + 46, off + 46 + tamNome));
+    // O cabeçalho local repete nome e extra com tamanhos PRÓPRIOS — usar os do
+    // diretório central aqui é o erro clássico que desloca os dados em alguns arquivos.
+    var nomeLocal = dv.getUint16(offLocal + 26, true);
+    var extraLocal = dv.getUint16(offLocal + 28, true);
+    var ini = offLocal + 30 + nomeLocal + extraLocal;
+    arquivos[nome] = { dados: u8.subarray(ini, ini + tamComp), metodo: metodo };
+    off += 46 + tamNome + tamExtra + tamCom;
+  }
+
+  async function xml(nome) {
+    if (!arquivos[nome]) return null;
+    var bytes = await inflar(arquivos[nome].dados, arquivos[nome].metodo);
+    return new DOMParser().parseFromString(new TextDecoder().decode(bytes), "application/xml");
+  }
+
+  // Textos repetidos ficam numa tabela à parte; a célula guarda só o índice.
+  var compart = [];
+  var docSS = await xml("xl/sharedStrings.xml");
+  if (docSS) {
+    var sis = docSS.getElementsByTagName("si");
+    for (var s = 0; s < sis.length; s++) {
+      var ts = sis[s].getElementsByTagName("t"), txt = "";
+      for (var ti = 0; ti < ts.length; ti++) txt += ts[ti].textContent;
+      compart.push(txt);
+    }
+  }
+
+  // Primeira planilha do arquivo, na ordem em que o Excel a lista.
+  var nomePlanilha = "xl/worksheets/sheet1.xml";
+  if (!arquivos[nomePlanilha]) {
+    var qualquer = Object.keys(arquivos).filter(function(n){ return /^xl\/worksheets\/.*\.xml$/.test(n); }).sort();
+    if (!qualquer.length) throw new Error("Não encontrei nenhuma planilha dentro do arquivo.");
+    nomePlanilha = qualquer[0];
+  }
+  var doc = await xml(nomePlanilha);
+  var rows = doc.getElementsByTagName("row");
+  var matriz = [];
+  for (var r = 0; r < rows.length; r++) {
+    var cs = rows[r].getElementsByTagName("c"), linha2 = [];
+    for (var ci = 0; ci < cs.length; ci++) {
+      var cel = cs[ci];
+      var ref = cel.getAttribute("r") || "";
+      var col = ref.replace(/[0-9]/g, "");
+      // "AB" → índice 27. A coluna vai na posição certa mesmo quando o Excel
+      // omite células vazias, o que ele faz o tempo todo.
+      var idx = 0;
+      for (var q = 0; q < col.length; q++) idx = idx * 26 + (col.charCodeAt(q) - 64);
+      idx = Math.max(0, idx - 1);
+      var tipo = cel.getAttribute("t");
+      var valor = "";
+      if (tipo === "s") {
+        var vs = cel.getElementsByTagName("v")[0];
+        valor = vs ? (compart[parseInt(vs.textContent, 10)] || "") : "";
+      } else if (tipo === "inlineStr") {
+        var tsi = cel.getElementsByTagName("t");
+        for (var w = 0; w < tsi.length; w++) valor += tsi[w].textContent;
+      } else {
+        var v2 = cel.getElementsByTagName("v")[0];
+        valor = v2 ? v2.textContent : "";
+      }
+      while (linha2.length < idx) linha2.push("");
+      linha2[idx] = String(valor).trim();
+    }
+    matriz.push(linha2);
+  }
+  return matriz.filter(function(l){ return l.some(function(x){ return x !== ""; }); });
+}
+
+// Data em número (serial do Excel) para ISO. O Excel conta dias desde
+// 1899-12-30 — não 31 — porque trata 1900 como bissexto, que não foi.
+function serialParaISO(n) {
+  var ms = Date.UTC(1899, 11, 30) + Math.round(n) * 86400000;
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+// Aceita 31/12/2026, 31-12-2026, 2026-12-31, 31/12/26 e o serial do Excel.
+// Devolve "" quando não reconhece, para a linha aparecer com erro em vez de
+// entrar com uma data inventada.
+function parseDataBR(v) {
+  var t = String(v == null ? "" : v).trim();
+  if (!t) return "";
+  if (/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0, 10);
+  // \d{4} vem ANTES de \d{2} na alternância de propósito: na ordem inversa a
+  // expressão casa "20" de "2026" e a data volta como 2020.
+  var m = t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4}|\d{2})(?!\d)/);
+  if (m) {
+    var d = parseInt(m[1], 10), mes = parseInt(m[2], 10), a = parseInt(m[3], 10);
+    if (a < 100) a += a < 70 ? 2000 : 1900;
+    if (d < 1 || d > 31 || mes < 1 || mes > 12 || a < 1900 || a > 2200) return "";
+    return a + "-" + String(mes).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+  }
+  if (/^\d+([.,]\d+)?$/.test(t)) {
+    var n = parseFloat(t.replace(",", "."));
+    if (n > 20000 && n < 80000) return serialParaISO(n);   // 1954 a 2119
+  }
+  return "";
+}
+
+// "R$ 1.234,56" → 1234.56. Também aceita "1234.56" (formato americano) e
+// "(123,45)" como negativo, que é como algumas planilhas exportam.
+function parseValorBR(v) {
+  var t = String(v == null ? "" : v).trim();
+  if (!t) return null;
+  var negativo = /^\(.*\)$/.test(t) || /^-/.test(t);
+  t = t.replace(/[R$\s()]/gi, "").replace(/^-/, "");
+  if (!t) return null;
+  var temVirgula = t.indexOf(",") >= 0, temPonto = t.indexOf(".") >= 0;
+  if (temVirgula && temPonto) {
+    // O último separador que aparece é o decimal; o outro é o de milhar.
+    t = t.lastIndexOf(",") > t.lastIndexOf(".")
+      ? t.replace(/\./g, "").replace(",", ".")
+      : t.replace(/,/g, "");
+  } else if (temVirgula) {
+    t = t.replace(",", ".");
+  } else if (temPonto) {
+    // "1.234" é mil e duzentos e trinta e quatro na planilha brasileira, mas
+    // "1.23" é um e vinte e três. Três dígitos depois do ponto = milhar.
+    var partes = t.split(".");
+    if (partes.length > 2 || (partes[1] && partes[1].length === 3)) t = partes.join("");
+  }
+  var n = parseFloat(t);
+  if (!isFinite(n)) return null;
+  return negativo ? -n : n;
+}
+
+// Campos da conta que a planilha pode preencher. "achar" são os nomes de coluna
+// que a gente reconhece sozinho — inclui os que o Bling e o Excel costumam usar.
+const CAMPOS_IMPORTACAO = [
+  { key:"descricao",  rotulo:"Fornecedor / descrição", obrigatorio:true,
+    achar:["fornecedor","credor","descricao","descrição","historico","histórico","favorecido","beneficiario","beneficiário","cliente/fornecedor","nome"] },
+  { key:"vencimento", rotulo:"Vencimento", obrigatorio:true,
+    achar:["vencimento","data de vencimento","datavencimento","vence em","dt vencimento","data vencto","vencto"] },
+  { key:"valor",      rotulo:"Valor", obrigatorio:true,
+    achar:["valor","valor total","total","valor da conta","vlr","valor documento","saldo"] },
+  { key:"categoria",  rotulo:"Categoria", obrigatorio:false,
+    achar:["categoria","classificacao","classificação","plano de contas","tipo","centro de custo"] },
+  { key:"emissao",    rotulo:"Emissão", obrigatorio:false,
+    achar:["emissao","emissão","data de emissao","data de emissão","data"] },
+  { key:"ndoc",       rotulo:"Nº documento", obrigatorio:false,
+    achar:["documento","numero documento","número documento","ndoc","nº doc","num doc","nota","nf"] },
+  { key:"juros",      rotulo:"Juros mensal (%)", obrigatorio:false, achar:["juros","juros mensal","juros %","juros ao mes"] },
+  { key:"multa",      rotulo:"Multa (%)",        obrigatorio:false, achar:["multa","multa %"] },
+  { key:"historico",  rotulo:"Observação",       obrigatorio:false, achar:["observacao","observação","obs","complemento","memo"] },
+];
+
+function normalizarCabecalho(s) {
+  return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+// Adivinha qual coluna da planilha vai em cada campo. É só um chute inicial: a
+// tela mostra o resultado e deixa corrigir, porque nome de coluna varia por ERP.
+function mapearColunas(cabecalho) {
+  var norm = cabecalho.map(normalizarCabecalho);
+  var mapa = {}, usadas = {};
+  CAMPOS_IMPORTACAO.forEach(function(campo){
+    var achou = -1;
+    campo.achar.forEach(function(nome){
+      if (achou >= 0) return;
+      var alvo = normalizarCabecalho(nome);
+      var i = norm.findIndex(function(h, idx){ return !usadas[idx] && h === alvo; });
+      if (i < 0) i = norm.findIndex(function(h, idx){ return !usadas[idx] && h && h.indexOf(alvo) >= 0; });
+      if (i >= 0) { achou = i; }
+    });
+    if (achou >= 0) { mapa[campo.key] = achou; usadas[achou] = true; }
+    else mapa[campo.key] = -1;
+  });
+  return mapa;
+}
+
+// Converte as linhas cruas em contas, dizendo o que deu errado em cada uma.
+// Linha com problema NÃO entra: uma conta com valor ou vencimento errado
+// estraga a priorização inteira, e o erro só apareceria na hora de pagar.
+function prepararLinhas(linhas, mapa, contasExistentes) {
+  var chaveExistente = {};
+  (contasExistentes || []).forEach(function(c){
+    chaveExistente[[String(c.descricao||"").trim().toLowerCase(), c.vencimento||"", (parseFloat(c.valor)||0).toFixed(2)].join("|")] = true;
+  });
+  var vistas = {};
+  return linhas.map(function(l, i){
+    function col(k){ var idx = mapa[k]; return idx >= 0 && idx < l.length ? l[idx] : ""; }
+    var descricao = String(col("descricao") || "").trim();
+    var vencimento = parseDataBR(col("vencimento"));
+    var valor = parseValorBR(col("valor"));
+    var erros = [];
+    if (!descricao) erros.push("sem fornecedor");
+    if (!vencimento) erros.push(String(col("vencimento")||"").trim() ? "vencimento não reconhecido" : "sem vencimento");
+    if (valor == null) erros.push(String(col("valor")||"").trim() ? "valor não reconhecido" : "sem valor");
+    else if (valor <= 0) erros.push("valor zero ou negativo");
+    var chave = [descricao.toLowerCase(), vencimento, (valor||0).toFixed(2)].join("|");
+    var duplicada = !erros.length && (!!chaveExistente[chave] || !!vistas[chave]);
+    var ondeDup = chaveExistente[chave] ? "já cadastrada" : (vistas[chave] ? "repetida na planilha" : "");
+    if (!erros.length) vistas[chave] = true;
+    return {
+      linha: i + 2,             // +2: a planilha conta a partir de 1 e a 1ª é o cabeçalho
+      erros: erros, duplicada: duplicada, ondeDup: ondeDup,
+      conta: {
+        descricao: descricao,
+        vencimento: vencimento,
+        valor: valor == null ? "" : String(valor),
+        categoria: String(col("categoria") || "").trim() || "Outros",
+        emissao: parseDataBR(col("emissao")) || "",
+        ndoc: String(col("ndoc") || "").trim(),
+        juros: String(parseValorBR(col("juros")) == null ? 0 : parseValorBR(col("juros"))),
+        multa: String(parseValorBR(col("multa")) == null ? 0 : parseValorBR(col("multa"))),
+        historico: String(col("historico") || "").trim(),
+        status: "pendente",
+      },
+    };
+  });
+}
+
+// Importação de contas a pagar por planilha, em três passos: escolher o
+// arquivo, conferir o mapeamento das colunas, revisar e importar.
+function ImportarContasModal({ contas, onImportar, onClose }) {
+  const [nomeArq, setNomeArq] = useState("");
+  const [cabecalho, setCabecalho] = useState(null);
+  const [linhas, setLinhas] = useState([]);
+  const [mapa, setMapa] = useState({});
+  const [erro, setErro] = useState("");
+  const [incluirDup, setIncluirDup] = useState(false);
+  const [lendo, setLendo] = useState(false);
+  const fileRef = useRef(null);
+
+  async function receber(file) {
+    setErro(""); setLendo(true); setNomeArq(file.name);
+    try {
+      var matriz;
+      if (/\.xlsx$/i.test(file.name)) matriz = await lerXLSX(await file.arrayBuffer());
+      else if (/\.xls$/i.test(file.name)) throw new Error("O formato .xls (Excel antigo) não é lido aqui. Abra no Excel e salve como .xlsx ou CSV.");
+      else matriz = lerCSV(await file.text());
+      if (matriz.length < 2) throw new Error("A planilha precisa de uma linha de cabeçalho e ao menos uma conta.");
+      var cab = matriz[0], corpo = matriz.slice(1);
+      setCabecalho(cab); setLinhas(corpo); setMapa(mapearColunas(cab));
+    } catch (e) {
+      setErro((e && e.message) || "Não consegui ler este arquivo.");
+      setCabecalho(null); setLinhas([]);
+    } finally { setLendo(false); }
+  }
+
+  var prontas = cabecalho ? prepararLinhas(linhas, mapa, contas) : [];
+  var validas = prontas.filter(function(p){ return !p.erros.length && (incluirDup || !p.duplicada); });
+  var comErro = prontas.filter(function(p){ return p.erros.length; });
+  var dups = prontas.filter(function(p){ return !p.erros.length && p.duplicada; });
+  var totalValidas = validas.reduce(function(s,p){ return s + (parseFloat(p.conta.valor)||0); }, 0);
+  var faltaObrig = CAMPOS_IMPORTACAO.filter(function(c){ return c.obrigatorio && (mapa[c.key] == null || mapa[c.key] < 0); });
+
+  function importar() {
+    var agora = Date.now();
+    onImportar(validas.map(function(p, i){
+      return Object.assign({}, p.conta, { id: "cp_imp_" + agora + "_" + i });
+    }));
+  }
+
+  var campo = { width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"8px 10px", borderRadius:7, fontSize:12.5, boxSizing:"border-box" };
+  var cartao = { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", marginBottom:14 };
+  var tit = { fontSize:13.5, fontWeight:600, color:"var(--text-strong)", marginBottom:10 };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"var(--bg)", zIndex:700, display:"flex", flexDirection:"column" }}>
+      <div style={{ borderBottom:"1px solid var(--border)", background:"var(--bg-2)", padding:"14px 22px", display:"flex", alignItems:"center", gap:14, flexWrap:"wrap" }}>
+        <button onClick={onClose} title="Voltar" style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", width:34, height:34, borderRadius:9, cursor:"pointer", fontSize:16 }}>←</button>
+        <div>
+          <div style={{ fontWeight:600, fontSize:17, color:"var(--text-strong)" }}>Importar contas a pagar</div>
+          <div style={{ fontSize:11.5, color:"var(--text-3)", marginTop:2 }}>{nomeArq || "CSV ou Excel (.xlsx)"}</div>
+        </div>
+        <div style={{ flex:1 }} />
+        <button onClick={onClose} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"9px 18px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Cancelar</button>
+        <button onClick={importar} disabled={!validas.length || faltaObrig.length > 0}
+          style={{ background: validas.length && !faltaObrig.length ? "var(--ui-accent)" : "var(--surface)",
+                   border: validas.length && !faltaObrig.length ? "none" : "1px solid var(--border)",
+                   color: validas.length && !faltaObrig.length ? "var(--ui-accent-text)" : "var(--text-4)",
+                   fontWeight:600, padding:"9px 24px", borderRadius:9,
+                   cursor: validas.length && !faltaObrig.length ? "pointer" : "default", fontSize:13 }}>
+          Importar {validas.length ? validas.length + " conta(s)" : ""}
+        </button>
+      </div>
+
+      <div style={{ flex:1, overflowY:"auto", padding:"18px 22px 40px" }}>
+        <div style={{ maxWidth:1100, margin:"0 auto" }}>
+          {erro && <div style={{ background:"rgba(255,82,82,.12)", border:"1px solid #FF5252", color:"#FF5252", borderRadius:10, padding:"11px 14px", fontSize:12.5, marginBottom:14 }}>{erro}</div>}
+
+          <div style={cartao}>
+            <div style={tit}>1. Escolha o arquivo</div>
+            <input ref={fileRef} type="file" accept=".csv,.tsv,.txt,.xlsx,text/csv" style={{ display:"none" }}
+              onChange={function(e){ if (e.target.files && e.target.files[0]) receber(e.target.files[0]); e.target.value=""; }} />
+            <button onClick={function(){ if (fileRef.current) fileRef.current.click(); }}
+              style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"10px 22px", borderRadius:9, cursor:"pointer", fontSize:13 }}>
+              {lendo ? "Lendo..." : (cabecalho ? "Trocar arquivo" : "Selecionar planilha")}
+            </button>
+            <div style={{ fontSize:11.5, color:"var(--text-3)", marginTop:10, lineHeight:1.6 }}>
+              Aceita <b>.csv</b> (vírgula, ponto e vírgula ou tabulação) e <b>.xlsx</b>. A primeira linha
+              precisa ser o cabeçalho com o nome das colunas. Valores como <code>R$ 1.234,56</code> e datas
+              como <code>31/12/2026</code> são entendidos.
+            </div>
+          </div>
+
+          {cabecalho && <>
+            <div style={cartao}>
+              <div style={tit}>2. Confira as colunas</div>
+              <div style={{ fontSize:12, color:"var(--text-3)", marginBottom:14, lineHeight:1.5 }}>
+                O sistema chutou o encaixe pelo nome das colunas. Corrija o que estiver errado — nome de
+                coluna muda de um sistema para outro.
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))", gap:12 }}>
+                {CAMPOS_IMPORTACAO.map(function(c){
+                  var vazio = mapa[c.key] == null || mapa[c.key] < 0;
+                  return <div key={c.key}>
+                    <label style={{ fontSize:11.5, color: c.obrigatorio && vazio ? "#FF5252" : "var(--text-3)", fontWeight:600, display:"block", marginBottom:4 }}>
+                      {c.rotulo}{c.obrigatorio ? " *" : ""}
+                    </label>
+                    <select value={mapa[c.key] == null ? -1 : mapa[c.key]}
+                      onChange={function(e){ var v = parseInt(e.target.value, 10); setMapa(Object.assign({}, mapa, { [c.key]: v })); }}
+                      style={{ ...campo, borderColor: c.obrigatorio && vazio ? "#FF5252" : "var(--border)" }}>
+                      <option value={-1}>— não importar —</option>
+                      {cabecalho.map(function(h, i){ return <option key={i} value={i}>{h || ("coluna " + (i+1))}</option>; })}
+                    </select>
+                  </div>;
+                })}
+              </div>
+              {faltaObrig.length > 0 && (
+                <div style={{ marginTop:12, fontSize:12.5, color:"#FF5252" }}>
+                  Falta escolher a coluna de: {faltaObrig.map(function(c){ return c.rotulo; }).join(", ")}.
+                </div>
+              )}
+              <div style={{ fontSize:11.5, color:"var(--text-3)", marginTop:10, lineHeight:1.6 }}>
+                <b>Juros e multa</b> são o que permite calcular quanto custa adiar cada conta na tela de
+                Prioridade de pagamento. Sem eles a conta entra do mesmo jeito, só sem esse cálculo.
+              </div>
+            </div>
+
+            <div style={cartao}>
+              <div style={tit}>3. Confira o resultado</div>
+              <div style={{ display:"flex", gap:22, flexWrap:"wrap", marginBottom:14 }}>
+                <div><div style={{ fontSize:11, color:"var(--text-3)" }}>Entram</div>
+                  <div style={{ fontSize:20, fontWeight:600, color:"#0a9d4e" }}>{validas.length}</div></div>
+                <div><div style={{ fontSize:11, color:"var(--text-3)" }}>Somando</div>
+                  <div style={{ fontSize:20, fontWeight:600, color:"var(--text-strong)" }}>{fmt(totalValidas)}</div></div>
+                <div><div style={{ fontSize:11, color:"var(--text-3)" }}>Com erro (ficam de fora)</div>
+                  <div style={{ fontSize:20, fontWeight:600, color: comErro.length ? "#FF5252" : "var(--text-3)" }}>{comErro.length}</div></div>
+                <div><div style={{ fontSize:11, color:"var(--text-3)" }}>Possíveis duplicadas</div>
+                  <div style={{ fontSize:20, fontWeight:600, color: dups.length ? "#FFC107" : "var(--text-3)" }}>{dups.length}</div></div>
+              </div>
+              {dups.length > 0 && (
+                <label style={{ display:"flex", alignItems:"center", gap:8, fontSize:12.5, color:"var(--text-2)", cursor:"pointer", marginBottom:12 }}>
+                  <input type="checkbox" checked={incluirDup} onChange={function(e){ setIncluirDup(e.target.checked); }} />
+                  Importar também as {dups.length} conta(s) com mesmo fornecedor, vencimento e valor de outra
+                </label>
+              )}
+              <div style={{ ..._tableWrap, maxHeight:420, overflowY:"auto" }}>
+                <table style={_table}>
+                  <thead><tr>{["Linha","Situação","Fornecedor","Categoria","Vencimento","Valor","Juros","Multa"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+                  <tbody>
+                    {prontas.slice(0, 300).map(function(p, i){
+                      var fora = p.erros.length || (p.duplicada && !incluirDup);
+                      return <tr key={i} style={{ opacity: fora ? .55 : 1 }}>
+                        <td style={{ ..._td, color:"var(--text-4)", width:52 }}>{p.linha}</td>
+                        <td style={_td}>
+                          {p.erros.length
+                            ? <span style={{ color:"#FF5252", fontSize:11.5 }}>{p.erros.join(", ")}</span>
+                            : p.duplicada
+                              ? <span style={{ color:"#FFC107", fontSize:11.5 }}>{p.ondeDup}</span>
+                              : <span style={{ color:"#0a9d4e", fontSize:11.5 }}>ok</span>}
+                        </td>
+                        <td style={{ ..._td, color:"var(--text-strong)", maxWidth:240 }}>{p.conta.descricao || "—"}</td>
+                        <td style={_td}>{p.conta.categoria}</td>
+                        <td style={_td}>{p.conta.vencimento ? (fmtDate(p.conta.vencimento) || p.conta.vencimento) : "—"}</td>
+                        <td style={_tdMono}>{p.conta.valor ? fmt(parseFloat(p.conta.valor)) : "—"}</td>
+                        <td style={_td}>{parseFloat(p.conta.juros) ? p.conta.juros + "%" : "—"}</td>
+                        <td style={_td}>{parseFloat(p.conta.multa) ? p.conta.multa + "%" : "—"}</td>
+                      </tr>;
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {prontas.length > 300 && <div style={{ fontSize:11.5, color:"var(--text-3)", marginTop:8 }}>Mostrando as 300 primeiras de {prontas.length} linhas — a importação leva todas as válidas.</div>}
+            </div>
+          </>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Prioridade de pagamento ────────────────────────────────────────────────
 // Divisão proposital de trabalho: TODA conta em dinheiro é feita aqui, no
 // código. A IA só classifica e explica. Um plano de pagamento com aritmética
@@ -3169,6 +3639,8 @@ function PrioridadePagamentoTab({ contas, salvarContas, config, salvarConfig }) 
 
 function ContasPagarTab({ contas, salvar }) {
   const [modal, setModal] = useState(null);
+  const [importando, setImportando] = useState(false);
+  const [resultadoImp, setResultadoImp] = useState(null);
   const [busca, setBusca] = useState("");
   const [sit, setSit] = useState("todas");
   const [mostrarFiltros, setMostrarFiltros] = useState(true);
@@ -3262,6 +3734,7 @@ function ContasPagarTab({ contas, salvar }) {
         {mostrarAcoes && (
           <div style={{ width:236, flexShrink:0, display:"flex", flexDirection:"column", gap:8 }}>
             <button onClick={function(){ setModal({}); }} style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"11px", borderRadius:9, cursor:"pointer", fontSize:13.5 }}>+ Incluir conta</button>
+            <button onClick={function(){ setImportando(true); }} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"11px", borderRadius:9, cursor:"pointer", fontSize:13 }}>⬆ Importar planilha</button>
             <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"6px", display:"flex", flexDirection:"column" }}>
               <button onClick={exportar} style={{ background:"none", border:"none", textAlign:"left", padding:"9px 10px", borderRadius:7, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" }}>Exportar para planilha</button>
               <button onClick={function(){ imprimir(); }} style={{ background:"none", border:"none", textAlign:"left", padding:"9px 10px", borderRadius:7, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" }}>Imprimir</button>
@@ -3274,6 +3747,20 @@ function ContasPagarTab({ contas, salvar }) {
           </div>
         )}
       </div>
+      {resultadoImp && (
+        <div style={{ position:"fixed", left:"50%", bottom:24, transform:"translateX(-50%)", background:"var(--surface)", border:"1px solid #0a9d4e", borderRadius:12, padding:"12px 18px", zIndex:650, boxShadow:"0 8px 30px rgba(0,0,0,.2)", fontSize:13, color:"var(--text-2)", display:"flex", alignItems:"center", gap:14 }}>
+          <span>{resultadoImp}</span>
+          <button onClick={function(){ setResultadoImp(null); }} style={{ background:"none", border:"none", color:"var(--text-3)", cursor:"pointer", fontSize:16 }}>×</button>
+        </div>
+      )}
+      {importando && <ImportarContasModal
+        contas={contas}
+        onImportar={function(novas){
+          salvar((contas || []).concat(novas));
+          setImportando(false);
+          setResultadoImp(novas.length + " conta(s) importada(s).");
+        }}
+        onClose={function(){ setImportando(false); }} />}
       {modal && <ContaModal conta={modal} onSave={salvarConta} onClose={function(){ setModal(null); }} />}
     </div>
   );

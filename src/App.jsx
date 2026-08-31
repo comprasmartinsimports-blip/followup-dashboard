@@ -1625,21 +1625,23 @@ function RelatoriosTab({ enrichedOrders }) {
 }
 
 // Contas a receber: recebíveis gerados automaticamente dos pedidos do Mercado Livre.
-function ContasReceberTab({ enrichedOrders, paymentData }) {
+function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, config }) {
   const [busca, setBusca] = useState("");
   const [mostrarFiltros, setMostrarFiltros] = useState(true);
   const [mostrarAcoes, setMostrarAcoes] = useState(true);
   const [fSituacao, setFSituacao] = useState("todas");
-  const [baixados, setBaixados] = useState(function(){ try { var v=JSON.parse(localStorage.getItem("recebiveis_baixados")||"{}"); return v&&typeof v==="object"?v:{}; } catch(e){ return {}; } });
-  function persistBaixa(n){ try { localStorage.setItem("recebiveis_baixados", JSON.stringify(n)); } catch(e){} }
-  function darBaixa(id){ setBaixados(function(b){ var n=Object.assign({},b); n[String(id)]=new Date().toISOString().slice(0,10); persistBaixa(n); return n; }); }
-  function estornar(id){ setBaixados(function(b){ var n=Object.assign({},b); delete n[String(id)]; persistBaixa(n); return n; }); }
+  var cfgFin = config || financeiroConfigPadrao();
+  function darBaixa(id){ var n = Object.assign({}, baixados); n[String(id)] = new Date().toISOString().slice(0,10); setBaixados(n); }
+  function estornar(id){ var n = Object.assign({}, baixados); delete n[String(id)]; setBaixados(n); }
   var linhas = (enrichedOrders || []).filter(function(o){ return o.status !== "cancelled"; }).map(function(o){
     var pay = paymentData && paymentData[String(o.id)];
     var valor = pay && pay.netAmount ? pay.netAmount : (o.price || 0) * (o.qty || 1);
     var previsao = pay && pay.releaseDate ? pay.releaseDate : (o.date || "");
     var baixaManual = baixados[String(o.id)] || null;
-    var recebido = (pay ? !!pay.isReleased : false) || !!baixaManual;
+    // Com "repasse só quando eu confirmo", a liberação anunciada pelo ML não
+    // basta: recebido é o que o usuário confirmou. É a mesma regra que o DRE
+    // aplica — as duas telas precisam mostrar o mesmo dinheiro.
+    var recebido = !!baixaManual || (cfgFin.repasse === "previsto" && !!(pay && pay.isReleased));
     return { id:o.id, cliente:o.buyerName || "Cliente ML", origem:"Mercado Livre", previsao:previsao, valor:valor, recebido:recebido, baixaManual:baixaManual };
   });
   var lista = linhas.filter(function(r){
@@ -2591,17 +2593,112 @@ function TelaEstruturada({ cfg }) {
   );
 }
 // DRE (Demonstrativo de Resultado): estrutura zerada, sem dados por enquanto.
-function DreTab({ enrichedOrders }) {
-  const [periodo, setPeriodo] = useState("30");
-  var cutoff = cutoffPeriodo(periodo);
-  var validos = (enrichedOrders || []).filter(function(o){ return o.status !== "cancelled" && (o.date || "") >= cutoff; });
+// ── Regime financeiro ──────────────────────────────────────────────────────
+// Duas escolhas que mudam TODOS os números do Financeiro, guardadas num lugar
+// só para as telas não discordarem entre si:
+//
+// regime  "caixa"      → conta no dia em que o dinheiro entra ou sai
+//         "competencia"→ conta no dia da venda ou da compra
+// repasse "confirmado" → o repasse do Mercado Livre só vira receita quando o
+//                        usuário confirma que caiu na conta
+//         "previsto"   → vale a data de liberação anunciada pelo ML
+const FINANCEIRO_PADRAO = {
+  regime: "caixa",
+  repasse: "confirmado",
+  // De onde saem as despesas do DRE. "pagas" é o certo no regime de caixa:
+  // é dinheiro que saiu de verdade. "configurados" usa os custos fixos de
+  // Financeiro → Impostos, útil enquanto Contas a pagar ainda está sendo
+  // preenchida. "ambos" soma os dois e pode contar a mesma despesa duas vezes.
+  origemDespesas: "pagas",
+  // Categorias de conta a pagar que são compra de mercadoria. O custo dessas
+  // já entra no DRE pelo CMV de cada venda; somá-las de novo como despesa
+  // contaria a mesma mercadoria duas vezes.
+  categoriasMercadoria: ["Fornecedor"],
+};
 
-  var fat=0, impostos=0, custo=0, taxas=0, lucro=0;
-  validos.forEach(function(o){ var q=o.qty||1;
-    fat += (o.price||0)*q; impostos += (o.imposto||0)*q; custo += (o.cost||0)*q; taxas += (o.fee||0)*q; lucro += (o.profit||0)*q; });
+function financeiroConfigPadrao() { return JSON.parse(JSON.stringify(FINANCEIRO_PADRAO)); }
+
+// Um pedido virou dinheiro? No regime de competência, a venda conta na data em
+// que foi feita. No de caixa, só quando o recebimento é confirmado — e a data
+// que vale é a da confirmação, não a da venda.
+function dataDeReceita(o, cfg, baixas, paymentData) {
+  if (cfg.regime !== "caixa") return o.date || "";
+  var manual = baixas && baixas[String(o.id)];
+  if (manual) return String(manual).slice(0, 10);
+  if (cfg.repasse === "previsto") {
+    var pay = paymentData && paymentData[String(o.id)];
+    if (pay && pay.isReleased) return String(pay.releaseDate || o.date || "").slice(0, 10);
+  }
+  return "";     // ainda não é dinheiro
+}
+
+// Uma conta a pagar virou dinheiro que saiu?
+function dataDeDespesa(c, cfg) {
+  if (cfg.regime !== "caixa") return c.competencia || c.emissao || c.vencimento || "";
+  return c.status === "paga" ? String(c.pago_em || c.vencimento || "").slice(0, 10) : "";
+}
+
+// Custos fixos são mensais. Para um período de N dias, o que corresponde é a
+// fração do mês — 90 dias valem três meses de aluguel, não um.
+function custosFixosNoPeriodo(custosFixos, faturamentoPeriodo, dias) {
+  var meses = dias / 30;
+  return (custosFixos || []).reduce(function(s, c){
+    var v = parseFloat(c.valor) || 0;
+    // O item em % é sobre o faturamento do PERÍODO, então já está na medida
+    // certa e não se multiplica por mês nenhum.
+    return s + (c.tipo === "%" ? faturamentoPeriodo * (v / 100) : v * meses);
+  }, 0);
+}
+
+function DreTab({ enrichedOrders, contasPagar, custosFixos, recebiveisBaixados, paymentData, config, salvarConfig }) {
+  const [periodo, setPeriodo] = useState("30");
+  const [mostrarAjustes, setMostrarAjustes] = useState(false);
+  var cfg = config || financeiroConfigPadrao();
+  var cutoff = cutoffPeriodo(periodo);
+  var dias = periodo === "tudo" ? 365 : parseInt(periodo, 10);
+  var hoje = new Date().toISOString().slice(0, 10);
+  var caixa = cfg.regime === "caixa";
+
+  // ── Receita ──────────────────────────────────────────────────────────────
+  var fat=0, impostos=0, custo=0, taxas=0, nPedidos=0;
+  var pedidosForaDoCaixa = 0, valorForaDoCaixa = 0;
+  (enrichedOrders || []).forEach(function(o){
+    if (o.status === "cancelled") return;
+    var q = o.qty || 1;
+    var d = dataDeReceita(o, cfg, recebiveisBaixados, paymentData);
+    if (!d) {
+      // Venda feita e ainda não recebida: fica de fora do resultado de caixa,
+      // mas a tela precisa dizer quanto é — senão o número parece perdido.
+      if ((o.date || "") >= cutoff) { pedidosForaDoCaixa++; valorForaDoCaixa += (o.price||0)*q; }
+      return;
+    }
+    if (d < cutoff || d > hoje) return;
+    fat += (o.price||0)*q; impostos += (o.imposto||0)*q;
+    custo += (o.cost||0)*q; taxas += (o.fee||0)*q; nPedidos++;
+  });
+
+  // ── Despesas ─────────────────────────────────────────────────────────────
+  var ehMercadoria = {};
+  (cfg.categoriasMercadoria || []).forEach(function(c){ ehMercadoria[c] = true; });
+  var despesasPagas = 0, mercadoriaPaga = 0, porCategoria = {};
+  (contasPagar || []).forEach(function(c){
+    var d = dataDeDespesa(c, cfg);
+    if (!d || d < cutoff || d > hoje) return;
+    var v = parseFloat(c.valorTotal || c.valor) || 0;
+    var cat = c.categoria || "Outros";
+    if (ehMercadoria[cat]) { mercadoriaPaga += v; return; }   // já contada no CMV
+    despesasPagas += v;
+    porCategoria[cat] = (porCategoria[cat] || 0) + v;
+  });
+  var fixosPrevistos = custosFixosNoPeriodo(custosFixos, fat, dias);
+  var despesas =
+    cfg.origemDespesas === "configurados" ? fixosPrevistos :
+    cfg.origemDespesas === "ambos"        ? despesasPagas + fixosPrevistos :
+                                            despesasPagas;
+
   var recLiq = fat - impostos;
   var lucroBruto = recLiq - custo;
-  var despesasFixas = 0; // ainda sem lançamento de despesas fixas
+  var lucro = lucroBruto - taxas - despesas;
   var margemLiq = fat ? lucro/fat*100 : 0;
 
   var linhas = [
@@ -2611,33 +2708,104 @@ function DreTab({ enrichedOrders }) {
     ["(-) Custo dos produtos (CMV)", -custo, false, "#768692"],
     ["= Lucro bruto", lucroBruto, true, "var(--text-strong)"],
     ["(-) Taxas dos marketplaces", -taxas, false, "#FFC107"],
-    ["(-) Despesas e custos fixos", -despesasFixas, false, "#8492a8"],
+    ["(-) Despesas e custos fixos", -despesas, false, "#8492a8"],
     ["= Lucro líquido", lucro, true, lucro>=0?"#0a9d4e":"#FF5252"],
   ];
-  // Composição do resultado (barras) — quanto de cada peça sai do faturamento.
   var composicao = [
     { name:"Receita bruta", value:fat, cor:"#768692" },
     { name:"Impostos", value:impostos, cor:"#FF7043" },
     { name:"CMV", value:custo, cor:"#768592" },
     { name:"Taxas ML", value:taxas, cor:"#FFC107" },
+    { name:"Despesas", value:despesas, cor:"#8492a8" },
     { name:"Lucro líq.", value:Math.max(0,lucro), cor:"#0a9d4e" },
   ];
+  var cats = Object.keys(porCategoria).sort(function(a,b){ return porCategoria[b]-porCategoria[a]; });
+
+  // Avisos: cada um só aparece quando a situação que ele descreve existe.
+  var avisos = [];
+  if (caixa && pedidosForaDoCaixa > 0) avisos.push({
+    tom:"info",
+    txt: pedidosForaDoCaixa + " venda(s) do período, somando " + fmt(valorForaDoCaixa) + ", ainda não entraram: " +
+         "no regime de caixa a receita só conta quando você confirma o recebimento em Contas a receber.",
+  });
+  if (cfg.origemDespesas === "pagas" && despesasPagas === 0 && fixosPrevistos > 0) avisos.push({
+    tom:"alerta",
+    txt: "Você tem " + fmt(fixosPrevistos) + " em custos fixos cadastrados e nenhuma conta paga no período. " +
+         "O lucro acima está SEM essas despesas. Troque a origem para “custos fixos configurados” em Ajustes, " +
+         "ou registre os pagamentos em Contas a pagar.",
+  });
+  if (cfg.origemDespesas === "ambos" && despesasPagas > 0 && fixosPrevistos > 0) avisos.push({
+    tom:"alerta",
+    txt: "As despesas somam contas pagas (" + fmt(despesasPagas) + ") e custos fixos configurados (" + fmt(fixosPrevistos) + "). " +
+         "Se o aluguel está nos dois lugares, ele está sendo contado duas vezes.",
+  });
+  if (mercadoriaPaga > 0) avisos.push({
+    tom:"info",
+    txt: fmt(mercadoriaPaga) + " em contas de " + (cfg.categoriasMercadoria||[]).join(", ") +
+         " foram pagas no período e NÃO entraram como despesa: compra de mercadoria já é contada no CMV de cada venda.",
+  });
+
+  function setCfg(k, v){ salvarConfig(Object.assign({}, cfg, { [k]: v })); }
+  var selAjuste = { background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"7px 10px", borderRadius:7, fontSize:12.5 };
+  var corAviso = { info:["var(--surface)","var(--border)","var(--text-3)"], alerta:["rgba(255,193,7,.10)","rgba(255,193,7,.5)","var(--text-2)"] };
 
   return (
     <div style={{ padding:2 }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:16 }}>
         <div>
           <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>DRE — Demonstrativo de resultado</div>
-          <div style={{ fontSize:13, color:"var(--text-3)" }}>Resultado do período, calculado a partir dos pedidos do Mercado Livre.</div>
+          <div style={{ fontSize:13, color:"var(--text-3)" }}>
+            Regime de <b>{caixa ? "caixa" : "competência"}</b> ·{" "}
+            {caixa
+              ? "conta no dia em que o dinheiro entra ou sai"
+              : "conta no dia da venda ou da compra"}
+            {caixa && cfg.repasse === "confirmado" ? " · repasse do ML só quando você confirma" : ""}
+          </div>
         </div>
         <div style={{ display:"flex", gap:6, alignItems:"center" }}>
           {PERIODOS_REL.map(function(p){ var ativo = periodo===p[0];
             return <button key={p[0]} onClick={function(){ setPeriodo(p[0]); }}
               style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600,
                 background: ativo ? "#768692" : "var(--surface)", color: ativo ? "#fff" : "var(--text-3)" }}>{p[1]}</button>; })}
+          <button onClick={function(){ setMostrarAjustes(function(v){ return !v; }); }}
+            style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background:"var(--surface)", color:"var(--text-2)", marginLeft:4 }}>⚙ Ajustes</button>
           <button onClick={exportarPDF} style={{ ..._btnPdf, marginLeft:4 }} title="Salvar/Imprimir como PDF">⬇ Exportar PDF</button>
         </div>
       </div>
+
+      {mostrarAjustes && (
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", marginBottom:14 }}>
+          <div style={{ fontSize:13.5, fontWeight:600, color:"var(--text-strong)", marginBottom:12 }}>Como o resultado é apurado</div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))", gap:14 }}>
+            <div>
+              <label style={{ fontSize:11.5, color:"var(--text-3)", fontWeight:600, display:"block", marginBottom:4 }}>Regime</label>
+              <select value={cfg.regime} onChange={function(e){ setCfg("regime", e.target.value); }} style={{ ...selAjuste, width:"100%" }}>
+                <option value="caixa">Caixa — quando o dinheiro entra e sai</option>
+                <option value="competencia">Competência — quando a venda acontece</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize:11.5, color:"var(--text-3)", fontWeight:600, display:"block", marginBottom:4 }}>Repasse do Mercado Livre</label>
+              <select value={cfg.repasse} onChange={function(e){ setCfg("repasse", e.target.value); }} style={{ ...selAjuste, width:"100%" }} disabled={!caixa}>
+                <option value="confirmado">Só quando eu confirmo o recebimento</option>
+                <option value="previsto">Na data de liberação do ML</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize:11.5, color:"var(--text-3)", fontWeight:600, display:"block", marginBottom:4 }}>Despesas vêm de</label>
+              <select value={cfg.origemDespesas} onChange={function(e){ setCfg("origemDespesas", e.target.value); }} style={{ ...selAjuste, width:"100%" }}>
+                <option value="pagas">Contas a pagar — o que foi realmente pago</option>
+                <option value="configurados">Custos fixos configurados — valor previsto</option>
+                <option value="ambos">As duas, somando</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ fontSize:11.5, color:"var(--text-3)", marginTop:12, lineHeight:1.6 }}>
+            Contas das categorias <b>{(cfg.categoriasMercadoria||[]).join(", ") || "nenhuma"}</b> são tratadas como compra de
+            mercadoria e ficam fora das despesas, porque o custo delas já entra pelo CMV de cada venda.
+          </div>
+        </div>
+      )}
 
       <div style={{ display:"flex", gap:14, flexWrap:"wrap", alignItems:"flex-start" }}>
         <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"8px 18px", flex:1, minWidth:340, maxWidth:560 }}>
@@ -2650,12 +2818,16 @@ function DreTab({ enrichedOrders }) {
           })}
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 0", marginTop:2, borderTop:"1px solid var(--border)" }}>
             <span style={{ fontSize:13, fontWeight:500, color:"var(--text-3)" }}>Margem líquida</span>
-            <span style={{ fontSize:15, fontWeight:600, color: margemLiq>=0?"#0a9d4e":"#FF5252" }}>{margemLiq.toFixed(1)}%</span>
+            <span style={{ fontSize:15, fontWeight:600, color: margemLiq>=0?"#0a9d4e":"#FF5252" }}>{fat ? margemLiq.toFixed(1) + "%" : "—"}</span>
+          </div>
+          <div style={{ fontSize:11.5, color:"var(--text-4)", padding:"0 0 10px" }}>
+            {nPedidos} pedido(s) no resultado
+            {cfg.origemDespesas !== "configurados" && cats.length ? " · " + cats.length + " categoria(s) de despesa" : ""}
           </div>
         </div>
 
         <ChartCard titulo="Composição do resultado" sub="Do faturamento ao lucro líquido" minW={320} flex={1}>
-          {fat === 0 ? <div style={{ color:"var(--text-3)", fontSize:13, padding:"30px 0", textAlign:"center" }}>Sem vendas no período.</div> :
+          {fat === 0 ? <div style={{ color:"var(--text-3)", fontSize:13, padding:"30px 0", textAlign:"center" }}>Sem receita no período.</div> :
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={composicao} layout="vertical" margin={{ top:4, right:16, left:10, bottom:0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} horizontal={false} />
@@ -2670,9 +2842,42 @@ function DreTab({ enrichedOrders }) {
         </ChartCard>
       </div>
 
-      <div style={{ marginTop:12, fontSize:12, color:"var(--text-3)", background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 14px" }}>
-        As <b>despesas e custos fixos</b> (aluguel, salários, etc.) ainda não estão lançados — entram no cálculo assim que você registrar em Contas a pagar. O lucro acima já desconta impostos, CMV e taxas do marketplace.
+      <div style={{ display:"flex", gap:14, flexWrap:"wrap", alignItems:"flex-start", marginTop:14 }}>
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 18px", flex:1, minWidth:320 }}>
+          <div style={{ fontSize:13.5, fontWeight:600, color:"var(--text-strong)", marginBottom:4 }}>Despesas por categoria</div>
+          <div style={{ fontSize:11.5, color:"var(--text-3)", marginBottom:10 }}>Contas a pagar quitadas no período.</div>
+          {cats.length === 0
+            ? <div style={{ fontSize:13, color:"var(--text-3)", padding:"14px 0" }}>Nenhuma conta paga no período.</div>
+            : cats.map(function(c){
+                return <div key={c} style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderBottom:"1px solid var(--border-soft)", fontSize:13 }}>
+                  <span style={{ color:"var(--text-2)" }}>{c}</span>
+                  <span style={{ color:"var(--text-strong)", fontWeight:600, fontVariantNumeric:"tabular-nums" }}>{fmt(porCategoria[c])}</span>
+                </div>;
+              })}
+        </div>
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 18px", flex:1, minWidth:320 }}>
+          <div style={{ fontSize:13.5, fontWeight:600, color:"var(--text-strong)", marginBottom:4 }}>Previsto × pago</div>
+          <div style={{ fontSize:11.5, color:"var(--text-3)", marginBottom:10 }}>Custos fixos cadastrados contra o que saiu de verdade.</div>
+          <div style={{ display:"flex", gap:24, flexWrap:"wrap" }}>
+            <div><div style={{ fontSize:11, color:"var(--text-3)" }}>Previsto ({dias} dias)</div>
+              <div style={{ fontSize:19, fontWeight:600, color:"var(--text-2)" }}>{fmt(fixosPrevistos)}</div></div>
+            <div><div style={{ fontSize:11, color:"var(--text-3)" }}>Pago</div>
+              <div style={{ fontSize:19, fontWeight:600, color:"var(--text-strong)" }}>{fmt(despesasPagas)}</div></div>
+            <div><div style={{ fontSize:11, color:"var(--text-3)" }}>Diferença</div>
+              <div style={{ fontSize:19, fontWeight:600, color: despesasPagas > fixosPrevistos ? "#FF5252" : "#0a9d4e" }}>
+                {fmt(despesasPagas - fixosPrevistos)}</div></div>
+          </div>
+          <div style={{ fontSize:11.5, color:"var(--text-3)", marginTop:10, lineHeight:1.5 }}>
+            Só uma das duas colunas entra no lucro — a que estiver escolhida em Ajustes. Esta comparação é para
+            você ver se está gastando acima do planejado.
+          </div>
+        </div>
       </div>
+
+      {avisos.map(function(a,i){
+        var c = corAviso[a.tom];
+        return <div key={i} style={{ marginTop:12, fontSize:12.5, color:c[2], background:c[0], border:"1px solid "+c[1], borderRadius:10, padding:"11px 14px", lineHeight:1.6 }}>{a.txt}</div>;
+      })}
     </div>
   );
 }
@@ -5778,6 +5983,8 @@ function SinoNotificacoes({ notificacoes, setNotificacoes, darkMode }) {
 const BACKUP_KEYS = [
   { key: "contas_pagar",            label: "Contas a Pagar" },
   { key: "prioridade_pagamento_config", label: "Regras de prioridade de pagamento" },
+  { key: "financeiro_config",       label: "Regime financeiro" },
+  { key: "recebiveis_baixados",     label: "Recebimentos confirmados" },
   { key: "contas_bancarias",        label: "Caixas e Bancos" },
   { key: "lancamentos",             label: "Lançamentos Financeiros" },
   { key: "categorias_pagar",        label: "Categorias" },
@@ -9146,6 +9353,32 @@ export default function App() {
     try { localStorage.setItem("pedidos_compra", JSON.stringify(lista)); } catch(e) {}
     try { kvSyncPush("pedidos_compra", lista); } catch(e) {}
   }
+  // Regime financeiro (caixa/competência, quando o repasse vira receita, de
+  // onde saem as despesas). Fica na raiz porque DRE e Contas a receber precisam
+  // concordar — duas telas com regimes diferentes dariam dois lucros.
+  const [financeiroConfig, setFinanceiroConfigState] = useState(function(){
+    try {
+      var v = JSON.parse(localStorage.getItem("financeiro_config") || "{}");
+      return Object.assign(financeiroConfigPadrao(), v || {});
+    } catch { return financeiroConfigPadrao(); }
+  });
+  function setFinanceiroConfig(cfg) {
+    setFinanceiroConfigState(cfg);
+    try { localStorage.setItem("financeiro_config", JSON.stringify(cfg)); } catch(e) {}
+    try { kvSyncPush("financeiro_config", cfg); } catch(e) {}
+  }
+  // Baixas manuais dos recebíveis. Sai de dentro de Contas a receber para a
+  // raiz porque o DRE em regime de caixa depende exatamente delas.
+  const [recebiveisBaixados, setRecebiveisBaixadosState] = useState(function(){
+    try { var v = JSON.parse(localStorage.getItem("recebiveis_baixados") || "{}"); return v && typeof v === "object" ? v : {}; }
+    catch { return {}; }
+  });
+  function setRecebiveisBaixados(mapa) {
+    setRecebiveisBaixadosState(mapa);
+    try { localStorage.setItem("recebiveis_baixados", JSON.stringify(mapa)); } catch(e) {}
+    try { kvSyncPush("recebiveis_baixados", mapa); } catch(e) {}
+  }
+
   // Regras e caixa da tela de Prioridade de pagamento. O caixa fica aqui junto
   // das regras porque é informado à mão e vale entre visitas à tela.
   const [configPrioridade, setConfigPrioridadeState] = useState(function(){
@@ -9396,7 +9629,7 @@ export default function App() {
     "custos_fixos_config","impostos_config","irpj_csll_config","icms_por_estado","icms_regime_config","lancamentos",
     "mov_estoque","metaMensal","min_stock_anuncios","real_fees_config","pedidos_compra",
     "precificacao_extras","precos_pendentes_ml","custos_extras_config","depositos_estoque","estoque_depositos",
-    "envios_full","vendas_estoque_baixadas","sku_overrides","analise_ia_config","prioridade_pagamento_config",
+    "envios_full","vendas_estoque_baixadas","sku_overrides","analise_ia_config","prioridade_pagamento_config","financeiro_config","recebiveis_baixados",
   ]).current;
   // Para os dados guardados como dicionário (chave→valor, ex: custo por anúncio), mesclar em
   // vez de substituir por inteiro — evita que um "pull" com dados parciais do servidor apague
@@ -9434,6 +9667,8 @@ export default function App() {
     custos_extras_config: mesclarSetter(setCustosExtras),
     analise_ia_config: function(v){ setConfigQualidade(v); },
     prioridade_pagamento_config: mesclarSetter(setConfigPrioridadeState),
+    financeiro_config: mesclarSetter(setFinanceiroConfigState),
+    recebiveis_baixados: mesclarSetter(setRecebiveisBaixadosState),
   }).current;
   // Tipo esperado de cada chave — usado para blindar contra um valor no formato errado
   // (ex: um objeto onde deveria vir uma lista) travando a tela com "x.filter is not a function".
@@ -9448,6 +9683,7 @@ export default function App() {
     min_stock_anuncios: "object", real_fees_config: "object", sku_overrides: "object",
     custos_extras_config: "object", analise_ia_config: "object",
     prioridade_pagamento_config: "object",
+    financeiro_config: "object", recebiveis_baixados: "object",
   }).current;
   const lastSyncRef = useRef({}); // key -> string JSON já sincronizado (evita reenviar/reaplicar sem necessidade)
 
@@ -11033,7 +11269,8 @@ export default function App() {
         {tab === "relatorios" && <RelatoriosTab enrichedOrders={enrichedOrders} />}
         {tab === "expedicao" && <EmConstrucao tab="expedicao" />}
         {tab === "notas_fiscais" && <EmConstrucao tab="notas_fiscais" />}
-        {tab === "contas_receber" && <ContasReceberTab enrichedOrders={enrichedOrders} paymentData={paymentData} />}
+        {tab === "contas_receber" && <ContasReceberTab enrichedOrders={enrichedOrders} paymentData={paymentData}
+          baixados={recebiveisBaixados} setBaixados={setRecebiveisBaixados} config={financeiroConfig} />}
         {tab === "contas_pagar" && <ContasPagarTab contas={contasPagar} salvar={salvarContasPagar} />}
         {tab === "prioridade_pagamento" && <PrioridadePagamentoTab contas={contasPagar} salvarContas={salvarContasPagar} config={configPrioridade} salvarConfig={setConfigPrioridade} />}
         {tab === "compras" && <ComprasTab produtos={produtos} pedidos={pedidosCompra} salvar={salvarPedidosCompra} />}
@@ -11050,7 +11287,9 @@ export default function App() {
             faturamentoMes={faturamentoMesAtual}
           />
         )}
-        {tab === "dre" && <DreTab enrichedOrders={enrichedOrders} />}
+        {tab === "dre" && <DreTab enrichedOrders={enrichedOrders} contasPagar={contasPagar}
+          custosFixos={custosFixos} recebiveisBaixados={recebiveisBaixados} paymentData={paymentData}
+          config={financeiroConfig} salvarConfig={setFinanceiroConfig} />}
         {TELAS_FIN[tab] && <TelaEstruturada cfg={TELAS_FIN[tab]} />}
       </div>{/* fecha a coluna do conteúdo */}
 

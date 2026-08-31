@@ -1674,16 +1674,29 @@ function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, 
   }
   var linhas = (enrichedOrders || []).filter(function(o){ return o.status !== "cancelled"; }).map(function(o){
     var pay = paymentData && paymentData[String(o.id)];
-    var valor = pay && pay.netAmount ? pay.netAmount : (o.price || 0) * (o.qty || 1);
+    // O líquido sai da MESMA conta que a tela de Vendas mostra como "Repasse do
+    // marketplace": bruto menos a taxa do ML menos o frete que você paga. Antes
+    // vinha do netAmount da API, que tinha três bases diferentes — sale_fee
+    // real, um chute de 13%, ou o bruto puro quando não havia dado nenhum — e a
+    // tela somava as três como se fossem a mesma coisa.
+    var q = o.qty || 1;
+    var bruto = (o.price || 0) * q;
+    var taxa = (o.fee || 0) * q;
+    var frete = o.freteSeller || 0;
+    var valor = Math.max(0, bruto - taxa - frete);
     var baixaManual = baixados[String(o.id)] || null;
     var estado = classificar(o, pay, baixaManual);
     return {
       id:o.id, cliente:o.buyerName || "Cliente ML", origem:"Mercado Livre",
       previsao: pay && pay.releaseDate ? pay.releaseDate : "",
-      dataVenda: o.date || "", valor:valor, estado:estado, baixaManual:baixaManual,
-      recebido: estado === "recebido",
+      dataVenda: o.date || "", bruto:bruto, taxa:taxa, frete:frete, valor:valor,
+      // A taxa é real quando veio do sale_fee do pedido; senão é a tabela
+      // 12%/17% por tipo de anúncio. A tela marca a diferença.
+      taxaEstimada: !o.feeReal,
+      estado:estado, baixaManual:baixaManual, recebido: estado === "recebido",
     };
   });
+  var nTaxaEstimada = linhas.filter(function(r){ return r.taxaEstimada && r.estado !== "recebido"; }).length;
   function somaDe(est){ return linhas.filter(function(r){ return r.estado === est; }).reduce(function(s,r){ return s + r.valor; }, 0); }
   function qtdDe(est){ return linhas.filter(function(r){ return r.estado === est; }).length; }
   var aReceber = somaDe("a_receber"), liberado = somaDe("liberado");
@@ -1721,11 +1734,17 @@ function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, 
   var selFiltro = { width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"7px 9px", borderRadius:8, fontSize:12.5 };
   var filtBtn = { background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"9px 12px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" };
   function limpar(){ setFSituacao("todas"); setBusca(""); }
-  function exportar(){ baixarCSV("contas-receber", ["Cliente","Origem","Nº pedido","Previsão","Valor","Situação"], lista.map(function(r){ return [r.cliente, r.origem, r.id, r.previsao||"", r.valor.toFixed(2), rotuloReceb(r.estado)[0]]; })); }
-  function imprimir(){ baixarPDF("contas-a-receber", ["Cliente","Origem","Nº pedido","Previsão","Valor","Situação"], lista.map(function(r){ return [r.cliente, r.origem, "#"+r.id, r.previsao?(fmtDate(r.previsao)||r.previsao):"—", fmt(r.valor), rotuloReceb(r.estado)[0]]; })); }
+  function exportar(){ baixarCSV("contas-receber",
+    ["Cliente","Nº pedido","Previsão","Bruto","Taxa ML","Taxa estimada?","Frete","Líquido a receber","Situação"],
+    lista.map(function(r){ return [r.cliente, r.id, r.previsao||"", r.bruto.toFixed(2), r.taxa.toFixed(2),
+      r.taxaEstimada ? "sim" : "não", r.frete.toFixed(2), r.valor.toFixed(2), rotuloReceb(r.estado)[0]]; })); }
+  function imprimir(){ baixarPDF("contas-a-receber",
+    ["Cliente","Nº pedido","Previsão","Bruto","Taxa ML","Frete","Líquido","Situação"],
+    lista.map(function(r){ return [r.cliente, "#"+r.id, r.previsao?(fmtDate(r.previsao)||r.previsao):"—",
+      fmt(r.bruto), fmt(r.taxa), r.frete>0?fmt(r.frete):"—", fmt(r.valor), rotuloReceb(r.estado)[0]]; })); }
   return (
     <FinanceiroShell tab={tab} setTab={setTab} titulo="Contas a receber" largura={1400}
-      sub="O que o Mercado Livre ainda não liberou é o seu contas a receber de verdade. O resto já é dinheiro seu."
+      sub="Valores líquidos: bruto menos a taxa do Mercado Livre e o frete que você paga. O que o ML ainda não liberou é o contas a receber de verdade."
       kpis={[
         { rotulo:"A receber de verdade", valor:fmt(aReceber), cor: qtdDe("a_receber") ? FIN_COR.atencao : FIN_COR.fraco,
           nota: qtdDe("a_receber") + " pedido(s) · o ML ainda não liberou" },
@@ -1768,6 +1787,11 @@ function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, 
           <div style={{ fontSize:11, color:"var(--text-3)", marginTop:10, lineHeight:1.55, borderTop:"1px solid var(--border-soft)", paddingTop:8 }}>
             Confirmar é o que faz a venda virar receita no DRE e entrar no saldo dos bancos.
           </div>
+          <div style={{ fontSize:11, color:"var(--text-3)", marginTop:8, lineHeight:1.55, borderTop:"1px solid var(--border-soft)", paddingTop:8 }}>
+            {nTaxaEstimada > 0
+              ? nTaxaEstimada + " pedido(s) usam a taxa por tipo de anúncio porque o ML não devolveu o sale_fee deles. Ficam marcados como “estimada” na coluna Taxa ML."
+              : "Todas as taxas vieram do sale_fee real de cada pedido."}
+          </div>
         </div>
       </>}>
       <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12, flexWrap:"wrap" }}>
@@ -1798,18 +1822,23 @@ function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, 
         <div style={{ flex:1, minWidth:0 }}>
           <div style={_tableWrap}>
             <table style={_table}>
-              <thead><tr>{["Cliente","Origem","Nº pedido","Previsão de recebimento","Valor","Situação","Ações"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+              <thead><tr>{["Cliente","Nº pedido","Previsão","Bruto","Taxa ML","Frete","Líquido a receber","Situação","Ações"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
               <tbody>
                 {lista.slice(0,500).map(function(r,i){
                   return <tr key={r.id || i}>
-                    <td style={{ ..._td, color:"var(--text-strong)" }}>{r.cliente}</td>
-                    <td style={_td}>{r.origem}</td>
+                    <td style={{ ..._td, color:"var(--text-strong)", maxWidth:210, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.cliente}</td>
                     <td style={_tdMono}>#{r.id}</td>
                     <td style={_td}>
                       {r.previsao ? (fmtDate(r.previsao)||r.previsao) : <span style={{ color:"var(--text-4)" }}>não informada</span>}
                       {r.estado === "recebido" && r.baixaManual && <div style={{ fontSize:10.5, color:"var(--text-4)" }}>confirmado em {fmtDate(r.baixaManual)||r.baixaManual}</div>}
                     </td>
-                    <td style={{ ..._tdMono, fontWeight:600 }}>{fmt(r.valor)}</td>
+                    <td style={_tdMono}>{fmt(r.bruto)}</td>
+                    <td style={_tdMono}>
+                      <span style={{ color:FIN_COR.saida }}>− {fmt(r.taxa)}</span>
+                      {r.taxaEstimada && <div style={{ fontSize:10, color:"var(--text-4)" }} title="Sem o sale_fee do pedido: usa a taxa por tipo de anúncio.">estimada</div>}
+                    </td>
+                    <td style={_tdMono}>{r.frete > 0 ? <span style={{ color:FIN_COR.saida }}>− {fmt(r.frete)}</span> : <span style={{ color:"var(--text-4)" }}>—</span>}</td>
+                    <td style={{ ..._tdMono, fontWeight:700 }}>{fmt(r.valor)}</td>
                     <td style={_td}>
                       <span title={rotuloReceb(r.estado)[2]} style={{ fontSize:11, fontWeight:600, padding:"2px 9px", borderRadius:20, background:"var(--surface-3)", color:rotuloReceb(r.estado)[1] }}>{rotuloReceb(r.estado)[0]}</span>
                     </td>
@@ -6960,7 +6989,13 @@ async function fetchPaymentForOrders(ordersList, validTk, onBatch) {
         var isReleased = false;
         var hoje2 = new Date().toLocaleDateString("sv-SE");
         if (paymentDetail) {
-          var rdRaw = paymentDetail.money_release_date || paymentDetail.date_approved || null;
+          // Só money_release_date serve como previsão de recebimento. Havia um
+          // recuo para date_approved — a data em que o pagamento foi APROVADO,
+          // que não tem relação com quando o dinheiro é liberado. Pior: como
+          // "liberado" também é concluído por "data <= hoje", todo pedido antigo
+          // aprovado virava liberado sozinho. Sem a data oficial, o pedido fica
+          // sem previsão e a tela diz isso, em vez de mostrar uma data inventada.
+          var rdRaw = paymentDetail.money_release_date || null;
           var rdStatus = paymentDetail.money_release_status || paymentDetail.release_status || "";
           if (rdRaw) {
             releaseDate = rdRaw.slice(0, 10);
@@ -11982,8 +12017,9 @@ export default function App() {
     const icmsPct = icmsDoAnuncio > 0 ? icmsDoAnuncio : icmsPctParaUF(o.buyerUF, icmsRegime, icmsTabela);
     const impostoPctPedido = impostoPctVenda + icmsPct;
     const custosFixosUnit = etiquetaUnit + embalagemUnit;
+    const feeReal = !!(pay && pay.tarifaML > 0 && !pay.isCalculated && o.price > 0);
     let base;
-    if (pay && pay.tarifaML > 0 && !pay.isCalculated && o.price > 0) {
+    if (feeReal) {
       const tarifaUnit = pay.tarifaML / (o.qty || 1);
       base = calcMargin(o.price, cost, tarifaUnit / o.price, freteSeller, { impostoPct: impostoPctPedido, custosFixosUnit });
     } else {
@@ -11996,7 +12032,7 @@ export default function App() {
       });
     }
     return { ...o, listing, ...base, cost, freteSeller, icmsPct, impostoPct: impostoPctPedido,
-             etiqueta: etiquetaUnit, embalagem: embalagemUnit, icmsProprio: icmsDoAnuncio > 0 };
+             etiqueta: etiquetaUnit, embalagem: embalagemUnit, icmsProprio: icmsDoAnuncio > 0, feeReal };
   })
 
   // Receita líquida do mês corrente — base dos percentuais na tela de Impostos.

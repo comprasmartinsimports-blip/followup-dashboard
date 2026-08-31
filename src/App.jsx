@@ -2608,6 +2608,455 @@ function TelaEstruturada({ cfg }) {
   );
 }
 // DRE (Demonstrativo de Resultado): estrutura zerada, sem dados por enquanto.
+// ── Conciliação bancária ───────────────────────────────────────────────────
+// Compara o extrato do banco com o que o sistema acha que aconteceu. O valor
+// está no que NÃO bate: repasse que veio menor, conta paga que o sistema não
+// registrou, lançamento que o banco nunca viu.
+const CAMPOS_EXTRATO = [
+  { key:"data",      rotulo:"Data",      obrigatorio:true,
+    achar:["data","data lancamento","data lançamento","dt","data movimento","data da operacao","data da operação"] },
+  { key:"descricao", rotulo:"Histórico", obrigatorio:true,
+    achar:["historico","histórico","descricao","descrição","lancamento","lançamento","memo","detalhe","documento"] },
+  { key:"valor",     rotulo:"Valor",     obrigatorio:true,
+    achar:["valor","valor r$","vlr","montante","credito/debito","crédito/débito"] },
+  { key:"tipo",      rotulo:"Tipo (opcional)", obrigatorio:false,
+    achar:["tipo","d/c","debito/credito","débito/crédito","natureza"] },
+];
+
+// Extrato costuma trazer o sinal no próprio valor; alguns trazem numa coluna
+// separada. Aceita os dois, e o sinal do valor manda quando existe.
+function tipoDoExtrato(valor, colunaTipo) {
+  if (valor < 0) return "saida";
+  var t = String(colunaTipo || "").trim().toLowerCase();
+  if (/^d$|debito|débito|saida|saída|pagamento/.test(t)) return "saida";
+  return "entrada";
+}
+
+var TOLERANCIA_DIAS = 5;          // o banco lança em D+1, D+2; a data raramente é igual
+// Até 35% de diferença ainda é "o mesmo lançamento com valor diferente". Parece
+// muito, e é de propósito: um repasse do Mercado Livre pode chegar bem menor que
+// o bruto por retenção ou estorno, e mostrar isso como UMA divergência de R$ 300
+// vale mais do que como duas linhas soltas que o usuário teria de cruzar na mão.
+// Um par errado fica visível lado a lado na tela e pode ser desfeito.
+var TOLERANCIA_DIVERGENCIA = 0.35;
+
+function diffDias(a, b) {
+  return Math.abs(Math.round((new Date(a + "T12:00:00") - new Date(b + "T12:00:00")) / 86400000));
+}
+
+// Casa cada linha do extrato com um movimento do sistema. Duas passadas: a
+// primeira exige o mesmo valor, a segunda aceita valor próximo e marca como
+// divergência. Sem as duas, um repasse que veio R$ 30 menor apareceria como
+// duas linhas soltas em vez de um problema a resolver.
+function conciliar(extrato, movimentos, manuais) {
+  var usados = {};
+  var linhas = (extrato || []).filter(function(e){ return !e.ignorado; });
+  var movs = (movimentos || []).slice();
+  var casadas = [], divergentes = [], soExtrato = [], resultadoPorMov = {};
+
+  function melhor(e, exigirValorIgual) {
+    var alvo = null, melhorScore = Infinity;
+    movs.forEach(function(m){
+      if (usados[m.id]) return;
+      if (m.tipo !== e.tipo) return;
+      var dd = diffDias(e.data, m.data);
+      if (dd > TOLERANCIA_DIAS) return;
+      var dv = Math.abs(m.valor - e.valor);
+      if (exigirValorIgual) { if (dv > 0.011) return; }
+      // A margem é medida sobre o valor ESPERADO, não sobre o que caiu: o
+      // esperado é a referência estável. Sobre o valor do banco, um crédito que
+      // veio menor pareceria proporcionalmente mais distante do que é.
+      else if (m.valor <= 0 || dv / m.valor > TOLERANCIA_DIVERGENCIA) return;
+      var score = dv * 100 + dd;   // valor pesa mais que data
+      if (score < melhorScore) { melhorScore = score; alvo = m; }
+    });
+    return alvo;
+  }
+
+  // Conciliação manual feita pelo usuário tem prioridade sobre qualquer palpite.
+  linhas.forEach(function(e){
+    var forcado = (manuais || {})[e.id];
+    if (!forcado) return;
+    var m = movs.find(function(x){ return x.id === forcado && !usados[x.id]; });
+    if (!m) return;
+    usados[m.id] = true; resultadoPorMov[m.id] = e.id;
+    (Math.abs(m.valor - e.valor) > 0.011 ? divergentes : casadas).push({ extrato:e, mov:m, manual:true });
+  });
+  linhas.forEach(function(e){
+    if ((manuais || {})[e.id]) return;
+    var m = melhor(e, true);
+    if (m) { usados[m.id] = true; resultadoPorMov[m.id] = e.id; casadas.push({ extrato:e, mov:m }); }
+  });
+  linhas.forEach(function(e){
+    if ((manuais || {})[e.id]) return;
+    if (casadas.some(function(c){ return c.extrato.id === e.id; })) return;
+    var m = melhor(e, false);
+    if (m) { usados[m.id] = true; resultadoPorMov[m.id] = e.id; divergentes.push({ extrato:e, mov:m }); }
+    else soExtrato.push(e);
+  });
+
+  var soSistema = movs.filter(function(m){ return !usados[m.id]; });
+  return { casadas: casadas, divergentes: divergentes, soExtrato: soExtrato, soSistema: soSistema, porMov: resultadoPorMov };
+}
+
+// Ponto de equilíbrio: quanto precisa faturar para o lucro dar zero. Só existe
+// se cada real vendido sobrar alguma coisa depois de imposto, CMV e taxa — se a
+// margem de contribuição for zero ou negativa, vender mais só aumenta o prejuízo.
+function pontoDeEquilibrio(receita, impostos, cmv, taxas, despesasFixas) {
+  if (!(receita > 0)) return null;
+  var contribuicao = receita - impostos - cmv - taxas;
+  var pct = contribuicao / receita;
+  if (pct <= 0) return { impossivel: true, pct: pct };
+  return { receita: despesasFixas / pct, pct: pct, impossivel: false };
+}
+
+// Período anterior de mesmo tamanho, para o DRE comparar. "Tudo" não tem
+// anterior — comparar com o infinito não significa nada.
+function periodoAnterior(periodo, hoje) {
+  if (periodo === "tudo") return null;
+  var dias = parseInt(periodo, 10);
+  return { de: somarDias(hoje, -2 * dias), ate: somarDias(hoje, -dias), dias: dias };
+}
+
+// Importação do extrato: mesmo leitor de CSV e .xlsx da importação de contas.
+function ImportarExtratoModal({ contasBancarias, onImportar, onClose }) {
+  const [nomeArq, setNomeArq] = useState("");
+  const [cabecalho, setCabecalho] = useState(null);
+  const [linhas, setLinhas] = useState([]);
+  const [mapa, setMapa] = useState({});
+  const [conta, setConta] = useState((contasBancarias || [])[0] ? contasBancarias[0].id : "");
+  const [erro, setErro] = useState("");
+  const [lendo, setLendo] = useState(false);
+  const fileRef = useRef(null);
+
+  async function receber(file) {
+    setErro(""); setLendo(true); setNomeArq(file.name);
+    try {
+      var matriz;
+      if (/\.xlsx$/i.test(file.name)) matriz = await lerXLSX(await file.arrayBuffer());
+      else if (/\.xls$/i.test(file.name)) throw new Error("O formato .xls (Excel antigo) não é lido aqui. Salve como .xlsx ou CSV.");
+      else matriz = lerCSV(await file.text());
+      if (matriz.length < 2) throw new Error("O extrato precisa de uma linha de cabeçalho e ao menos um lançamento.");
+      var cab = matriz[0];
+      setCabecalho(cab); setLinhas(matriz.slice(1));
+      var norm = cab.map(normalizarCabecalho), m = {}, usadas = {};
+      CAMPOS_EXTRATO.forEach(function(campo){
+        var achou = -1;
+        campo.achar.forEach(function(nome){
+          if (achou >= 0) return;
+          var alvo = normalizarCabecalho(nome);
+          var i = norm.findIndex(function(h, idx){ return !usadas[idx] && h === alvo; });
+          if (i < 0) i = norm.findIndex(function(h, idx){ return !usadas[idx] && h && h.indexOf(alvo) >= 0; });
+          if (i >= 0) achou = i;
+        });
+        if (achou >= 0) { m[campo.key] = achou; usadas[achou] = true; } else m[campo.key] = -1;
+      });
+      setMapa(m);
+    } catch (e) {
+      setErro((e && e.message) || "Não consegui ler este arquivo.");
+      setCabecalho(null); setLinhas([]);
+    } finally { setLendo(false); }
+  }
+
+  var prontas = !cabecalho ? [] : linhas.map(function(l, i){
+    function col(k){ var idx = mapa[k]; return idx >= 0 && idx < l.length ? l[idx] : ""; }
+    var data = parseDataBR(col("data"));
+    var valor = parseValorBR(col("valor"));
+    var erros = [];
+    if (!data) erros.push("data não reconhecida");
+    if (valor == null || valor === 0) erros.push("valor não reconhecido");
+    return {
+      linha: i + 2, erros: erros,
+      item: {
+        data: data, descricao: String(col("descricao") || "").trim() || "(sem histórico)",
+        valor: Math.abs(valor || 0), tipo: tipoDoExtrato(valor || 0, col("tipo")), conta: conta,
+      },
+    };
+  });
+  var validas = prontas.filter(function(p){ return !p.erros.length; });
+  var faltaObrig = CAMPOS_EXTRATO.filter(function(c){ return c.obrigatorio && (mapa[c.key] == null || mapa[c.key] < 0); });
+  var entradas = validas.filter(function(p){ return p.item.tipo === "entrada"; }).reduce(function(s,p){ return s + p.item.valor; }, 0);
+  var saidas = validas.filter(function(p){ return p.item.tipo === "saida"; }).reduce(function(s,p){ return s + p.item.valor; }, 0);
+
+  var campo = { width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"8px 10px", borderRadius:7, fontSize:12.5, boxSizing:"border-box" };
+  var cartao = { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", marginBottom:14 };
+  var tit = { fontSize:13.5, fontWeight:600, color:"var(--text-strong)", marginBottom:10 };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"var(--bg)", zIndex:700, display:"flex", flexDirection:"column" }}>
+      <div style={{ borderBottom:"1px solid var(--border)", background:"var(--bg-2)", padding:"14px 22px", display:"flex", alignItems:"center", gap:14, flexWrap:"wrap" }}>
+        <button onClick={onClose} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", width:34, height:34, borderRadius:9, cursor:"pointer", fontSize:16 }}>←</button>
+        <div>
+          <div style={{ fontWeight:600, fontSize:17, color:"var(--text-strong)" }}>Importar extrato</div>
+          <div style={{ fontSize:11.5, color:"var(--text-3)", marginTop:2 }}>{nomeArq || "CSV ou Excel (.xlsx) do seu banco"}</div>
+        </div>
+        <div style={{ flex:1 }} />
+        <button onClick={onClose} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"9px 18px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Cancelar</button>
+        <button onClick={function(){ onImportar(validas.map(function(p){ return p.item; }), conta); }}
+          disabled={!validas.length || faltaObrig.length > 0 || !conta}
+          style={{ background: validas.length && !faltaObrig.length && conta ? "var(--ui-accent)" : "var(--surface)",
+                   border: validas.length && !faltaObrig.length && conta ? "none" : "1px solid var(--border)",
+                   color: validas.length && !faltaObrig.length && conta ? "var(--ui-accent-text)" : "var(--text-4)",
+                   fontWeight:600, padding:"9px 24px", borderRadius:9,
+                   cursor: validas.length && !faltaObrig.length && conta ? "pointer" : "default", fontSize:13 }}>
+          Importar {validas.length ? validas.length + " lançamento(s)" : ""}
+        </button>
+      </div>
+      <div style={{ flex:1, overflowY:"auto", padding:"18px 22px 40px" }}>
+        <div style={{ maxWidth:1080, margin:"0 auto" }}>
+          {erro && <div style={{ background:"rgba(255,82,82,.12)", border:"1px solid #FF5252", color:"#FF5252", borderRadius:10, padding:"11px 14px", fontSize:12.5, marginBottom:14 }}>{erro}</div>}
+          <div style={cartao}>
+            <div style={tit}>1. De qual conta é este extrato?</div>
+            {(contasBancarias || []).length === 0
+              ? <div style={{ fontSize:13, color:"#FF5252" }}>Cadastre uma conta em Caixas e bancos antes de importar um extrato.</div>
+              : <select value={conta} onChange={function(e){ setConta(e.target.value); }} style={{ ...campo, maxWidth:340 }}>
+                  {(contasBancarias||[]).map(function(c){ return <option key={c.id} value={c.id}>{c.nome}</option>; })}
+                </select>}
+          </div>
+          <div style={cartao}>
+            <div style={tit}>2. Escolha o arquivo</div>
+            <input ref={fileRef} type="file" accept=".csv,.tsv,.txt,.xlsx,text/csv" style={{ display:"none" }}
+              onChange={function(e){ if (e.target.files && e.target.files[0]) receber(e.target.files[0]); e.target.value=""; }} />
+            <button onClick={function(){ if (fileRef.current) fileRef.current.click(); }}
+              style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"10px 22px", borderRadius:9, cursor:"pointer", fontSize:13 }}>
+              {lendo ? "Lendo..." : (cabecalho ? "Trocar arquivo" : "Selecionar extrato")}
+            </button>
+            <div style={{ fontSize:11.5, color:"var(--text-3)", marginTop:10, lineHeight:1.6 }}>
+              Valor negativo é entendido como saída. Se o seu banco usa uma coluna separada de D/C,
+              indique-a no mapeamento abaixo.
+            </div>
+          </div>
+          {cabecalho && <>
+            <div style={cartao}>
+              <div style={tit}>3. Confira as colunas</div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))", gap:12 }}>
+                {CAMPOS_EXTRATO.map(function(c){
+                  var vazio = mapa[c.key] == null || mapa[c.key] < 0;
+                  return <div key={c.key}>
+                    <label style={{ fontSize:11.5, color: c.obrigatorio && vazio ? "#FF5252" : "var(--text-3)", fontWeight:600, display:"block", marginBottom:4 }}>{c.rotulo}{c.obrigatorio ? " *" : ""}</label>
+                    <select value={mapa[c.key] == null ? -1 : mapa[c.key]}
+                      onChange={function(e){ setMapa(Object.assign({}, mapa, { [c.key]: parseInt(e.target.value, 10) })); }}
+                      style={{ ...campo, borderColor: c.obrigatorio && vazio ? "#FF5252" : "var(--border)" }}>
+                      <option value={-1}>— não importar —</option>
+                      {cabecalho.map(function(h,i){ return <option key={i} value={i}>{h || ("coluna " + (i+1))}</option>; })}
+                    </select>
+                  </div>;
+                })}
+              </div>
+            </div>
+            <div style={cartao}>
+              <div style={tit}>4. Confira o resultado</div>
+              <div style={{ display:"flex", gap:22, flexWrap:"wrap", marginBottom:12 }}>
+                <div><div style={{ fontSize:11, color:"var(--text-3)" }}>Entram</div><div style={{ fontSize:20, fontWeight:600, color:FIN_COR.neutro }}>{validas.length}</div></div>
+                <div><div style={{ fontSize:11, color:"var(--text-3)" }}>Créditos</div><div style={{ fontSize:20, fontWeight:600, color:FIN_COR.entrada }}>{fmt(entradas)}</div></div>
+                <div><div style={{ fontSize:11, color:"var(--text-3)" }}>Débitos</div><div style={{ fontSize:20, fontWeight:600, color:FIN_COR.saida }}>{fmt(saidas)}</div></div>
+                <div><div style={{ fontSize:11, color:"var(--text-3)" }}>Com erro</div><div style={{ fontSize:20, fontWeight:600, color: prontas.length - validas.length ? FIN_COR.saida : FIN_COR.fraco }}>{prontas.length - validas.length}</div></div>
+              </div>
+              <div style={{ ..._tableWrap, maxHeight:380, overflowY:"auto" }}>
+                <table style={_table}>
+                  <thead><tr>{["Linha","Situação","Data","Histórico","Entrada","Saída"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+                  <tbody>{prontas.slice(0,300).map(function(p,i){
+                    return <tr key={i} style={{ opacity: p.erros.length ? .55 : 1 }}>
+                      <td style={{ ..._td, color:"var(--text-4)", width:52 }}>{p.linha}</td>
+                      <td style={_td}>{p.erros.length ? <span style={{ color:FIN_COR.saida, fontSize:11.5 }}>{p.erros.join(", ")}</span> : <span style={{ color:FIN_COR.entrada, fontSize:11.5 }}>ok</span>}</td>
+                      <td style={_td}>{p.item.data ? (fmtDate(p.item.data) || p.item.data) : "—"}</td>
+                      <td style={{ ..._td, maxWidth:300, color:"var(--text-strong)" }}>{p.item.descricao}</td>
+                      <td style={_tdMono}>{p.item.tipo === "entrada" ? fmt(p.item.valor) : "—"}</td>
+                      <td style={_tdMono}>{p.item.tipo === "saida" ? fmt(p.item.valor) : "—"}</td>
+                    </tr>;
+                  })}</tbody>
+                </table>
+              </div>
+            </div>
+          </>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Conciliação: o que o banco diz contra o que o sistema acha.
+function ConciliacaoTab({ tab, setTab, periodo, setPeriodo, extrato, salvarExtrato, manuais, salvarManuais,
+                          movimentos, contasBancarias, lancamentos, salvarLancamentos }) {
+  const [importando, setImportando] = useState(false);
+  const [aba, setAba] = useState("divergentes");
+  const [fConta, setFConta] = useState("");
+  var cutoff = cutoffPeriodo(periodo);
+  var nomeConta = {}; (contasBancarias||[]).forEach(function(c){ nomeConta[c.id] = c.nome; });
+
+  var extPeriodo = (extrato || []).filter(function(e){ return e.data >= cutoff && (!fConta || e.conta === fConta); });
+  var movPeriodo = (movimentos || []).filter(function(m){ return m.data >= cutoff && (!fConta || m.conta === fConta); });
+  var r = conciliar(extPeriodo, movPeriodo, manuais);
+
+  function somar(arr, get){ return arr.reduce(function(s,x){ return s + get(x); }, 0); }
+  var difTotal = somar(r.divergentes, function(d){ return d.extrato.valor - d.mov.valor; });
+
+  function importar(itens, conta) {
+    var agora = Date.now();
+    var novos = itens.map(function(it, i){ return Object.assign({}, it, { id:"ex_"+agora+"_"+i, importadoEm:new Date().toISOString().slice(0,10) }); });
+    // Não repete o que já foi importado: mesma conta, data, valor e tipo.
+    var jaTem = {};
+    (extrato || []).forEach(function(e){ jaTem[[e.conta,e.data,e.valor.toFixed(2),e.tipo].join("|")] = true; });
+    var inedito = novos.filter(function(e){ return !jaTem[[e.conta,e.data,e.valor.toFixed(2),e.tipo].join("|")]; });
+    salvarExtrato((extrato || []).concat(inedito));
+    setImportando(false);
+    if (inedito.length < novos.length) {
+      window.alert(inedito.length + " lançamento(s) importado(s). " + (novos.length - inedito.length) +
+        " já estavam no extrato e foram ignorados.");
+    }
+  }
+  function lancarDoExtrato(e) {
+    var l = { id:"lc_"+Date.now(), data:e.data, tipo:e.tipo, categoria:"A classificar",
+              descricao:e.descricao, valor:String(e.valor), conta:e.conta, obs:"Criado da conciliação do extrato" };
+    salvarLancamentos((lancamentos || []).concat([l]));
+  }
+  function ignorar(e) { salvarExtrato((extrato || []).map(function(x){ return x.id === e.id ? Object.assign({}, x, { ignorado:true }) : x; })); }
+  function conciliarNaMao(eId, movId) { salvarManuais(Object.assign({}, manuais, { [eId]: movId })); }
+  function desfazer(eId) { var n = Object.assign({}, manuais); delete n[eId]; salvarManuais(n); }
+
+  var abas = [
+    ["divergentes", "Valor diferente", r.divergentes.length, FIN_COR.atencao],
+    ["soExtrato",   "Só no banco",     r.soExtrato.length,   FIN_COR.saida],
+    ["soSistema",   "Só no sistema",   r.soSistema.length,   FIN_COR.saida],
+    ["casadas",     "Conciliados",     r.casadas.length,     FIN_COR.entrada],
+  ];
+
+  var acoes = <>
+    <AcaoFin tipo="pri" onClick={function(){ setImportando(true); }}>⬆ Importar extrato</AcaoFin>
+    <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"12px 14px", fontSize:11.5, color:"var(--text-3)", lineHeight:1.6 }}>
+      Casa por <b>valor e data</b>, aceitando até {TOLERANCIA_DIAS} dias de diferença — banco lança em D+1.
+      Valor até {Math.round(TOLERANCIA_DIVERGENCIA*100)}% distante do esperado vira <b>divergência</b>, não duas
+      linhas soltas: um repasse que veio menor é um problema a resolver, não dois lançamentos órfãos.
+    </div>
+  </>;
+
+  if (!(extrato || []).length) {
+    return <FinanceiroShell tab={tab} setTab={setTab} titulo="Conciliação" largura={1000}
+      sub="O que caiu na conta contra o que o sistema acha que aconteceu." acoes={acoes}>
+      <VazioFin icone="🧮" titulo="Nenhum extrato importado ainda."
+        texto={<>Baixe o extrato do seu banco em CSV ou Excel e importe aqui. O sistema casa cada lançamento com o que já conhece — contas pagas, recebimentos confirmados e lançamentos — e mostra o que <b>não</b> bate: repasse que veio menor, conta paga que ninguém registrou, lançamento que o banco nunca viu.</>}
+        acao="⬆ Importar extrato" onAcao={function(){ setImportando(true); }} />
+      {importando && <ImportarExtratoModal contasBancarias={contasBancarias} onImportar={importar} onClose={function(){ setImportando(false); }} />}
+    </FinanceiroShell>;
+  }
+
+  return (
+    <FinanceiroShell tab={tab} setTab={setTab} titulo="Conciliação" largura={1320}
+      sub="O que caiu na conta contra o que o sistema acha que aconteceu."
+      periodo={periodo} setPeriodo={setPeriodo}
+      controles={(contasBancarias||[]).length > 1
+        ? <select value={fConta} onChange={function(e){ setFConta(e.target.value); }}
+            style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"7px 10px", borderRadius:8, fontSize:12.5 }}>
+            <option value="">Todas as contas</option>
+            {(contasBancarias||[]).map(function(c){ return <option key={c.id} value={c.id}>{c.nome}</option>; })}
+          </select>
+        : null}
+      kpis={[
+        { rotulo:"Conciliados", valor:String(r.casadas.length), cor:FIN_COR.entrada, nota:fmt(somar(r.casadas, function(c){ return c.extrato.valor; })) },
+        { rotulo:"Valor diferente", valor:String(r.divergentes.length), cor: r.divergentes.length ? FIN_COR.atencao : FIN_COR.fraco,
+          nota: r.divergentes.length ? (difTotal >= 0 ? "+" : "−") + fmt(Math.abs(difTotal)) + " no banco" : "nenhuma" },
+        { rotulo:"Só no banco", valor:String(r.soExtrato.length), cor: r.soExtrato.length ? FIN_COR.saida : FIN_COR.fraco, nota:"falta lançar no sistema" },
+        { rotulo:"Só no sistema", valor:String(r.soSistema.length), cor: r.soSistema.length ? FIN_COR.saida : FIN_COR.fraco, nota:"o banco não confirma" },
+      ]}
+      acoes={acoes}>
+
+      <div className="scroll-x" style={{ display:"flex", gap:6, marginBottom:12 }}>
+        {abas.map(function(a){
+          var on = aba === a[0];
+          return <button key={a[0]} onClick={function(){ setAba(a[0]); }}
+            style={{ padding:"7px 14px", borderRadius:8, border:"1px solid " + (on ? a[3] : "var(--border)"), cursor:"pointer", fontSize:12.5, fontWeight:600,
+                     background: on ? "var(--surface-3)" : "var(--surface)", color: on ? a[3] : "var(--text-3)", whiteSpace:"nowrap" }}>
+            {a[1]} <span style={{ opacity:.75 }}>({a[2]})</span>
+          </button>;
+        })}
+      </div>
+
+      {aba === "divergentes" && (r.divergentes.length === 0
+        ? <VazioFin icone="✓" titulo="Nada com valor diferente." texto="Todo lançamento que casou veio pelo valor exato que o sistema esperava." />
+        : <div style={_tableWrap}><table style={_table}>
+            <thead><tr>{["Data","No banco","Valor no banco","No sistema","Valor esperado","Diferença",""].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+            <tbody>{r.divergentes.map(function(d,i){
+              var dif = d.extrato.valor - d.mov.valor;
+              return <tr key={i}>
+                <td style={_td}>{fmtDate(d.extrato.data) || d.extrato.data}</td>
+                <td style={{ ..._td, color:"var(--text-strong)", maxWidth:220 }}>{d.extrato.descricao}</td>
+                <td style={_tdMono}>{fmt(d.extrato.valor)}</td>
+                <td style={{ ..._td, maxWidth:220 }}>{d.mov.descricao}</td>
+                <td style={_tdMono}>{fmt(d.mov.valor)}</td>
+                <td style={{ ..._tdMono, fontWeight:700, color: dif < 0 ? FIN_COR.saida : FIN_COR.entrada }}>{(dif >= 0 ? "+" : "−") + fmt(Math.abs(dif))}</td>
+                <td style={{ ..._td, textAlign:"right" }}>
+                  {d.manual && <button onClick={function(){ desfazer(d.extrato.id); }} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", fontSize:11, fontWeight:600, padding:"4px 9px", borderRadius:6, cursor:"pointer" }}>Desfazer</button>}
+                </td>
+              </tr>;
+            })}</tbody>
+          </table></div>)}
+
+      {aba === "soExtrato" && (r.soExtrato.length === 0
+        ? <VazioFin icone="✓" titulo="Nada solto no banco." texto="Todo lançamento do extrato encontrou par no sistema." />
+        : <div style={_tableWrap}><table style={_table}>
+            <thead><tr>{["Data","Histórico","Conta","Entrada","Saída","Ações"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+            <tbody>{r.soExtrato.map(function(e){
+              return <tr key={e.id}>
+                <td style={_td}>{fmtDate(e.data) || e.data}</td>
+                <td style={{ ..._td, color:"var(--text-strong)", maxWidth:320 }}>{e.descricao}</td>
+                <td style={_td}>{nomeConta[e.conta] || "—"}</td>
+                <td style={_tdMono}>{e.tipo === "entrada" ? <span style={{ color:FIN_COR.entrada }}>{fmt(e.valor)}</span> : "—"}</td>
+                <td style={_tdMono}>{e.tipo === "saida" ? <span style={{ color:FIN_COR.saida }}>{fmt(e.valor)}</span> : "—"}</td>
+                <td style={{ ..._td, textAlign:"right", whiteSpace:"nowrap" }}>
+                  <button onClick={function(){ lancarDoExtrato(e); }} style={{ background:"rgba(10,157,78,.12)", border:"none", color:"var(--ui-accent)", fontSize:11, fontWeight:600, padding:"4px 9px", borderRadius:6, cursor:"pointer", marginRight:6 }}>Lançar</button>
+                  <button onClick={function(){ ignorar(e); }} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-3)", fontSize:11, fontWeight:600, padding:"4px 9px", borderRadius:6, cursor:"pointer" }}>Ignorar</button>
+                </td>
+              </tr>;
+            })}</tbody>
+          </table></div>)}
+
+      {aba === "soSistema" && (r.soSistema.length === 0
+        ? <VazioFin icone="✓" titulo="Nada solto no sistema." texto="Todo movimento registrado aqui apareceu no extrato." />
+        : <div style={_tableWrap}><table style={_table}>
+            <thead><tr>{["Data","Movimento","Origem","Conta","Entrada","Saída","Conciliar com"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+            <tbody>{r.soSistema.map(function(m){
+              var candidatos = r.soExtrato.filter(function(e){ return e.tipo === m.tipo && diffDias(e.data, m.data) <= 15; });
+              return <tr key={m.id}>
+                <td style={_td}>{fmtDate(m.data) || m.data}</td>
+                <td style={{ ..._td, color:"var(--text-strong)", maxWidth:260 }}>{m.descricao}</td>
+                <td style={{ ..._td, fontSize:11.5, color:"var(--text-3)" }}>{ROTULO_ORIGEM[m.origem] || m.origem}</td>
+                <td style={_td}>{nomeConta[m.conta] || <span style={{ color:FIN_COR.atencao, fontSize:12 }}>sem conta</span>}</td>
+                <td style={_tdMono}>{m.tipo === "entrada" ? <span style={{ color:FIN_COR.entrada }}>{fmt(m.valor)}</span> : "—"}</td>
+                <td style={_tdMono}>{m.tipo === "saida" ? <span style={{ color:FIN_COR.saida }}>{fmt(m.valor)}</span> : "—"}</td>
+                <td style={{ ..._td, minWidth:200 }}>
+                  {candidatos.length === 0
+                    ? <span style={{ fontSize:11.5, color:"var(--text-4)" }}>nenhum candidato no extrato</span>
+                    : <select defaultValue="" onChange={function(e){ if (e.target.value) conciliarNaMao(e.target.value, m.id); }}
+                        style={{ width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"5px 8px", borderRadius:6, fontSize:11.5 }}>
+                        <option value="">— escolher —</option>
+                        {candidatos.map(function(e){ return <option key={e.id} value={e.id}>{(fmtDate(e.data)||e.data) + " · " + fmt(e.valor) + " · " + e.descricao.slice(0,28)}</option>; })}
+                      </select>}
+                </td>
+              </tr>;
+            })}</tbody>
+          </table></div>)}
+
+      {aba === "casadas" && (r.casadas.length === 0
+        ? <VazioFin icone="🧮" titulo="Nenhum lançamento conciliado no período." texto="Importe o extrato do período ou amplie o intervalo acima." />
+        : <div style={_tableWrap}><table style={_table}>
+            <thead><tr>{["Data","No banco","No sistema","Origem","Valor",""].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+            <tbody>{r.casadas.map(function(c,i){
+              return <tr key={i}>
+                <td style={_td}>{fmtDate(c.extrato.data) || c.extrato.data}</td>
+                <td style={{ ..._td, maxWidth:250, color:"var(--text-strong)" }}>{c.extrato.descricao}</td>
+                <td style={{ ..._td, maxWidth:250 }}>{c.mov.descricao}</td>
+                <td style={{ ..._td, fontSize:11.5, color:"var(--text-3)" }}>{ROTULO_ORIGEM[c.mov.origem] || c.mov.origem}</td>
+                <td style={{ ..._tdMono, color: c.mov.tipo === "entrada" ? FIN_COR.entrada : FIN_COR.saida }}>{fmt(c.mov.valor)}</td>
+                <td style={{ ..._td, textAlign:"right", fontSize:11, color:"var(--text-4)" }}>{c.manual ? "conciliado à mão" : ""}</td>
+              </tr>;
+            })}</tbody>
+          </table></div>)}
+
+      {importando && <ImportarExtratoModal contasBancarias={contasBancarias} onImportar={importar} onClose={function(){ setImportando(false); }} />}
+    </FinanceiroShell>
+  );
+}
+
 // ── Esqueleto comum do Financeiro ──────────────────────────────────────────
 // Oito telas, cada uma com o seu próprio jeito: uma punha os totais na coluna
 // da direita, outra no topo, outra misturava; o período tinha nome diferente em
@@ -2634,6 +3083,7 @@ const ABAS_FINANCEIRO = [
   { key:"contas_receber",        label:"Contas a receber" },
   { key:"lancamentos",           label:"Lançamentos" },
   { key:"dre",                   label:"DRE" },
+  { key:"conciliacao",           label:"Conciliação" },
   { key:"impostos",              label:"Impostos" },
 ];
 
@@ -3590,77 +4040,92 @@ function custosFixosNoPeriodo(custosFixos, faturamentoPeriodo, dias) {
 
 function DreTab({ enrichedOrders, contasPagar, custosFixos, recebiveisBaixados, paymentData, config, salvarConfig, lancamentos, tab, setTab, periodo, setPeriodo }) {
   const [mostrarAjustes, setMostrarAjustes] = useState(false);
+  const [comparar, setComparar] = useState(false);
   var cfg = config || financeiroConfigPadrao();
   var cutoff = cutoffPeriodo(periodo);
   var dias = periodo === "tudo" ? 365 : parseInt(periodo, 10);
   var hoje = new Date().toISOString().slice(0, 10);
   var caixa = cfg.regime === "caixa";
 
-  // ── Receita ──────────────────────────────────────────────────────────────
-  var fat=0, impostos=0, custo=0, taxas=0, nPedidos=0;
-  var pedidosForaDoCaixa = 0, valorForaDoCaixa = 0;
-  (enrichedOrders || []).forEach(function(o){
-    if (o.status === "cancelled") return;
-    var q = o.qty || 1;
-    var d = dataDeReceita(o, cfg, recebiveisBaixados, paymentData);
-    if (!d) {
-      // Venda feita e ainda não recebida: fica de fora do resultado de caixa,
-      // mas a tela precisa dizer quanto é — senão o número parece perdido.
-      if ((o.date || "") >= cutoff) { pedidosForaDoCaixa++; valorForaDoCaixa += (o.price||0)*q; }
-      return;
-    }
-    if (d < cutoff || d > hoje) return;
-    fat += (o.price||0)*q; impostos += (o.imposto||0)*q;
-    custo += (o.cost||0)*q; taxas += (o.fee||0)*q; nPedidos++;
-  });
+  // ── Apuração ─────────────────────────────────────────────────────────────
+  // Uma função só, chamada duas vezes: no período escolhido e no anterior de
+  // mesmo tamanho. Duplicar a conta para a comparação seria a receita certa
+  // para os dois números divergirem na primeira alteração.
+  function apurar(de, ate, diasPer) {
+    var fat=0, impostos=0, custo=0, taxas=0, nPedidos=0;
+    var pedidosForaDoCaixa = 0, valorForaDoCaixa = 0;
+    (enrichedOrders || []).forEach(function(o){
+      if (o.status === "cancelled") return;
+      var q = o.qty || 1;
+      var d = dataDeReceita(o, cfg, recebiveisBaixados, paymentData);
+      if (!d) {
+        if ((o.date || "") >= de && (o.date || "") <= ate) { pedidosForaDoCaixa++; valorForaDoCaixa += (o.price||0)*q; }
+        return;
+      }
+      if (d < de || d > ate) return;
+      fat += (o.price||0)*q; impostos += (o.imposto||0)*q;
+      custo += (o.cost||0)*q; taxas += (o.fee||0)*q; nPedidos++;
+    });
+    var ehMercadoria = {};
+    (cfg.categoriasMercadoria || []).forEach(function(c){ ehMercadoria[c] = true; });
+    var despesasPagas = 0, mercadoriaPaga = 0, porCategoria = {};
+    (contasPagar || []).forEach(function(c){
+      var d = dataDeDespesa(c, cfg);
+      if (!d || d < de || d > ate) return;
+      var v = parseFloat(c.valorTotal || c.valor) || 0;
+      var cat = c.categoria || "Outros";
+      if (ehMercadoria[cat]) { mercadoriaPaga += v; return; }
+      despesasPagas += v;
+      porCategoria[cat] = (porCategoria[cat] || 0) + v;
+    });
+    (lancamentos || []).forEach(function(l){
+      if (l.tipo !== "saida") return;
+      var d = String(l.data || "").slice(0, 10);
+      if (!d || d < de || d > ate) return;
+      var v = parseFloat(l.valor) || 0;
+      despesasPagas += v;
+      var cat = l.categoria || "Outros";
+      porCategoria[cat] = (porCategoria[cat] || 0) + v;
+    });
+    // O tamanho do período vem de quem chama. Derivá-lo das datas quebrava em
+    // "Tudo", cujo início é uma data-sentinela inválida: a diferença dava NaN e
+    // o rateio dos custos fixos aparecia como R$ 0,00 sem erro nenhum.
+    var fixosPrevistos = custosFixosNoPeriodo(custosFixos, fat, Math.max(1, diasPer || 0));
+    var despesas =
+      cfg.origemDespesas === "configurados" ? fixosPrevistos :
+      cfg.origemDespesas === "ambos"        ? despesasPagas + fixosPrevistos : despesasPagas;
+    var recLiq = fat - impostos, lucroBruto = recLiq - custo;
+    return {
+      fat:fat, impostos:impostos, custo:custo, taxas:taxas, nPedidos:nPedidos,
+      pedidosForaDoCaixa:pedidosForaDoCaixa, valorForaDoCaixa:valorForaDoCaixa,
+      despesasPagas:despesasPagas, mercadoriaPaga:mercadoriaPaga, porCategoria:porCategoria,
+      fixosPrevistos:fixosPrevistos, despesas:despesas,
+      recLiq:recLiq, lucroBruto:lucroBruto, lucro: lucroBruto - taxas - despesas,
+    };
+  }
 
-  // ── Despesas ─────────────────────────────────────────────────────────────
-  var ehMercadoria = {};
-  (cfg.categoriasMercadoria || []).forEach(function(c){ ehMercadoria[c] = true; });
-  var despesasPagas = 0, mercadoriaPaga = 0, porCategoria = {};
-  (contasPagar || []).forEach(function(c){
-    var d = dataDeDespesa(c, cfg);
-    if (!d || d < cutoff || d > hoje) return;
-    var v = parseFloat(c.valorTotal || c.valor) || 0;
-    var cat = c.categoria || "Outros";
-    if (ehMercadoria[cat]) { mercadoriaPaga += v; return; }   // já contada no CMV
-    despesasPagas += v;
-    porCategoria[cat] = (porCategoria[cat] || 0) + v;
-  });
-  // Lançamento manual de saída é despesa que não passou por Contas a pagar.
-  // Os que vêm de conta a pagar não entram aqui: já foram somados acima, e
-  // contá-los de novo dobraria a despesa.
-  var lancSaida = 0;
-  (lancamentos || []).forEach(function(l){
-    if (l.tipo !== "saida") return;
-    var d = String(l.data || "").slice(0, 10);
-    if (!d || d < cutoff || d > hoje) return;
-    var v = parseFloat(l.valor) || 0;
-    lancSaida += v;
-    var cat = l.categoria || "Outros";
-    porCategoria[cat] = (porCategoria[cat] || 0) + v;
-  });
-  despesasPagas += lancSaida;
-  var fixosPrevistos = custosFixosNoPeriodo(custosFixos, fat, dias);
-  var despesas =
-    cfg.origemDespesas === "configurados" ? fixosPrevistos :
-    cfg.origemDespesas === "ambos"        ? despesasPagas + fixosPrevistos :
-                                            despesasPagas;
+  var A = apurar(cutoff, hoje, dias);
+  var ant = periodoAnterior(periodo, hoje);
+  var B = comparar && ant ? apurar(ant.de, ant.ate, ant.dias) : null;
 
-  var recLiq = fat - impostos;
-  var lucroBruto = recLiq - custo;
-  var lucro = lucroBruto - taxas - despesas;
+  var fat=A.fat, impostos=A.impostos, custo=A.custo, taxas=A.taxas, nPedidos=A.nPedidos;
+  var pedidosForaDoCaixa=A.pedidosForaDoCaixa, valorForaDoCaixa=A.valorForaDoCaixa;
+
+  var despesasPagas=A.despesasPagas, mercadoriaPaga=A.mercadoriaPaga, porCategoria=A.porCategoria;
+  var fixosPrevistos=A.fixosPrevistos, despesas=A.despesas;
+  var recLiq=A.recLiq, lucroBruto=A.lucroBruto, lucro=A.lucro;
   var margemLiq = fat ? lucro/fat*100 : 0;
+  var equilibrio = pontoDeEquilibrio(fat, impostos, custo, taxas, despesas);
 
   var linhas = [
-    ["Receita bruta", fat, false, "var(--text-strong)"],
-    ["(-) Impostos e deduções", -impostos, false, "#FF7043"],
-    ["= Receita líquida", recLiq, true, "var(--text-strong)"],
-    ["(-) Custo dos produtos (CMV)", -custo, false, "#768692"],
-    ["= Lucro bruto", lucroBruto, true, "var(--text-strong)"],
-    ["(-) Taxas dos marketplaces", -taxas, false, "#FFC107"],
-    ["(-) Despesas e custos fixos", -despesas, false, "#8492a8"],
-    ["= Lucro líquido", lucro, true, lucro>=0?"#0a9d4e":"#FF5252"],
+    ["Receita bruta", fat, false, "var(--text-strong)", B && B.fat],
+    ["(-) Impostos e deduções", -impostos, false, "#FF7043", B && -B.impostos],
+    ["= Receita líquida", recLiq, true, "var(--text-strong)", B && B.recLiq],
+    ["(-) Custo dos produtos (CMV)", -custo, false, "#768692", B && -B.custo],
+    ["= Lucro bruto", lucroBruto, true, "var(--text-strong)", B && B.lucroBruto],
+    ["(-) Taxas dos marketplaces", -taxas, false, "#FFC107", B && -B.taxas],
+    ["(-) Despesas e custos fixos", -despesas, false, "#8492a8", B && -B.despesas],
+    ["= Lucro líquido", lucro, true, lucro>=0?"#0a9d4e":"#FF5252", B && B.lucro],
   ];
   var composicao = [
     { name:"Receita bruta", value:fat, cor:"#768692" },
@@ -3674,6 +4139,8 @@ function DreTab({ enrichedOrders, contasPagar, custosFixos, recebiveisBaixados, 
 
   // Avisos: cada um só aparece quando a situação que ele descreve existe.
   var avisos = [];
+  if (comparar && !ant) avisos.push({ tom:"info",
+    txt:"“Tudo” não tem período anterior de mesmo tamanho para comparar. Escolha 7, 30 ou 90 dias." });
   if (caixa && pedidosForaDoCaixa > 0) avisos.push({
     tom:"info",
     txt: pedidosForaDoCaixa + " venda(s) do período, somando " + fmt(valorForaDoCaixa) + ", ainda não entraram: " +
@@ -3706,6 +4173,12 @@ function DreTab({ enrichedOrders, contasPagar, custosFixos, recebiveisBaixados, 
            + (caixa && cfg.repasse === "confirmado" ? " · repasse do ML só quando você confirma" : "")}
       periodo={periodo} setPeriodo={setPeriodo}
       controles={<>
+        <button onClick={function(){ setComparar(function(v){ return !v; }); }} disabled={periodo === "tudo"}
+          title={periodo === "tudo" ? "“Tudo” não tem período anterior para comparar." : ""}
+          style={{ padding:"7px 14px", borderRadius:8, border:"1px solid " + (comparar ? "var(--ui-accent)" : "var(--border)"), cursor: periodo === "tudo" ? "not-allowed" : "pointer", fontSize:12, fontWeight:600,
+                   background: comparar ? "rgba(10,157,78,.12)" : "var(--surface)", color: periodo === "tudo" ? "var(--text-4)" : (comparar ? "var(--ui-accent)" : "var(--text-2)") }}>
+          ⇄ Comparar períodos
+        </button>
         <button onClick={function(){ setMostrarAjustes(function(v){ return !v; }); }}
           style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background:"var(--surface)", color:"var(--text-2)" }}>⚙ Ajustes</button>
         <button onClick={exportarPDF} style={_btnPdf} title="Salvar/Imprimir como PDF">⬇ Exportar PDF</button>
@@ -3752,11 +4225,27 @@ function DreTab({ enrichedOrders, contasPagar, custosFixos, recebiveisBaixados, 
 
       <div style={{ display:"flex", gap:14, flexWrap:"wrap", alignItems:"flex-start" }}>
         <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"8px 18px", flex:1, minWidth:340, maxWidth:560 }}>
+          {B && (
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:16, padding:"6px 0 2px", fontSize:10.5, color:"var(--text-4)", textTransform:"uppercase", letterSpacing:.5 }}>
+              <span style={{ width:110, textAlign:"right" }}>período anterior</span>
+              <span style={{ width:110, textAlign:"right" }}>este período</span>
+              <span style={{ width:74, textAlign:"right" }}>variação</span>
+            </div>
+          )}
           {linhas.map(function(l,i){
             var isTot = l[2];
-            return <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 0", borderBottom: i < linhas.length-1 ? "1px solid var(--border-soft)" : "none", background: isTot ? "linear-gradient(90deg, rgba(128,140,168,.06), transparent)" : "none" }}>
-              <span style={{ fontSize:14, fontWeight: isTot ? 800 : 500, color: isTot ? "var(--text-strong)" : "var(--text-2)" }}>{l[0]}</span>
-              <span style={{ fontSize:14, fontWeight: isTot ? 800 : 600, color: l[3], fontVariantNumeric:"tabular-nums" }}>{fmt(l[1])}</span>
+            var antV = l[4];
+            // Variação em % só faz sentido quando havia base. De zero para
+            // qualquer coisa não é "infinito por cento", é "não havia antes".
+            var varPct = (B && typeof antV === "number" && Math.abs(antV) > 0.005) ? ((l[1] - antV) / Math.abs(antV)) * 100 : null;
+            return <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:16, padding:"12px 0", borderBottom: i < linhas.length-1 ? "1px solid var(--border-soft)" : "none", background: isTot ? "linear-gradient(90deg, rgba(128,140,168,.06), transparent)" : "none" }}>
+              <span style={{ fontSize:14, fontWeight: isTot ? 800 : 500, color: isTot ? "var(--text-strong)" : "var(--text-2)", flex:1, minWidth:0 }}>{l[0]}</span>
+              {B && <span style={{ width:110, textAlign:"right", fontSize:13, color:"var(--text-4)", fontVariantNumeric:"tabular-nums" }}>{fmt(antV)}</span>}
+              <span style={{ width: B ? 110 : "auto", textAlign:"right", fontSize:14, fontWeight: isTot ? 800 : 600, color: l[3], fontVariantNumeric:"tabular-nums" }}>{fmt(l[1])}</span>
+              {B && <span style={{ width:74, textAlign:"right", fontSize:12, fontWeight:600, fontVariantNumeric:"tabular-nums",
+                     color: varPct == null ? "var(--text-4)" : (varPct >= 0 ? FIN_COR.entrada : FIN_COR.saida) }}>
+                {varPct == null ? "—" : (varPct >= 0 ? "+" : "") + varPct.toFixed(0) + "%"}
+              </span>}
             </div>;
           })}
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 0", marginTop:2, borderTop:"1px solid var(--border)" }}>
@@ -3798,6 +4287,34 @@ function DreTab({ enrichedOrders, contasPagar, custosFixos, recebiveisBaixados, 
                 </div>;
               })}
         </div>
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 18px", flex:1, minWidth:320 }}>
+          <div style={{ fontSize:13.5, fontWeight:600, color:"var(--text-strong)", marginBottom:4 }}>Ponto de equilíbrio</div>
+          <div style={{ fontSize:11.5, color:"var(--text-3)", marginBottom:10 }}>Quanto precisa faturar no período para o lucro dar zero.</div>
+          {!equilibrio
+            ? <div style={{ fontSize:13, color:"var(--text-3)" }}>Sem receita no período — não dá para medir quanto sobra de cada real vendido.</div>
+            : equilibrio.impossivel
+              ? <div style={{ fontSize:13, color:FIN_COR.saida, lineHeight:1.6 }}>
+                  Cada real vendido está saindo no negativo depois de imposto, CMV e taxa. Não existe
+                  ponto de equilíbrio: vender mais aumenta o prejuízo. O que resolve é preço ou custo,
+                  não volume.
+                </div>
+              : <div style={{ display:"flex", gap:24, flexWrap:"wrap" }}>
+                  <div><div style={{ fontSize:11, color:"var(--text-3)" }}>Faturamento necessário</div>
+                    <div style={{ fontSize:21, fontWeight:600, color: fat >= equilibrio.receita ? FIN_COR.entrada : FIN_COR.atencao }}>{fmt(equilibrio.receita)}</div></div>
+                  <div><div style={{ fontSize:11, color:"var(--text-3)" }}>Faturou</div>
+                    <div style={{ fontSize:21, fontWeight:600, color:FIN_COR.neutro }}>{fmt(fat)}</div></div>
+                  <div><div style={{ fontSize:11, color:"var(--text-3)" }}>Sobra de cada real vendido</div>
+                    <div style={{ fontSize:21, fontWeight:600, color:FIN_COR.neutro }}>{(equilibrio.pct*100).toFixed(1)}%</div></div>
+                  <div style={{ width:"100%", fontSize:11.5, color:"var(--text-3)", lineHeight:1.55 }}>
+                    {fat >= equilibrio.receita
+                      ? "Passou do ponto de equilíbrio: as despesas do período estão cobertas."
+                      : "Faltam " + fmt(equilibrio.receita - fat) + " de faturamento para cobrir as despesas do período."}
+                  </div>
+                </div>}
+        </div>
+      </div>
+
+      <div style={{ display:"flex", gap:14, flexWrap:"wrap", alignItems:"flex-start", marginTop:14 }}>
         <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 18px", flex:1, minWidth:320 }}>
           <div style={{ fontSize:13.5, fontWeight:600, color:"var(--text-strong)", marginBottom:4 }}>Previsto × pago</div>
           <div style={{ fontSize:11.5, color:"var(--text-3)", marginBottom:10 }}>Custos fixos cadastrados contra o que saiu de verdade.</div>
@@ -5839,6 +6356,7 @@ function HomeTab({ enrichedOrders, currentUser, setTab }){
       { key:"bancos", label:"Caixas e bancos", desc:"Onde o dinheiro está e quanto tem" },
       { key:"lancamentos", label:"Lançamentos", desc:"Extrato de tudo o que entrou e saiu" },
       { key:"dre", label:"DRE e conciliação", desc:"Demonstrativo de resultado" },
+      { key:"conciliacao", label:"Conciliação", desc:"O que caiu na conta x o que o sistema espera" },
       { key:"impostos", label:"Impostos", desc:"ICMS por destino, IRPJ, CSLL e custos fixos" },
     ]},
     { titulo:"Cadastro", itens:[
@@ -6949,6 +7467,7 @@ const BACKUP_KEYS = [
   { key: "prioridade_pagamento_config", label: "Regras de prioridade de pagamento" },
   { key: "financeiro_config",       label: "Regime financeiro" },
   { key: "contas_bancarias",        label: "Caixas e bancos" },
+  { key: "extrato_bancario",        label: "Extrato importado" },
   { key: "recebiveis_baixados",     label: "Recebimentos confirmados" },
   { key: "contas_bancarias",        label: "Caixas e Bancos" },
   { key: "lancamentos",             label: "Lançamentos Financeiros" },
@@ -10313,6 +10832,24 @@ export default function App() {
     try { localStorage.setItem("pedidos_compra", JSON.stringify(lista)); } catch(e) {}
     try { kvSyncPush("pedidos_compra", lista); } catch(e) {}
   }
+  const [extratoBancario, setExtratoBancarioState] = useState(function(){
+    try { var v = JSON.parse(localStorage.getItem("extrato_bancario") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
+  });
+  function salvarExtratoBancario(lista) {
+    setExtratoBancarioState(lista);
+    try { localStorage.setItem("extrato_bancario", JSON.stringify(lista)); } catch(e) {}
+    try { kvSyncPush("extrato_bancario", lista); } catch(e) {}
+  }
+  // Conciliações feitas à mão: {idDoExtrato: idDoMovimento}. Ficam separadas do
+  // extrato porque valem mesmo se o extrato for reimportado.
+  const [conciliacoesManuais, setConciliacoesManuaisState] = useState(function(){
+    try { var v = JSON.parse(localStorage.getItem("conciliacoes_manuais") || "{}"); return v && typeof v === "object" ? v : {}; } catch { return {}; }
+  });
+  function salvarConciliacoesManuais(mapa) {
+    setConciliacoesManuaisState(mapa);
+    try { localStorage.setItem("conciliacoes_manuais", JSON.stringify(mapa)); } catch(e) {}
+    try { kvSyncPush("conciliacoes_manuais", mapa); } catch(e) {}
+  }
   // Período do módulo Financeiro. Fica aqui para sobreviver à troca de aba: era
   // estado interno de cada tela, então ir ao DRE e voltar a Lançamentos jogava
   // a escolha fora.
@@ -10603,7 +11140,7 @@ export default function App() {
     "custos_fixos_config","impostos_config","irpj_csll_config","icms_por_estado","icms_regime_config","lancamentos",
     "mov_estoque","metaMensal","min_stock_anuncios","real_fees_config","pedidos_compra",
     "precificacao_extras","precos_pendentes_ml","custos_extras_config","depositos_estoque","estoque_depositos",
-    "envios_full","vendas_estoque_baixadas","sku_overrides","analise_ia_config","prioridade_pagamento_config","financeiro_config","recebiveis_baixados",
+    "envios_full","vendas_estoque_baixadas","sku_overrides","analise_ia_config","prioridade_pagamento_config","financeiro_config","recebiveis_baixados","extrato_bancario","conciliacoes_manuais",
   ]).current;
   // Para os dados guardados como dicionário (chave→valor, ex: custo por anúncio), mesclar em
   // vez de substituir por inteiro — evita que um "pull" com dados parciais do servidor apague
@@ -10643,6 +11180,8 @@ export default function App() {
     prioridade_pagamento_config: mesclarSetter(setConfigPrioridadeState),
     financeiro_config: mesclarSetter(setFinanceiroConfigState),
     recebiveis_baixados: mesclarSetter(setRecebiveisBaixadosState),
+    extrato_bancario: setExtratoBancarioState,
+    conciliacoes_manuais: mesclarSetter(setConciliacoesManuaisState),
   }).current;
   // Tipo esperado de cada chave — usado para blindar contra um valor no formato errado
   // (ex: um objeto onde deveria vir uma lista) travando a tela com "x.filter is not a function".
@@ -10658,6 +11197,7 @@ export default function App() {
     custos_extras_config: "object", analise_ia_config: "object",
     prioridade_pagamento_config: "object",
     financeiro_config: "object", recebiveis_baixados: "object",
+    extrato_bancario: "array", conciliacoes_manuais: "object",
   }).current;
   const lastSyncRef = useRef({}); // key -> string JSON já sincronizado (evita reenviar/reaplicar sem necessidade)
 
@@ -11653,6 +12193,7 @@ export default function App() {
               { key:"bancos", label:"Caixas e bancos" },
               { key:"lancamentos", label:"Lançamentos" },
               { key:"dre", label:"DRE e conciliação" },
+              { key:"conciliacao", label:"Conciliação" },
               { key:"impostos", label:"Impostos" },
             ]},
             { titulo:"Cadastro", itens:[
@@ -12266,6 +12807,11 @@ export default function App() {
         {tab === "fluxo_caixa" && <FluxoCaixaTab tab={tab} saldoEmCaixa={saldoEmCaixa} temContasBancarias={(contasBancarias||[]).length > 0}
           contasPagar={contasPagar} enrichedOrders={enrichedOrders} paymentData={paymentData}
           recebiveisBaixados={recebiveisBaixados} lancamentos={lancamentos} custosFixos={custosFixos} setTab={setTab} />}
+        {tab === "conciliacao" && <ConciliacaoTab tab={tab} setTab={setTab} periodo={periodoFin} setPeriodo={setPeriodoFin}
+          extrato={extratoBancario} salvarExtrato={salvarExtratoBancario}
+          manuais={conciliacoesManuais} salvarManuais={salvarConciliacoesManuais}
+          movimentos={movimentosCaixa} contasBancarias={contasBancarias}
+          lancamentos={lancamentos} salvarLancamentos={salvarLancamentos} />}
         {tab === "bancos" && <BancosTab tab={tab} contasBancarias={contasBancarias} salvar={salvarContasBancarias} movimentos={movimentosCaixa} setTab={setTab} />}
         {tab === "lancamentos" && <LancamentosTab tab={tab} setTab={setTab} periodo={periodoFin} setPeriodo={setPeriodoFin} lancamentos={lancamentos} salvar={salvarLancamentos} movimentos={movimentosCaixa} contasBancarias={contasBancarias} categorias={categoriasPagar} />}
         {tab === "compras" && <ComprasTab produtos={produtos} pedidos={pedidosCompra} salvar={salvarPedidosCompra} />}

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef, Children, cloneElement } f
 import {
   ResponsiveContainer, LineChart, Line, AreaChart, Area,
   PieChart, Pie, Cell, BarChart, Bar,
-  XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, Legend,
+  XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, Legend, ReferenceLine,
 } from "recharts";
 import { BR_VIEWBOX, BR_ESTADOS } from "./brazilMap.js";
 
@@ -559,6 +559,7 @@ const ABA_INFO = {
   compras:["🛒","Compras","Pedidos de compra e reposição de estoque."],
   estoque:["📦","Estoque","Saldo por depósito, baixa automática e estoque mínimo."],
   contas_pagar:["⬇️","Contas a pagar","Despesas, vencimentos e baixas."],
+  fluxo_caixa:["📈","Fluxo de caixa","Saldo projetado dia a dia e o dia em que ele acaba."],
   bancos:["🏦","Caixas e bancos","Onde o dinheiro está, com saldo calculado."],
   lancamentos:["📒","Lançamentos","Extrato de tudo o que entrou e saiu."],
   prioridade_pagamento:["🎯","Prioridade de pagamento","Que contas pagar primeiro, com o caixa que você tem."],
@@ -1395,6 +1396,10 @@ var PALETA_SISTEMA = ["#768692", "#c2a878", "#3a4550", "#b5714e"];
 var PALETA_ABC = ["#768692","#00A3B5","#0a9d4e","#FFC107","#FF7043","#768592","#E7515A","#5A6B86"];
 
 // Tooltip padrão em R$ (respeita o tema via var(--...)).
+function fmtDiaCurto(iso){
+  var p = String(iso || "").slice(0, 10).split("-");
+  return p.length === 3 ? p[2] + "/" + p[1] : String(iso || "");
+}
 function TipMoeda({ active, payload, label }){
   if(!active || !payload || !payload.length) return null;
   return (
@@ -2595,6 +2600,370 @@ function TelaEstruturada({ cfg }) {
   );
 }
 // DRE (Demonstrativo de Resultado): estrutura zerada, sem dados por enquanto.
+// ── Fluxo de caixa ─────────────────────────────────────────────────────────
+// Projeção dia a dia do saldo. Diferente do DRE de propósito: o DRE só conta o
+// repasse que você CONFIRMOU, porque olha para trás e precisa ser exato. A
+// projeção olha para frente, onde não existe nada confirmado — ela usa a data
+// prevista de liberação do Mercado Livre. São perguntas diferentes, e a tela diz isso.
+function somarDias(iso, n) {
+  var d = new Date(iso + "T12:00:00");
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function projetarFluxo(opts) {
+  var hoje = opts.hoje || new Date().toISOString().slice(0, 10);
+  var fim = somarDias(hoje, opts.dias || 30);
+  var adiam = opts.adiamentos || {};
+  var eventos = [];
+
+  // Saídas: contas em aberto. Uma conta já vencida não fica no passado — ela
+  // ainda vai sair do caixa, e o dia mais cedo possível é hoje.
+  (opts.contasPagar || []).forEach(function(c){
+    if (c.status === "paga" || c.status === "cancelada") return;
+    var v = parseFloat(c.valorTotal || c.valor) || 0;
+    if (v <= 0) return;
+    var base = c.vencimento || hoje;
+    if (base < hoje) base = hoje;
+    var d = adiam[c.id] ? somarDias(base, adiam[c.id]) : base;
+    if (d > fim) return;
+    eventos.push({ data:d, tipo:"saida", valor:v, descricao:c.descricao || "(sem fornecedor)",
+                   categoria:c.categoria || "Outros", origem:"conta_pagar", refId:c.id,
+                   vencida: (c.vencimento || "") < hoje, adiada: !!adiam[c.id] });
+  });
+
+  // Entradas: repasses ainda não confirmados, na data prevista pelo ML. Um
+  // repasse cuja data já passou e que você não confirmou entra hoje — o dinheiro
+  // não some, só está atrasado em relação ao anunciado.
+  //
+  // Pedido SEM data prevista fica de fora. Chutar que cai hoje seria o erro mais
+  // caro que esta tela pode cometer: infla o saldo, esconde o dia em que o caixa
+  // acaba, e o usuário só descobre quando o pagamento volta. O total não
+  // projetado é devolvido para a tela dizer quanto é.
+  var semPrevisao = 0, nSemPrevisao = 0;
+  (opts.enrichedOrders || []).forEach(function(o){
+    if (o.status === "cancelled") return;
+    if ((opts.recebiveisBaixados || {})[String(o.id)]) return;   // já entrou no saldo
+    var pay = (opts.paymentData || {})[String(o.id)];
+    var v = pay && pay.netAmount ? pay.netAmount : (o.price || 0) * (o.qty || 1);
+    if (v <= 0) return;
+    var prev = pay && pay.releaseDate ? String(pay.releaseDate).slice(0,10) : "";
+    if (!prev) { semPrevisao += v; nSemPrevisao++; return; }
+    var d = prev < hoje ? hoje : prev;
+    if (d > fim) return;
+    eventos.push({ data:d, tipo:"entrada", valor:v, descricao:"Repasse ML · pedido #" + o.id,
+                   categoria:"Vendas", origem:"recebivel", refId:o.id });
+  });
+
+  // Lançamentos manuais agendados para o futuro.
+  (opts.lancamentos || []).forEach(function(l){
+    var d = String(l.data || "").slice(0,10);
+    var v = parseFloat(l.valor) || 0;
+    if (!d || d <= hoje || d > fim || v <= 0) return;
+    eventos.push({ data:d, tipo: l.tipo === "entrada" ? "entrada" : "saida", valor:v,
+                   descricao:l.descricao || "(lançamento)", categoria:l.categoria || "Outros", origem:"manual", refId:l.id });
+  });
+
+  // Custos fixos previstos. Só os de valor em R$: os definidos como % do
+  // faturamento dependem de uma venda que ainda não aconteceu, e projetá-los
+  // seria inventar receita para justificar despesa.
+  if (opts.incluirFixos) {
+    var mensal = (opts.custosFixos || []).filter(function(c){ return c.tipo !== "%"; })
+      .reduce(function(s,c){ return s + (parseFloat(c.valor) || 0); }, 0);
+    if (mensal > 0) {
+      var dia = Math.min(28, Math.max(1, parseInt(opts.diaFixos, 10) || 5));
+      var cursor = new Date(hoje + "T12:00:00");
+      cursor.setDate(1);
+      for (var m = 0; m < 14; m++) {
+        var iso = cursor.getFullYear() + "-" + String(cursor.getMonth()+1).padStart(2,"0") + "-" + String(dia).padStart(2,"0");
+        if (iso > hoje && iso <= fim) {
+          eventos.push({ data:iso, tipo:"saida", valor:mensal, descricao:"Custos fixos do mês (previsto)",
+                         categoria:"Custos fixos", origem:"previsto" });
+        }
+        cursor.setMonth(cursor.getMonth() + 1);
+      }
+    }
+  }
+
+  // Agrupa por dia e vai acumulando o saldo.
+  var porDia = {};
+  eventos.forEach(function(e){
+    if (!porDia[e.data]) porDia[e.data] = { data:e.data, entradas:0, saidas:0, itens:[] };
+    porDia[e.data][e.tipo === "entrada" ? "entradas" : "saidas"] += e.valor;
+    porDia[e.data].itens.push(e);
+  });
+
+  var linha = [], saldo = parseFloat(opts.saldoInicial) || 0;
+  var d2 = hoje;
+  while (d2 <= fim) {
+    var dia2 = porDia[d2] || { data:d2, entradas:0, saidas:0, itens:[] };
+    saldo += dia2.entradas - dia2.saidas;
+    linha.push({ data:d2, entradas:dia2.entradas, saidas:dia2.saidas, saldo:saldo,
+                 itens:dia2.itens.sort(function(a,b){ return b.valor - a.valor; }) });
+    d2 = somarDias(d2, 1);
+  }
+  var primeiroNegativo = linha.find(function(x){ return x.saldo < 0; });
+  var menor = linha.reduce(function(a,b){ return b.saldo < a.saldo ? b : a; }, linha[0]);
+  return {
+    linha: linha,
+    entradas: linha.reduce(function(s,x){ return s + x.entradas; }, 0),
+    saidas: linha.reduce(function(s,x){ return s + x.saidas; }, 0),
+    saldoFinal: linha.length ? linha[linha.length-1].saldo : (parseFloat(opts.saldoInicial) || 0),
+    primeiroNegativo: primeiroNegativo || null,
+    menor: menor || null,
+    semPrevisao: semPrevisao, nSemPrevisao: nSemPrevisao,
+  };
+}
+
+// Fluxo de caixa: o saldo dia a dia daqui para frente, e o dia em que ele acaba.
+function FluxoCaixaTab({ saldoEmCaixa, temContasBancarias, contasPagar, enrichedOrders, paymentData,
+                         recebiveisBaixados, lancamentos, custosFixos, setTab }) {
+  const [dias, setDias] = useState(30);
+  const [incluirFixos, setIncluirFixos] = useState(true);
+  const [diaFixos, setDiaFixos] = useState(5);
+  const [adiamentos, setAdiamentos] = useState({});   // simulação, não é gravada
+  const [diaAberto, setDiaAberto] = useState(null);
+  var hoje = new Date().toISOString().slice(0, 10);
+
+  var proj = projetarFluxo({
+    hoje: hoje, dias: dias, saldoInicial: saldoEmCaixa || 0,
+    contasPagar: contasPagar, enrichedOrders: enrichedOrders, paymentData: paymentData,
+    recebiveisBaixados: recebiveisBaixados, lancamentos: lancamentos,
+    custosFixos: custosFixos, incluirFixos: incluirFixos, diaFixos: diaFixos,
+    adiamentos: adiamentos,
+  });
+  // Sem adiamento nenhum, para mostrar o efeito da simulação.
+  var base = projetarFluxo({
+    hoje: hoje, dias: dias, saldoInicial: saldoEmCaixa || 0,
+    contasPagar: contasPagar, enrichedOrders: enrichedOrders, paymentData: paymentData,
+    recebiveisBaixados: recebiveisBaixados, lancamentos: lancamentos,
+    custosFixos: custosFixos, incluirFixos: incluirFixos, diaFixos: diaFixos, adiamentos: {},
+  });
+  var simulando = Object.keys(adiamentos).length > 0;
+
+  var dadosGrafico = proj.linha.map(function(d){
+    return { dia: fmtDiaCurto(d.data), data: d.data, Saldo: Math.round(d.saldo * 100) / 100 };
+  });
+  var comMovimento = proj.linha.filter(function(d){ return d.entradas > 0 || d.saidas > 0; });
+  // Saídas ainda não pagas, para a simulação de adiamento.
+  var saidasFuturas = [];
+  proj.linha.forEach(function(d){
+    d.itens.forEach(function(i){ if (i.tipo === "saida" && i.origem === "conta_pagar") saidasFuturas.push(Object.assign({ dia:d.data }, i)); });
+  });
+
+  function adiar(id, d){
+    setAdiamentos(function(a){
+      var n = Object.assign({}, a);
+      if (!d) delete n[id]; else n[id] = d;
+      return n;
+    });
+  }
+
+  var cartao = { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px" };
+  var COR_SALDO = "#768692", COR_RUIM = "#FF5252", COR_BOM = "#0a9d4e";
+
+  if (!temContasBancarias) {
+    return <div style={{ padding:2, maxWidth:820 }}>
+      <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)", marginBottom:14 }}>Fluxo de caixa</div>
+      <div style={{ ...cartao, textAlign:"center", padding:"54px 24px" }}>
+        <div style={{ fontSize:36, marginBottom:10 }}>📈</div>
+        <div style={{ fontWeight:600, fontSize:16, color:"var(--text-strong)" }}>Falta dizer de onde a projeção parte.</div>
+        <div style={{ fontSize:13.5, color:"var(--text-3)", marginTop:8, lineHeight:1.65, maxWidth:520, margin:"8px auto 0" }}>
+          A projeção é o saldo de hoje mais o que entra e sai a cada dia. Sem nenhuma conta em
+          <b> Caixas e bancos</b>, não há saldo de hoje — e uma projeção que começa do zero não diz nada.
+        </div>
+        {setTab && <button onClick={function(){ setTab("bancos"); }}
+          style={{ marginTop:18, background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"10px 24px", borderRadius:9, cursor:"pointer", fontSize:13 }}>
+          Cadastrar contas →
+        </button>}
+      </div>
+    </div>;
+  }
+
+  return (
+    <div style={{ padding:2, maxWidth:1240 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14, flexWrap:"wrap" }}>
+        <div>
+          <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Fluxo de caixa</div>
+          <div style={{ fontSize:12.5, color:"var(--text-3)" }}>Saldo projetado dia a dia, a partir do que você tem hoje.</div>
+        </div>
+        <div style={{ flex:1 }} />
+        {[30,60,90].map(function(n){
+          var on = dias === n;
+          return <button key={n} onClick={function(){ setDias(n); setDiaAberto(null); }}
+            style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600,
+                     background: on ? "#768692" : "var(--surface)", color: on ? "#fff" : "var(--text-3)" }}>{n} dias</button>;
+        })}
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12, marginBottom:14 }}>
+        {[
+          ["Saldo hoje", fmt(saldoEmCaixa || 0), (saldoEmCaixa||0) >= 0 ? "var(--text-strong)" : COR_RUIM, "de Caixas e bancos"],
+          ["Entra em " + dias + " dias", fmt(proj.entradas), COR_BOM, "repasses e lançamentos"],
+          ["Sai em " + dias + " dias", fmt(proj.saidas), COR_RUIM, incluirFixos ? "contas e custos fixos" : "contas a pagar"],
+          ["Saldo ao fim", fmt(proj.saldoFinal), proj.saldoFinal >= 0 ? COR_BOM : COR_RUIM,
+            proj.menor ? "menor: " + fmt(proj.menor.saldo) + " em " + (fmtDate(proj.menor.data)||proj.menor.data) : ""],
+        ].map(function(k,i){
+          return <div key={i} style={cartao}>
+            <div style={{ fontSize:11.5, color:"var(--text-3)" }}>{k[0]}</div>
+            <div style={{ fontSize:21, fontWeight:600, color:k[2], marginTop:2, fontVariantNumeric:"tabular-nums" }}>{k[1]}</div>
+            <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:2 }}>{k[3]}</div>
+          </div>;
+        })}
+      </div>
+
+      {proj.primeiroNegativo && (
+        <div style={{ background:"rgba(255,82,82,.10)", border:"1px solid rgba(255,82,82,.5)", borderRadius:10, padding:"12px 16px", marginBottom:14, fontSize:13.5, color:"var(--text-2)", lineHeight:1.6 }}>
+          <b style={{ color:COR_RUIM }}>O caixa fica negativo em {fmtDate(proj.primeiroNegativo.data) || proj.primeiroNegativo.data}</b>
+          {" "}— saldo de {fmt(proj.primeiroNegativo.saldo)} naquele dia. Adie ou negocie alguma saída antes dessa data,
+          ou antecipe entrada. Use a simulação abaixo para ver o efeito.
+        </div>
+      )}
+
+      <ChartCard
+        titulo="Saldo projetado"
+        sub={"Do saldo de hoje até " + (fmtDate(somarDias(hoje, dias)) || somarDias(hoje, dias)) + (simulando ? " · com os adiamentos simulados" : "")}
+        flex={null} minW={0}>
+        <ResponsiveContainer width="100%" height={300}>
+          <AreaChart data={dadosGrafico} margin={{ top:24, right:16, left:6, bottom:0 }}>
+            <defs>
+              <linearGradient id="gradSaldo" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={COR_SALDO} stopOpacity={0.30} />
+                <stop offset="100%" stopColor={COR_SALDO} stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} vertical={false} />
+            <XAxis dataKey="dia" tick={{ fill:CHART_AXIS, fontSize:11 }} tickLine={false} axisLine={false} minTickGap={26} />
+            <YAxis tick={{ fill:CHART_AXIS, fontSize:11 }} tickLine={false} axisLine={false}
+              tickFormatter={function(v){ return (v < 0 ? "-" : "") + "R$" + (Math.abs(v)>=1000 ? (Math.abs(v)/1000).toFixed(0)+"k" : Math.abs(v)); }} />
+            <RTooltip content={<TipMoeda />} cursor={{ stroke:CHART_AXIS, strokeWidth:1 }} />
+            <ReferenceLine y={0} stroke={COR_RUIM} strokeWidth={1.5} strokeDasharray="4 3" />
+            {proj.primeiroNegativo && (
+              <ReferenceLine x={fmtDiaCurto(proj.primeiroNegativo.data)} stroke={COR_RUIM} strokeWidth={1.5}
+                label={{ value:"caixa acaba", position:"top", fill:COR_RUIM, fontSize:11 }} />
+            )}
+            <Area type="monotone" dataKey="Saldo" stroke={COR_SALDO} strokeWidth={2} fill="url(#gradSaldo)" dot={false}
+              activeDot={{ r:5, strokeWidth:2, stroke:"var(--surface)" }} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </ChartCard>
+
+      <div style={{ display:"flex", gap:14, flexWrap:"wrap", alignItems:"flex-start", marginTop:14 }}>
+        <div style={{ ...cartao, flex:2, minWidth:420 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:4, gap:10, flexWrap:"wrap" }}>
+            <div style={{ fontSize:13.5, fontWeight:600, color:"var(--text-strong)" }}>Dias com movimento</div>
+            <label style={{ display:"flex", alignItems:"center", gap:7, fontSize:12, color:"var(--text-3)", cursor:"pointer" }}>
+              <input type="checkbox" checked={incluirFixos} onChange={function(e){ setIncluirFixos(e.target.checked); }} />
+              incluir custos fixos previstos, dia
+              <input type="number" min="1" max="28" value={diaFixos} onChange={function(e){ setDiaFixos(e.target.value); }}
+                style={{ width:52, background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"3px 6px", borderRadius:6, fontSize:12 }} />
+            </label>
+          </div>
+          <div style={{ fontSize:11.5, color:"var(--text-3)", marginBottom:10 }}>Clique num dia para ver o que compõe.</div>
+          {comMovimento.length === 0
+            ? <div style={{ fontSize:13, color:"var(--text-3)", padding:"18px 0" }}>Nenhuma entrada ou saída prevista nos próximos {dias} dias.</div>
+            : <div style={{ ..._tableWrap, maxHeight:400, overflowY:"auto" }}>
+                <table style={_table}>
+                  <thead><tr>{["Dia","Entradas","Saídas","Saldo no fim do dia"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+                  <tbody>
+                    {comMovimento.map(function(d){
+                      var neg = d.saldo < 0;
+                      var aberto = diaAberto === d.data;
+                      return <React.Fragment key={d.data}>
+                        <tr onClick={function(){ setDiaAberto(aberto ? null : d.data); }} style={{ cursor:"pointer", background: neg ? "rgba(255,82,82,.07)" : "transparent" }}>
+                          <td style={_td}>{aberto ? "▾ " : "▸ "}{fmtDate(d.data) || d.data}</td>
+                          <td style={_tdMono}>{d.entradas > 0 ? <span style={{ color:COR_BOM }}>{fmt(d.entradas)}</span> : "—"}</td>
+                          <td style={_tdMono}>{d.saidas > 0 ? <span style={{ color:COR_RUIM }}>{fmt(d.saidas)}</span> : "—"}</td>
+                          <td style={{ ..._tdMono, fontWeight:700, color: neg ? COR_RUIM : "var(--text-strong)" }}>{fmt(d.saldo)}</td>
+                        </tr>
+                        {aberto && d.itens.map(function(i,k){
+                          return <tr key={k} style={{ background:"var(--surface-3)" }}>
+                            <td style={{ ..._td, paddingLeft:30, fontSize:12, color:"var(--text-2)" }} colSpan={2}>
+                              {i.descricao}
+                              {i.vencida && <span style={{ marginLeft:6, fontSize:10, color:COR_RUIM }}>vencida</span>}
+                              {i.adiada && <span style={{ marginLeft:6, fontSize:10, color:"#FFC107" }}>adiada na simulação</span>}
+                              {i.origem === "previsto" && <span style={{ marginLeft:6, fontSize:10, color:"var(--text-4)" }}>previsto, não lançado</span>}
+                            </td>
+                            <td style={{ ..._td, fontSize:12, color:"var(--text-3)" }}>{i.categoria}</td>
+                            <td style={{ ..._tdMono, fontSize:12, color: i.tipo === "entrada" ? COR_BOM : COR_RUIM }}>
+                              {(i.tipo === "entrada" ? "+" : "-") + fmt(i.valor).replace("R$ ", "R$ ")}
+                            </td>
+                          </tr>;
+                        })}
+                      </React.Fragment>;
+                    })}
+                  </tbody>
+                </table>
+              </div>}
+        </div>
+
+        <div style={{ ...cartao, flex:1, minWidth:320 }}>
+          <div style={{ fontSize:13.5, fontWeight:600, color:"var(--text-strong)", marginBottom:4 }}>E se eu adiar?</div>
+          <div style={{ fontSize:11.5, color:"var(--text-3)", marginBottom:12, lineHeight:1.55 }}>
+            Simulação — <b>nada é alterado</b> nas suas contas. Serve para achar o adiamento que salva o mês.
+          </div>
+          {saidasFuturas.length === 0
+            ? <div style={{ fontSize:13, color:"var(--text-3)" }}>Nenhuma conta a pagar no horizonte.</div>
+            : <div style={{ display:"flex", flexDirection:"column", gap:9, maxHeight:330, overflowY:"auto" }}>
+                {saidasFuturas.slice(0, 20).map(function(i){
+                  return <div key={i.refId} style={{ borderBottom:"1px solid var(--border-soft)", paddingBottom:8 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", gap:8, alignItems:"baseline" }}>
+                      <span style={{ fontSize:12.5, color:"var(--text-strong)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{i.descricao}</span>
+                      <span style={{ fontSize:12.5, fontWeight:600, color:COR_RUIM, whiteSpace:"nowrap" }}>{fmt(i.valor)}</span>
+                    </div>
+                    <div style={{ display:"flex", gap:5, alignItems:"center", marginTop:5 }}>
+                      <span style={{ fontSize:10.5, color:"var(--text-4)", marginRight:2 }}>{fmtDate(i.dia) || i.dia}</span>
+                      {[7,15,30].map(function(n){
+                        var on = adiamentos[i.refId] === n;
+                        return <button key={n} onClick={function(){ adiar(i.refId, on ? 0 : n); }}
+                          style={{ fontSize:10.5, fontWeight:600, padding:"3px 8px", borderRadius:6, cursor:"pointer",
+                                   border:"1px solid " + (on ? "#FFC107" : "var(--border)"),
+                                   background: on ? "rgba(255,193,7,.16)" : "var(--surface)",
+                                   color: on ? "#B8860B" : "var(--text-3)" }}>+{n}d</button>;
+                      })}
+                    </div>
+                  </div>;
+                })}
+              </div>}
+          {simulando && (
+            <div style={{ marginTop:12, paddingTop:10, borderTop:"1px solid var(--border)" }}>
+              <div style={{ fontSize:11.5, color:"var(--text-3)" }}>Saldo ao fim do período</div>
+              <div style={{ display:"flex", gap:10, alignItems:"baseline", flexWrap:"wrap" }}>
+                <span style={{ fontSize:13, color:"var(--text-4)", textDecoration:"line-through" }}>{fmt(base.saldoFinal)}</span>
+                <span style={{ fontSize:19, fontWeight:700, color: proj.saldoFinal >= 0 ? COR_BOM : COR_RUIM }}>{fmt(proj.saldoFinal)}</span>
+              </div>
+              <div style={{ fontSize:11.5, color:"var(--text-3)", marginTop:6, lineHeight:1.55 }}>
+                {base.primeiroNegativo && !proj.primeiroNegativo
+                  ? "Com esses adiamentos o caixa não fica negativo no período."
+                  : base.primeiroNegativo && proj.primeiroNegativo
+                    ? ("O caixa ainda fica negativo, agora em " + (fmtDate(proj.primeiroNegativo.data) || proj.primeiroNegativo.data) + ".")
+                    : "O adiamento não muda o total que sai — só quando ele sai. Lembre dos juros e da multa da conta adiada."}
+              </div>
+              <button onClick={function(){ setAdiamentos({}); }}
+                style={{ marginTop:10, background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>Limpar simulação</button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {proj.nSemPrevisao > 0 && (
+        <div style={{ marginTop:12, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"11px 14px", fontSize:12.5, color:"var(--text-3)", lineHeight:1.6 }}>
+          <b>{fmt(proj.semPrevisao)}</b> em {proj.nSemPrevisao} repasse(s) ficaram <b>fora</b> da projeção: o
+          Mercado Livre ainda não informou a data de liberação deles. Chutar uma data infla o saldo e
+          esconde o dia em que o caixa acaba — quando a previsão chegar, eles aparecem sozinhos.
+        </div>
+      )}
+      <div style={{ marginTop:12, fontSize:11.5, color:"var(--text-3)", background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"11px 14px", lineHeight:1.65 }}>
+        A projeção usa a <b>data prevista de liberação</b> do Mercado Livre para as entradas — no DRE a
+        receita só conta quando você confirma o recebimento. Não é contradição: o DRE olha para trás e
+        precisa ser exato, a projeção olha para frente, onde nada está confirmado. Conta vencida e ainda
+        não paga entra <b>hoje</b>, porque o dinheiro ainda vai sair. Custos fixos em % do faturamento
+        ficam de fora da projeção: dependem de uma venda que ainda não aconteceu.
+      </div>
+    </div>
+  );
+}
+
 // ── Caixas, bancos e movimentos ────────────────────────────────────────────
 // O extrato NÃO é guardado. Ele é montado na hora a partir do que já existe:
 // contas a pagar quitadas, recebimentos confirmados e lançamentos manuais.
@@ -5411,6 +5780,7 @@ function HomeTab({ enrichedOrders, currentUser, setTab }){
       { key:"notas_fiscais", label:"Notas fiscais", desc:"Emissão e consulta" },
     ]},
     { titulo:"Financeiro", itens:[
+      { key:"fluxo_caixa", label:"Fluxo de caixa", desc:"Saldo projetado dia a dia" },
       { key:"contas_pagar", label:"Contas a pagar", desc:"Despesas e vencimentos" },
       { key:"prioridade_pagamento", label:"Prioridade de pagamento", desc:"Que contas pagar primeiro com o caixa que você tem" },
       { key:"contas_receber", label:"Contas a receber", desc:"Recebíveis dos marketplaces" },
@@ -11225,6 +11595,7 @@ export default function App() {
               { key:"notas_fiscais", label:"Notas fiscais" },
             ]},
             { titulo:"Financeiro", itens:[
+              { key:"fluxo_caixa", label:"Fluxo de caixa" },
               { key:"contas_pagar", label:"Contas a pagar" },
               { key:"prioridade_pagamento", label:"Prioridade de pagamento" },
               { key:"contas_receber", label:"Contas a receber" },
@@ -11841,6 +12212,9 @@ export default function App() {
           baixados={recebiveisBaixados} setBaixados={setRecebiveisBaixados} config={financeiroConfig} />}
         {tab === "contas_pagar" && <ContasPagarTab contas={contasPagar} salvar={salvarContasPagar} contasBancarias={contasBancarias} />}
         {tab === "prioridade_pagamento" && <PrioridadePagamentoTab contas={contasPagar} salvarContas={salvarContasPagar} config={configPrioridade} salvarConfig={setConfigPrioridade} saldoEmCaixa={saldoEmCaixa} temContasBancarias={(contasBancarias||[]).length > 0} />}
+        {tab === "fluxo_caixa" && <FluxoCaixaTab saldoEmCaixa={saldoEmCaixa} temContasBancarias={(contasBancarias||[]).length > 0}
+          contasPagar={contasPagar} enrichedOrders={enrichedOrders} paymentData={paymentData}
+          recebiveisBaixados={recebiveisBaixados} lancamentos={lancamentos} custosFixos={custosFixos} setTab={setTab} />}
         {tab === "bancos" && <BancosTab contasBancarias={contasBancarias} salvar={salvarContasBancarias} movimentos={movimentosCaixa} setTab={setTab} />}
         {tab === "lancamentos" && <LancamentosTab lancamentos={lancamentos} salvar={salvarLancamentos} movimentos={movimentosCaixa} contasBancarias={contasBancarias} categorias={categoriasPagar} />}
         {tab === "compras" && <ComprasTab produtos={produtos} pedidos={pedidosCompra} salvar={salvarPedidosCompra} />}

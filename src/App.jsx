@@ -1632,7 +1632,7 @@ function RelatoriosTab({ enrichedOrders }) {
 }
 
 // Contas a receber: recebíveis gerados automaticamente dos pedidos do Mercado Livre.
-function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, config }) {
+function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, config, tab, setTab }) {
   const [busca, setBusca] = useState("");
   const [mostrarFiltros, setMostrarFiltros] = useState(true);
   const [mostrarAcoes, setMostrarAcoes] = useState(true);
@@ -1665,17 +1665,39 @@ function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, 
   function limpar(){ setFSituacao("todas"); setBusca(""); }
   function exportar(){ baixarCSV("contas-receber", ["Cliente","Origem","Nº pedido","Previsão","Valor","Situação"], lista.map(function(r){ return [r.cliente, r.origem, r.id, r.previsao||"", r.valor.toFixed(2), r.recebido?"Recebido":"A receber"]; })); }
   function imprimir(){ baixarPDF("contas-a-receber", ["Cliente","Origem","Nº pedido","Previsão","Valor","Situação"], lista.map(function(r){ return [r.cliente, r.origem, "#"+r.id, r.previsao?(fmtDate(r.previsao)||r.previsao):"—", fmt(r.valor), r.recebido?"Recebido":"A receber"]; })); }
+  var nAberto = linhas.filter(function(r){ return !r.recebido; }).length;
   return (
-    <div style={{ padding:2 }}>
+    <FinanceiroShell tab={tab} setTab={setTab} titulo="Contas a receber" largura={1400}
+      sub={cfgFin.repasse === "confirmado"
+        ? "Confirmar aqui é o que faz a venda virar receita no DRE e entrar no saldo dos bancos."
+        : "Repasses do Mercado Livre, pela data de liberação anunciada."}
+      kpis={[
+        { rotulo:"A receber", valor:fmt(aReceber), cor: nAberto ? FIN_COR.atencao : FIN_COR.fraco, nota:nAberto + " pedido(s) em aberto" },
+        { rotulo:"Recebido", valor:fmt(recebidoTot), cor:FIN_COR.entrada, nota:(linhas.length - nAberto) + " confirmado(s)" },
+        { rotulo:"Total", valor:fmt(aReceber + recebidoTot), cor:FIN_COR.neutro, nota:linhas.length + " pedido(s)" },
+      ]}
+      acoes={<>
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"6px", display:"flex", flexDirection:"column" }}>
+          <button onClick={exportar} style={{ background:"none", border:"none", textAlign:"left", padding:"9px 10px", borderRadius:7, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" }}>Exportar para planilha</button>
+          <button onClick={function(){ imprimir(); }} style={{ background:"none", border:"none", textAlign:"left", padding:"9px 10px", borderRadius:7, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" }}>Imprimir</button>
+        </div>
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"12px 14px" }}>
+          <div style={{ fontSize:11.5, color:"var(--text-3)" }}>Total filtrado</div>
+          <div style={{ fontSize:18, fontWeight:600, color:"var(--text-strong)" }}>{fmt(valorLista)}</div>
+          <div style={{ fontSize:11, color:"var(--text-4)", marginTop:2 }}>{lista.length} de {linhas.length} pedido(s)</div>
+          <div style={{ fontSize:11, color:"var(--text-3)", marginTop:10, lineHeight:1.55, borderTop:"1px solid var(--border-soft)", paddingTop:8 }}>
+            {cfgFin.repasse === "confirmado"
+              ? "Enquanto não confirmado, o repasse não entra no DRE nem no saldo dos bancos."
+              : "A liberação anunciada pelo ML já conta como recebida."}
+          </div>
+        </div>
+      </>}>
       <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12, flexWrap:"wrap" }}>
-        <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Contas a receber</div>
         <button onClick={function(){ setMostrarFiltros(function(v){return !v;}); }} style={{ ...filtBtn, background: mostrarFiltros?"rgba(118,133,146,.14)":"var(--surface)" }}>⚙ Filtros</button>
         <div style={{ position:"relative", flex:1, minWidth:220, maxWidth:520 }}>
           <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:"var(--text-3)", fontSize:13 }}>🔍</span>
           <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Pesquise por cliente ou número do pedido" style={{ width:"100%", background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 12px 9px 34px", borderRadius:9, fontSize:13, outline:"none" }} />
         </div>
-        <div style={{ flex:1 }} />
-        <button onClick={function(){ setMostrarAcoes(function(v){return !v;}); }} style={filtBtn}>Ações</button>
       </div>
       <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
         {mostrarFiltros && (
@@ -1711,29 +1733,15 @@ function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, 
                 })}
               </tbody>
             </table>
-            {lista.length === 0 && <div style={{ padding:40, textAlign:"center" }}><div style={{ fontWeight:600, color:"var(--ui-accent)" }}>Nenhum resultado encontrado.</div></div>}
+            {lista.length === 0 && <VazioFin icone="⬆️"
+              titulo={temFiltro ? "Nenhum recebível com esses filtros." : "Nenhuma venda para receber."}
+              texto={temFiltro
+                ? "Limpe os filtros para ver todos os recebíveis."
+                : "Os repasses aparecem aqui conforme as vendas do Mercado Livre são sincronizadas."} />}
           </div>
         </div>
-        {mostrarAcoes && (
-          <div style={{ width:236, flexShrink:0, display:"flex", flexDirection:"column", gap:8 }}>
-            <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"6px", display:"flex", flexDirection:"column" }}>
-              <button onClick={exportar} style={{ background:"none", border:"none", textAlign:"left", padding:"9px 10px", borderRadius:7, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" }}>Exportar para planilha</button>
-              <button onClick={function(){ imprimir(); }} style={{ background:"none", border:"none", textAlign:"left", padding:"9px 10px", borderRadius:7, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" }}>Imprimir</button>
-            </div>
-            <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"12px 14px" }}>
-              <div style={{ fontWeight:600, fontSize:13, color:"var(--text-strong)", marginBottom:8 }}>Informações</div>
-              <div style={{ fontSize:12, color:"var(--text-3)" }}>A receber</div>
-              <div style={{ fontSize:19, fontWeight:600, color:"#FFC107", marginBottom:8 }}>{fmt(aReceber)}</div>
-              <div style={{ fontSize:12, color:"var(--text-3)" }}>Recebido</div>
-              <div style={{ fontSize:19, fontWeight:600, color:"var(--ui-accent)", marginBottom:8 }}>{fmt(recebidoTot)}</div>
-              <div style={{ fontSize:12, color:"var(--text-3)" }}>Quantidade</div>
-              <div style={{ fontSize:19, fontWeight:600, color:"var(--text-strong)" }}>{lista.length}</div>
-            </div>
-            <div style={{ fontSize:10.5, color:"var(--text-4)", lineHeight:1.4, padding:"0 4px" }}>Recebíveis gerados automaticamente dos pedidos do Mercado Livre. A previsão vem da data de liberação do ML; a baixa manual é registrada neste navegador.</div>
-          </div>
-        )}
       </div>
-    </div>
+    </FinanceiroShell>
   );
 }
 
@@ -2600,6 +2608,123 @@ function TelaEstruturada({ cfg }) {
   );
 }
 // DRE (Demonstrativo de Resultado): estrutura zerada, sem dados por enquanto.
+// ── Esqueleto comum do Financeiro ──────────────────────────────────────────
+// Oito telas, cada uma com o seu próprio jeito: uma punha os totais na coluna
+// da direita, outra no topo, outra misturava; o período tinha nome diferente em
+// cada uma e se perdia ao trocar de aba. Quem usa reaprendia a tela a cada
+// clique. Daqui em diante todas passam por aqui.
+
+// Cor com significado fixo. Antes o âmbar aparecia em custo, em taxa e em
+// alerta ao mesmo tempo, o que esvazia o sinal: se tudo é atenção, nada é.
+const FIN_COR = {
+  entrada: "#0a9d4e",           // dinheiro que entra, conta recebida
+  saida:   "#FF5252",           // dinheiro que sai, conta vencida, saldo negativo
+  atencao: "#FFC107",           // só o que precisa de decisão
+  neutro:  "var(--text-strong)",// valores sem polaridade
+  fraco:   "var(--text-3)",     // ausência de valor
+};
+
+// A ordem é a do dia de trabalho: primeiro o que eu tenho e vou ter, depois o
+// que devo, depois o que me devem, e por último o que já aconteceu.
+const ABAS_FINANCEIRO = [
+  { key:"fluxo_caixa",           label:"Fluxo de caixa" },
+  { key:"bancos",                label:"Caixas e bancos" },
+  { key:"contas_pagar",          label:"Contas a pagar" },
+  { key:"prioridade_pagamento",  label:"Prioridade" },
+  { key:"contas_receber",        label:"Contas a receber" },
+  { key:"lancamentos",           label:"Lançamentos" },
+  { key:"dre",                   label:"DRE" },
+  { key:"impostos",              label:"Impostos" },
+];
+
+// Períodos retroativos, usados pelas telas que olham para trás. O horizonte das
+// que olham para frente é outro conceito e tem os seus próprios botões — juntar
+// os dois num controle só faria "30 dias" significar coisas diferentes por aba.
+var PERIODOS_FIN = [["7","7 dias"],["30","30 dias"],["90","90 dias"],["tudo","Tudo"]];
+
+function KpiFin({ rotulo, valor, cor, nota }) {
+  return (
+    <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"13px 16px", minWidth:0 }}>
+      <div style={{ fontSize:11.5, color:"var(--text-3)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{rotulo}</div>
+      <div style={{ fontSize:21, fontWeight:600, color: cor || FIN_COR.neutro, marginTop:2, fontVariantNumeric:"tabular-nums" }}>{valor}</div>
+      {nota && <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{nota}</div>}
+    </div>
+  );
+}
+
+// props:
+//   tab/setTab        aba atual do módulo
+//   titulo, sub       cabeçalho da tela
+//   periodo/setPeriodo  quando a tela olha para trás (compartilhado entre elas)
+//   controles         nós extras no topo (horizonte, ajustes, exportar)
+//   kpis              [{ rotulo, valor, cor, nota }] — sempre na mesma faixa
+//   acoes             nós da coluna da direita — sempre no mesmo lugar
+//   largura           limite de largura do corpo
+function FinanceiroShell({ tab, setTab, titulo, sub, periodo, setPeriodo, controles, kpis, acoes, largura, children }) {
+  return (
+    <div style={{ padding:2, maxWidth: largura || 1280 }}>
+      <div style={{ display:"flex", alignItems:"flex-start", gap:12, marginBottom:12, flexWrap:"wrap" }}>
+        <div style={{ minWidth:0 }}>
+          <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>{titulo}</div>
+          {sub && <div style={{ fontSize:12.5, color:"var(--text-3)", marginTop:2 }}>{sub}</div>}
+        </div>
+        <div style={{ flex:1 }} />
+        <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
+          {setPeriodo && PERIODOS_FIN.map(function(p){
+            var on = periodo === p[0];
+            return <button key={p[0]} onClick={function(){ setPeriodo(p[0]); }}
+              style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600,
+                       background: on ? "#768692" : "var(--surface)", color: on ? "#fff" : "var(--text-3)" }}>{p[1]}</button>;
+          })}
+          {controles || null}
+        </div>
+      </div>
+
+      <div className="scroll-x" style={{ display:"flex", gap:2, marginBottom:14, borderBottom:"1px solid var(--border)" }}>
+        {ABAS_FINANCEIRO.map(function(a){
+          var on = tab === a.key;
+          return <button key={a.key} onClick={function(){ if (!on) setTab(a.key); }}
+            style={{ background:"none", border:"none", borderBottom: on ? "2px solid var(--ui-accent)" : "2px solid transparent",
+                     color: on ? "var(--text-strong)" : "var(--text-3)", fontWeight: on ? 600 : 500,
+                     padding:"9px 13px", cursor: on ? "default" : "pointer", fontSize:13, whiteSpace:"nowrap" }}>{a.label}</button>;
+        })}
+      </div>
+
+      {kpis && kpis.length > 0 && (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12, marginBottom:14 }}>
+          {kpis.map(function(k,i){ return <KpiFin key={i} rotulo={k.rotulo} valor={k.valor} cor={k.cor} nota={k.nota} />; })}
+        </div>
+      )}
+
+      <div style={{ display:"flex", gap:14, alignItems:"flex-start" }}>
+        <div style={{ flex:1, minWidth:0 }}>{children}</div>
+        {acoes && <div style={{ width:236, flexShrink:0, display:"flex", flexDirection:"column", gap:8 }}>{acoes}</div>}
+      </div>
+    </div>
+  );
+}
+
+// Botão da coluna de ações, para elas não divergirem de novo tela a tela.
+function AcaoFin({ onClick, children, tipo }) {
+  var estilo = tipo === "pri"
+    ? { background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, fontSize:13.5 }
+    : { background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, fontSize:13 };
+  return <button onClick={onClick} style={Object.assign({ padding:"11px", borderRadius:9, cursor:"pointer", width:"100%" }, estilo)}>{children}</button>;
+}
+
+// Tela vazia que ensina, no lugar de "Nenhum resultado encontrado".
+function VazioFin({ icone, titulo, texto, acao, onAcao }) {
+  return (
+    <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"54px 24px", textAlign:"center" }}>
+      <div style={{ fontSize:36, marginBottom:10 }}>{icone || "🗎"}</div>
+      <div style={{ fontWeight:600, fontSize:16, color:"var(--text-strong)" }}>{titulo}</div>
+      <div style={{ fontSize:13.5, color:"var(--text-3)", marginTop:8, lineHeight:1.65, maxWidth:540, margin:"8px auto 0" }}>{texto}</div>
+      {acao && onAcao && <button onClick={onAcao}
+        style={{ marginTop:18, background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"10px 24px", borderRadius:9, cursor:"pointer", fontSize:13 }}>{acao}</button>}
+    </div>
+  );
+}
+
 // ── Fluxo de caixa ─────────────────────────────────────────────────────────
 // Projeção dia a dia do saldo. Diferente do DRE de propósito: o DRE só conta o
 // repasse que você CONFIRMOU, porque olha para trás e precisa ser exato. A
@@ -2717,7 +2842,7 @@ function projetarFluxo(opts) {
 
 // Fluxo de caixa: o saldo dia a dia daqui para frente, e o dia em que ele acaba.
 function FluxoCaixaTab({ saldoEmCaixa, temContasBancarias, contasPagar, enrichedOrders, paymentData,
-                         recebiveisBaixados, lancamentos, custosFixos, setTab }) {
+                         recebiveisBaixados, lancamentos, custosFixos, setTab, tab }) {
   const [dias, setDias] = useState(30);
   const [incluirFixos, setIncluirFixos] = useState(true);
   const [diaFixos, setDiaFixos] = useState(5);
@@ -2762,56 +2887,36 @@ function FluxoCaixaTab({ saldoEmCaixa, temContasBancarias, contasPagar, enriched
   var cartao = { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px" };
   var COR_SALDO = "#768692", COR_RUIM = "#FF5252", COR_BOM = "#0a9d4e";
 
+  // O horizonte olha para frente; o período do módulo olha para trás. São
+  // controles diferentes de propósito — "30 dias" não pode significar duas
+  // coisas conforme a aba.
+  var horizonte = [30,60,90].map(function(n){
+    var on = dias === n;
+    return <button key={n} onClick={function(){ setDias(n); setDiaAberto(null); }}
+      style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600,
+               background: on ? "#768692" : "var(--surface)", color: on ? "#fff" : "var(--text-3)" }}>{n} dias</button>;
+  });
+
   if (!temContasBancarias) {
-    return <div style={{ padding:2, maxWidth:820 }}>
-      <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)", marginBottom:14 }}>Fluxo de caixa</div>
-      <div style={{ ...cartao, textAlign:"center", padding:"54px 24px" }}>
-        <div style={{ fontSize:36, marginBottom:10 }}>📈</div>
-        <div style={{ fontWeight:600, fontSize:16, color:"var(--text-strong)" }}>Falta dizer de onde a projeção parte.</div>
-        <div style={{ fontSize:13.5, color:"var(--text-3)", marginTop:8, lineHeight:1.65, maxWidth:520, margin:"8px auto 0" }}>
-          A projeção é o saldo de hoje mais o que entra e sai a cada dia. Sem nenhuma conta em
-          <b> Caixas e bancos</b>, não há saldo de hoje — e uma projeção que começa do zero não diz nada.
-        </div>
-        {setTab && <button onClick={function(){ setTab("bancos"); }}
-          style={{ marginTop:18, background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"10px 24px", borderRadius:9, cursor:"pointer", fontSize:13 }}>
-          Cadastrar contas →
-        </button>}
-      </div>
-    </div>;
+    return <FinanceiroShell tab={tab} setTab={setTab} titulo="Fluxo de caixa"
+      sub="Saldo projetado dia a dia, a partir do que você tem hoje." largura={900}>
+      <VazioFin icone="📈" titulo="Falta dizer de onde a projeção parte."
+        texto={<>A projeção é o saldo de hoje mais o que entra e sai a cada dia. Sem nenhuma conta em <b>Caixas e bancos</b>, não há saldo de hoje — e uma projeção que começa do zero não diz nada.</>}
+        acao="Cadastrar contas →" onAcao={function(){ setTab("bancos"); }} />
+    </FinanceiroShell>;
   }
 
   return (
-    <div style={{ padding:2, maxWidth:1240 }}>
-      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14, flexWrap:"wrap" }}>
-        <div>
-          <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Fluxo de caixa</div>
-          <div style={{ fontSize:12.5, color:"var(--text-3)" }}>Saldo projetado dia a dia, a partir do que você tem hoje.</div>
-        </div>
-        <div style={{ flex:1 }} />
-        {[30,60,90].map(function(n){
-          var on = dias === n;
-          return <button key={n} onClick={function(){ setDias(n); setDiaAberto(null); }}
-            style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600,
-                     background: on ? "#768692" : "var(--surface)", color: on ? "#fff" : "var(--text-3)" }}>{n} dias</button>;
-        })}
-      </div>
-
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12, marginBottom:14 }}>
-        {[
-          ["Saldo hoje", fmt(saldoEmCaixa || 0), (saldoEmCaixa||0) >= 0 ? "var(--text-strong)" : COR_RUIM, "de Caixas e bancos"],
-          ["Entra em " + dias + " dias", fmt(proj.entradas), COR_BOM, "repasses e lançamentos"],
-          ["Sai em " + dias + " dias", fmt(proj.saidas), COR_RUIM, incluirFixos ? "contas e custos fixos" : "contas a pagar"],
-          ["Saldo ao fim", fmt(proj.saldoFinal), proj.saldoFinal >= 0 ? COR_BOM : COR_RUIM,
-            proj.menor ? "menor: " + fmt(proj.menor.saldo) + " em " + (fmtDate(proj.menor.data)||proj.menor.data) : ""],
-        ].map(function(k,i){
-          return <div key={i} style={cartao}>
-            <div style={{ fontSize:11.5, color:"var(--text-3)" }}>{k[0]}</div>
-            <div style={{ fontSize:21, fontWeight:600, color:k[2], marginTop:2, fontVariantNumeric:"tabular-nums" }}>{k[1]}</div>
-            <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:2 }}>{k[3]}</div>
-          </div>;
-        })}
-      </div>
-
+    <FinanceiroShell tab={tab} setTab={setTab} titulo="Fluxo de caixa"
+      sub="Saldo projetado dia a dia, a partir do que você tem hoje."
+      controles={horizonte}
+      kpis={[
+        { rotulo:"Saldo hoje", valor:fmt(saldoEmCaixa || 0), cor:(saldoEmCaixa||0) >= 0 ? FIN_COR.neutro : FIN_COR.saida, nota:"de Caixas e bancos" },
+        { rotulo:"Entra em " + dias + " dias", valor:fmt(proj.entradas), cor:FIN_COR.entrada, nota:"repasses e lançamentos" },
+        { rotulo:"Sai em " + dias + " dias", valor:fmt(proj.saidas), cor:FIN_COR.saida, nota:incluirFixos ? "contas e custos fixos" : "contas a pagar" },
+        { rotulo:"Saldo ao fim", valor:fmt(proj.saldoFinal), cor:proj.saldoFinal >= 0 ? FIN_COR.entrada : FIN_COR.saida,
+          nota:proj.menor ? "menor: " + fmt(proj.menor.saldo) + " em " + (fmtDate(proj.menor.data)||proj.menor.data) : "" },
+      ]}>
       {proj.primeiroNegativo && (
         <div style={{ background:"rgba(255,82,82,.10)", border:"1px solid rgba(255,82,82,.5)", borderRadius:10, padding:"12px 16px", marginBottom:14, fontSize:13.5, color:"var(--text-2)", lineHeight:1.6 }}>
           <b style={{ color:COR_RUIM }}>O caixa fica negativo em {fmtDate(proj.primeiroNegativo.data) || proj.primeiroNegativo.data}</b>
@@ -2960,7 +3065,7 @@ function FluxoCaixaTab({ saldoEmCaixa, temContasBancarias, contasPagar, enriched
         não paga entra <b>hoje</b>, porque o dinheiro ainda vai sair. Custos fixos em % do faturamento
         ficam de fora da projeção: dependem de uma venda que ainda não aconteceu.
       </div>
-    </div>
+    </FinanceiroShell>
   );
 }
 
@@ -3127,7 +3232,7 @@ function ContaBancariaModal({ conta, onSave, onClose, onExcluir }) {
 
 // Caixas e bancos: onde o dinheiro está, com o saldo calculado a partir dos
 // movimentos — não digitado.
-function BancosTab({ contasBancarias, salvar, movimentos, setTab }) {
+function BancosTab({ contasBancarias, salvar, movimentos, setTab, tab }) {
   const [modal, setModal] = useState(null);
   const [extratoDe, setExtratoDe] = useState(null);
   var semConta = movimentosSemConta(movimentos, contasBancarias);
@@ -3150,6 +3255,14 @@ function BancosTab({ contasBancarias, salvar, movimentos, setTab }) {
 
   var cartao = { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"18px 20px" };
 
+  var kpisBanco = [
+    { rotulo:"Saldo consolidado", valor:fmt(consolidado), cor: consolidado >= 0 ? FIN_COR.entrada : FIN_COR.saida, nota:"contas ativas, sem cartões" },
+    { rotulo:"Contas cadastradas", valor:String((contasBancarias||[]).length), cor:FIN_COR.neutro,
+      nota:(contasBancarias||[]).filter(function(c){ return c.ativa !== false; }).length + " ativa(s)" },
+    { rotulo:"Movimentos sem conta", valor:String(semConta.length), cor: semConta.length ? FIN_COR.atencao : FIN_COR.fraco,
+      nota: semConta.length ? fmt(Math.abs(somaSemConta)) + " fora de qualquer saldo" : "tudo atribuído" },
+  ];
+
   if (extratoDe) {
     var conta = (contasBancarias || []).find(function(c){ return c.id === extratoDe; });
     if (!conta) { setExtratoDe(null); return null; }
@@ -3160,19 +3273,14 @@ function BancosTab({ contasBancarias, salvar, movimentos, setTab }) {
       return Object.assign({}, m, { saldo: corrido });
     }).reverse();
     return (
-      <div style={{ padding:2, maxWidth:1050 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14 }}>
-          <button onClick={function(){ setExtratoDe(null); }} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", width:34, height:34, borderRadius:9, cursor:"pointer", fontSize:16 }}>←</button>
-          <div>
-            <div style={{ fontWeight:600, fontSize:19, color:"var(--text-strong)" }}>{conta.nome}</div>
-            <div style={{ fontSize:12, color:"var(--text-3)" }}>Extrato desde {fmtDate(conta.dataSaldoInicial) || conta.dataSaldoInicial} · saldo inicial {fmt(parseFloat(conta.saldoInicial)||0)}</div>
-          </div>
-          <div style={{ flex:1 }} />
-          <div style={{ textAlign:"right" }}>
-            <div style={{ fontSize:11, color:"var(--text-3)" }}>Saldo atual</div>
-            <div style={{ fontSize:22, fontWeight:600, color: saldoDaConta(conta, movimentos) >= 0 ? "#0a9d4e" : "#FF5252" }}>{fmt(saldoDaConta(conta, movimentos))}</div>
-          </div>
-        </div>
+      <FinanceiroShell tab={tab} setTab={setTab} titulo={conta.nome} largura={1080}
+        sub={"Extrato desde " + (fmtDate(conta.dataSaldoInicial) || conta.dataSaldoInicial) + " · saldo inicial " + fmt(parseFloat(conta.saldoInicial)||0)}
+        controles={<button onClick={function(){ setExtratoDe(null); }} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"7px 16px", borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:600 }}>← Todas as contas</button>}
+        kpis={[
+          { rotulo:"Saldo atual", valor:fmt(saldoDaConta(conta, movimentos)), cor: saldoDaConta(conta, movimentos) >= 0 ? FIN_COR.entrada : FIN_COR.saida },
+          { rotulo:"Entradas no extrato", valor:fmt(doExtrato.filter(function(m){ return m.tipo==="entrada"; }).reduce(function(a,m){ return a+m.valor; },0)), cor:FIN_COR.entrada },
+          { rotulo:"Saídas no extrato", valor:fmt(doExtrato.filter(function(m){ return m.tipo==="saida"; }).reduce(function(a,m){ return a+m.valor; },0)), cor:FIN_COR.saida },
+        ]}>
         {comSaldo.length === 0
           ? <div style={{ ...cartao, textAlign:"center", padding:"46px 20px", color:"var(--text-3)", fontSize:13.5 }}>Nenhum movimento nesta conta desde a data do saldo inicial.</div>
           : <div style={_tableWrap}><table style={_table}>
@@ -3189,40 +3297,25 @@ function BancosTab({ contasBancarias, salvar, movimentos, setTab }) {
                 </tr>;
               })}</tbody>
             </table></div>}
-      </div>
+      </FinanceiroShell>
     );
   }
 
   return (
-    <div style={{ padding:2, maxWidth:1050 }}>
-      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14, flexWrap:"wrap" }}>
-        <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Caixas e bancos</div>
-        <div style={{ flex:1 }} />
-        <button onClick={function(){ setModal({}); }} style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"9px 22px", borderRadius:9, cursor:"pointer", fontSize:13 }}>+ Nova conta</button>
-      </div>
-
-      <div style={{ ...cartao, marginBottom:14, display:"flex", alignItems:"baseline", gap:26, flexWrap:"wrap" }}>
-        <div>
-          <div style={{ fontSize:11.5, color:"var(--text-3)" }}>Saldo consolidado</div>
-          <div style={{ fontSize:30, fontWeight:700, color: consolidado >= 0 ? "#0a9d4e" : "#FF5252", letterSpacing:"-.01em" }}>{fmt(consolidado)}</div>
-          <div style={{ fontSize:11, color:"var(--text-4)" }}>soma das contas ativas, sem cartões</div>
-        </div>
-        <div style={{ flex:1 }} />
-        <div style={{ fontSize:12, color:"var(--text-3)", maxWidth:340, lineHeight:1.6 }}>
-          É este número que a <b>Prioridade de pagamento</b> passa a usar, no lugar de perguntar
+    <FinanceiroShell tab={tab} setTab={setTab} titulo="Caixas e bancos" largura={1080}
+      sub="Onde o dinheiro está. O saldo é calculado — não digitado."
+      kpis={kpisBanco}
+      acoes={<>
+        <AcaoFin tipo="pri" onClick={function(){ setModal({}); }}>+ Nova conta</AcaoFin>
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"12px 14px", fontSize:11.5, color:"var(--text-3)", lineHeight:1.6 }}>
+          O saldo consolidado é o que a <b>Prioridade de pagamento</b> usa, no lugar de perguntar
           quanto você tem.
         </div>
-      </div>
-
+      </>}>
       {(contasBancarias || []).length === 0 ? (
-        <div style={{ ...cartao, textAlign:"center", padding:"54px 20px" }}>
-          <div style={{ fontSize:36, marginBottom:10 }}>🏦</div>
-          <div style={{ fontWeight:600, fontSize:16, color:"var(--text-strong)" }}>Nenhuma conta cadastrada.</div>
-          <div style={{ fontSize:13, color:"var(--text-3)", marginTop:6, lineHeight:1.6 }}>
-            Cadastre onde o seu dinheiro fica — banco, caixa, reserva. Informe o saldo de hoje e o
-            sistema mantém o resto a partir das contas pagas e dos recebimentos confirmados.
-          </div>
-        </div>
+        <VazioFin icone="🏦" titulo="Nenhuma conta cadastrada."
+          texto="Cadastre onde o seu dinheiro fica — banco, caixa, reserva. Informe o saldo de hoje e o sistema mantém o resto a partir das contas pagas e dos recebimentos confirmados."
+          acao="+ Nova conta" onAcao={function(){ setModal({}); }} />
       ) : (
         <div style={_tableWrap}>
           <table style={_table}>
@@ -3268,7 +3361,7 @@ function BancosTab({ contasBancarias, salvar, movimentos, setTab }) {
       )}
 
       {modal && <ContaBancariaModal conta={modal.id ? modal : null} onSave={salvarConta} onExcluir={excluir} onClose={function(){ setModal(null); }} />}
-    </div>
+    </FinanceiroShell>
   );
 }
 
@@ -3335,9 +3428,8 @@ function LancamentoModal({ lancamento, contasBancarias, categorias, onSave, onCl
 }
 
 // Lançamentos: o extrato de tudo o que mexeu em dinheiro, de qualquer origem.
-function LancamentosTab({ lancamentos, salvar, movimentos, contasBancarias, categorias }) {
+function LancamentosTab({ lancamentos, salvar, movimentos, contasBancarias, categorias, tab, setTab, periodo, setPeriodo }) {
   const [modal, setModal] = useState(null);
-  const [periodo, setPeriodo] = useState("30");
   const [fTipo, setFTipo] = useState("todos");
   const [fConta, setFConta] = useState("");
   const [fOrigem, setFOrigem] = useState("todas");
@@ -3370,32 +3462,18 @@ function LancamentosTab({ lancamentos, salvar, movimentos, contasBancarias, cate
   var sel = { background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"8px 10px", borderRadius:8, fontSize:12.5 };
 
   return (
-    <div style={{ padding:2, maxWidth:1180 }}>
-      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14, flexWrap:"wrap" }}>
-        <div>
-          <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Lançamentos</div>
-          <div style={{ fontSize:12.5, color:"var(--text-3)" }}>Tudo o que mexeu em dinheiro: contas pagas, recebimentos confirmados e lançamentos seus.</div>
-        </div>
-        <div style={{ flex:1 }} />
-        <button onClick={function(){ setModal({}); }} style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"9px 22px", borderRadius:9, cursor:"pointer", fontSize:13 }}>+ Novo lançamento</button>
-      </div>
-
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12, marginBottom:14 }}>
-        {[["Entradas", fmt(entradas), "#0a9d4e"], ["Saídas", fmt(saidas), "#FF5252"],
-          ["Resultado do período", fmt(entradas - saidas), entradas - saidas >= 0 ? "#0a9d4e" : "#FF5252"],
-          ["Movimentos", String(lista.length), "var(--text-strong)"]].map(function(k,i){
-          return <div key={i} style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 16px" }}>
-            <div style={{ fontSize:11.5, color:"var(--text-3)" }}>{k[0]}</div>
-            <div style={{ fontSize:20, fontWeight:600, color:k[2], marginTop:2 }}>{k[1]}</div>
-          </div>;
-        })}
-      </div>
+    <FinanceiroShell tab={tab} setTab={setTab} titulo="Lançamentos" largura={1220}
+      sub="Tudo o que mexeu em dinheiro: contas pagas, recebimentos confirmados e lançamentos seus."
+      periodo={periodo} setPeriodo={setPeriodo}
+      kpis={[
+        { rotulo:"Entradas", valor:fmt(entradas), cor:FIN_COR.entrada },
+        { rotulo:"Saídas", valor:fmt(saidas), cor:FIN_COR.saida },
+        { rotulo:"Resultado do período", valor:fmt(entradas - saidas), cor: entradas - saidas >= 0 ? FIN_COR.entrada : FIN_COR.saida },
+        { rotulo:"Movimentos", valor:String(lista.length), cor:FIN_COR.neutro },
+      ]}
+      acoes={<AcaoFin tipo="pri" onClick={function(){ setModal({}); }}>+ Novo lançamento</AcaoFin>}>
 
       <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap", alignItems:"center" }}>
-        {PERIODOS_REL.map(function(p){ var on = periodo===p[0];
-          return <button key={p[0]} onClick={function(){ setPeriodo(p[0]); }}
-            style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600,
-              background: on ? "#768692" : "var(--surface)", color: on ? "#fff" : "var(--text-3)" }}>{p[1]}</button>; })}
         <select value={fTipo} onChange={function(e){ setFTipo(e.target.value); }} style={sel}>
           <option value="todos">Entradas e saídas</option><option value="entrada">Só entradas</option><option value="saida">Só saídas</option>
         </select>
@@ -3415,13 +3493,9 @@ function LancamentosTab({ lancamentos, salvar, movimentos, contasBancarias, cate
       </div>
 
       {lista.length === 0 ? (
-        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"52px 20px", textAlign:"center" }}>
-          <div style={{ fontWeight:600, fontSize:15.5, color:"var(--text-strong)" }}>Nenhum movimento no período.</div>
-          <div style={{ fontSize:13, color:"var(--text-3)", marginTop:6, lineHeight:1.6 }}>
-            Esta tela mostra contas a pagar quitadas, recebimentos confirmados em Contas a receber, e
-            lançamentos que você criar aqui.
-          </div>
-        </div>
+        <VazioFin icone="📒" titulo="Nenhum movimento no período."
+          texto="Esta tela mostra contas a pagar quitadas, recebimentos confirmados em Contas a receber, e lançamentos que você criar aqui."
+          acao="+ Novo lançamento" onAcao={function(){ setModal({}); }} />
       ) : (
         <div style={_tableWrap}>
           <table style={_table}>
@@ -3453,7 +3527,7 @@ function LancamentosTab({ lancamentos, salvar, movimentos, contasBancarias, cate
 
       {modal && <LancamentoModal lancamento={modal.id ? modal : null} contasBancarias={contasBancarias}
         categorias={categorias} onSave={salvarLanc} onClose={function(){ setModal(null); }} />}
-    </div>
+    </FinanceiroShell>
   );
 }
 
@@ -3514,8 +3588,7 @@ function custosFixosNoPeriodo(custosFixos, faturamentoPeriodo, dias) {
   }, 0);
 }
 
-function DreTab({ enrichedOrders, contasPagar, custosFixos, recebiveisBaixados, paymentData, config, salvarConfig, lancamentos }) {
-  const [periodo, setPeriodo] = useState("30");
+function DreTab({ enrichedOrders, contasPagar, custosFixos, recebiveisBaixados, paymentData, config, salvarConfig, lancamentos, tab, setTab, periodo, setPeriodo }) {
   const [mostrarAjustes, setMostrarAjustes] = useState(false);
   var cfg = config || financeiroConfigPadrao();
   var cutoff = cutoffPeriodo(periodo);
@@ -3628,29 +3701,21 @@ function DreTab({ enrichedOrders, contasPagar, custosFixos, recebiveisBaixados, 
   var corAviso = { info:["var(--surface)","var(--border)","var(--text-3)"], alerta:["rgba(255,193,7,.10)","rgba(255,193,7,.5)","var(--text-2)"] };
 
   return (
-    <div style={{ padding:2 }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:16 }}>
-        <div>
-          <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>DRE — Demonstrativo de resultado</div>
-          <div style={{ fontSize:13, color:"var(--text-3)" }}>
-            Regime de <b>{caixa ? "caixa" : "competência"}</b> ·{" "}
-            {caixa
-              ? "conta no dia em que o dinheiro entra ou sai"
-              : "conta no dia da venda ou da compra"}
-            {caixa && cfg.repasse === "confirmado" ? " · repasse do ML só quando você confirma" : ""}
-          </div>
-        </div>
-        <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-          {PERIODOS_REL.map(function(p){ var ativo = periodo===p[0];
-            return <button key={p[0]} onClick={function(){ setPeriodo(p[0]); }}
-              style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600,
-                background: ativo ? "#768692" : "var(--surface)", color: ativo ? "#fff" : "var(--text-3)" }}>{p[1]}</button>; })}
-          <button onClick={function(){ setMostrarAjustes(function(v){ return !v; }); }}
-            style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background:"var(--surface)", color:"var(--text-2)", marginLeft:4 }}>⚙ Ajustes</button>
-          <button onClick={exportarPDF} style={{ ..._btnPdf, marginLeft:4 }} title="Salvar/Imprimir como PDF">⬇ Exportar PDF</button>
-        </div>
-      </div>
-
+    <FinanceiroShell tab={tab} setTab={setTab} titulo="DRE — Demonstrativo de resultado" largura={1280}
+      sub={"Regime de " + (caixa ? "caixa · conta no dia em que o dinheiro entra ou sai" : "competência · conta no dia da venda ou da compra")
+           + (caixa && cfg.repasse === "confirmado" ? " · repasse do ML só quando você confirma" : "")}
+      periodo={periodo} setPeriodo={setPeriodo}
+      controles={<>
+        <button onClick={function(){ setMostrarAjustes(function(v){ return !v; }); }}
+          style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background:"var(--surface)", color:"var(--text-2)" }}>⚙ Ajustes</button>
+        <button onClick={exportarPDF} style={_btnPdf} title="Salvar/Imprimir como PDF">⬇ Exportar PDF</button>
+      </>}
+      kpis={[
+        { rotulo:"Receita bruta", valor:fmt(fat), cor:FIN_COR.entrada, nota:nPedidos + " pedido(s)" },
+        { rotulo:"CMV + taxas", valor:fmt(custo + taxas), cor:FIN_COR.saida, nota:"custo do produto e do marketplace" },
+        { rotulo:"Despesas", valor:fmt(despesas), cor:FIN_COR.saida, nota: cfg.origemDespesas === "configurados" ? "custos fixos configurados" : "contas pagas e lançamentos" },
+        { rotulo:"Lucro líquido", valor:fmt(lucro), cor: lucro >= 0 ? FIN_COR.entrada : FIN_COR.saida, nota: fat ? "margem " + margemLiq.toFixed(1) + "%" : "sem receita no período" },
+      ]}>
       {mostrarAjustes && (
         <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", marginBottom:14 }}>
           <div style={{ fontSize:13.5, fontWeight:600, color:"var(--text-strong)", marginBottom:12 }}>Como o resultado é apurado</div>
@@ -3756,7 +3821,7 @@ function DreTab({ enrichedOrders, contasPagar, custosFixos, recebiveisBaixados, 
         var c = corAviso[a.tom];
         return <div key={i} style={{ marginTop:12, fontSize:12.5, color:c[2], background:c[0], border:"1px solid "+c[1], borderRadius:10, padding:"11px 14px", lineHeight:1.6 }}>{a.txt}</div>;
       })}
-    </div>
+    </FinanceiroShell>
   );
 }
 
@@ -4481,7 +4546,7 @@ async function analisarPrioridadeIA(ranking, plano, cfg, caixa, aReceber) {
 
 // Tela: ordena as contas em aberto e monta um plano de pagamento para o caixa
 // que o usuário informar. A IA é opcional — o ranking e o plano funcionam sem ela.
-function PrioridadePagamentoTab({ contas, salvarContas, config, salvarConfig, saldoEmCaixa, temContasBancarias }) {
+function PrioridadePagamentoTab({ contas, salvarContas, config, salvarConfig, saldoEmCaixa, temContasBancarias, tab, setTab }) {
   const [analise, setAnalise] = useState(null);
   const [estado, setEstado] = useState("idle"); // idle | loading | done | error
   const [erro, setErro] = useState("");
@@ -4523,50 +4588,29 @@ function PrioridadePagamentoTab({ contas, salvarContas, config, salvarConfig, sa
   var rotuloAcao = { pagar:"Pagar", negociar:"Negociar", adiar:"Adiar" };
 
   if (!ranking.length) {
-    return <div style={{ padding:2, maxWidth:900 }}>
-      <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)", marginBottom:14 }}>Prioridade de pagamento</div>
-      <div style={{ ...cartao, textAlign:"center", padding:"56px 20px" }}>
-        <div style={{ fontSize:38, marginBottom:10 }}>🗎</div>
-        <div style={{ fontWeight:600, fontSize:16, color:"var(--text-strong)" }}>Nenhuma conta em aberto para priorizar.</div>
-        <div style={{ fontSize:13, color:"var(--text-3)", marginTop:6, lineHeight:1.6 }}>
-          Esta tela lê as contas de <b>Financeiro → Contas a pagar</b> que não estão pagas nem canceladas.<br />
-          Cadastre as contas lá — com <b>vencimento</b>, <b>categoria</b> e, quando houver, <b>juros e multa</b>,
-          que são o que permite calcular quanto custa adiar cada uma.
-        </div>
-      </div>
-    </div>;
+    return <FinanceiroShell tab={tab} setTab={setTab} titulo="Prioridade de pagamento" largura={960}
+      sub="Que contas pagar primeiro com o caixa que você tem.">
+      <VazioFin icone="🎯" titulo="Nenhuma conta em aberto para priorizar."
+        texto={<>Esta tela lê as contas de <b>Contas a pagar</b> que não estão pagas nem canceladas. Cadastre-as lá — com <b>vencimento</b>, <b>categoria</b> e, quando houver, <b>juros e multa</b>, que são o que permite calcular quanto custa adiar cada uma.</>}
+        acao="Ir para Contas a pagar →" onAcao={function(){ setTab("contas_pagar"); }} />
+    </FinanceiroShell>;
   }
 
   return (
-    <div style={{ padding:2, maxWidth:1180 }}>
-      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14, flexWrap:"wrap" }}>
-        <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Prioridade de pagamento</div>
-        <div style={{ flex:1 }} />
-        <button onClick={function(){ setRascunho(JSON.parse(JSON.stringify(config))); setMostrarRegras(function(v){ return !v; }); }}
-          style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"9px 16px", borderRadius:9, cursor:"pointer", fontSize:13 }}>
+    <FinanceiroShell tab={tab} setTab={setTab} titulo="Prioridade de pagamento" largura={1220}
+      sub="Ordenadas por prazo, risco e quanto custa adiar cada uma."
+      kpis={[
+        { rotulo:"Total em aberto", valor:fmt(totalAberto), cor:FIN_COR.neutro, nota:ranking.length + " conta(s)" },
+        { rotulo:"Vencidas", valor:fmt(vencidas.reduce(function(s,i){ return s+i.valor; },0)), cor: vencidas.length ? FIN_COR.saida : FIN_COR.fraco, nota:vencidas.length + " conta(s)" },
+        { rotulo:"Vencem em 7 dias", valor:fmt(vence7.reduce(function(s,i){ return s+i.valor; },0)), cor: vence7.length ? FIN_COR.atencao : FIN_COR.fraco, nota:vence7.length + " conta(s)" },
+        { rotulo:"Custo de adiar tudo 7 dias", valor:fmt(custoSemana), cor: custoSemana > 0 ? FIN_COR.saida : FIN_COR.fraco, nota:"juros + multa" },
+      ]}
+      acoes={<>
+        <AcaoFin tipo="pri" onClick={analisar}>{estado === "loading" ? "Analisando..." : "Analisar com IA"}</AcaoFin>
+        <AcaoFin onClick={function(){ setRascunho(JSON.parse(JSON.stringify(config))); setMostrarRegras(function(v){ return !v; }); }}>
           {mostrarRegras ? "Fechar regras" : "⚙ Regras e pesos"}
-        </button>
-        <button onClick={analisar} disabled={estado === "loading"}
-          style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"9px 24px", borderRadius:9, cursor: estado==="loading"?"wait":"pointer", fontSize:13 }}>
-          {estado === "loading" ? "Analisando..." : "Analisar com IA"}
-        </button>
-      </div>
-
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))", gap:12, marginBottom:14 }}>
-        {[
-          ["Total em aberto", fmt(totalAberto), "var(--text-strong)", ranking.length + " conta(s)"],
-          ["Vencidas", fmt(vencidas.reduce(function(s,i){ return s+i.valor; },0)), "#FF5252", vencidas.length + " conta(s)"],
-          ["Vencem em 7 dias", fmt(vence7.reduce(function(s,i){ return s+i.valor; },0)), "#FFC107", vence7.length + " conta(s)"],
-          ["Custo de adiar tudo 7 dias", fmt(custoSemana), custoSemana > 0 ? "#FF5252" : "var(--text-3)", "juros + multa"],
-        ].map(function(k,i){
-          return <div key={i} style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 16px" }}>
-            <div style={{ fontSize:11.5, color:"var(--text-3)" }}>{k[0]}</div>
-            <div style={{ fontSize:20, fontWeight:600, color:k[2], marginTop:2 }}>{k[1]}</div>
-            <div style={{ fontSize:11, color:"var(--text-4)", marginTop:2 }}>{k[3]}</div>
-          </div>;
-        })}
-      </div>
-
+        </AcaoFin>
+      </>}>
       {mostrarRegras && (
         <div style={cartao}>
           <div style={tit}>Regras e pesos</div>
@@ -4747,11 +4791,11 @@ function PrioridadePagamentoTab({ contas, salvarContas, config, salvarConfig, sa
         mensais proporcionais a 7 dias. Todos os valores em reais são calculados pelo sistema; a IA só
         classifica e escreve os motivos.
       </div>
-    </div>
+    </FinanceiroShell>
   );
 }
 
-function ContasPagarTab({ contas, salvar, contasBancarias }) {
+function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab }) {
   const [modal, setModal] = useState(null);
   const [importando, setImportando] = useState(false);
   const [resultadoImp, setResultadoImp] = useState(null);
@@ -4787,17 +4831,38 @@ function ContasPagarTab({ contas, salvar, contasBancarias }) {
   function exportar(){ baixarCSV("contas-pagar", ["Vencimento","Fornecedor","Categoria","Valor","Situação"], lista.map(function(c){ return [c.vencimento||"", c.descricao||"", c.categoria||"", (parseFloat(c.valor)||0).toFixed(2), statusReal(c)]; })); }
   function imprimir(){ baixarPDF("contas-a-pagar", ["Vencimento","Fornecedor","Categoria","Valor","Situação"], lista.map(function(c){ return [c.vencimento?(fmtDate(c.vencimento)||c.vencimento):"—", c.descricao||"", c.categoria||"", fmt(parseFloat(c.valor)||0), statusReal(c)]; })); }
   var temFiltro = sit!=="todas" || fCategoria || busca;
+  // O número grande responde à pergunta da tela: aqui é "o que me aperta agora",
+  // não o total histórico.
+  var venc7 = (contas||[]).filter(function(c){ var st=statusReal(c); return st==="pendente" && c.vencimento && c.vencimento <= new Date(Date.now()+7*864e5).toISOString().slice(0,10); });
   return (
-    <div style={{ padding:2 }}>
+    <FinanceiroShell tab={tab} setTab={setTab} titulo="Contas a pagar" largura={1400}
+      sub="Compromissos com vencimento. A baixa aqui vira movimento em Lançamentos."
+      kpis={[
+        { rotulo:"Vencidas", valor:fmt(soma(function(c){ return statusReal(c) === "vencida"; })), cor: kpis[1].v === "R$ 0,00" ? FIN_COR.fraco : FIN_COR.saida,
+          nota:(contas||[]).filter(function(c){ return statusReal(c)==="vencida"; }).length + " conta(s)" },
+        { rotulo:"Vencem em 7 dias", valor:fmt(venc7.reduce(function(a,c){ return a + (parseFloat(c.valor)||0); },0)), cor: venc7.length ? FIN_COR.atencao : FIN_COR.fraco, nota:venc7.length + " conta(s)" },
+        { rotulo:"Pendentes", valor:fmt(soma(function(c){ return statusReal(c) === "pendente"; })), cor:FIN_COR.neutro, nota:"total em aberto" },
+        { rotulo:"Pagas", valor:fmt(soma(function(c){ return statusReal(c) === "paga"; })), cor:FIN_COR.entrada, nota:"já quitadas" },
+      ]}
+      acoes={<>
+        <AcaoFin tipo="pri" onClick={function(){ setModal({}); }}>+ Incluir conta</AcaoFin>
+        <AcaoFin onClick={function(){ setImportando(true); }}>⬆ Importar planilha</AcaoFin>
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"6px", display:"flex", flexDirection:"column" }}>
+          <button onClick={exportar} style={{ background:"none", border:"none", textAlign:"left", padding:"9px 10px", borderRadius:7, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" }}>Exportar para planilha</button>
+          <button onClick={function(){ imprimir(); }} style={{ background:"none", border:"none", textAlign:"left", padding:"9px 10px", borderRadius:7, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" }}>Imprimir</button>
+        </div>
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"12px 14px" }}>
+          <div style={{ fontSize:11.5, color:"var(--text-3)" }}>Total filtrado</div>
+          <div style={{ fontSize:18, fontWeight:600, color:"var(--text-strong)" }}>{fmt(valorTotalLista)}</div>
+          <div style={{ fontSize:11, color:"var(--text-4)", marginTop:2 }}>{lista.length} de {(contas||[]).length} conta(s)</div>
+        </div>
+      </>}>
       <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12, flexWrap:"wrap" }}>
-        <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Contas a pagar</div>
         <button onClick={function(){ setMostrarFiltros(function(v){return !v;}); }} style={{ ...filtBtn, background: mostrarFiltros?"rgba(118,133,146,.14)":"var(--surface)" }}>⚙ Filtros</button>
         <div style={{ position:"relative", flex:1, minWidth:220, maxWidth:520 }}>
           <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:"var(--text-3)", fontSize:13 }}>🔍</span>
           <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Pesquise por fornecedor, categoria ou histórico" style={{ width:"100%", background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 12px 9px 34px", borderRadius:9, fontSize:13, outline:"none" }} />
         </div>
-        <div style={{ flex:1 }} />
-        <button onClick={function(){ setMostrarAcoes(function(v){return !v;}); }} style={filtBtn}>Ações</button>
       </div>
       <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
         {mostrarFiltros && (
@@ -4813,11 +4878,13 @@ function ContasPagarTab({ contas, salvar, contasBancarias }) {
         )}
         <div style={{ flex:1, minWidth:0 }}>
           {lista.length === 0 ? (
-            <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"60px 20px", textAlign:"center" }}>
-              <div style={{ fontSize:40, marginBottom:10 }}>🗎</div>
-              <div style={{ fontWeight:600, fontSize:16, color:"var(--ui-accent)" }}>Nenhum resultado encontrado.</div>
-              <div style={{ fontSize:13, color:"var(--text-3)", marginTop:4 }}>Crie uma conta em "Incluir conta" ou ajuste os filtros.</div>
-            </div>
+            <VazioFin icone="🗎"
+              titulo={temFiltro ? "Nenhuma conta com esses filtros." : "Nenhuma conta cadastrada."}
+              texto={temFiltro
+                ? "Limpe os filtros para ver todas, ou cadastre a conta que está procurando."
+                : "Cadastre aqui o que você deve, com vencimento, categoria e — quando houver — juros e multa. É isso que faz a Prioridade de pagamento e o Fluxo de caixa funcionarem."}
+              acao={temFiltro ? "Limpar filtros" : "+ Incluir conta"}
+              onAcao={temFiltro ? limpar : function(){ setModal({}); }} />
           ) : (
             <div style={_tableWrap}>
               <table style={_table}>
@@ -4845,21 +4912,6 @@ function ContasPagarTab({ contas, salvar, contasBancarias }) {
             </div>
           )}
         </div>
-        {mostrarAcoes && (
-          <div style={{ width:236, flexShrink:0, display:"flex", flexDirection:"column", gap:8 }}>
-            <button onClick={function(){ setModal({}); }} style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"11px", borderRadius:9, cursor:"pointer", fontSize:13.5 }}>+ Incluir conta</button>
-            <button onClick={function(){ setImportando(true); }} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"11px", borderRadius:9, cursor:"pointer", fontSize:13 }}>⬆ Importar planilha</button>
-            <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"6px", display:"flex", flexDirection:"column" }}>
-              <button onClick={exportar} style={{ background:"none", border:"none", textAlign:"left", padding:"9px 10px", borderRadius:7, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" }}>Exportar para planilha</button>
-              <button onClick={function(){ imprimir(); }} style={{ background:"none", border:"none", textAlign:"left", padding:"9px 10px", borderRadius:7, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" }}>Imprimir</button>
-            </div>
-            <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"12px 14px" }}>
-              <div style={{ fontWeight:600, fontSize:13, color:"var(--text-strong)", marginBottom:8 }}>Informações</div>
-              {kpis.map(function(k,i){ return <div key={i} style={{ marginBottom:6 }}><div style={{ fontSize:11.5, color:"var(--text-3)" }}>{k.l}</div><div style={{ fontSize:16, fontWeight:600, color:k.c }}>{k.v}</div></div>; })}
-              <div style={{ borderTop:"1px solid var(--border-soft)", marginTop:6, paddingTop:6 }}><div style={{ fontSize:11.5, color:"var(--text-3)" }}>Total filtrado</div><div style={{ fontSize:18, fontWeight:600, color:"var(--text-strong)" }}>{fmt(valorTotalLista)}</div></div>
-            </div>
-          </div>
-        )}
       </div>
       {resultadoImp && (
         <div style={{ position:"fixed", left:"50%", bottom:24, transform:"translateX(-50%)", background:"var(--surface)", border:"1px solid #0a9d4e", borderRadius:12, padding:"12px 18px", zIndex:650, boxShadow:"0 8px 30px rgba(0,0,0,.2)", fontSize:13, color:"var(--text-2)", display:"flex", alignItems:"center", gap:14 }}>
@@ -4876,7 +4928,7 @@ function ContasPagarTab({ contas, salvar, contasBancarias }) {
         }}
         onClose={function(){ setImportando(false); }} />}
       {modal && <ContaModal conta={modal} onSave={salvarConta} onClose={function(){ setModal(null); }} contasBancarias={contasBancarias} />}
-    </div>
+    </FinanceiroShell>
   );
 }
 
@@ -5787,6 +5839,7 @@ function HomeTab({ enrichedOrders, currentUser, setTab }){
       { key:"bancos", label:"Caixas e bancos", desc:"Onde o dinheiro está e quanto tem" },
       { key:"lancamentos", label:"Lançamentos", desc:"Extrato de tudo o que entrou e saiu" },
       { key:"dre", label:"DRE e conciliação", desc:"Demonstrativo de resultado" },
+      { key:"impostos", label:"Impostos", desc:"ICMS por destino, IRPJ, CSLL e custos fixos" },
     ]},
     { titulo:"Cadastro", itens:[
       { key:"clientes", label:"Clientes", desc:"Recorrentes e novos" },
@@ -5799,7 +5852,6 @@ function HomeTab({ enrichedOrders, currentUser, setTab }){
     ]},
     { titulo:"Configuração", itens:[
       perm.includes("admin") && { key:"admin", label:"Equipe", desc:"Usuários e permissões" },
-      { key:"impostos", label:"Impostos", desc:"ICMS por destino, IRPJ, CSLL e custos fixos" },
       { key:"analise_ia", label:"Análise de anúncios", desc:"Critérios da nota e regras para a IA" },
       { key:"integracoes", label:"Integrações", desc:"Conexões e marketplaces" },
     ]},
@@ -7714,15 +7766,10 @@ function icmsPctProjecao(regime, tabelaPorEstado) {
 // uma aba do painel global que nenhum botão abria — ficava inalcançável na interface.
 function ImpostosTab(props) {
   return (
-    <div style={{ padding:"0 20px" }}>
-      <div style={{ padding:"12px 0 14px", borderBottom:"1px solid var(--border)", marginBottom:16 }}>
-        <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)", marginBottom:4 }}>🧾 Impostos</div>
-        <div style={{ fontSize:13, color:"var(--text-2)" }}>
-          ICMS por destino da venda, IRPJ, CSLL e custos fixos — entram no cálculo de margem de anúncios, pedidos e precificação
-        </div>
-      </div>
+    <FinanceiroShell tab={props.tab} setTab={props.setTab} titulo="Impostos" largura={1400}
+      sub="ICMS por destino da venda, IRPJ, CSLL e custos fixos — entram na margem de anúncios e pedidos, e nas despesas do DRE.">
       <ImpostosCompacto {...props} />
-    </div>
+    </FinanceiroShell>
   );
 }
 
@@ -10266,6 +10313,10 @@ export default function App() {
     try { localStorage.setItem("pedidos_compra", JSON.stringify(lista)); } catch(e) {}
     try { kvSyncPush("pedidos_compra", lista); } catch(e) {}
   }
+  // Período do módulo Financeiro. Fica aqui para sobreviver à troca de aba: era
+  // estado interno de cada tela, então ir ao DRE e voltar a Lançamentos jogava
+  // a escolha fora.
+  const [periodoFin, setPeriodoFin] = useState("30");
   // Regime financeiro (caixa/competência, quando o repasse vira receita, de
   // onde saem as despesas). Fica na raiz porque DRE e Contas a receber precisam
   // concordar — duas telas com regimes diferentes dariam dois lucros.
@@ -11602,6 +11653,7 @@ export default function App() {
               { key:"bancos", label:"Caixas e bancos" },
               { key:"lancamentos", label:"Lançamentos" },
               { key:"dre", label:"DRE e conciliação" },
+              { key:"impostos", label:"Impostos" },
             ]},
             { titulo:"Cadastro", itens:[
               { key:"clientes", label:"Clientes" },
@@ -11614,7 +11666,6 @@ export default function App() {
             ]},
             { titulo:"Configuração", itens:[
               currentUser?.permissoes?.includes("admin") && { key:"admin", label:"Equipe" },
-              { key:"impostos", label:"Impostos" },
               { key:"analise_ia", label:"Análise de anúncios" },
               { key:"integracoes", label:"Integrações" },
             ]},
@@ -12208,21 +12259,21 @@ export default function App() {
         {tab === "relatorios" && <RelatoriosTab enrichedOrders={enrichedOrders} />}
         {tab === "expedicao" && <EmConstrucao tab="expedicao" />}
         {tab === "notas_fiscais" && <EmConstrucao tab="notas_fiscais" />}
-        {tab === "contas_receber" && <ContasReceberTab enrichedOrders={enrichedOrders} paymentData={paymentData}
+        {tab === "contas_receber" && <ContasReceberTab tab={tab} setTab={setTab} enrichedOrders={enrichedOrders} paymentData={paymentData}
           baixados={recebiveisBaixados} setBaixados={setRecebiveisBaixados} config={financeiroConfig} />}
-        {tab === "contas_pagar" && <ContasPagarTab contas={contasPagar} salvar={salvarContasPagar} contasBancarias={contasBancarias} />}
-        {tab === "prioridade_pagamento" && <PrioridadePagamentoTab contas={contasPagar} salvarContas={salvarContasPagar} config={configPrioridade} salvarConfig={setConfigPrioridade} saldoEmCaixa={saldoEmCaixa} temContasBancarias={(contasBancarias||[]).length > 0} />}
-        {tab === "fluxo_caixa" && <FluxoCaixaTab saldoEmCaixa={saldoEmCaixa} temContasBancarias={(contasBancarias||[]).length > 0}
+        {tab === "contas_pagar" && <ContasPagarTab tab={tab} setTab={setTab} contas={contasPagar} salvar={salvarContasPagar} contasBancarias={contasBancarias} />}
+        {tab === "prioridade_pagamento" && <PrioridadePagamentoTab contas={contasPagar} salvarContas={salvarContasPagar} config={configPrioridade} salvarConfig={setConfigPrioridade} saldoEmCaixa={saldoEmCaixa} temContasBancarias={(contasBancarias||[]).length > 0} tab={tab} setTab={setTab} />}
+        {tab === "fluxo_caixa" && <FluxoCaixaTab tab={tab} saldoEmCaixa={saldoEmCaixa} temContasBancarias={(contasBancarias||[]).length > 0}
           contasPagar={contasPagar} enrichedOrders={enrichedOrders} paymentData={paymentData}
           recebiveisBaixados={recebiveisBaixados} lancamentos={lancamentos} custosFixos={custosFixos} setTab={setTab} />}
-        {tab === "bancos" && <BancosTab contasBancarias={contasBancarias} salvar={salvarContasBancarias} movimentos={movimentosCaixa} setTab={setTab} />}
-        {tab === "lancamentos" && <LancamentosTab lancamentos={lancamentos} salvar={salvarLancamentos} movimentos={movimentosCaixa} contasBancarias={contasBancarias} categorias={categoriasPagar} />}
+        {tab === "bancos" && <BancosTab tab={tab} contasBancarias={contasBancarias} salvar={salvarContasBancarias} movimentos={movimentosCaixa} setTab={setTab} />}
+        {tab === "lancamentos" && <LancamentosTab tab={tab} setTab={setTab} periodo={periodoFin} setPeriodo={setPeriodoFin} lancamentos={lancamentos} salvar={salvarLancamentos} movimentos={movimentosCaixa} contasBancarias={contasBancarias} categorias={categoriasPagar} />}
         {tab === "compras" && <ComprasTab produtos={produtos} pedidos={pedidosCompra} salvar={salvarPedidosCompra} />}
         {tab === "clientes" && <ClientesTab rawOrders={rawOrders} />}
         {tab === "tendencias" && <TendenciasTab setTab={setTab} setBuscaPrecificacao={setBuscaPrecificacao} enriched={enriched} />}
         {tab === "integracoes" && <IntegracoesTab token={token} user={user} lastUpdate={lastUpdate} />}
         {tab === "impostos" && (
-          <ImpostosTab
+          <ImpostosTab tab={tab} setTab={setTab}
             impostos={impostos} setImpostos={setImpostos}
             custosFixos={custosFixos} setCustosFixos={setCustosFixos}
             irpjCsllConfig={irpjCsllConfig} setIrpjCsllConfig={setIrpjCsllConfig}
@@ -12233,7 +12284,7 @@ export default function App() {
         )}
         {tab === "dre" && <DreTab enrichedOrders={enrichedOrders} contasPagar={contasPagar} lancamentos={lancamentos}
           custosFixos={custosFixos} recebiveisBaixados={recebiveisBaixados} paymentData={paymentData}
-          config={financeiroConfig} salvarConfig={setFinanceiroConfig} />}
+          config={financeiroConfig} salvarConfig={setFinanceiroConfig} tab={tab} setTab={setTab} periodo={periodoFin} setPeriodo={setPeriodoFin} />}
         {TELAS_FIN[tab] && <TelaEstruturada cfg={TELAS_FIN[tab]} />}
       </div>{/* fecha a coluna do conteúdo */}
 

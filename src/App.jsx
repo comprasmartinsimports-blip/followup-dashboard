@@ -4140,9 +4140,39 @@ function ContaBancariaModal({ conta, onSave, onClose, onExcluir }) {
 
 // Caixas e bancos: onde o dinheiro está, com o saldo calculado a partir dos
 // movimentos — não digitado.
-function BancosTab({ contasBancarias, salvar, movimentos, setTab, tab, estornar }) {
+function BancosTab({ contasBancarias, salvar, movimentos, setTab, tab, estornar, extratoBancario, conciliacoesManuais }) {
   const [modal, setModal] = useState(null);
   const [extratoDe, setExtratoDe] = useState(null);
+  const [busca, setBusca] = useState("");
+  // O painel de filtros começa aberto e o estado fica gravado: quem fecha uma
+  // vez não quer reabrir a cada visita.
+  const [filtrosAbertos, setFiltrosAbertos] = useState(function(){
+    try { return localStorage.getItem("bancos_filtros_ocultos") !== "1"; } catch { return true; }
+  });
+  function alternarFiltros(){
+    setFiltrosAbertos(function(v){
+      try { localStorage.setItem("bancos_filtros_ocultos", v ? "1" : "0"); } catch(e) {}
+      return !v;
+    });
+  }
+  const [fCat, setFCat] = useState("todas");
+  const [fTipo, setFTipo] = useState("todos");
+  const [fOrigem, setFOrigem] = useState("todas");
+  const [fConc, setFConc] = useState("todas");
+  const [fVMin, setFVMin] = useState("");
+  const [fVMax, setFVMax] = useState("");
+
+  // Situação da conciliação de cada movimento, vinda do mesmo motor da tela de
+  // Conciliação — não de um campo digitado à parte, que sairia do lugar.
+  var conc = useMemo(function(){
+    if (!(extratoBancario || []).length) return null;
+    return conciliar(extratoBancario, movimentos, conciliacoesManuais);
+  }, [extratoBancario, movimentos, conciliacoesManuais]);
+  function situacaoConc(m){
+    if (!conc) return "sem_extrato";
+    if (conc.divergentes.some(function(x){ return x.mov && x.mov.id === m.id; })) return "divergente";
+    return conc.porMov[m.id] ? "conciliado" : "pendente";
+  }
   var semConta = movimentosSemConta(movimentos, contasBancarias);
   var somaSemConta = semConta.reduce(function(s,m){ return s + (m.tipo === "entrada" ? m.valor : -m.valor); }, 0);
   var consolidado = saldoConsolidado(contasBancarias, movimentos);
@@ -4163,6 +4193,12 @@ function BancosTab({ contasBancarias, salvar, movimentos, setTab, tab, estornar 
 
   var cartao = { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"18px 20px" };
 
+  var termoConta = busca.trim().toLowerCase();
+  var contasVisiveis = (contasBancarias || []).filter(function(c){
+    if (!termoConta) return true;
+    return (c.nome + " " + (c.banco||"") + " " + (c.agencia||"") + " " + (c.numero||"")).toLowerCase().indexOf(termoConta) >= 0;
+  });
+
   var kpisBanco = [
     { rotulo:"Saldo consolidado", valor:fmt(consolidado), cor: consolidado >= 0 ? FIN_COR.entrada : FIN_COR.saida, nota:"contas ativas, sem cartões" },
     { rotulo:"Contas cadastradas", valor:String((contasBancarias||[]).length), cor:FIN_COR.neutro,
@@ -4176,14 +4212,48 @@ function BancosTab({ contasBancarias, salvar, movimentos, setTab, tab, estornar 
     if (!conta) { setExtratoDe(null); return null; }
     var doExtrato = (movimentos || []).filter(function(m){ return m.conta === conta.id && m.data >= (conta.dataSaldoInicial || "0000-00-00"); });
     var corrido = parseFloat(conta.saldoInicial) || 0;
+    // O saldo corrido é calculado sobre TODOS os movimentos e só depois a lista
+    // é filtrada: filtrar antes faria a coluna Saldo mostrar um saldo que não
+    // existe, o de uma conta onde só as linhas escolhidas tivessem acontecido.
     var comSaldo = doExtrato.slice().reverse().map(function(m){
       corrido += m.tipo === "entrada" ? m.valor : -m.valor;
       return Object.assign({}, m, { saldo: corrido });
     }).reverse();
+    var vMin = fVMin === "" ? null : parseFloat(fVMin);
+    var vMax = fVMax === "" ? null : parseFloat(fVMax);
+    var termo = busca.trim().toLowerCase();
+    var visiveis = comSaldo.filter(function(m){
+      if (termo && (m.descricao + " " + (m.categoria||"")).toLowerCase().indexOf(termo) < 0) return false;
+      if (fCat !== "todas" && (m.categoria || "Outros") !== fCat) return false;
+      if (fTipo !== "todos" && m.tipo !== fTipo) return false;
+      if (fOrigem !== "todas" && m.origem !== fOrigem) return false;
+      if (fConc !== "todas" && situacaoConc(m) !== fConc) return false;
+      if (vMin != null && !isNaN(vMin) && m.valor < vMin) return false;
+      if (vMax != null && !isNaN(vMax) && m.valor > vMax) return false;
+      return true;
+    });
+    var filtrando = visiveis.length !== comSaldo.length;
+    var categoriasExtrato = [];
+    comSaldo.forEach(function(m){ var c = m.categoria || "Outros"; if (categoriasExtrato.indexOf(c) < 0) categoriasExtrato.push(c); });
+    categoriasExtrato.sort(function(a,b){ return a.localeCompare(b, "pt-BR"); });
+    function limparFiltros(){ setFCat("todas"); setFTipo("todos"); setFOrigem("todas"); setFConc("todas"); setFVMin(""); setFVMax(""); setBusca(""); }
+
+    var grupoFiltro = { marginBottom:16 };
+    var rotFiltro = { fontSize:11, fontWeight:700, color:"var(--text-3)", textTransform:"uppercase", letterSpacing:.4, marginBottom:7 };
+    function OpcaoFiltro(valor, atual, set, rotulo, nota){
+      var on = atual === valor;
+      return <button key={valor} onClick={function(){ set(valor); }}
+        style={{ display:"block", width:"100%", textAlign:"left", background: on ? "rgba(10,157,78,.12)" : "none",
+                 border:"1px solid " + (on ? "rgba(10,157,78,.4)" : "transparent"), borderRadius:8,
+                 color: on ? "#0a9d4e" : "var(--text-2)", fontWeight: on ? 600 : 500,
+                 padding:"6px 9px", cursor:"pointer", fontSize:12.5, marginBottom:2 }}>
+        {rotulo}{nota != null && <span style={{ float:"right", color:"var(--text-4)", fontWeight:400 }}>{nota}</span>}
+      </button>;
+    }
     return (
       <FinanceiroShell tab={tab} setTab={setTab} titulo={conta.nome}
         sub={"Extrato desde " + (fmtDate(conta.dataSaldoInicial) || conta.dataSaldoInicial) + " · saldo inicial " + fmt(parseFloat(conta.saldoInicial)||0)}
-        controles={<button onClick={function(){ setExtratoDe(null); }} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"7px 16px", borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:600 }}>← Todas as contas</button>}
+        controles={<button onClick={function(){ setBusca(""); setExtratoDe(null); }} style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"7px 16px", borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:600 }}>← Todas as contas</button>}
         kpis={[
           { rotulo:"Saldo atual", valor:fmt(saldoDaConta(conta, movimentos)), cor: saldoDaConta(conta, movimentos) >= 0 ? FIN_COR.entrada : FIN_COR.saida },
           { rotulo:"Entradas no extrato", valor:fmt(doExtrato.filter(function(m){ return m.tipo==="entrada"; }).reduce(function(a,m){ return a+m.valor; },0)), cor:FIN_COR.entrada },
@@ -4191,14 +4261,95 @@ function BancosTab({ contasBancarias, salvar, movimentos, setTab, tab, estornar 
         ]}>
         {comSaldo.length === 0
           ? <div style={{ ...cartao, textAlign:"center", padding:"46px 20px", color:"var(--text-3)", fontSize:13.5 }}>Nenhum movimento nesta conta desde a data do saldo inicial.</div>
-          : <div className="tabela-wrap"><table className="tabela">
-              <thead><tr>{["Data","Descrição","Categoria","Origem","Entrada","Saída","Saldo",""].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
-              <tbody>{comSaldo.map(function(m,i){
+          : <div style={{ display:"flex", gap:14, alignItems:"flex-start" }}>
+            {/* Painel de filtros. Retrai para a lista ocupar a tela inteira e
+                volta no mesmo estado na próxima visita. */}
+            <div style={{ width: filtrosAbertos ? 212 : 40, flexShrink:0 }}>
+              <button onClick={alternarFiltros} title={filtrosAbertos ? "Recolher filtros" : "Expandir filtros"}
+                style={{ width:"100%", background:"var(--surface)", border:"1px solid var(--border)", borderRadius:9,
+                         color:"var(--text-2)", fontWeight:600, fontSize:12, padding:"8px 10px", cursor:"pointer",
+                         display:"flex", alignItems:"center", justifyContent: filtrosAbertos ? "space-between" : "center", gap:6 }}>
+                {filtrosAbertos ? <><span>Filtros</span><span style={{ color:"var(--text-4)" }}>⟨</span></> : <span>⟩</span>}
+              </button>
+              {filtrosAbertos && (
+                <div style={{ ...cartao, padding:"14px 12px", marginTop:8 }}>
+                  <div style={grupoFiltro}>
+                    <div style={rotFiltro}>Categoria</div>
+                    {OpcaoFiltro("todas", fCat, setFCat, "Todas as categorias", comSaldo.length)}
+                    {categoriasExtrato.map(function(c){
+                      return OpcaoFiltro(c, fCat, setFCat, c, comSaldo.filter(function(m){ return (m.categoria||"Outros") === c; }).length);
+                    })}
+                  </div>
+                  <div style={grupoFiltro}>
+                    <div style={rotFiltro}>Situação</div>
+                    {OpcaoFiltro("todos", fTipo, setFTipo, "Entradas e saídas", comSaldo.length)}
+                    {OpcaoFiltro("entrada", fTipo, setFTipo, "Só entradas", comSaldo.filter(function(m){ return m.tipo === "entrada"; }).length)}
+                    {OpcaoFiltro("saida", fTipo, setFTipo, "Só saídas", comSaldo.filter(function(m){ return m.tipo === "saida"; }).length)}
+                  </div>
+                  <div style={grupoFiltro}>
+                    <div style={rotFiltro}>Origem</div>
+                    {OpcaoFiltro("todas", fOrigem, setFOrigem, "Todas as origens", comSaldo.length)}
+                    {["conta_pagar","recebivel","manual"].map(function(o){
+                      var n = comSaldo.filter(function(m){ return m.origem === o; }).length;
+                      return n ? OpcaoFiltro(o, fOrigem, setFOrigem, ROTULO_ORIGEM[o] || o, n) : null;
+                    })}
+                  </div>
+                  <div style={grupoFiltro}>
+                    <div style={rotFiltro}>Situação da conciliação</div>
+                    {!conc ? (
+                      <div style={{ fontSize:11.5, color:"var(--text-4)", lineHeight:1.5, padding:"2px 2px 4px" }}>
+                        Nenhum extrato bancário importado — sem ele não dá para dizer o que está conciliado.
+                        {setTab && <button onClick={function(){ setTab("conciliacao"); }} style={{ display:"block", marginTop:6, background:"none", border:"none", color:"var(--ui-accent)", cursor:"pointer", fontSize:11.5, fontWeight:600, padding:0 }}>Importar em Conciliação →</button>}
+                      </div>
+                    ) : <>
+                      {OpcaoFiltro("todas", fConc, setFConc, "Todas", comSaldo.length)}
+                      {[["conciliado","Conciliados"],["divergente","Divergentes"],["pendente","Não conciliados"]].map(function(x){
+                        return OpcaoFiltro(x[0], fConc, setFConc, x[1], comSaldo.filter(function(m){ return situacaoConc(m) === x[0]; }).length);
+                      })}
+                    </>}
+                  </div>
+                  <div style={grupoFiltro}>
+                    <div style={rotFiltro}>Valor</div>
+                    <div style={{ display:"flex", gap:6 }}>
+                      <input type="number" step="0.01" value={fVMin} onChange={function(e){ setFVMin(e.target.value); }} placeholder="de"
+                        style={{ width:"50%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"7px 8px", borderRadius:7, fontSize:12, outline:"none", boxSizing:"border-box" }} />
+                      <input type="number" step="0.01" value={fVMax} onChange={function(e){ setFVMax(e.target.value); }} placeholder="até"
+                        style={{ width:"50%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"7px 8px", borderRadius:7, fontSize:12, outline:"none", boxSizing:"border-box" }} />
+                    </div>
+                  </div>
+                  {filtrando && <button onClick={limparFiltros}
+                    style={{ width:"100%", background:"var(--surface-3)", border:"1px solid var(--border)", color:"var(--text-2)",
+                             fontWeight:600, fontSize:12, padding:"7px 10px", borderRadius:8, cursor:"pointer" }}>Limpar filtros</button>}
+                </div>
+              )}
+            </div>
+
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10, flexWrap:"wrap" }}>
+                <div style={{ position:"relative", flex:1, minWidth:220, maxWidth:520 }}>
+                  <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:"var(--text-3)", fontSize:13 }}>🔍</span>
+                  <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Pesquise por nome ou histórico" className="busca" />
+                </div>
+                <span style={{ fontSize:12, color:"var(--text-3)" }}>
+                  {filtrando ? visiveis.length + " de " + comSaldo.length + " movimentos" : comSaldo.length + " movimentos"}
+                  {filtrando && <> · <b style={{ color:"var(--text-2)" }}>{fmt(visiveis.reduce(function(a,m){ return a + (m.tipo === "entrada" ? m.valor : -m.valor); }, 0))}</b> no que está à vista</>}
+                </span>
+              </div>
+              {visiveis.length === 0
+                ? <div style={{ ...cartao, textAlign:"center", padding:"40px 20px", color:"var(--text-3)", fontSize:13.5 }}>
+                    Nenhum movimento com esses filtros.
+                    <button onClick={limparFiltros} style={{ marginLeft:8, background:"none", border:"none", color:"var(--ui-accent)", cursor:"pointer", fontSize:13.5, fontWeight:600, padding:0 }}>Limpar</button>
+                  </div>
+                : <div className="tabela-wrap"><table className="tabela">
+              <thead><tr>{["Data","Descrição","Categoria","Origem","Conciliação","Entrada","Saída","Saldo",""].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
+              <tbody>{visiveis.map(function(m,i){
+                var rotConc = { conciliado:["Conciliado","#0a9d4e"], divergente:["Divergente","#FFC107"], pendente:["Não conciliado","var(--text-3)"], sem_extrato:["—","var(--text-4)"] }[situacaoConc(m)];
                 return <tr key={m.id||i}>
                   <td className="td">{fmtDate(m.data) || m.data}</td>
                   <td className="td" style={{ color:"var(--text-strong)", maxWidth:280 }}>{m.descricao}</td>
                   <td className="td">{m.categoria}</td>
                   <td className="td" style={{ fontSize:11.5, color:"var(--text-3)" }}>{ROTULO_ORIGEM[m.origem] || m.origem}</td>
+                  <td className="td" style={{ fontSize:11.5, color: rotConc[1] }}>{rotConc[0]}</td>
                   <td className="td-num">{m.tipo === "entrada" ? <span style={{ color:"#0a9d4e" }}>{fmt(m.valor)}</span> : "—"}</td>
                   <td className="td-num">{m.tipo === "saida" ? <span style={{ color:"#FF5252" }}>{fmt(m.valor)}</span> : "—"}</td>
                   <td className="td-num" style={{ fontWeight:600, color: m.saldo >= 0 ? "var(--text-strong)" : "#FF5252" }}>{fmt(m.saldo)}</td>
@@ -4214,6 +4365,8 @@ function BancosTab({ contasBancarias, salvar, movimentos, setTab, tab, estornar 
                 </tr>;
               })}</tbody>
             </table></div>}
+            </div>
+          </div>}
       </FinanceiroShell>
     );
   }
@@ -4221,27 +4374,43 @@ function BancosTab({ contasBancarias, salvar, movimentos, setTab, tab, estornar 
   return (
     <FinanceiroShell tab={tab} setTab={setTab} titulo="Caixas e bancos"
       sub="Onde o dinheiro está. O saldo é calculado — não digitado."
-      kpis={kpisBanco}
       acoes={<>
         <AcaoFin tipo="pri" onClick={function(){ setModal({}); }}>+ Nova conta</AcaoFin>
         <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"12px 14px", fontSize:11.5, color:"var(--text-3)", lineHeight:1.6 }}>
           O saldo consolidado é o que a <b>Prioridade de pagamento</b> usa, no lugar de perguntar
           quanto você tem.
         </div>
+        {/* Os números moraram na faixa do topo; aqui embaixo do botão eles ficam
+            ao lado da frase que explica para que servem. */}
+        {kpisBanco.map(function(k,i){ return <KpiFin key={i} rotulo={k.rotulo} valor={k.valor} cor={k.cor} nota={k.nota} />; })}
       </>}>
       {(contasBancarias || []).length === 0 ? (
         <VazioFin icone="🏦" titulo="Nenhuma conta cadastrada."
           texto="Cadastre onde o seu dinheiro fica — banco, caixa, reserva. Informe o saldo de hoje e o sistema mantém o resto a partir das contas pagas e dos recebimentos confirmados."
           acao="+ Nova conta" onAcao={function(){ setModal({}); }} />
       ) : (
-        <div className="tabela-wrap">
+        <>
+        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10, flexWrap:"wrap" }}>
+          <div style={{ position:"relative", flex:1, minWidth:220, maxWidth:520 }}>
+            <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:"var(--text-3)", fontSize:13 }}>🔍</span>
+            <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Pesquise pelo nome da conta ou pelo banco" className="busca" />
+          </div>
+          {contasVisiveis.length !== (contasBancarias || []).length &&
+            <span style={{ fontSize:12, color:"var(--text-3)" }}>{contasVisiveis.length} de {(contasBancarias||[]).length} contas</span>}
+        </div>
+        {contasVisiveis.length === 0
+          ? <div style={{ ...cartao, textAlign:"center", padding:"40px 20px", color:"var(--text-3)", fontSize:13.5 }}>
+              Nenhuma conta com esse nome.
+              <button onClick={function(){ setBusca(""); }} style={{ marginLeft:8, background:"none", border:"none", color:"var(--ui-accent)", cursor:"pointer", fontSize:13.5, fontWeight:600, padding:0 }}>Limpar</button>
+            </div>
+          : <div className="tabela-wrap">
           <table className="tabela">
             <thead><tr>{["Conta","Tipo","Dados","Saldo inicial","Saldo atual",""].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
             <tbody>
-              {(contasBancarias || []).map(function(c){
+              {contasVisiveis.map(function(c){
                 var saldo = saldoDaConta(c, movimentos);
                 var inativa = c.ativa === false;
-                return <tr key={c.id} onClick={function(){ setExtratoDe(c.id); }} style={{ cursor:"pointer", opacity: inativa ? .5 : 1 }} title="Ver extrato">
+                return <tr key={c.id} onClick={function(){ setBusca(""); setExtratoDe(c.id); }} style={{ cursor:"pointer", opacity: inativa ? .5 : 1 }} title="Ver extrato">
                   <td className="td" style={{ color:"var(--text-strong)", fontWeight:500 }}>
                     {c.nome}
                     {c.recebeML && <span style={{ marginLeft:8, fontSize:10, fontWeight:600, padding:"2px 7px", borderRadius:20, background:"rgba(255,193,7,.16)", color:"#B8860B" }}>repasses ML</span>}
@@ -4258,7 +4427,8 @@ function BancosTab({ contasBancarias, salvar, movimentos, setTab, tab, estornar 
               })}
             </tbody>
           </table>
-        </div>
+        </div>}
+        </>
       )}
 
       {(contasBancarias || []).length > 0 && !temML && (
@@ -13848,7 +14018,7 @@ export default function App() {
           manuais={conciliacoesManuais} salvarManuais={salvarConciliacoesManuais}
           movimentos={movimentosCaixa} contasBancarias={contasBancarias}
           lancamentos={lancamentos} salvarLancamentos={salvarLancamentos} />}
-        {tab === "bancos" && <BancosTab tab={tab} contasBancarias={contasBancarias} salvar={salvarContasBancarias} movimentos={movimentosCaixa} setTab={setTab} estornar={estornarMovimento} />}
+        {tab === "bancos" && <BancosTab tab={tab} contasBancarias={contasBancarias} salvar={salvarContasBancarias} movimentos={movimentosCaixa} setTab={setTab} estornar={estornarMovimento} extratoBancario={extratoBancario} conciliacoesManuais={conciliacoesManuais} />}
         {tab === "lancamentos" && <LancamentosTab tab={tab} setTab={setTab} periodo={periodoFin} setPeriodo={setPeriodoFin} lancamentos={lancamentos} salvar={salvarLancamentos} movimentos={movimentosCaixa} contasBancarias={contasBancarias} categorias={categoriasPagar} estornar={estornarMovimento} />}
         {tab === "compras" && <ComprasTab produtos={produtos} pedidos={pedidosCompra} salvar={salvarPedidosCompra} />}
         {tab === "clientes" && <ClientesTab rawOrders={rawOrders} />}

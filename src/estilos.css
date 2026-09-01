@@ -104,7 +104,7 @@
                  padding:9px 13px; cursor:pointer; font-size:13px; white-space:nowrap; font-family:inherit; }
 .mod-aba.on    { border-bottom-color:var(--ui-accent); color:var(--text-strong); font-weight:600; cursor:default; }
 .mod-corpo     { display:flex; gap:14px; align-items:flex-start; }
-.mod-acoes     { width:236px; flex-shrink:0; display:flex; flex-direction:column; gap:8px; }
+.mod-acoes     { width:236px; flex-shrink:0; display:flex; flex-direction:column; gap:6px; }
 
 /* ═══ BASE — regras globais que estavam dentro do App.jsx ═══════════════ */
 *{box-sizing:border-box;margin:0;padding:0}

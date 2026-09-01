@@ -6359,6 +6359,24 @@ function PrioridadePagamentoTab({ contas, salvarContas, config, salvarConfig, sa
   );
 }
 
+function IconeCalendario({ tamanho }) {
+  var t = tamanho || 19;
+  return (
+    <svg width={t} height={t} viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display:"block", flexShrink:0 }}>
+      <rect x="3" y="5" width="18" height="16" rx="3.4" stroke="currentColor" strokeWidth="1.9" />
+      <path d="M3.4 10.2h17.2" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+      <path d="M8 2.6v3.6M16 2.6v3.6" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+      <g fill="currentColor">
+        <rect x="6.7" y="12.9" width="2.5" height="2.5" rx=".7" />
+        <rect x="10.75" y="12.9" width="2.5" height="2.5" rx=".7" />
+        <rect x="14.8" y="12.9" width="2.5" height="2.5" rx=".7" />
+        <rect x="6.7" y="16.6" width="2.5" height="2.5" rx=".7" />
+        <rect x="10.75" y="16.6" width="2.5" height="2.5" rx=".7" />
+      </g>
+    </svg>
+  );
+}
+
 function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categorias, salvarCategorias, fornecedores, salvarFornecedores }) {
   const [modal, setModal] = useState(null);
   const [importando, setImportando] = useState(false);
@@ -6549,25 +6567,25 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categori
         <AcaoFin tipo="pri" onClick={function(){ setModal({}); }}>+ Incluir conta</AcaoFin>
         <AcaoFin onClick={function(){ setImportando(true); }}>⬆ Importar planilha</AcaoFin>
         <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"6px", display:"flex", flexDirection:"column" }}>
-          <button onClick={exportar} style={{ background:"none", border:"none", textAlign:"left", padding:"9px 10px", borderRadius:7, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" }}>Exportar para planilha</button>
-          <button onClick={function(){ imprimir(); }} style={{ background:"none", border:"none", textAlign:"left", padding:"9px 10px", borderRadius:7, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" }}>Imprimir</button>
+          <button onClick={exportar} style={{ background:"none", border:"none", textAlign:"left", padding:"7px 10px", borderRadius:7, cursor:"pointer", fontSize:11.5, color:"var(--text-2)", width:"100%" }}>Exportar para planilha</button>
+          <button onClick={function(){ imprimir(); }} style={{ background:"none", border:"none", textAlign:"left", padding:"7px 10px", borderRadius:7, cursor:"pointer", fontSize:11.5, color:"var(--text-2)", width:"100%" }}>Imprimir</button>
         </div>
-        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"12px 14px" }}>
-          <div style={{ fontSize:11.5, color:"var(--text-3)" }}>Total filtrado</div>
-          <div style={{ fontSize:18, fontWeight:600, color:"var(--text-strong)" }}>{fmt(valorTotalLista)}</div>
-          <div style={{ fontSize:11, color:"var(--text-4)", marginTop:2 }}>{lista.length} de {(contas||[]).length} conta(s)</div>
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"10px 12px" }}>
+          <div style={{ fontSize:10.5, color:"var(--text-3)" }}>Total filtrado</div>
+          <div style={{ fontSize:15, fontWeight:600, color:"var(--text-strong)", fontVariantNumeric:"tabular-nums" }}>{fmt(valorTotalLista)}</div>
+          <div style={{ fontSize:10, color:"var(--text-4)", marginTop:1 }}>{lista.length} de {(contas||[]).length} conta(s)</div>
         </div>
 
         {/* O que age sobre a seleção fica junto do total, não em cima da tabela:
             é aqui que se olha para decidir o que fazer com o que está marcado. */}
-        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"12px 14px", display:"flex", flexDirection:"column", gap:8 }}>
-          <div style={{ fontSize:11.5, color: selIds.length ? "var(--text-2)" : "var(--text-4)" }}>
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"10px 12px", display:"flex", flexDirection:"column", gap:7 }}>
+          <div style={{ fontSize:10.5, color: selIds.length ? "var(--text-2)" : "var(--text-4)" }}>
             {selIds.length ? selIds.length + " conta(s) selecionada(s)" : "Selecione contas na lista para agir"}
           </div>
-          <div style={{ display:"flex", gap:8 }}>
+          <div style={{ display:"flex", gap:7 }}>
             <button onClick={function(){ if (pagaveis.length) setBaixando(pagaveis); }} disabled={!pagaveis.length}
               title={pagaveis.length ? "Registrar o pagamento das contas marcadas" : "Marque uma ou mais contas em aberto"}
-              className="btn" style={{ flex:1, justifyContent:"center",
+              className="btn" style={{ flex:1, justifyContent:"center", fontSize:12, padding:"8px 12px",
                        background: pagaveis.length ? "var(--ui-accent)" : "var(--surface-3)",
                        color: pagaveis.length ? "var(--ui-accent-text)" : "var(--text-4)",
                        border: pagaveis.length ? "none" : "1px solid var(--border)",
@@ -6575,22 +6593,33 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categori
               Baixar pagamento{pagaveis.length ? " (" + pagaveis.length + ")" : ""}
             </button>
             <button onClick={excluirSelecionadas} disabled={!selIds.length} title={selIds.length ? "Excluir as contas marcadas" : "Marque uma ou mais contas"}
-              className="btn" style={{ background:"var(--surface-3)", border:"1px solid var(--border)",
-                       color: selIds.length ? "#FF5252" : "var(--text-4)", cursor: selIds.length ? "pointer" : "not-allowed", padding:"9px 13px" }}>🗑</button>
+              className="btn" style={{ background:"var(--surface-3)", border:"1px solid var(--border)", fontSize:13,
+                       color: selIds.length ? "#FF5252" : "var(--text-4)", cursor: selIds.length ? "pointer" : "not-allowed", padding:"8px 11px" }}>🗑</button>
           </div>
         </div>
 
-        {[
-          { rotulo:"Vencidas", valor:fmt(somaSaldo(function(c){ return statusReal(c) === "vencida"; })),
-            cor: (contas||[]).some(function(c){ return statusReal(c)==="vencida"; }) ? FIN_COR.saida : FIN_COR.fraco,
-            nota:(contas||[]).filter(function(c){ return statusReal(c)==="vencida"; }).length + " conta(s)" },
-          { rotulo:"Vencem em 7 dias", valor:fmt(venc7.reduce(function(a,c){ return a + saldoDe(c); },0)), cor: venc7.length ? FIN_COR.atencao : FIN_COR.fraco, nota:venc7.length + " conta(s)" },
-          { rotulo:"Em aberto", valor:fmt(somaSaldo(function(c){ var st = statusReal(c); return st === "pendente" || st === "vencida" || st === "parcial"; })),
-            cor:FIN_COR.neutro, nota:"saldo devedor, não valor de face" },
-          { rotulo:"Pagamento parcial", valor:fmt(somaSaldo(function(c){ return statusReal(c) === "parcial"; })),
-            cor: (contas||[]).some(function(c){ return statusReal(c)==="parcial"; }) ? FIN_COR.atencao : FIN_COR.fraco,
-            nota:(contas||[]).filter(function(c){ return statusReal(c)==="parcial"; }).length + " conta(s) · falta este valor" },
-        ].map(function(k,i){ return <KpiFin key={i} rotulo={k.rotulo} valor={k.valor} cor={k.cor} nota={k.nota} />; })}
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, overflow:"hidden" }}>
+          {[
+            { rotulo:"Vencidas", valor:fmt(somaSaldo(function(c){ return statusReal(c) === "vencida"; })),
+              cor: (contas||[]).some(function(c){ return statusReal(c)==="vencida"; }) ? FIN_COR.saida : FIN_COR.fraco,
+              nota:(contas||[]).filter(function(c){ return statusReal(c)==="vencida"; }).length + " conta(s)" },
+            { rotulo:"Vencem em 7 dias", valor:fmt(venc7.reduce(function(a,c){ return a + saldoDe(c); },0)), cor: venc7.length ? FIN_COR.atencao : FIN_COR.fraco, nota:venc7.length + " conta(s)" },
+            { rotulo:"Em aberto", valor:fmt(somaSaldo(function(c){ var st = statusReal(c); return st === "pendente" || st === "vencida" || st === "parcial"; })),
+              cor:FIN_COR.neutro, nota:"saldo devedor, não valor de face" },
+            { rotulo:"Pagamento parcial", valor:fmt(somaSaldo(function(c){ return statusReal(c) === "parcial"; })),
+              cor: (contas||[]).some(function(c){ return statusReal(c)==="parcial"; }) ? FIN_COR.atencao : FIN_COR.fraco,
+              nota:(contas||[]).filter(function(c){ return statusReal(c)==="parcial"; }).length + " conta(s) · falta este valor" },
+          ].map(function(k,i){
+            return <div key={i} style={{ padding:"8px 12px", borderTop: i ? "1px solid var(--border-soft)" : "none",
+                                         display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:8 }}>
+              <div style={{ minWidth:0 }}>
+                <div style={{ fontSize:10.5, color:"var(--text-3)", whiteSpace:"nowrap" }}>{k.rotulo}</div>
+                <div style={{ fontSize:9.5, color:"var(--text-4)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{k.nota}</div>
+              </div>
+              <div style={{ fontSize:13, fontWeight:600, color:k.cor, whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{k.valor}</div>
+            </div>;
+          })}
+        </div>
       </>}>
       <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12, flexWrap:"wrap" }}>
         <button onClick={alternarFiltros} style={{ ...filtBtn, background: mostrarFiltros?"rgba(118,133,146,.14)":"var(--surface)" }}>{mostrarFiltros ? "⟨ Filtros" : "⟩ Filtros"}</button>
@@ -6603,8 +6632,10 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categori
         <div style={{ position:"relative" }}>
           <button onClick={function(){ setDataAberta(!dataAberta); }} title={de || ate ? "Período: " + ((fmtDate(de)||de) || "início") + " até " + ((fmtDate(ate)||ate) || "hoje em diante") : "Filtrar por data de vencimento"}
             style={{ ...filtBtn, background: (de || ate) ? "rgba(10,157,78,.12)" : dataAberta ? "rgba(118,133,146,.14)" : "var(--surface)",
-                     border:"1px solid " + ((de || ate) ? "var(--ui-accent)" : "var(--border)"), padding:"9px 13px", display:"flex", alignItems:"center", gap:7 }}>
-            <span style={{ fontSize:14 }}>📅</span>
+                     border:"1px solid " + ((de || ate) ? "var(--ui-accent)" : "var(--border)"),
+                     borderRadius:11, padding: (de || ate) ? "0 12px 0 9px" : 0, height:38, minWidth:38,
+                     display:"flex", alignItems:"center", justifyContent:"center", gap:8, color:"#0a9d4e" }}>
+            <IconeCalendario />
             {(de || ate) && <span style={{ fontSize:12, color:"#0a9d4e", fontWeight:600 }}>
               {(de ? (fmtDate(de)||de) : "…") + " – " + (ate ? (fmtDate(ate)||ate) : "…")}
             </span>}

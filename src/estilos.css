@@ -104,7 +104,13 @@
                  padding:9px 13px; cursor:pointer; font-size:13px; white-space:nowrap; font-family:inherit; }
 .mod-aba.on    { border-bottom-color:var(--ui-accent); color:var(--text-strong); font-weight:600; cursor:default; }
 .mod-corpo     { display:flex; gap:14px; align-items:flex-start; }
-.mod-acoes     { width:236px; flex-shrink:0; display:flex; flex-direction:column; gap:6px; }
+/* Coluna de ações: um bloco contínuo. Cada cartão com a sua borda e o seu vão
+   fazia a coluna competir com a tabela; junta, ela informa sem gritar. Os
+   !important existem porque o conteúdo de cada aba vem com estilo em linha. */
+.mod-acoes         { width:236px; flex-shrink:0; display:flex; flex-direction:column; gap:0;
+                     background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+.mod-acoes > *     { border:none !important; border-radius:0 !important; }
+.mod-acoes > * + * { border-top:1px solid var(--border-soft) !important; }
 
 /* ═══ BASE — regras globais que estavam dentro do App.jsx ═══════════════ */
 *{box-sizing:border-box;margin:0;padding:0}

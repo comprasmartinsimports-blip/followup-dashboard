@@ -1758,15 +1758,6 @@ function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, 
   return (
     <FinanceiroShell tab={tab} setTab={setTab} titulo="Contas a receber"
       sub="Valores líquidos: bruto menos a taxa do Mercado Livre e o frete que você paga. O que o ML ainda não liberou é o contas a receber de verdade."
-      kpis={[
-        { rotulo:"A receber de verdade", valor:fmt(aReceber), cor: qtdDe("a_receber") ? FIN_COR.atencao : FIN_COR.fraco,
-          nota: qtdDe("a_receber") + " pedido(s) · o ML ainda não liberou" },
-        { rotulo:"Liberado, falta confirmar", valor:fmt(liberado), cor: qtdDe("liberado") ? "#0a9d4e" : FIN_COR.fraco,
-          nota: qtdDe("liberado") + " pedido(s) · já é dinheiro seu" },
-        { rotulo:"Recebido", valor:fmt(recebidoTot), cor:FIN_COR.entrada, nota:qtdDe("recebido") + " confirmado(s)" },
-        { rotulo:"Sem dado de repasse", valor:fmt(semDado), cor: qtdDe("sem_dado") ? FIN_COR.fraco : FIN_COR.fraco,
-          nota: qtdDe("sem_dado") + " pedido(s) · fora das contas acima" },
-      ]}
       acoes={<>
         {qtdDe("liberado") > 0 && (
           <AcaoFin tipo="pri" onClick={confirmarLiberados}>
@@ -1793,10 +1784,19 @@ function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, 
           <button onClick={exportar} style={{ background:"none", border:"none", textAlign:"left", padding:"9px 10px", borderRadius:7, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" }}>Exportar para planilha</button>
           <button onClick={function(){ imprimir(); }} style={{ background:"none", border:"none", textAlign:"left", padding:"9px 10px", borderRadius:7, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" }}>Imprimir</button>
         </div>
-        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"12px 14px" }}>
-          <div style={{ fontSize:11.5, color:"var(--text-3)" }}>Total filtrado</div>
-          <div style={{ fontSize:18, fontWeight:600, color:"var(--text-strong)" }}>{fmt(valorLista)}</div>
-          <div style={{ fontSize:11, color:"var(--text-4)", marginTop:2 }}>{lista.length} de {linhas.length} pedido(s)</div>
+        <BlocoKpis itens={[
+          { rotulo:"A receber de verdade", valor:fmt(aReceber), cor: qtdDe("a_receber") ? FIN_COR.atencao : FIN_COR.fraco,
+            nota: qtdDe("a_receber") + " pedido(s) · o ML ainda não liberou" },
+          { rotulo:"Liberado, falta confirmar", valor:fmt(liberado), cor: qtdDe("liberado") ? "#0a9d4e" : FIN_COR.fraco,
+            nota: qtdDe("liberado") + " pedido(s) · já é dinheiro seu" },
+          { rotulo:"Recebido", valor:fmt(recebidoTot), cor:FIN_COR.entrada, nota:qtdDe("recebido") + " confirmado(s)" },
+          { rotulo:"Sem dado de repasse", valor:fmt(semDado), cor:FIN_COR.fraco,
+            nota: qtdDe("sem_dado") + " pedido(s) · fora das contas acima" },
+        ]} />
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"10px 12px" }}>
+          <div style={{ fontSize:10.5, color:"var(--text-3)" }}>Total filtrado</div>
+          <div style={{ fontSize:15, fontWeight:600, color:"var(--text-strong)", fontVariantNumeric:"tabular-nums" }}>{fmt(valorLista)}</div>
+          <div style={{ fontSize:10, color:"var(--text-4)", marginTop:1 }}>{lista.length} de {linhas.length} pedido(s)</div>
           <div style={{ fontSize:11, color:"var(--text-3)", marginTop:10, lineHeight:1.55, borderTop:"1px solid var(--border-soft)", paddingTop:8 }}>
             Confirmar é o que faz a venda virar receita no DRE e entrar no saldo dos bancos.
           </div>
@@ -3497,6 +3497,26 @@ function KpiFin({ rotulo, valor, cor, nota }) {
   );
 }
 
+// Os mesmos números do KpiFin, mas empilhados num cartão só e em corpo menor.
+// Na coluna lateral eles informam de canto de olho; cada um no seu cartão
+// ocupava meia tela para dizer quatro linhas.
+function BlocoKpis({ itens }) {
+  return (
+    <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, overflow:"hidden" }}>
+      {(itens || []).map(function(k,i){
+        return <div key={i} style={{ padding:"8px 12px", borderTop: i ? "1px solid var(--border-soft)" : "none",
+                                     display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:8 }}>
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontSize:10.5, color:"var(--text-3)", whiteSpace:"nowrap" }}>{k.rotulo}</div>
+            {k.nota && <div style={{ fontSize:9.5, color:"var(--text-4)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{k.nota}</div>}
+          </div>
+          <div style={{ fontSize:13, fontWeight:600, color:k.cor, whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{k.valor}</div>
+        </div>;
+      })}
+    </div>
+  );
+}
+
 // props:
 //   tab/setTab        aba atual do módulo
 //   titulo, sub       cabeçalho da tela
@@ -4552,13 +4572,15 @@ function LancamentosTab({ lancamentos, salvar, movimentos, contasBancarias, cate
     <FinanceiroShell tab={tab} setTab={setTab} titulo="Lançamentos"
       sub="Tudo o que mexeu em dinheiro: contas pagas, recebimentos confirmados e lançamentos seus."
       periodo={periodo} setPeriodo={setPeriodo}
-      kpis={[
-        { rotulo:"Entradas", valor:fmt(entradas), cor:FIN_COR.entrada },
-        { rotulo:"Saídas", valor:fmt(saidas), cor:FIN_COR.saida },
-        { rotulo:"Resultado do período", valor:fmt(entradas - saidas), cor: entradas - saidas >= 0 ? FIN_COR.entrada : FIN_COR.saida },
-        { rotulo:"Movimentos", valor:String(lista.length), cor:FIN_COR.neutro },
-      ]}
-      acoes={<AcaoFin tipo="pri" onClick={function(){ setModal({}); }}>+ Novo lançamento</AcaoFin>}>
+      acoes={<>
+        <AcaoFin tipo="pri" onClick={function(){ setModal({}); }}>+ Novo lançamento</AcaoFin>
+        <BlocoKpis itens={[
+          { rotulo:"Entradas", valor:fmt(entradas), cor: entradas ? FIN_COR.entrada : FIN_COR.fraco, nota:"no período" },
+          { rotulo:"Saídas", valor:fmt(saidas), cor: saidas ? FIN_COR.saida : FIN_COR.fraco, nota:"no período" },
+          { rotulo:"Resultado do período", valor:fmt(entradas - saidas), cor: entradas - saidas >= 0 ? FIN_COR.entrada : FIN_COR.saida, nota:"entradas menos saídas" },
+          { rotulo:"Movimentos", valor:String(lista.length), cor:FIN_COR.neutro, nota:"linhas na lista" },
+        ]} />
+      </>}>
 
       <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap", alignItems:"center" }}>
         <select value={fTipo} onChange={function(e){ setFTipo(e.target.value); }} style={sel}>
@@ -6598,28 +6620,17 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categori
           </div>
         </div>
 
-        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, overflow:"hidden" }}>
-          {[
-            { rotulo:"Vencidas", valor:fmt(somaSaldo(function(c){ return statusReal(c) === "vencida"; })),
-              cor: (contas||[]).some(function(c){ return statusReal(c)==="vencida"; }) ? FIN_COR.saida : FIN_COR.fraco,
-              nota:(contas||[]).filter(function(c){ return statusReal(c)==="vencida"; }).length + " conta(s)" },
-            { rotulo:"Vencem em 7 dias", valor:fmt(venc7.reduce(function(a,c){ return a + saldoDe(c); },0)), cor: venc7.length ? FIN_COR.atencao : FIN_COR.fraco, nota:venc7.length + " conta(s)" },
-            { rotulo:"Em aberto", valor:fmt(somaSaldo(function(c){ var st = statusReal(c); return st === "pendente" || st === "vencida" || st === "parcial"; })),
-              cor:FIN_COR.neutro, nota:"saldo devedor, não valor de face" },
-            { rotulo:"Pagamento parcial", valor:fmt(somaSaldo(function(c){ return statusReal(c) === "parcial"; })),
-              cor: (contas||[]).some(function(c){ return statusReal(c)==="parcial"; }) ? FIN_COR.atencao : FIN_COR.fraco,
-              nota:(contas||[]).filter(function(c){ return statusReal(c)==="parcial"; }).length + " conta(s) · falta este valor" },
-          ].map(function(k,i){
-            return <div key={i} style={{ padding:"8px 12px", borderTop: i ? "1px solid var(--border-soft)" : "none",
-                                         display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:8 }}>
-              <div style={{ minWidth:0 }}>
-                <div style={{ fontSize:10.5, color:"var(--text-3)", whiteSpace:"nowrap" }}>{k.rotulo}</div>
-                <div style={{ fontSize:9.5, color:"var(--text-4)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{k.nota}</div>
-              </div>
-              <div style={{ fontSize:13, fontWeight:600, color:k.cor, whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{k.valor}</div>
-            </div>;
-          })}
-        </div>
+        <BlocoKpis itens={[
+          { rotulo:"Vencidas", valor:fmt(somaSaldo(function(c){ return statusReal(c) === "vencida"; })),
+            cor: (contas||[]).some(function(c){ return statusReal(c)==="vencida"; }) ? FIN_COR.saida : FIN_COR.fraco,
+            nota:(contas||[]).filter(function(c){ return statusReal(c)==="vencida"; }).length + " conta(s)" },
+          { rotulo:"Vencem em 7 dias", valor:fmt(venc7.reduce(function(a,c){ return a + saldoDe(c); },0)), cor: venc7.length ? FIN_COR.atencao : FIN_COR.fraco, nota:venc7.length + " conta(s)" },
+          { rotulo:"Em aberto", valor:fmt(somaSaldo(function(c){ var st = statusReal(c); return st === "pendente" || st === "vencida" || st === "parcial"; })),
+            cor:FIN_COR.neutro, nota:"saldo devedor, não valor de face" },
+          { rotulo:"Pagamento parcial", valor:fmt(somaSaldo(function(c){ return statusReal(c) === "parcial"; })),
+            cor: (contas||[]).some(function(c){ return statusReal(c)==="parcial"; }) ? FIN_COR.atencao : FIN_COR.fraco,
+            nota:(contas||[]).filter(function(c){ return statusReal(c)==="parcial"; }).length + " conta(s) · falta este valor" },
+        ]} />
       </>}>
       <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12, flexWrap:"wrap" }}>
         <button onClick={alternarFiltros} style={{ ...filtBtn, background: mostrarFiltros?"rgba(118,133,146,.14)":"var(--surface)" }}>{mostrarFiltros ? "⟨ Filtros" : "⟩ Filtros"}</button>
@@ -6631,12 +6642,13 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categori
             de data ocupavam o painel inteiro para uma pergunta ocasional. */}
         <div style={{ position:"relative" }}>
           <button onClick={function(){ setDataAberta(!dataAberta); }} title={de || ate ? "Período: " + ((fmtDate(de)||de) || "início") + " até " + ((fmtDate(ate)||ate) || "hoje em diante") : "Filtrar por data de vencimento"}
-            style={{ ...filtBtn, background: (de || ate) ? "rgba(10,157,78,.12)" : dataAberta ? "rgba(118,133,146,.14)" : "var(--surface)",
-                     border:"1px solid " + ((de || ate) ? "var(--ui-accent)" : "var(--border)"),
+            style={{ ...filtBtn, background: (de || ate) ? "var(--ui-accent)" : dataAberta ? "rgba(118,133,146,.14)" : "var(--surface)",
+                     border: (de || ate) ? "1px solid var(--ui-accent)" : "1px solid var(--border)",
                      borderRadius:11, padding: (de || ate) ? "0 12px 0 9px" : 0, height:38, minWidth:38,
-                     display:"flex", alignItems:"center", justifyContent:"center", gap:8, color:"#0a9d4e" }}>
+                     display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+                     color: (de || ate) ? "var(--ui-accent-text)" : "var(--text-2)" }}>
             <IconeCalendario />
-            {(de || ate) && <span style={{ fontSize:12, color:"#0a9d4e", fontWeight:600 }}>
+            {(de || ate) && <span style={{ fontSize:12, fontWeight:600 }}>
               {(de ? (fmtDate(de)||de) : "…") + " – " + (ate ? (fmtDate(ate)||ate) : "…")}
             </span>}
           </button>
@@ -6679,7 +6691,9 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categori
               <div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Categoria</div>
               <button onClick={function(){ setCatAberto(!catAberto); }}
                 style={{ ...selFiltro, textAlign:"left", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center", gap:6,
-                         borderColor: fCats.length ? "var(--ui-accent)" : "var(--border)", color: fCats.length ? "var(--text-strong)" : "var(--text-3)" }}>
+                         borderColor: fCats.length ? "var(--ui-accent)" : "var(--border)",
+                         borderWidth: fCats.length ? 1.5 : 1,
+                         color: fCats.length ? "var(--text-strong)" : "var(--text-3)" }}>
                 <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                   {fCats.length === 0 ? "Todas categorias"
                     : fCats.length === 1 ? (fCats[0] || "Sem categoria")
@@ -6691,7 +6705,7 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categori
                 <>
                   <div onClick={function(){ setCatAberto(false); }} style={{ position:"fixed", inset:0, zIndex:29 }} />
                   <div style={{ position:"absolute", zIndex:30, left:0, right:0, top:"calc(100% + 4px)", background:"var(--bg-2)",
-                                border:"1px solid var(--ui-accent)", borderRadius:10, boxShadow:"0 12px 32px rgba(0,0,0,.35)", overflow:"hidden" }}>
+                                border:"1px solid var(--border)", borderRadius:10, boxShadow:"0 12px 32px rgba(0,0,0,.35)", overflow:"hidden" }}>
                     <input autoFocus value={catBusca} onChange={function(e){ setCatBusca(e.target.value); }} placeholder="Filtrar categorias..."
                       style={{ width:"100%", background:"var(--bg)", border:"none", borderBottom:"1px solid var(--border-soft)", color:"var(--text-strong)",
                                padding:"9px 11px", fontSize:12.5, outline:"none", boxSizing:"border-box" }} />
@@ -6702,7 +6716,8 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categori
                       }).map(function(k){
                         var marcada = fCats.indexOf(k) >= 0;
                         return <label key={k || "__sem"} style={{ display:"flex", alignItems:"center", gap:9, padding:"7px 11px", cursor:"pointer",
-                                        fontSize:12.5, color:"var(--text-2)", background: marcada ? "rgba(10,157,78,.10)" : "transparent" }}>
+                                        fontSize:12.5, color: marcada ? "var(--text-strong)" : "var(--text-2)",
+                                        fontWeight: marcada ? 600 : 400, background: marcada ? "var(--surface-3)" : "transparent" }}>
                           <input type="checkbox" checked={marcada} onChange={function(){ alternarCat(k); }} style={{ accentColor:"var(--ui-accent)", cursor:"pointer" }} />
                           <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{k || "Sem categoria"}</span>
                         </label>;

@@ -334,25 +334,25 @@ function AnaliseIATab({ config, salvar, enriched }) {
           para todos os anúncios de uma vez. O peso é relativo: a nota é quanto o anúncio somou
           dividido pela soma dos pesos ativos.
         </div>
-        <div style={_tableWrap}>
-          <table style={_table}>
-            <thead><tr>{["Ativo","Critério","Exigência","Peso"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+        <div className="tabela-wrap">
+          <table className="tabela">
+            <thead><tr>{["Ativo","Critério","Exigência","Peso"].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
             <tbody>
               {CRITERIOS_QUALIDADE.map(function(def){
                 var c = porChave[def.key];
                 var temValor = def.valor != null;
                 return <tr key={def.key} style={{ opacity: c.ativo ? 1 : .5 }}>
-                  <td style={{ ..._td, width:52 }}>
+                  <td className="td" style={{ width:52 }}>
                     <input type="checkbox" checked={!!c.ativo} onChange={function(e){ mudar(def.key, "ativo", e.target.checked); }} />
                   </td>
-                  <td style={{ ..._td, color:"var(--text-strong)" }}>{def.rotulo(c.valor)}</td>
-                  <td style={_td}>
+                  <td className="td" style={{ color:"var(--text-strong)" }}>{def.rotulo(c.valor)}</td>
+                  <td className="td">
                     {temValor
                       ? <input type="number" min="1" value={c.valor} disabled={!c.ativo}
                           onChange={function(e){ mudar(def.key, "valor", Math.max(1, parseInt(e.target.value,10) || 1)); }} style={num} />
                       : <span style={{ color:"var(--text-4)" }}>sim/não</span>}
                   </td>
-                  <td style={_td}>
+                  <td className="td">
                     <input type="number" min="0" value={c.peso} disabled={!c.ativo}
                       onChange={function(e){ mudar(def.key, "peso", Math.max(0, parseInt(e.target.value,10) || 0)); }} style={num} />
                   </td>
@@ -584,26 +584,18 @@ function EmConstrucao({ tab }) {
 }
 
 // Estilos compartilhados das telas de tabela (Produtos, Estoque).
-const _kpiCard = { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 16px" };
-const _kpiLbl = { fontSize:11, color:"var(--text-3)", textTransform:"none", letterSpacing:.5, fontWeight:600 };
-const _kpiVal = { fontSize:20, fontWeight:600, marginTop:5 };
-const _inputBusca = { width:"100%", background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"10px 14px", borderRadius:10, fontSize:13, outline:"none", marginBottom:12, boxSizing:"border-box" };
-const _tableWrap = { overflowX:"auto", border:"1px solid var(--border)", borderRadius:12, background:"var(--surface)" };
-const _table = { borderCollapse:"collapse", width:"100%", fontSize:13, minWidth:640 };
-const _th = { textAlign:"left", padding:"10px 12px", fontSize:11, textTransform:"none", letterSpacing:.4, color:"var(--text-3)", fontWeight:600, borderBottom:"1px solid var(--border)", whiteSpace:"nowrap", background:"var(--surface-3)" };
-const _td = { padding:"9px 12px", borderBottom:"1px solid var(--border-soft)", color:"var(--text-2)", verticalAlign:"middle" };
-const _tdMono = { padding:"9px 12px", borderBottom:"1px solid var(--border-soft)", color:"var(--text-2)", fontFamily:"'JetBrains Mono',monospace", fontSize:12 };
+// Os estilos de tabela, KPI, botão e campo saíram daqui para src/estilos.css,
+// como classes. Use className="td", "kpi", "btn-pri"... e deixe em style={{ }}
+// só o ajuste daquela instância.
 function nomeProd(p){ return p.titulo || p.nome || "—"; }
 function qtdAnuncios(p){ return (p.mlbsVinculados || []).length || (p.mlbVinculado ? 1 : 0); }
 
 // Campos do cadastro de produto. Ficam FORA do componente de propósito: definidos
 // dentro dele, o React os trataria como um tipo novo a cada tecla digitada,
 // remontaria o input e o campo perderia o foco a cada caractere.
-const _pCampo = { width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 11px", borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box" };
-const _pLbl = { fontSize:11, color:"var(--text-3)", fontWeight:600, letterSpacing:.3, marginBottom:4, display:"block" };
 function PC(props){
   return <div>
-    <label style={_pLbl}>{props.label}</label>
+    <label className="rotulo">{props.label}</label>
     {props.children}
     {props.dica && <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:3 }}>{props.dica}</div>}
   </div>;
@@ -613,13 +605,13 @@ function PTxt(props){
   return <PC label={props.label} dica={props.dica}>
     <input value={v == null ? "" : v} onChange={function(e){ props.set(props.k, e.target.value); }}
       type={props.tipo || "text"} step={props.tipo === "number" ? (props.step || "0.01") : undefined}
-      placeholder={props.ph || ""} list={props.list} style={_pCampo} />
+      placeholder={props.ph || ""} list={props.list} className="campo" />
   </PC>;
 }
 function PSel(props){
   var v = props.f[props.k];
   return <PC label={props.label} dica={props.dica}>
-    <select value={v == null ? "" : v} onChange={function(e){ props.set(props.k, e.target.value); }} style={_pCampo}>
+    <select value={v == null ? "" : v} onChange={function(e){ props.set(props.k, e.target.value); }} className="campo">
       {props.opcoes.map(function(o){
         var val = Array.isArray(o) ? o[0] : o, txt = Array.isArray(o) ? o[1] : o;
         return <option key={val} value={val}>{txt}</option>;
@@ -895,17 +887,17 @@ function ProdutoPagina({ produto, produtos, fornecedores, enriched, onSave, onCl
             {mlbs.length === 0 && <div style={{ fontSize:13, color:"var(--text-3)" }}>
               Nenhum anúncio ligado a este produto. A ligação é feita pelo SKU na tela <b>Operação → Vincular anúncios</b>.
             </div>}
-            {mlbs.length > 0 && <div style={_tableWrap}>
-              <table style={_table}>
-                <thead><tr>{["Código MLB","Anúncio","Preço","Situação",""].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+            {mlbs.length > 0 && <div className="tabela-wrap">
+              <table className="tabela">
+                <thead><tr>{["Código MLB","Anúncio","Preço","Situação",""].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
                 <tbody>{mlbs.map(function(m){
                   var l = (enriched || []).find(function(x){ return x.id === m; });
                   return <tr key={m}>
-                    <td style={_tdMono}>{m}</td>
-                    <td style={{ ..._td, maxWidth:340 }}>{l ? l.title : <span style={{ color:"var(--text-4)" }}>anúncio não está na lista carregada</span>}</td>
-                    <td style={_td}>{l ? fmt(l.price) : "—"}</td>
-                    <td style={_td}>{l ? (l.status === "active" ? "Ativo" : l.status) : "—"}</td>
-                    <td style={{ ..._td, textAlign:"right" }}>
+                    <td className="td-num">{m}</td>
+                    <td className="td" style={{ maxWidth:340 }}>{l ? l.title : <span style={{ color:"var(--text-4)" }}>anúncio não está na lista carregada</span>}</td>
+                    <td className="td">{l ? fmt(l.price) : "—"}</td>
+                    <td className="td">{l ? (l.status === "active" ? "Ativo" : l.status) : "—"}</td>
+                    <td className="td" style={{ textAlign:"right" }}>
                       <button onClick={function(){
                         setF(function(s){
                           return Object.assign({}, s, {
@@ -1139,16 +1131,16 @@ function ProdutosTab({ produtos, salvar, fornecedores, enriched }) {
           {idsSel.length > 0 && (
             <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8, background:"rgba(118,133,146,.10)", border:"1px solid var(--border)", borderRadius:9, padding:"7px 12px", fontSize:12 }}>
               <span style={{ color:"var(--text-2)" }}>{idsSel.length} selecionado(s)</span>
-              <button onClick={exportarPlanilha} style={_btnExp}>Exportar</button>
-              <button onClick={excluirSelecionados} style={{ ..._btnExp, color:"#FF5252" }}>Excluir</button>
-              <button onClick={function(){ setSel({}); }} style={{ ..._btnExp, borderColor:"transparent", background:"transparent" }}>Limpar</button>
+              <button onClick={exportarPlanilha} className="btn-exp">Exportar</button>
+              <button onClick={excluirSelecionados} className="btn-exp" style={{ color:"#FF5252" }}>Excluir</button>
+              <button onClick={function(){ setSel({}); }} className="btn-exp" style={{ borderColor:"transparent", background:"transparent" }}>Limpar</button>
             </div>
           )}
-          <div style={_tableWrap}>
-            <table style={_table}>
+          <div className="tabela-wrap">
+            <table className="tabela">
               <thead><tr>
-                <th style={{ ..._th, width:34 }}><input type="checkbox" checked={lista.length>0 && idsSel.length===lista.length} onChange={toggleTodos} /></th>
-                {["Descrição","Código","Estoque","Marca","Preço de custo","Preço de venda","Anúncios","Situação",""].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}
+                <th className="th" style={{ width:34 }}><input type="checkbox" checked={lista.length>0 && idsSel.length===lista.length} onChange={toggleTodos} /></th>
+                {["Descrição","Código","Estoque","Marca","Preço de custo","Preço de venda","Anúncios","Situação",""].map(function(h){ return <th key={h} className="th">{h}</th>; })}
               </tr></thead>
               <tbody>
                 {lista.slice(0,500).map(function(p,i){
@@ -1160,8 +1152,8 @@ function ProdutosTab({ produtos, salvar, fornecedores, enriched }) {
                   // param o clique — nelas o alvo é o controle, não o produto.
                   function abrir(){ setEditando(p); }
                   return <tr key={p.id||i} onClick={abrir} style={{ cursor:"pointer" }} title="Abrir cadastro do produto">
-                    <td style={_td} onClick={function(e){ e.stopPropagation(); }}><input type="checkbox" checked={!!sel[p.id]} onChange={function(){ toggleSel(p.id); }} /></td>
-                    <td style={{ ..._td, maxWidth:340, color:"var(--text-strong)", fontWeight:500 }}>
+                    <td className="td" onClick={function(e){ e.stopPropagation(); }}><input type="checkbox" checked={!!sel[p.id]} onChange={function(){ toggleSel(p.id); }} /></td>
+                    <td className="td" style={{ maxWidth:340, color:"var(--text-strong)", fontWeight:500 }}>
                       <span style={{ display:"flex", alignItems:"center", gap:9, minWidth:0 }}>
                         {img
                           ? <img src={img} alt="" style={{ width:28, height:28, borderRadius:5, objectFit:"cover", flexShrink:0 }} />
@@ -1169,14 +1161,14 @@ function ProdutosTab({ produtos, salvar, fornecedores, enriched }) {
                         <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{nomeProd(p)}</span>
                       </span>
                     </td>
-                    <td style={_tdMono}>{cod} <button className="copy-btn" onClick={function(e){ e.stopPropagation(); copiar(cod); }}>⎘</button></td>
-                    <td style={_td}>{parseInt(p.estoqueAtual)||0}</td>
-                    <td style={_td}>{p.marca || "—"}</td>
-                    <td style={_td}>{parseFloat(p.precoCusto)>0 ? fmt(parseFloat(p.precoCusto)) : <span style={{ color:"#FFC107" }}>0,00</span>}</td>
-                    <td style={_td}>{parseFloat(p.precoVenda)>0 ? fmt(parseFloat(p.precoVenda)) : "—"}</td>
-                    <td style={_td}>{nAnuncios ? nAnuncios : <span style={{ color:"var(--text-4)" }}>—</span>}</td>
-                    <td style={{ ..._td, color: ativo ? "#0a9d4e" : "var(--text-4)" }}>{ativo ? "Ativo" : "Inativo"}</td>
-                    <td style={{ ..._td, position:"relative", textAlign:"right", width:44 }} onClick={function(e){ e.stopPropagation(); }}>
+                    <td className="td-num">{cod} <button className="copy-btn" onClick={function(e){ e.stopPropagation(); copiar(cod); }}>⎘</button></td>
+                    <td className="td">{parseInt(p.estoqueAtual)||0}</td>
+                    <td className="td">{p.marca || "—"}</td>
+                    <td className="td">{parseFloat(p.precoCusto)>0 ? fmt(parseFloat(p.precoCusto)) : <span style={{ color:"#FFC107" }}>0,00</span>}</td>
+                    <td className="td">{parseFloat(p.precoVenda)>0 ? fmt(parseFloat(p.precoVenda)) : "—"}</td>
+                    <td className="td">{nAnuncios ? nAnuncios : <span style={{ color:"var(--text-4)" }}>—</span>}</td>
+                    <td className="td" style={{ color: ativo ? "#0a9d4e" : "var(--text-4)" }}>{ativo ? "Ativo" : "Inativo"}</td>
+                    <td className="td" style={{ position:"relative", textAlign:"right", width:44 }} onClick={function(e){ e.stopPropagation(); }}>
                       <button onClick={function(){ setMenuRow(menuRow===p.id?null:p.id); }} style={{ background:"none", border:"none", color:"var(--text-3)", cursor:"pointer", fontSize:16, padding:"0 6px" }}>⋮</button>
                       {menuRow===p.id && (
                         <div style={{ position:"absolute", right:8, top:"100%", zIndex:50, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, boxShadow:"0 8px 24px rgba(0,0,0,.18)", padding:4, minWidth:130, display:"flex", flexDirection:"column" }}>
@@ -1263,26 +1255,26 @@ function EstoqueTab({ produtos }) {
       <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Estoque</div>
       <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Saldo atual x mínimo, com alerta de reposição.</div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12, marginBottom:14 }}>
-        {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
+        {kpis.map(function(k,i){ return <div key={i} className="kpi"><div className="kpi-rot">{k.l}</div><div className="kpi-val" style={{ color:k.c }}>{k.v}</div></div>; })}
       </div>
       <div style={{ display:"flex", gap:6, marginBottom:12 }}>
         {filtros.map(function(f){ var a = filtro === f[0]; return <button key={f[0]} onClick={function(){ setFiltro(f[0]); }} style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background: a ? "#768692" : "var(--surface)", color: a ? "#fff" : "var(--text-3)" }}>{f[1]}</button>; })}
       </div>
-      <div style={_tableWrap}>
-        <table style={_table}>
-          <thead><tr>{["Foto","Produto","SKU","Estoque","Mínimo","Situação","Anúncios"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+      <div className="tabela-wrap">
+        <table className="tabela">
+          <thead><tr>{["Foto","Produto","SKU","Estoque","Mínimo","Situação","Anúncios"].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
           <tbody>
             {lista.slice(0,400).map(function(p,i){
               var img = (p.imagens && p.imagens[0]) || null;
               var s = situacao(p); var b = badge[s];
               return <tr key={p.id || i}>
-                <td style={_td}>{img ? <img src={img} alt="" style={{ width:36, height:36, borderRadius:6, objectFit:"cover" }} /> : <div style={{ width:36, height:36, borderRadius:6, background:"var(--surface-3)" }} />}</td>
-                <td style={{ ..._td, maxWidth:300, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)", fontWeight:500 }}>{nomeProd(p)}</td>
-                <td style={_tdMono}>{p.sku || "—"}</td>
-                <td style={{ ..._td, fontWeight:500, color: s === "zerado" ? "#FF5252" : "var(--text-strong)" }}>{parseInt(p.estoqueAtual) || 0}</td>
-                <td style={_td}>{parseInt(p.estoqueMinimo) || 0}</td>
-                <td style={_td}><span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
-                <td style={_td}>{qtdAnuncios(p)}</td>
+                <td className="td">{img ? <img src={img} alt="" style={{ width:36, height:36, borderRadius:6, objectFit:"cover" }} /> : <div style={{ width:36, height:36, borderRadius:6, background:"var(--surface-3)" }} />}</td>
+                <td className="td" style={{ maxWidth:300, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)", fontWeight:500 }}>{nomeProd(p)}</td>
+                <td className="td-num">{p.sku || "—"}</td>
+                <td className="td" style={{ fontWeight:500, color: s === "zerado" ? "#FF5252" : "var(--text-strong)" }}>{parseInt(p.estoqueAtual) || 0}</td>
+                <td className="td">{parseInt(p.estoqueMinimo) || 0}</td>
+                <td className="td"><span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
+                <td className="td">{qtdAnuncios(p)}</td>
               </tr>;
             })}
           </tbody>
@@ -1350,26 +1342,26 @@ function VincularTab({ enriched, produtos, salvar }) {
         <button onClick={vincularAuto} style={{ background:"#768692", border:"none", color:"#fff", fontWeight:500, padding:"9px 18px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" }}>Vincular automático</button>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12, marginBottom:14 }}>
-        {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
+        {kpis.map(function(k,i){ return <div key={i} className="kpi"><div className="kpi-rot">{k.l}</div><div className="kpi-val" style={{ color:k.c }}>{k.v}</div></div>; })}
       </div>
       <div style={{ display:"flex", gap:6, marginBottom:10, flexWrap:"wrap" }}>
         {filtros.map(function(f){ var a = filtro === f[0]; return <button key={f[0]} onClick={function(){ setFiltro(f[0]); }} style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background: a ? "#768692" : "var(--surface)", color: a ? "#fff" : "var(--text-3)" }}>{f[1]}</button>; })}
       </div>
-      <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Buscar por título, SKU ou MLB..." style={_inputBusca} />
+      <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Buscar por título, SKU ou MLB..." className="busca" />
       <datalist id="dl-produtos">
         {opcoesProd.map(function(p){ return <option key={p.id} value={nomeProd(p)} />; })}
       </datalist>
-      <div style={_tableWrap}>
-        <table style={_table}>
-          <thead><tr>{["Foto","Anúncio","MLB","SKU","Produto do catálogo"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+      <div className="tabela-wrap">
+        <table className="tabela">
+          <thead><tr>{["Foto","Anúncio","MLB","SKU","Produto do catálogo"].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
           <tbody>
             {lista.slice(0,150).map(function(r,i){
               return <tr key={r.id || i}>
-                <td style={_td}>{r.thumb ? <img src={r.thumb} alt="" style={{ width:36, height:36, borderRadius:6, objectFit:"cover" }} /> : <div style={{ width:36, height:36, borderRadius:6, background:"var(--surface-3)" }} />}</td>
-                <td style={{ ..._td, maxWidth:260, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)" }}>{r.titulo || "—"}</td>
-                <td style={_tdMono}>{r.id}</td>
-                <td style={_tdMono}>{r.sku || "—"}</td>
-                <td style={_td}>
+                <td className="td">{r.thumb ? <img src={r.thumb} alt="" style={{ width:36, height:36, borderRadius:6, objectFit:"cover" }} /> : <div style={{ width:36, height:36, borderRadius:6, background:"var(--surface-3)" }} />}</td>
+                <td className="td" style={{ maxWidth:260, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)" }}>{r.titulo || "—"}</td>
+                <td className="td-num">{r.id}</td>
+                <td className="td-num">{r.sku || "—"}</td>
+                <td className="td">
                   <input list="dl-produtos" key={r.prod ? r.prod.id : "none"} defaultValue={r.prod ? nomeProd(r.prod) : ""} placeholder="Sem vínculo"
                     onChange={function(e){ var nome = e.target.value; var p = opcoesProd.find(function(x){ return nomeProd(x) === nome; }); if (p || nome === "") vincular(r.id, p ? p.id : ""); }}
                     style={{ width:220, maxWidth:"100%", background:"var(--bg)", border:"1px solid " + (r.vinculado ? "rgba(10,157,78,.4)" : "var(--border)"), color:"var(--text-strong)", padding:"7px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
@@ -1462,7 +1454,6 @@ function curvaABC(orders){
 
 // Botão "Exportar PDF": usa a impressão do navegador (Salvar como PDF).
 function exportarPDF(){ try { window.print(); } catch(e){} }
-var _btnPdf = { display:"inline-flex", alignItems:"center", gap:7, padding:"9px 15px", borderRadius:9, border:"1px solid var(--border)", background:"var(--surface)", color:"var(--text-strong)", fontSize:12.5, fontWeight:500, cursor:"pointer" };
 
 // Filtro de período reutilizável (Dashboard/Relatórios). Retorna [botões JSX].
 var PERIODOS_REL = [["7","7 dias"],["30","30 dias"],["90","90 dias"],["tudo","Tudo"]];
@@ -1524,7 +1515,7 @@ function RelatoriosTab({ enrichedOrders }) {
             return <button key={p[0]} onClick={function(){ setPeriodo(p[0]); }}
               style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600,
                 background: ativo ? "#768692" : "var(--surface)", color: ativo ? "#fff" : "var(--text-3)" }}>{p[1]}</button>; })}
-          <button onClick={exportarPDF} style={{ ..._btnPdf, marginLeft:4 }} title="Salvar/Imprimir como PDF">⬇ Exportar PDF</button>
+          <button onClick={exportarPDF} className="btn-pdf" style={{ marginLeft:4 }} title="Salvar/Imprimir como PDF">⬇ Exportar PDF</button>
         </div>
       </div>
 
@@ -1585,20 +1576,20 @@ function RelatoriosTab({ enrichedOrders }) {
       </div>
 
       <ChartCard titulo="Curva ABC de produtos" sub="A = 80% do faturamento · B = próximos 15% · C = cauda" flex={null}>
-        <div style={_tableWrap}>
-          <table style={_table}>
-            <thead><tr>{["Classe","Produto","Qtd","Faturamento","Lucro","% acumulado"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+        <div className="tabela-wrap">
+          <table className="tabela">
+            <thead><tr>{["Classe","Produto","Qtd","Faturamento","Lucro","% acumulado"].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
             <tbody>
-              {abc.length === 0 ? <tr><td style={_td} colSpan={6}>Sem vendas no período.</td></tr> :
+              {abc.length === 0 ? <tr><td className="td" colSpan={6}>Sem vendas no período.</td></tr> :
               abc.slice(0, 40).map(function(x,i){
                 var cor = x.classe==="A" ? "#0a9d4e" : (x.classe==="B" ? "#FFC107" : "#8492a8");
                 return <tr key={i}>
-                  <td style={_td}><span style={{ display:"inline-block", minWidth:22, textAlign:"center", padding:"2px 6px", borderRadius:6, background:cor, color:"#fff", fontWeight:600, fontSize:11 }}>{x.classe}</span></td>
-                  <td style={{ ..._td, maxWidth:320, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)" }}>{x.titulo}</td>
-                  <td style={_td}>{x.qtd}</td>
-                  <td style={_tdMono}>{fmt(x.fat)}</td>
-                  <td style={{ ..._tdMono, color: x.lucro>=0?"#0a9d4e":"#FF5252", fontWeight:500 }}>{fmt(x.lucro)}</td>
-                  <td style={_td}>{x.pctAcc.toFixed(1)}%</td>
+                  <td className="td"><span style={{ display:"inline-block", minWidth:22, textAlign:"center", padding:"2px 6px", borderRadius:6, background:cor, color:"#fff", fontWeight:600, fontSize:11 }}>{x.classe}</span></td>
+                  <td className="td" style={{ maxWidth:320, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)" }}>{x.titulo}</td>
+                  <td className="td">{x.qtd}</td>
+                  <td className="td-num">{fmt(x.fat)}</td>
+                  <td className="td-num" style={{ color: x.lucro>=0?"#0a9d4e":"#FF5252", fontWeight:500 }}>{fmt(x.lucro)}</td>
+                  <td className="td">{x.pctAcc.toFixed(1)}%</td>
                 </tr>;
               })}
             </tbody>
@@ -1608,18 +1599,18 @@ function RelatoriosTab({ enrichedOrders }) {
 
       <div style={{ marginTop:14 }}>
         <ChartCard titulo="Resumo mensal" sub="Histórico completo (todos os meses)" flex={null}>
-          <div style={_tableWrap}>
-            <table style={_table}>
-              <thead><tr>{["Mês","Pedidos","Faturamento","Lucro líquido","Margem"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+          <div className="tabela-wrap">
+            <table className="tabela">
+              <thead><tr>{["Mês","Pedidos","Faturamento","Lucro líquido","Margem"].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
               <tbody>
-                {meses.length === 0 ? <tr><td style={_td} colSpan={5}>Sem vendas registradas.</td></tr> :
+                {meses.length === 0 ? <tr><td className="td" colSpan={5}>Sem vendas registradas.</td></tr> :
                 meses.map(function(m,i){ var mg = m.fat ? (m.lucro/m.fat*100) : 0;
                   return <tr key={i}>
-                    <td style={{ ..._td, fontWeight:600, color:"var(--text-strong)" }}>{rotuloMes(m.mes)}</td>
-                    <td style={_td}>{m.ped}</td>
-                    <td style={_tdMono}>{fmt(m.fat)}</td>
-                    <td style={{ ..._tdMono, fontWeight:500, color: m.lucro>=0?"#0a9d4e":"#FF5252" }}>{fmt(m.lucro)}</td>
-                    <td style={{ ..._td, color: mg>=0?"#0a9d4e":"#FF5252" }}>{mg.toFixed(1)}%</td>
+                    <td className="td" style={{ fontWeight:600, color:"var(--text-strong)" }}>{rotuloMes(m.mes)}</td>
+                    <td className="td">{m.ped}</td>
+                    <td className="td-num">{fmt(m.fat)}</td>
+                    <td className="td-num" style={{ fontWeight:500, color: m.lucro>=0?"#0a9d4e":"#FF5252" }}>{fmt(m.lucro)}</td>
+                    <td className="td" style={{ color: mg>=0?"#0a9d4e":"#FF5252" }}>{mg.toFixed(1)}%</td>
                   </tr>;
                 })}
               </tbody>
@@ -1820,29 +1811,29 @@ function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, 
           </div>
         )}
         <div style={{ flex:1, minWidth:0 }}>
-          <div style={_tableWrap}>
-            <table style={_table}>
-              <thead><tr>{["Cliente","Nº pedido","Previsão","Bruto","Taxa ML","Frete","Líquido a receber","Situação","Ações"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+          <div className="tabela-wrap">
+            <table className="tabela">
+              <thead><tr>{["Cliente","Nº pedido","Previsão","Bruto","Taxa ML","Frete","Líquido a receber","Situação","Ações"].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
               <tbody>
                 {lista.slice(0,500).map(function(r,i){
                   return <tr key={r.id || i}>
-                    <td style={{ ..._td, color:"var(--text-strong)", maxWidth:210, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.cliente}</td>
-                    <td style={_tdMono}>#{r.id}</td>
-                    <td style={_td}>
+                    <td className="td" style={{ color:"var(--text-strong)", maxWidth:210, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.cliente}</td>
+                    <td className="td-num">#{r.id}</td>
+                    <td className="td">
                       {r.previsao ? (fmtDate(r.previsao)||r.previsao) : <span style={{ color:"var(--text-4)" }}>não informada</span>}
                       {r.estado === "recebido" && r.baixaManual && <div style={{ fontSize:10.5, color:"var(--text-4)" }}>confirmado em {fmtDate(r.baixaManual)||r.baixaManual}</div>}
                     </td>
-                    <td style={_tdMono}>{fmt(r.bruto)}</td>
-                    <td style={_tdMono}>
+                    <td className="td-num">{fmt(r.bruto)}</td>
+                    <td className="td-num">
                       <span style={{ color:FIN_COR.saida }}>− {fmt(r.taxa)}</span>
                       {r.taxaEstimada && <div style={{ fontSize:10, color:"var(--text-4)" }} title="Sem o sale_fee do pedido: usa a taxa por tipo de anúncio.">estimada</div>}
                     </td>
-                    <td style={_tdMono}>{r.frete > 0 ? <span style={{ color:FIN_COR.saida }}>− {fmt(r.frete)}</span> : <span style={{ color:"var(--text-4)" }}>—</span>}</td>
-                    <td style={{ ..._tdMono, fontWeight:700 }}>{fmt(r.valor)}</td>
-                    <td style={_td}>
+                    <td className="td-num">{r.frete > 0 ? <span style={{ color:FIN_COR.saida }}>− {fmt(r.frete)}</span> : <span style={{ color:"var(--text-4)" }}>—</span>}</td>
+                    <td className="td-num" style={{ fontWeight:700 }}>{fmt(r.valor)}</td>
+                    <td className="td">
                       <span title={rotuloReceb(r.estado)[2]} style={{ fontSize:11, fontWeight:600, padding:"2px 9px", borderRadius:20, background:"var(--surface-3)", color:rotuloReceb(r.estado)[1] }}>{rotuloReceb(r.estado)[0]}</span>
                     </td>
-                    <td style={{ ..._td, whiteSpace:"nowrap" }}>
+                    <td className="td" style={{ whiteSpace:"nowrap" }}>
                       {r.estado === "recebido"
                         ? <button onClick={function(){ estornar(r.id); }} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Estornar</button>
                         : <button onClick={function(){ darBaixa(r.id, r.previsao || r.dataVenda); }} style={{ background:"rgba(10,157,78,.12)", border:"none", color:"var(--ui-accent)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Confirmar</button>}
@@ -1893,25 +1884,25 @@ function ClientesTab({ rawOrders }) {
       <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Clientes</div>
       <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Cadastrados automaticamente dos compradores do Mercado Livre.</div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12, marginBottom:14 }}>
-        {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
+        {kpis.map(function(k,i){ return <div key={i} className="kpi"><div className="kpi-rot">{k.l}</div><div className="kpi-val" style={{ color:k.c }}>{k.v}</div></div>; })}
       </div>
       <div style={{ display:"flex", gap:6, marginBottom:10, flexWrap:"wrap" }}>
         {filtros.map(function(f){ var a = filtro === f[0]; return <button key={f[0]} onClick={function(){ setFiltro(f[0]); }} style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background: a ? "#768692" : "var(--surface)", color: a ? "#fff" : "var(--text-3)" }}>{f[1]}</button>; })}
       </div>
-      <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Buscar por nome ou documento..." style={_inputBusca} />
-      <div style={_tableWrap}>
-        <table style={_table}>
-          <thead><tr>{["Cliente","Documento","Cidade/UF","Pedidos","Total gasto","Última compra","Perfil"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+      <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Buscar por nome ou documento..." className="busca" />
+      <div className="tabela-wrap">
+        <table className="tabela">
+          <thead><tr>{["Cliente","Documento","Cidade/UF","Pedidos","Total gasto","Última compra","Perfil"].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
           <tbody>
             {lista.slice(0,400).map(function(c,i){
               return <tr key={i}>
-                <td style={{ ..._td, color:"var(--text-strong)", fontWeight:500 }}>{c.nome}</td>
-                <td style={_tdMono}>{c.doc}</td>
-                <td style={_td}>{c.local}</td>
-                <td style={_td}>{c.pedidos}</td>
-                <td style={{ ..._td, fontWeight:500 }}>{fmt(c.total)}</td>
-                <td style={_td}>{c.ultima || "—"}</td>
-                <td style={_td}><span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background: c.recorrente ? "rgba(0,200,83,.14)" : "var(--surface-3)", color: c.recorrente ? "#0a9d4e" : "var(--text-3)" }}>{c.recorrente ? "Recorrente" : "Único"}</span></td>
+                <td className="td" style={{ color:"var(--text-strong)", fontWeight:500 }}>{c.nome}</td>
+                <td className="td-num">{c.doc}</td>
+                <td className="td">{c.local}</td>
+                <td className="td">{c.pedidos}</td>
+                <td className="td" style={{ fontWeight:500 }}>{fmt(c.total)}</td>
+                <td className="td">{c.ultima || "—"}</td>
+                <td className="td"><span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background: c.recorrente ? "rgba(0,200,83,.14)" : "var(--surface-3)", color: c.recorrente ? "#0a9d4e" : "var(--text-3)" }}>{c.recorrente ? "Recorrente" : "Único"}</span></td>
               </tr>;
             })}
           </tbody>
@@ -1969,21 +1960,21 @@ function VendasTab({ enrichedOrders }) {
       <div style={{ display:"flex", gap:6, marginBottom:12 }}>
         {filtros.map(function(f){ var a = situacao === f[0]; return <button key={f[0]} onClick={function(){ setSituacao(f[0]); }} style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background: a ? "#768692" : "var(--surface)", color: a ? "#fff" : "var(--text-3)" }}>{f[1]}</button>; })}
       </div>
-      <div style={_tableWrap}>
-        <table style={_table}>
-          <thead><tr>{["Data","Código MLB","SKU","Anúncio","Qtd","Faturamento","Lucro","Margem"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+      <div className="tabela-wrap">
+        <table className="tabela">
+          <thead><tr>{["Data","Código MLB","SKU","Anúncio","Qtd","Faturamento","Lucro","Margem"].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
           <tbody>
             {lista.slice(0,400).map(function(o,i){
               var c = calc(o);
               return <tr key={o.id || i} onClick={function(){ setSel(o); }} style={{ cursor:"pointer" }}>
-                <td style={_td}>{o.date || "—"}</td>
-                <td style={_tdMono}>{o.listing_id || o.id}</td>
-                <td style={_tdMono}>{o.sku || "—"}</td>
-                <td style={{ ..._td, maxWidth:240, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)" }}>{o.title || "—"}</td>
-                <td style={_td}>{c.q}</td>
-                <td style={_td}>{fmt(c.fat)}</td>
-                <td style={{ ..._td, fontWeight:500, color: c.lucro >= 0 ? "#0a9d4e" : "#FF5252" }}>{fmt(c.lucro)}</td>
-                <td style={{ ..._td, color: c.margem >= 0 ? "#0a9d4e" : "#FF5252" }}>{c.margem.toFixed(1)}%</td>
+                <td className="td">{o.date || "—"}</td>
+                <td className="td-num">{o.listing_id || o.id}</td>
+                <td className="td-num">{o.sku || "—"}</td>
+                <td className="td" style={{ maxWidth:240, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)" }}>{o.title || "—"}</td>
+                <td className="td">{c.q}</td>
+                <td className="td">{fmt(c.fat)}</td>
+                <td className="td" style={{ fontWeight:500, color: c.lucro >= 0 ? "#0a9d4e" : "#FF5252" }}>{fmt(c.lucro)}</td>
+                <td className="td" style={{ color: c.margem >= 0 ? "#0a9d4e" : "#FF5252" }}>{c.margem.toFixed(1)}%</td>
               </tr>;
             })}
           </tbody>
@@ -2126,26 +2117,26 @@ function ExpedicaoTab({ rawOrders }) {
       <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Expedição</div>
       <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14 }}>Status de envio dos pedidos.</div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:14 }}>
-        {kpis.map(function(k,i){ return <div key={i} style={_kpiCard}><div style={_kpiLbl}>{k.l}</div><div style={{ ..._kpiVal, color:k.c }}>{k.v}</div></div>; })}
+        {kpis.map(function(k,i){ return <div key={i} className="kpi"><div className="kpi-rot">{k.l}</div><div className="kpi-val" style={{ color:k.c }}>{k.v}</div></div>; })}
       </div>
       <div style={{ display:"flex", gap:6, marginBottom:12, flexWrap:"wrap" }}>
         {filtros.map(function(f){ var a = filtro === f[0]; return <button key={f[0]} onClick={function(){ setFiltro(f[0]); }} style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background: a ? "#768692" : "var(--surface)", color: a ? "#fff" : "var(--text-3)" }}>{f[1]}</button>; })}
       </div>
-      <div style={_tableWrap}>
-        <table style={_table}>
-          <thead><tr>{["Data","Pedido","Produto","SKU","Qtd","UF","Frete","Envio"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+      <div className="tabela-wrap">
+        <table className="tabela">
+          <thead><tr>{["Data","Pedido","Produto","SKU","Qtd","UF","Frete","Envio"].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
           <tbody>
             {lista.slice(0,400).map(function(o,i){
               var b = badge[categoria(o.shipment_status)];
               return <tr key={o.id || i}>
-                <td style={_td}>{o.date || "—"}</td>
-                <td style={_tdMono}>{o.id}</td>
-                <td style={{ ..._td, maxWidth:260, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)" }}>{o.title || "—"}</td>
-                <td style={_tdMono}>{o.sku || "—"}</td>
-                <td style={_td}>{o.qty || 1}</td>
-                <td style={_td}>{o.buyerUF || "—"}</td>
-                <td style={_td}>{o.seller_shipping_cost > 0 ? fmt(o.seller_shipping_cost) : "—"}</td>
-                <td style={_td}><span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
+                <td className="td">{o.date || "—"}</td>
+                <td className="td-num">{o.id}</td>
+                <td className="td" style={{ maxWidth:260, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)" }}>{o.title || "—"}</td>
+                <td className="td-num">{o.sku || "—"}</td>
+                <td className="td">{o.qty || 1}</td>
+                <td className="td">{o.buyerUF || "—"}</td>
+                <td className="td">{o.seller_shipping_cost > 0 ? fmt(o.seller_shipping_cost) : "—"}</td>
+                <td className="td"><span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
               </tr>;
             })}
           </tbody>
@@ -2843,28 +2834,28 @@ function FornecedoresTab({ fornecedores, salvar, contasPagar, setTab }) {
             style={{ marginTop:18, background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, padding:"10px 22px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Ir para Contas a pagar →</button>}
         </div>
       ) : (
-        <div style={_tableWrap}>
-          <table style={_table}>
-            <thead><tr>{["Fornecedor","Documento","Contato","Condição","Em aberto","Vencido","Já pago",""].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+        <div className="tabela-wrap">
+          <table className="tabela">
+            <thead><tr>{["Fornecedor","Documento","Contato","Condição","Em aberto","Vencido","Já pago",""].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
             <tbody>
               {lista.map(function(x){
                 var inativo = x.ativo === false;
                 return <tr key={x.id || x._i} onClick={function(){ setModal(x); }} style={{ cursor:"pointer", opacity: inativo ? .5 : 1 }} title="Abrir cadastro">
-                  <td style={{ ..._td, color:"var(--text-strong)", fontWeight:500 }}>
+                  <td className="td" style={{ color:"var(--text-strong)", fontWeight:500 }}>
                     {x.nome}
                     {x.origem && <span style={{ marginLeft:7, fontSize:10, color:"var(--text-4)" }}>via {x.origem}</span>}
                     {inativo && <span style={{ marginLeft:7, fontSize:10.5, color:"var(--text-4)" }}>inativo</span>}
                   </td>
-                  <td style={_tdMono}>{x.documento || "—"}</td>
-                  <td style={_td}>{x.contato || x.email || x.telefone || "—"}</td>
-                  <td style={_td}>{x.condicao || "—"}</td>
-                  <td style={{ ..._tdMono, fontWeight:600, color: x.mov.aberto ? "var(--text-strong)" : "var(--text-4)" }}>
+                  <td className="td-num">{x.documento || "—"}</td>
+                  <td className="td">{x.contato || x.email || x.telefone || "—"}</td>
+                  <td className="td">{x.condicao || "—"}</td>
+                  <td className="td-num" style={{ fontWeight:600, color: x.mov.aberto ? "var(--text-strong)" : "var(--text-4)" }}>
                     {x.mov.aberto ? fmt(x.mov.aberto) : "—"}
                     {x.mov.nAberto > 0 && <div style={{ fontSize:10, color:"var(--text-4)", fontWeight:400 }}>{x.mov.nAberto} conta(s)</div>}
                   </td>
-                  <td style={_tdMono}>{x.mov.vencido ? <span style={{ color:"#FF5252" }}>{fmt(x.mov.vencido)}</span> : <span style={{ color:"var(--text-4)" }}>—</span>}</td>
-                  <td style={_tdMono}>{x.mov.pago ? <span style={{ color:"#0a9d4e" }}>{fmt(x.mov.pago)}</span> : <span style={{ color:"var(--text-4)" }}>—</span>}</td>
-                  <td style={{ ..._td, textAlign:"right" }} onClick={function(e){ e.stopPropagation(); }}>
+                  <td className="td-num">{x.mov.vencido ? <span style={{ color:"#FF5252" }}>{fmt(x.mov.vencido)}</span> : <span style={{ color:"var(--text-4)" }}>—</span>}</td>
+                  <td className="td-num">{x.mov.pago ? <span style={{ color:"#0a9d4e" }}>{fmt(x.mov.pago)}</span> : <span style={{ color:"var(--text-4)" }}>—</span>}</td>
+                  <td className="td" style={{ textAlign:"right" }} onClick={function(e){ e.stopPropagation(); }}>
                     <button onClick={function(){ setModal(x); }} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Editar</button>
                   </td>
                 </tr>;
@@ -3122,17 +3113,17 @@ function ImportarExtratoModal({ contasBancarias, onImportar, onClose }) {
                 <div><div style={{ fontSize:11, color:"var(--text-3)" }}>Débitos</div><div style={{ fontSize:20, fontWeight:600, color:FIN_COR.saida }}>{fmt(saidas)}</div></div>
                 <div><div style={{ fontSize:11, color:"var(--text-3)" }}>Com erro</div><div style={{ fontSize:20, fontWeight:600, color: prontas.length - validas.length ? FIN_COR.saida : FIN_COR.fraco }}>{prontas.length - validas.length}</div></div>
               </div>
-              <div style={{ ..._tableWrap, maxHeight:380, overflowY:"auto" }}>
-                <table style={_table}>
-                  <thead><tr>{["Linha","Situação","Data","Histórico","Entrada","Saída"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+              <div className="tabela-wrap" style={{ maxHeight:380, overflowY:"auto" }}>
+                <table className="tabela">
+                  <thead><tr>{["Linha","Situação","Data","Histórico","Entrada","Saída"].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
                   <tbody>{prontas.slice(0,300).map(function(p,i){
                     return <tr key={i} style={{ opacity: p.erros.length ? .55 : 1 }}>
-                      <td style={{ ..._td, color:"var(--text-4)", width:52 }}>{p.linha}</td>
-                      <td style={_td}>{p.erros.length ? <span style={{ color:FIN_COR.saida, fontSize:11.5 }}>{p.erros.join(", ")}</span> : <span style={{ color:FIN_COR.entrada, fontSize:11.5 }}>ok</span>}</td>
-                      <td style={_td}>{p.item.data ? (fmtDate(p.item.data) || p.item.data) : "—"}</td>
-                      <td style={{ ..._td, maxWidth:300, color:"var(--text-strong)" }}>{p.item.descricao}</td>
-                      <td style={_tdMono}>{p.item.tipo === "entrada" ? fmt(p.item.valor) : "—"}</td>
-                      <td style={_tdMono}>{p.item.tipo === "saida" ? fmt(p.item.valor) : "—"}</td>
+                      <td className="td" style={{ color:"var(--text-4)", width:52 }}>{p.linha}</td>
+                      <td className="td">{p.erros.length ? <span style={{ color:FIN_COR.saida, fontSize:11.5 }}>{p.erros.join(", ")}</span> : <span style={{ color:FIN_COR.entrada, fontSize:11.5 }}>ok</span>}</td>
+                      <td className="td">{p.item.data ? (fmtDate(p.item.data) || p.item.data) : "—"}</td>
+                      <td className="td" style={{ maxWidth:300, color:"var(--text-strong)" }}>{p.item.descricao}</td>
+                      <td className="td-num">{p.item.tipo === "entrada" ? fmt(p.item.valor) : "—"}</td>
+                      <td className="td-num">{p.item.tipo === "saida" ? fmt(p.item.valor) : "—"}</td>
                     </tr>;
                   })}</tbody>
                 </table>
@@ -3243,18 +3234,18 @@ function ConciliacaoTab({ tab, setTab, periodo, setPeriodo, extrato, salvarExtra
 
       {aba === "divergentes" && (r.divergentes.length === 0
         ? <VazioFin icone="✓" titulo="Nada com valor diferente." texto="Todo lançamento que casou veio pelo valor exato que o sistema esperava." />
-        : <div style={_tableWrap}><table style={_table}>
-            <thead><tr>{["Data","No banco","Valor no banco","No sistema","Valor esperado","Diferença",""].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+        : <div className="tabela-wrap"><table className="tabela">
+            <thead><tr>{["Data","No banco","Valor no banco","No sistema","Valor esperado","Diferença",""].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
             <tbody>{r.divergentes.map(function(d,i){
               var dif = d.extrato.valor - d.mov.valor;
               return <tr key={i}>
-                <td style={_td}>{fmtDate(d.extrato.data) || d.extrato.data}</td>
-                <td style={{ ..._td, color:"var(--text-strong)", maxWidth:220 }}>{d.extrato.descricao}</td>
-                <td style={_tdMono}>{fmt(d.extrato.valor)}</td>
-                <td style={{ ..._td, maxWidth:220 }}>{d.mov.descricao}</td>
-                <td style={_tdMono}>{fmt(d.mov.valor)}</td>
-                <td style={{ ..._tdMono, fontWeight:700, color: dif < 0 ? FIN_COR.saida : FIN_COR.entrada }}>{(dif >= 0 ? "+" : "−") + fmt(Math.abs(dif))}</td>
-                <td style={{ ..._td, textAlign:"right" }}>
+                <td className="td">{fmtDate(d.extrato.data) || d.extrato.data}</td>
+                <td className="td" style={{ color:"var(--text-strong)", maxWidth:220 }}>{d.extrato.descricao}</td>
+                <td className="td-num">{fmt(d.extrato.valor)}</td>
+                <td className="td" style={{ maxWidth:220 }}>{d.mov.descricao}</td>
+                <td className="td-num">{fmt(d.mov.valor)}</td>
+                <td className="td-num" style={{ fontWeight:700, color: dif < 0 ? FIN_COR.saida : FIN_COR.entrada }}>{(dif >= 0 ? "+" : "−") + fmt(Math.abs(dif))}</td>
+                <td className="td" style={{ textAlign:"right" }}>
                   {d.manual && <button onClick={function(){ desfazer(d.extrato.id); }} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", fontSize:11, fontWeight:600, padding:"4px 9px", borderRadius:6, cursor:"pointer" }}>Desfazer</button>}
                 </td>
               </tr>;
@@ -3263,16 +3254,16 @@ function ConciliacaoTab({ tab, setTab, periodo, setPeriodo, extrato, salvarExtra
 
       {aba === "soExtrato" && (r.soExtrato.length === 0
         ? <VazioFin icone="✓" titulo="Nada solto no banco." texto="Todo lançamento do extrato encontrou par no sistema." />
-        : <div style={_tableWrap}><table style={_table}>
-            <thead><tr>{["Data","Histórico","Conta","Entrada","Saída","Ações"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+        : <div className="tabela-wrap"><table className="tabela">
+            <thead><tr>{["Data","Histórico","Conta","Entrada","Saída","Ações"].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
             <tbody>{r.soExtrato.map(function(e){
               return <tr key={e.id}>
-                <td style={_td}>{fmtDate(e.data) || e.data}</td>
-                <td style={{ ..._td, color:"var(--text-strong)", maxWidth:320 }}>{e.descricao}</td>
-                <td style={_td}>{nomeConta[e.conta] || "—"}</td>
-                <td style={_tdMono}>{e.tipo === "entrada" ? <span style={{ color:FIN_COR.entrada }}>{fmt(e.valor)}</span> : "—"}</td>
-                <td style={_tdMono}>{e.tipo === "saida" ? <span style={{ color:FIN_COR.saida }}>{fmt(e.valor)}</span> : "—"}</td>
-                <td style={{ ..._td, textAlign:"right", whiteSpace:"nowrap" }}>
+                <td className="td">{fmtDate(e.data) || e.data}</td>
+                <td className="td" style={{ color:"var(--text-strong)", maxWidth:320 }}>{e.descricao}</td>
+                <td className="td">{nomeConta[e.conta] || "—"}</td>
+                <td className="td-num">{e.tipo === "entrada" ? <span style={{ color:FIN_COR.entrada }}>{fmt(e.valor)}</span> : "—"}</td>
+                <td className="td-num">{e.tipo === "saida" ? <span style={{ color:FIN_COR.saida }}>{fmt(e.valor)}</span> : "—"}</td>
+                <td className="td" style={{ textAlign:"right", whiteSpace:"nowrap" }}>
                   <button onClick={function(){ lancarDoExtrato(e); }} style={{ background:"rgba(10,157,78,.12)", border:"none", color:"var(--ui-accent)", fontSize:11, fontWeight:600, padding:"4px 9px", borderRadius:6, cursor:"pointer", marginRight:6 }}>Lançar</button>
                   <button onClick={function(){ ignorar(e); }} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-3)", fontSize:11, fontWeight:600, padding:"4px 9px", borderRadius:6, cursor:"pointer" }}>Ignorar</button>
                 </td>
@@ -3282,18 +3273,18 @@ function ConciliacaoTab({ tab, setTab, periodo, setPeriodo, extrato, salvarExtra
 
       {aba === "soSistema" && (r.soSistema.length === 0
         ? <VazioFin icone="✓" titulo="Nada solto no sistema." texto="Todo movimento registrado aqui apareceu no extrato." />
-        : <div style={_tableWrap}><table style={_table}>
-            <thead><tr>{["Data","Movimento","Origem","Conta","Entrada","Saída","Conciliar com"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+        : <div className="tabela-wrap"><table className="tabela">
+            <thead><tr>{["Data","Movimento","Origem","Conta","Entrada","Saída","Conciliar com"].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
             <tbody>{r.soSistema.map(function(m){
               var candidatos = r.soExtrato.filter(function(e){ return e.tipo === m.tipo && diffDias(e.data, m.data) <= 15; });
               return <tr key={m.id}>
-                <td style={_td}>{fmtDate(m.data) || m.data}</td>
-                <td style={{ ..._td, color:"var(--text-strong)", maxWidth:260 }}>{m.descricao}</td>
-                <td style={{ ..._td, fontSize:11.5, color:"var(--text-3)" }}>{ROTULO_ORIGEM[m.origem] || m.origem}</td>
-                <td style={_td}>{nomeConta[m.conta] || <span style={{ color:FIN_COR.atencao, fontSize:12 }}>sem conta</span>}</td>
-                <td style={_tdMono}>{m.tipo === "entrada" ? <span style={{ color:FIN_COR.entrada }}>{fmt(m.valor)}</span> : "—"}</td>
-                <td style={_tdMono}>{m.tipo === "saida" ? <span style={{ color:FIN_COR.saida }}>{fmt(m.valor)}</span> : "—"}</td>
-                <td style={{ ..._td, minWidth:200 }}>
+                <td className="td">{fmtDate(m.data) || m.data}</td>
+                <td className="td" style={{ color:"var(--text-strong)", maxWidth:260 }}>{m.descricao}</td>
+                <td className="td" style={{ fontSize:11.5, color:"var(--text-3)" }}>{ROTULO_ORIGEM[m.origem] || m.origem}</td>
+                <td className="td">{nomeConta[m.conta] || <span style={{ color:FIN_COR.atencao, fontSize:12 }}>sem conta</span>}</td>
+                <td className="td-num">{m.tipo === "entrada" ? <span style={{ color:FIN_COR.entrada }}>{fmt(m.valor)}</span> : "—"}</td>
+                <td className="td-num">{m.tipo === "saida" ? <span style={{ color:FIN_COR.saida }}>{fmt(m.valor)}</span> : "—"}</td>
+                <td className="td" style={{ minWidth:200 }}>
                   {candidatos.length === 0
                     ? <span style={{ fontSize:11.5, color:"var(--text-4)" }}>nenhum candidato no extrato</span>
                     : <select defaultValue="" onChange={function(e){ if (e.target.value) conciliarNaMao(e.target.value, m.id); }}
@@ -3308,16 +3299,16 @@ function ConciliacaoTab({ tab, setTab, periodo, setPeriodo, extrato, salvarExtra
 
       {aba === "casadas" && (r.casadas.length === 0
         ? <VazioFin icone="🧮" titulo="Nenhum lançamento conciliado no período." texto="Importe o extrato do período ou amplie o intervalo acima." />
-        : <div style={_tableWrap}><table style={_table}>
-            <thead><tr>{["Data","No banco","No sistema","Origem","Valor",""].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+        : <div className="tabela-wrap"><table className="tabela">
+            <thead><tr>{["Data","No banco","No sistema","Origem","Valor",""].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
             <tbody>{r.casadas.map(function(c,i){
               return <tr key={i}>
-                <td style={_td}>{fmtDate(c.extrato.data) || c.extrato.data}</td>
-                <td style={{ ..._td, maxWidth:250, color:"var(--text-strong)" }}>{c.extrato.descricao}</td>
-                <td style={{ ..._td, maxWidth:250 }}>{c.mov.descricao}</td>
-                <td style={{ ..._td, fontSize:11.5, color:"var(--text-3)" }}>{ROTULO_ORIGEM[c.mov.origem] || c.mov.origem}</td>
-                <td style={{ ..._tdMono, color: c.mov.tipo === "entrada" ? FIN_COR.entrada : FIN_COR.saida }}>{fmt(c.mov.valor)}</td>
-                <td style={{ ..._td, textAlign:"right", fontSize:11, color:"var(--text-4)" }}>{c.manual ? "conciliado à mão" : ""}</td>
+                <td className="td">{fmtDate(c.extrato.data) || c.extrato.data}</td>
+                <td className="td" style={{ maxWidth:250, color:"var(--text-strong)" }}>{c.extrato.descricao}</td>
+                <td className="td" style={{ maxWidth:250 }}>{c.mov.descricao}</td>
+                <td className="td" style={{ fontSize:11.5, color:"var(--text-3)" }}>{ROTULO_ORIGEM[c.mov.origem] || c.mov.origem}</td>
+                <td className="td-num" style={{ color: c.mov.tipo === "entrada" ? FIN_COR.entrada : FIN_COR.saida }}>{fmt(c.mov.valor)}</td>
+                <td className="td" style={{ textAlign:"right", fontSize:11, color:"var(--text-4)" }}>{c.manual ? "conciliado à mão" : ""}</td>
               </tr>;
             })}</tbody>
           </table></div>)}
@@ -3687,30 +3678,30 @@ function FluxoCaixaTab({ saldoEmCaixa, temContasBancarias, contasPagar, enriched
           <div style={{ fontSize:11.5, color:"var(--text-3)", marginBottom:10 }}>Clique num dia para ver o que compõe.</div>
           {comMovimento.length === 0
             ? <div style={{ fontSize:13, color:"var(--text-3)", padding:"18px 0" }}>Nenhuma entrada ou saída prevista nos próximos {dias} dias.</div>
-            : <div style={{ ..._tableWrap, maxHeight:400, overflowY:"auto" }}>
-                <table style={_table}>
-                  <thead><tr>{["Dia","Entradas","Saídas","Saldo no fim do dia"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+            : <div className="tabela-wrap" style={{ maxHeight:400, overflowY:"auto" }}>
+                <table className="tabela">
+                  <thead><tr>{["Dia","Entradas","Saídas","Saldo no fim do dia"].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
                   <tbody>
                     {comMovimento.map(function(d){
                       var neg = d.saldo < 0;
                       var aberto = diaAberto === d.data;
                       return <React.Fragment key={d.data}>
                         <tr onClick={function(){ setDiaAberto(aberto ? null : d.data); }} style={{ cursor:"pointer", background: neg ? "rgba(255,82,82,.07)" : "transparent" }}>
-                          <td style={_td}>{aberto ? "▾ " : "▸ "}{fmtDate(d.data) || d.data}</td>
-                          <td style={_tdMono}>{d.entradas > 0 ? <span style={{ color:COR_BOM }}>{fmt(d.entradas)}</span> : "—"}</td>
-                          <td style={_tdMono}>{d.saidas > 0 ? <span style={{ color:COR_RUIM }}>{fmt(d.saidas)}</span> : "—"}</td>
-                          <td style={{ ..._tdMono, fontWeight:700, color: neg ? COR_RUIM : "var(--text-strong)" }}>{fmt(d.saldo)}</td>
+                          <td className="td">{aberto ? "▾ " : "▸ "}{fmtDate(d.data) || d.data}</td>
+                          <td className="td-num">{d.entradas > 0 ? <span style={{ color:COR_BOM }}>{fmt(d.entradas)}</span> : "—"}</td>
+                          <td className="td-num">{d.saidas > 0 ? <span style={{ color:COR_RUIM }}>{fmt(d.saidas)}</span> : "—"}</td>
+                          <td className="td-num" style={{ fontWeight:700, color: neg ? COR_RUIM : "var(--text-strong)" }}>{fmt(d.saldo)}</td>
                         </tr>
                         {aberto && d.itens.map(function(i,k){
                           return <tr key={k} style={{ background:"var(--surface-3)" }}>
-                            <td style={{ ..._td, paddingLeft:30, fontSize:12, color:"var(--text-2)" }} colSpan={2}>
+                            <td className="td" style={{ paddingLeft:30, fontSize:12, color:"var(--text-2)" }} colSpan={2}>
                               {i.descricao}
                               {i.vencida && <span style={{ marginLeft:6, fontSize:10, color:COR_RUIM }}>vencida</span>}
                               {i.adiada && <span style={{ marginLeft:6, fontSize:10, color:"#FFC107" }}>adiada na simulação</span>}
                               {i.origem === "previsto" && <span style={{ marginLeft:6, fontSize:10, color:"var(--text-4)" }}>previsto, não lançado</span>}
                             </td>
-                            <td style={{ ..._td, fontSize:12, color:"var(--text-3)" }}>{i.categoria}</td>
-                            <td style={{ ..._tdMono, fontSize:12, color: i.tipo === "entrada" ? COR_BOM : COR_RUIM }}>
+                            <td className="td" style={{ fontSize:12, color:"var(--text-3)" }}>{i.categoria}</td>
+                            <td className="td-num" style={{ fontSize:12, color: i.tipo === "entrada" ? COR_BOM : COR_RUIM }}>
                               {(i.tipo === "entrada" ? "+" : "-") + fmt(i.valor).replace("R$ ", "R$ ")}
                             </td>
                           </tr>;
@@ -4003,18 +3994,18 @@ function BancosTab({ contasBancarias, salvar, movimentos, setTab, tab, estornar 
         ]}>
         {comSaldo.length === 0
           ? <div style={{ ...cartao, textAlign:"center", padding:"46px 20px", color:"var(--text-3)", fontSize:13.5 }}>Nenhum movimento nesta conta desde a data do saldo inicial.</div>
-          : <div style={_tableWrap}><table style={_table}>
-              <thead><tr>{["Data","Descrição","Categoria","Origem","Entrada","Saída","Saldo",""].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+          : <div className="tabela-wrap"><table className="tabela">
+              <thead><tr>{["Data","Descrição","Categoria","Origem","Entrada","Saída","Saldo",""].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
               <tbody>{comSaldo.map(function(m,i){
                 return <tr key={m.id||i}>
-                  <td style={_td}>{fmtDate(m.data) || m.data}</td>
-                  <td style={{ ..._td, color:"var(--text-strong)", maxWidth:280 }}>{m.descricao}</td>
-                  <td style={_td}>{m.categoria}</td>
-                  <td style={{ ..._td, fontSize:11.5, color:"var(--text-3)" }}>{ROTULO_ORIGEM[m.origem] || m.origem}</td>
-                  <td style={_tdMono}>{m.tipo === "entrada" ? <span style={{ color:"#0a9d4e" }}>{fmt(m.valor)}</span> : "—"}</td>
-                  <td style={_tdMono}>{m.tipo === "saida" ? <span style={{ color:"#FF5252" }}>{fmt(m.valor)}</span> : "—"}</td>
-                  <td style={{ ..._tdMono, fontWeight:600, color: m.saldo >= 0 ? "var(--text-strong)" : "#FF5252" }}>{fmt(m.saldo)}</td>
-                  <td style={{ ..._td, textAlign:"right", whiteSpace:"nowrap" }}>
+                  <td className="td">{fmtDate(m.data) || m.data}</td>
+                  <td className="td" style={{ color:"var(--text-strong)", maxWidth:280 }}>{m.descricao}</td>
+                  <td className="td">{m.categoria}</td>
+                  <td className="td" style={{ fontSize:11.5, color:"var(--text-3)" }}>{ROTULO_ORIGEM[m.origem] || m.origem}</td>
+                  <td className="td-num">{m.tipo === "entrada" ? <span style={{ color:"#0a9d4e" }}>{fmt(m.valor)}</span> : "—"}</td>
+                  <td className="td-num">{m.tipo === "saida" ? <span style={{ color:"#FF5252" }}>{fmt(m.valor)}</span> : "—"}</td>
+                  <td className="td-num" style={{ fontWeight:600, color: m.saldo >= 0 ? "var(--text-strong)" : "#FF5252" }}>{fmt(m.saldo)}</td>
+                  <td className="td" style={{ textAlign:"right", whiteSpace:"nowrap" }}>
                     {estornar && <button onClick={function(){ estornar(m); }}
                       title={m.origem === "conta_pagar" ? "Desfaz a baixa: a conta volta para Contas a pagar"
                            : m.origem === "recebivel" ? "Desfaz a confirmação: volta para Contas a receber"
@@ -4046,24 +4037,24 @@ function BancosTab({ contasBancarias, salvar, movimentos, setTab, tab, estornar 
           texto="Cadastre onde o seu dinheiro fica — banco, caixa, reserva. Informe o saldo de hoje e o sistema mantém o resto a partir das contas pagas e dos recebimentos confirmados."
           acao="+ Nova conta" onAcao={function(){ setModal({}); }} />
       ) : (
-        <div style={_tableWrap}>
-          <table style={_table}>
-            <thead><tr>{["Conta","Tipo","Dados","Saldo inicial","Saldo atual",""].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+        <div className="tabela-wrap">
+          <table className="tabela">
+            <thead><tr>{["Conta","Tipo","Dados","Saldo inicial","Saldo atual",""].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
             <tbody>
               {(contasBancarias || []).map(function(c){
                 var saldo = saldoDaConta(c, movimentos);
                 var inativa = c.ativa === false;
                 return <tr key={c.id} onClick={function(){ setExtratoDe(c.id); }} style={{ cursor:"pointer", opacity: inativa ? .5 : 1 }} title="Ver extrato">
-                  <td style={{ ..._td, color:"var(--text-strong)", fontWeight:500 }}>
+                  <td className="td" style={{ color:"var(--text-strong)", fontWeight:500 }}>
                     {c.nome}
                     {c.recebeML && <span style={{ marginLeft:8, fontSize:10, fontWeight:600, padding:"2px 7px", borderRadius:20, background:"rgba(255,193,7,.16)", color:"#B8860B" }}>repasses ML</span>}
                     {inativa && <span style={{ marginLeft:8, fontSize:10.5, color:"var(--text-4)" }}>inativa</span>}
                   </td>
-                  <td style={_td}>{(TIPOS_CONTA_BANCARIA.find(function(t){ return t[0]===c.tipo; })||["","—"])[1]}</td>
-                  <td style={{ ..._td, fontSize:12, color:"var(--text-3)" }}>{c.banco ? c.banco + (c.agencia ? " · ag " + c.agencia : "") + (c.numero ? " · cc " + c.numero : "") : "—"}</td>
-                  <td style={_tdMono}>{fmt(parseFloat(c.saldoInicial)||0)}</td>
-                  <td style={{ ..._tdMono, fontWeight:700, color: saldo >= 0 ? "var(--text-strong)" : "#FF5252" }}>{fmt(saldo)}</td>
-                  <td style={{ ..._td, textAlign:"right" }} onClick={function(e){ e.stopPropagation(); }}>
+                  <td className="td">{(TIPOS_CONTA_BANCARIA.find(function(t){ return t[0]===c.tipo; })||["","—"])[1]}</td>
+                  <td className="td" style={{ fontSize:12, color:"var(--text-3)" }}>{c.banco ? c.banco + (c.agencia ? " · ag " + c.agencia : "") + (c.numero ? " · cc " + c.numero : "") : "—"}</td>
+                  <td className="td-num">{fmt(parseFloat(c.saldoInicial)||0)}</td>
+                  <td className="td-num" style={{ fontWeight:700, color: saldo >= 0 ? "var(--text-strong)" : "#FF5252" }}>{fmt(saldo)}</td>
+                  <td className="td" style={{ textAlign:"right" }} onClick={function(e){ e.stopPropagation(); }}>
                     <button onClick={function(){ setModal(c); }} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Editar</button>
                   </td>
                 </tr>;
@@ -4226,21 +4217,21 @@ function LancamentosTab({ lancamentos, salvar, movimentos, contasBancarias, cate
           texto="Esta tela mostra contas a pagar quitadas, recebimentos confirmados em Contas a receber, e lançamentos que você criar aqui."
           acao="+ Novo lançamento" onAcao={function(){ setModal({}); }} />
       ) : (
-        <div style={_tableWrap}>
-          <table style={_table}>
-            <thead><tr>{["Data","Descrição","Categoria","Conta","Origem","Entrada","Saída",""].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+        <div className="tabela-wrap">
+          <table className="tabela">
+            <thead><tr>{["Data","Descrição","Categoria","Conta","Origem","Entrada","Saída",""].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
             <tbody>
               {lista.slice(0,400).map(function(m,i){
                 var editavel = m.origem === "manual";
                 return <tr key={m.id||i}>
-                  <td style={_td}>{fmtDate(m.data) || m.data}</td>
-                  <td style={{ ..._td, color:"var(--text-strong)", maxWidth:280 }}>{m.descricao}</td>
-                  <td style={_td}>{m.categoria}</td>
-                  <td style={_td}>{m.conta && nomeConta[m.conta] ? nomeConta[m.conta] : <span style={{ color:"#FFC107", fontSize:12 }}>sem conta</span>}</td>
-                  <td style={{ ..._td, fontSize:11.5, color:"var(--text-3)" }}>{ROTULO_ORIGEM[m.origem] || m.origem}</td>
-                  <td style={_tdMono}>{m.tipo === "entrada" ? <span style={{ color:"#0a9d4e" }}>{fmt(m.valor)}</span> : "—"}</td>
-                  <td style={_tdMono}>{m.tipo === "saida" ? <span style={{ color:"#FF5252" }}>{fmt(m.valor)}</span> : "—"}</td>
-                  <td style={{ ..._td, textAlign:"right", whiteSpace:"nowrap" }}>
+                  <td className="td">{fmtDate(m.data) || m.data}</td>
+                  <td className="td" style={{ color:"var(--text-strong)", maxWidth:280 }}>{m.descricao}</td>
+                  <td className="td">{m.categoria}</td>
+                  <td className="td">{m.conta && nomeConta[m.conta] ? nomeConta[m.conta] : <span style={{ color:"#FFC107", fontSize:12 }}>sem conta</span>}</td>
+                  <td className="td" style={{ fontSize:11.5, color:"var(--text-3)" }}>{ROTULO_ORIGEM[m.origem] || m.origem}</td>
+                  <td className="td-num">{m.tipo === "entrada" ? <span style={{ color:"#0a9d4e" }}>{fmt(m.valor)}</span> : "—"}</td>
+                  <td className="td-num">{m.tipo === "saida" ? <span style={{ color:"#FF5252" }}>{fmt(m.valor)}</span> : "—"}</td>
+                  <td className="td" style={{ textAlign:"right", whiteSpace:"nowrap" }}>
                     {editavel ? <>
                       <button onClick={function(){ setModal((lancamentos||[]).find(function(x){ return x.id === m.id; })); }} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", fontSize:11, fontWeight:600, padding:"4px 9px", borderRadius:6, cursor:"pointer", marginRight:6 }}>Editar</button>
                       <button onClick={function(){ excluir(m.id); }} style={{ background:"rgba(255,82,82,.1)", border:"none", color:"#FF5252", fontSize:11, fontWeight:600, padding:"4px 9px", borderRadius:6, cursor:"pointer" }}>Excluir</button>
@@ -4464,7 +4455,7 @@ function DreTab({ enrichedOrders, contasPagar, custosFixos, recebiveisBaixados, 
         </button>
         <button onClick={function(){ setMostrarAjustes(function(v){ return !v; }); }}
           style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600, background:"var(--surface)", color:"var(--text-2)" }}>⚙ Ajustes</button>
-        <button onClick={exportarPDF} style={_btnPdf} title="Salvar/Imprimir como PDF">⬇ Exportar PDF</button>
+        <button onClick={exportarPDF} className="btn-pdf" title="Salvar/Imprimir como PDF">⬇ Exportar PDF</button>
       </>}
       kpis={[
         { rotulo:"Receita bruta", valor:fmt(fat), cor:FIN_COR.entrada, nota:nPedidos + " pedido(s)" },
@@ -5328,27 +5319,27 @@ function ImportarContasModal({ contas, onImportar, onClose }) {
                   Importar também as {dups.length} conta(s) com mesmo fornecedor, vencimento e valor de outra
                 </label>
               )}
-              <div style={{ ..._tableWrap, maxHeight:420, overflowY:"auto" }}>
-                <table style={_table}>
-                  <thead><tr>{["Linha","Situação","Fornecedor","Categoria","Vencimento","Valor","Juros","Multa"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+              <div className="tabela-wrap" style={{ maxHeight:420, overflowY:"auto" }}>
+                <table className="tabela">
+                  <thead><tr>{["Linha","Situação","Fornecedor","Categoria","Vencimento","Valor","Juros","Multa"].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
                   <tbody>
                     {prontas.slice(0, 300).map(function(p, i){
                       var fora = p.erros.length || (p.duplicada && !incluirDup);
                       return <tr key={i} style={{ opacity: fora ? .55 : 1 }}>
-                        <td style={{ ..._td, color:"var(--text-4)", width:52 }}>{p.linha}</td>
-                        <td style={_td}>
+                        <td className="td" style={{ color:"var(--text-4)", width:52 }}>{p.linha}</td>
+                        <td className="td">
                           {p.erros.length
                             ? <span style={{ color:"#FF5252", fontSize:11.5 }}>{p.erros.join(", ")}</span>
                             : p.duplicada
                               ? <span style={{ color:"#FFC107", fontSize:11.5 }}>{p.ondeDup}</span>
                               : <span style={{ color:"#0a9d4e", fontSize:11.5 }}>ok</span>}
                         </td>
-                        <td style={{ ..._td, color:"var(--text-strong)", maxWidth:240 }}>{p.conta.descricao || "—"}</td>
-                        <td style={_td}>{p.conta.categoria}</td>
-                        <td style={_td}>{p.conta.vencimento ? (fmtDate(p.conta.vencimento) || p.conta.vencimento) : "—"}</td>
-                        <td style={_tdMono}>{p.conta.valor ? fmt(parseFloat(p.conta.valor)) : "—"}</td>
-                        <td style={_td}>{parseFloat(p.conta.juros) ? p.conta.juros + "%" : "—"}</td>
-                        <td style={_td}>{parseFloat(p.conta.multa) ? p.conta.multa + "%" : "—"}</td>
+                        <td className="td" style={{ color:"var(--text-strong)", maxWidth:240 }}>{p.conta.descricao || "—"}</td>
+                        <td className="td">{p.conta.categoria}</td>
+                        <td className="td">{p.conta.vencimento ? (fmtDate(p.conta.vencimento) || p.conta.vencimento) : "—"}</td>
+                        <td className="td-num">{p.conta.valor ? fmt(parseFloat(p.conta.valor)) : "—"}</td>
+                        <td className="td">{parseFloat(p.conta.juros) ? p.conta.juros + "%" : "—"}</td>
+                        <td className="td">{parseFloat(p.conta.multa) ? p.conta.multa + "%" : "—"}</td>
                       </tr>;
                     })}
                   </tbody>
@@ -5741,38 +5732,38 @@ function PrioridadePagamentoTab({ contas, salvarContas, config, salvarConfig, sa
         </div>
       )}
 
-      <div style={_tableWrap}>
-        <table style={_table}>
-          <thead><tr>{["#","Urgência","Fornecedor","Categoria","Vencimento","Valor","Custo/semana","IA","Motivo",""].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+      <div className="tabela-wrap">
+        <table className="tabela">
+          <thead><tr>{["#","Urgência","Fornecedor","Categoria","Vencimento","Valor","Custo/semana","IA","Motivo",""].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
           <tbody>
             {ranking.map(function(it, i){
               var d = analise ? analise.porId[it.id] : null;
               var cabe = caixa > 0 && plano.cabem.indexOf(it) >= 0;
               return <tr key={it.id || i} style={{ background: cabe ? "rgba(10,157,78,.05)" : "transparent" }}>
-                <td style={{ ..._td, color:"var(--text-4)", width:34 }}>{i+1}</td>
-                <td style={_td}>
+                <td className="td" style={{ color:"var(--text-4)", width:34 }}>{i+1}</td>
+                <td className="td">
                   <span title={"prazo " + it.pontosPrazo + " + risco " + it.pontosRisco + " + custo do atraso " + Math.round(it.pontosCusto)}
                     style={{ fontSize:12, fontWeight:700, color: it.urgencia >= 60 ? "#FF5252" : it.urgencia >= 40 ? "#FFC107" : "var(--text-3)" }}>{it.urgencia}</span>
                 </td>
-                <td style={{ ..._td, color:"var(--text-strong)", maxWidth:230 }}>{it.descricao}</td>
-                <td style={_td}>{it.categoria}</td>
-                <td style={_td}>
+                <td className="td" style={{ color:"var(--text-strong)", maxWidth:230 }}>{it.descricao}</td>
+                <td className="td">{it.categoria}</td>
+                <td className="td">
                   {it.vencimento ? (fmtDate(it.vencimento) || it.vencimento) : <span style={{ color:"var(--text-4)" }}>sem data</span>}
                   {it.dias != null && <div style={{ fontSize:10.5, color: it.vencida ? "#FF5252" : "var(--text-4)" }}>
                     {it.vencida ? Math.abs(it.dias) + " dias vencida" : (it.dias === 0 ? "vence hoje" : "em " + it.dias + " dias")}
                   </div>}
                 </td>
-                <td style={{ ..._tdMono, fontWeight:600 }}>{fmt(it.valor)}</td>
-                <td style={_tdMono}>{it.custo7 > 0 ? <span style={{ color:"#FFC107" }}>{fmt(it.custo7)}</span> : <span style={{ color:"var(--text-4)" }}>—</span>}</td>
-                <td style={_td}>
+                <td className="td-num" style={{ fontWeight:600 }}>{fmt(it.valor)}</td>
+                <td className="td-num">{it.custo7 > 0 ? <span style={{ color:"#FFC107" }}>{fmt(it.custo7)}</span> : <span style={{ color:"var(--text-4)" }}>—</span>}</td>
+                <td className="td">
                   {d ? <span style={{ fontSize:11, fontWeight:700, padding:"2px 9px", borderRadius:20, background:"var(--surface-3)", color:corAcao[d.acao] }}>{rotuloAcao[d.acao]}</span>
                      : <span style={{ color:"var(--text-4)", fontSize:11 }}>—</span>}
                 </td>
-                <td style={{ ..._td, fontSize:12, maxWidth:300, color:"var(--text-3)" }}>
+                <td className="td" style={{ fontSize:12, maxWidth:300, color:"var(--text-3)" }}>
                   {d ? d.motivo : ""}
                   {d && d.comoNegociar && <div style={{ marginTop:3, color:"#FFC107" }}>{d.comoNegociar}</div>}
                 </td>
-                <td style={{ ..._td, textAlign:"right" }}>
+                <td className="td" style={{ textAlign:"right" }}>
                   <button onClick={function(){ marcarPaga(it); }}
                     style={{ background:"rgba(10,157,78,.12)", border:"none", color:"var(--ui-accent)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer", whiteSpace:"nowrap" }}>Pagar</button>
                 </td>
@@ -5969,22 +5960,22 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categori
               acao={temFiltro ? "Limpar filtros" : "+ Incluir conta"}
               onAcao={temFiltro ? limpar : function(){ setModal({}); }} />
           ) : (
-            <div style={_tableWrap}>
-              <table style={_table}>
-                <thead><tr>{["Vencimento","Fornecedor","Categoria","Valor","Situação","Ações"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+            <div className="tabela-wrap">
+              <table className="tabela">
+                <thead><tr>{["Vencimento","Fornecedor","Categoria","Valor","Situação","Ações"].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
                 <tbody>
                   {lista.map(function(c,i){
                     var s = statusReal(c); var b = badge[s];
                     return <tr key={c.id || i}>
-                      <td style={_td}>{c.vencimento ? (fmtDate(c.vencimento)||c.vencimento) : "—"}</td>
-                      <td style={{ ..._td, color:"var(--text-strong)" }}>
+                      <td className="td">{c.vencimento ? (fmtDate(c.vencimento)||c.vencimento) : "—"}</td>
+                      <td className="td" style={{ color:"var(--text-strong)" }}>
                         {c.descricao || "—"}
                         {c.serieId && <span style={{ marginLeft:7, fontSize:10, color:"var(--text-4)" }}>{c.parcela}/{c.parcelas}</span>}
                       </td>
-                      <td style={_td}>{c.categoria || "—"}</td>
-                      <td style={{ ..._tdMono, fontWeight:600 }}>{fmt(parseFloat(c.valor) || 0)}</td>
-                      <td style={_td}><span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
-                      <td style={_td}>
+                      <td className="td">{c.categoria || "—"}</td>
+                      <td className="td-num" style={{ fontWeight:600 }}>{fmt(parseFloat(c.valor) || 0)}</td>
+                      <td className="td"><span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
+                      <td className="td">
                         <div style={{ display:"flex", gap:8 }}>
                           {s !== "paga" && s !== "cancelada" && <button onClick={function(){ baixar(c); }} style={{ background:"rgba(10,157,78,.12)", border:"none", color:"var(--ui-accent)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Pagar</button>}
                           <button onClick={function(){ setModal(c); }} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Editar</button>
@@ -6214,19 +6205,19 @@ function ComprasTab({ produtos, pedidos, salvar }) {
               <div style={{ fontSize:13, color:"var(--text-3)", marginTop:4 }}>Crie um pedido em "Incluir pedido" ou ajuste os filtros.</div>
             </div>
           ) : (
-            <div style={_tableWrap}>
-              <table style={_table}>
-                <thead><tr>{["Data","Fornecedor","Itens","Valor","Situação","Ações"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+            <div className="tabela-wrap">
+              <table className="tabela">
+                <thead><tr>{["Data","Fornecedor","Itens","Valor","Situação","Ações"].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
                 <tbody>
                   {lista.map(function(p,i){
                     var b = badgeP[p.status] || badgeP.aberto;
                     return <tr key={p.id || i}>
-                      <td style={_td}>{p.data ? (fmtDate(p.data)||p.data) : "—"}</td>
-                      <td style={{ ..._td, color:"var(--text-strong)" }}>{p.fornecedor || "—"}</td>
-                      <td style={{ ..._td, maxWidth:260, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.itens || "—"}</td>
-                      <td style={{ ..._tdMono, fontWeight:600 }}>{fmt(parseFloat(p.valor) || 0)}</td>
-                      <td style={_td}><span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
-                      <td style={_td}>
+                      <td className="td">{p.data ? (fmtDate(p.data)||p.data) : "—"}</td>
+                      <td className="td" style={{ color:"var(--text-strong)" }}>{p.fornecedor || "—"}</td>
+                      <td className="td" style={{ maxWidth:260, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.itens || "—"}</td>
+                      <td className="td-num" style={{ fontWeight:600 }}>{fmt(parseFloat(p.valor) || 0)}</td>
+                      <td className="td"><span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background:b[1], color:b[0] }}>{b[2]}</span></td>
+                      <td className="td">
                         <div style={{ display:"flex", gap:8 }}>
                           {p.status === "aberto" && <button onClick={function(){ receber(p); }} style={{ background:"rgba(10,157,78,.12)", border:"none", color:"var(--ui-accent)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Receber</button>}
                           <button onClick={function(){ setModal(p); }} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Editar</button>
@@ -6271,8 +6262,6 @@ function ComprasTab({ produtos, pedidos, salvar }) {
 // ═══════════════════════════════════════════════════════════════════════════
 function pct1(n){ n = isFinite(n) ? n : 0; return n.toFixed(1).replace(".", ",") + "%"; }
 var _inpDataG = { background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"6px 8px", borderRadius:8, fontSize:12 };
-var _wideWrap = { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, overflowX:"auto" };
-var _btnExp = { display:"inline-flex", alignItems:"center", gap:6, padding:"7px 13px", borderRadius:8, border:"1px solid var(--border)", background:"var(--surface)", color:"var(--text-2)", fontSize:12, fontWeight:500, cursor:"pointer" };
 
 // Downloads iniciados pelo usuário (clique nos botões Excel/CSV) — dados do próprio usuário.
 function _dispararDownload(blob, nome){
@@ -6315,9 +6304,9 @@ function baixarPDF(nome, colunas, linhas){
 }
 function BotoesExport({ nome, colunas, linhas }){
   return <div style={{ display:"flex", gap:8 }}>
-    <button style={_btnExp} onClick={function(){ baixarExcel(nome, colunas, linhas()); }}>Excel</button>
-    <button style={_btnExp} onClick={function(){ baixarCSV(nome, colunas, linhas()); }}>CSV</button>
-    <button style={_btnExp} onClick={function(){ baixarPDF(nome, colunas, linhas()); }}>PDF</button>
+    <button className="btn-exp" onClick={function(){ baixarExcel(nome, colunas, linhas()); }}>Excel</button>
+    <button className="btn-exp" onClick={function(){ baixarCSV(nome, colunas, linhas()); }}>CSV</button>
+    <button className="btn-exp" onClick={function(){ baixarPDF(nome, colunas, linhas()); }}>PDF</button>
   </div>;
 }
 
@@ -6408,10 +6397,10 @@ function EstadosDash({ enrichedOrders }){
           {!sel ? <div style={{ color:"var(--text-3)", fontSize:13 }}>Sem vendas para exibir.</div> : <>
             <div style={{ fontWeight:600, fontSize:17, color:"var(--text-strong)" }}>{NOMES[sel.uf]||sel.uf} <span style={{ color:"var(--text-3)", fontWeight:600, fontSize:13 }}>({sel.uf})</span></div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:10, margin:"12px 0" }}>
-              <div style={_kpiCard}><div style={_kpiLbl}>Faturamento</div><div style={{ ..._kpiVal, color:"var(--text-strong)" }}>{fmt(sel.fat)}</div></div>
-              <div style={_kpiCard}><div style={_kpiLbl}>Peças vendidas</div><div style={{ ..._kpiVal, color:"var(--text-strong)" }}>{sel.pecas}</div></div>
-              <div style={_kpiCard}><div style={_kpiLbl}>Pedidos</div><div style={{ ..._kpiVal, color:"var(--text-strong)" }}>{sel.pedidos}</div></div>
-              <div style={_kpiCard}><div style={_kpiLbl}>Ticket médio</div><div style={{ ..._kpiVal, color:"var(--text-strong)" }}>{fmt(sel.ticket)}</div></div>
+              <div className="kpi"><div className="kpi-rot">Faturamento</div><div className="kpi-val" style={{ color:"var(--text-strong)" }}>{fmt(sel.fat)}</div></div>
+              <div className="kpi"><div className="kpi-rot">Peças vendidas</div><div className="kpi-val" style={{ color:"var(--text-strong)" }}>{sel.pecas}</div></div>
+              <div className="kpi"><div className="kpi-rot">Pedidos</div><div className="kpi-val" style={{ color:"var(--text-strong)" }}>{sel.pedidos}</div></div>
+              <div className="kpi"><div className="kpi-rot">Ticket médio</div><div className="kpi-val" style={{ color:"var(--text-strong)" }}>{fmt(sel.ticket)}</div></div>
             </div>
             <div style={{ fontSize:12, fontWeight:500, color:"var(--text-3)", textTransform:"none", letterSpacing:.5, margin:"4px 0 6px" }}>Produtos vendidos</div>
             <div style={{ maxHeight:220, overflowY:"auto" }}>
@@ -6423,19 +6412,19 @@ function EstadosDash({ enrichedOrders }){
           </>}
         </div>
       </div>
-      <div style={{ ..._wideWrap, marginTop:14 }}>
-        <table style={_table}>
-          <thead><tr>{["Estado","UF","Faturamento","Peças","Pedidos","Ticket médio"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+      <div className="tabela-wrap" style={{ marginTop:14 }}>
+        <table className="tabela">
+          <thead><tr>{["Estado","UF","Faturamento","Peças","Pedidos","Ticket médio"].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
           <tbody>
-            {lista.length===0 ? <tr><td style={_td} colSpan={6}>Sem vendas.</td></tr> :
+            {lista.length===0 ? <tr><td className="td" colSpan={6}>Sem vendas.</td></tr> :
             lista.map(function(e,i){ var isSel=sel&&sel.uf===e.uf;
               return <tr key={i} onClick={function(){ setUfSel(e.uf); }} style={{ cursor:"pointer", background:isSel?"rgba(118,134,146,.08)":"transparent" }}>
-                <td style={{ ..._td, fontWeight:600, color:"var(--text-strong)" }}>{NOMES[e.uf]||(e.uf==="—"?"Não informado":e.uf)}</td>
-                <td style={_tdMono}>{e.uf}</td>
-                <td style={_tdMono}>{fmt(e.fat)}</td>
-                <td style={_td}>{e.pecas}</td>
-                <td style={_td}>{e.pedidos}</td>
-                <td style={_tdMono}>{fmt(e.ticket)}</td>
+                <td className="td" style={{ fontWeight:600, color:"var(--text-strong)" }}>{NOMES[e.uf]||(e.uf==="—"?"Não informado":e.uf)}</td>
+                <td className="td-num">{e.uf}</td>
+                <td className="td-num">{fmt(e.fat)}</td>
+                <td className="td">{e.pecas}</td>
+                <td className="td">{e.pedidos}</td>
+                <td className="td-num">{fmt(e.ticket)}</td>
               </tr>;
             })}
           </tbody>
@@ -6532,26 +6521,26 @@ function MargemPedidoDash({ enrichedOrders }){
             style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"7px 10px", borderRadius:8, fontSize:12, minWidth:240 }} />
         </div>
         <div style={{ overflowX:"auto" }}>
-          <table style={_table}>
-            <thead><tr>{["Nº","ID Pedido","Marketplace","Data","Valor do Pedido","Valor Base","Custo","$ Taxa","% Taxa","Imposto","Frete Vend.","Frete Comp.","$ Contrib.","% Contrib."].map(function(h){ return <th key={h} style={{ ..._th, whiteSpace:"nowrap" }}>{h}</th>; })}</tr></thead>
+          <table className="tabela">
+            <thead><tr>{["Nº","ID Pedido","Marketplace","Data","Valor do Pedido","Valor Base","Custo","$ Taxa","% Taxa","Imposto","Frete Vend.","Frete Comp.","$ Contrib.","% Contrib."].map(function(h){ return <th key={h} className="th" style={{ whiteSpace:"nowrap" }}>{h}</th>; })}</tr></thead>
             <tbody>
-              {slice.length===0 ? <tr><td style={_td} colSpan={14}>Nenhum pedido.</td></tr> :
+              {slice.length===0 ? <tr><td className="td" colSpan={14}>Nenhum pedido.</td></tr> :
               slice.map(function(r,i){ var neg=r.contrib<0;
                 return <tr key={r.id||i}>
-                  <td style={_tdMono}>{(pg-1)*POR+i+1}</td>
-                  <td style={_tdMono}>{r.id}</td>
-                  <td style={_td}>Mercado Livre</td>
-                  <td style={_td}>{fmtDate(r.data)||r.data}</td>
-                  <td style={_tdMono}>{fmt(r.valorPedido)}</td>
-                  <td style={_tdMono}>{fmt(r.valorBase)}</td>
-                  <td style={_tdMono}>{fmt(r.custo)}</td>
-                  <td style={_tdMono}>{fmt(r.taxa)}</td>
-                  <td style={_td}>{pct1(r.taxaPct)}</td>
-                  <td style={_tdMono}>{fmt(r.imp)}</td>
-                  <td style={_tdMono}>{fmt(r.fv)}</td>
-                  <td style={_tdMono}>{fmt(r.fc)}</td>
-                  <td style={{ ..._tdMono, fontWeight:500, color:neg?"#FF5252":"#0a9d4e" }}>{fmt(r.contrib)}</td>
-                  <td style={{ ..._td, fontWeight:500, color:neg?"#FF5252":"#0a9d4e" }}>{pct1(r.contribPct)}</td>
+                  <td className="td-num">{(pg-1)*POR+i+1}</td>
+                  <td className="td-num">{r.id}</td>
+                  <td className="td">Mercado Livre</td>
+                  <td className="td">{fmtDate(r.data)||r.data}</td>
+                  <td className="td-num">{fmt(r.valorPedido)}</td>
+                  <td className="td-num">{fmt(r.valorBase)}</td>
+                  <td className="td-num">{fmt(r.custo)}</td>
+                  <td className="td-num">{fmt(r.taxa)}</td>
+                  <td className="td">{pct1(r.taxaPct)}</td>
+                  <td className="td-num">{fmt(r.imp)}</td>
+                  <td className="td-num">{fmt(r.fv)}</td>
+                  <td className="td-num">{fmt(r.fc)}</td>
+                  <td className="td-num" style={{ fontWeight:500, color:neg?"#FF5252":"#0a9d4e" }}>{fmt(r.contrib)}</td>
+                  <td className="td" style={{ fontWeight:500, color:neg?"#FF5252":"#0a9d4e" }}>{pct1(r.contribPct)}</td>
                 </tr>;
               })}
             </tbody>
@@ -6560,9 +6549,9 @@ function MargemPedidoDash({ enrichedOrders }){
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:10, fontSize:12, color:"var(--text-3)" }}>
           <span>{filtradas.length===0?0:((pg-1)*POR+1)}–{Math.min(pg*POR,filtradas.length)} de {filtradas.length}</span>
           <div style={{ display:"flex", gap:6 }}>
-            <button disabled={pg<=1} onClick={function(){ setPagina(pg-1); }} style={{ ..._btnExp, opacity:pg<=1?.5:1, cursor:pg<=1?"default":"pointer" }}>Anterior</button>
+            <button disabled={pg<=1} onClick={function(){ setPagina(pg-1); }} className="btn-exp" style={{ opacity:pg<=1?.5:1, cursor:pg<=1?"default":"pointer" }}>Anterior</button>
             <span style={{ alignSelf:"center" }}>Pág. {pg}/{totalPg}</span>
-            <button disabled={pg>=totalPg} onClick={function(){ setPagina(pg+1); }} style={{ ..._btnExp, opacity:pg>=totalPg?.5:1, cursor:pg>=totalPg?"default":"pointer" }}>Próxima</button>
+            <button disabled={pg>=totalPg} onClick={function(){ setPagina(pg+1); }} className="btn-exp" style={{ opacity:pg>=totalPg?.5:1, cursor:pg>=totalPg?"default":"pointer" }}>Próxima</button>
           </div>
         </div>
       </div>
@@ -6596,16 +6585,16 @@ function EstoqueDash({ produtos }){
               style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"7px 10px", borderRadius:8, fontSize:12, minWidth:220 }} />
           </div>
           <div style={{ overflowX:"auto" }}>
-            <table style={_table}>
-              <thead><tr>{["Código","Descrição","Estoque","Custo","Valor"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+            <table className="tabela">
+              <thead><tr>{["Código","Descrição","Estoque","Custo","Valor"].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
               <tbody>
-                {slice.length===0 ? <tr><td style={{ ..._td, textAlign:"center", padding:"32px 12px", color:"var(--text-3)" }} colSpan={5}>{(produtos||[]).length===0?"Nenhum produto cadastrado. Importe em Produtos.":"Nada encontrado."}</td></tr> :
+                {slice.length===0 ? <tr><td className="td" style={{ textAlign:"center", padding:"32px 12px", color:"var(--text-3)" }} colSpan={5}>{(produtos||[]).length===0?"Nenhum produto cadastrado. Importe em Produtos.":"Nada encontrado."}</td></tr> :
                 slice.map(function(x,i){ return <tr key={i}>
-                  <td style={_tdMono}>{x.codigo}</td>
-                  <td style={{ ..._td, maxWidth:360, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)", fontWeight:500 }}>{x.desc}</td>
-                  <td style={{ ..._td, fontWeight:500 }}>{x.est}</td>
-                  <td style={_tdMono}>{fmt(x.custo)}</td>
-                  <td style={_tdMono}>{fmt(x.valor)}</td>
+                  <td className="td-num">{x.codigo}</td>
+                  <td className="td" style={{ maxWidth:360, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)", fontWeight:500 }}>{x.desc}</td>
+                  <td className="td" style={{ fontWeight:500 }}>{x.est}</td>
+                  <td className="td-num">{fmt(x.custo)}</td>
+                  <td className="td-num">{fmt(x.valor)}</td>
                 </tr>; })}
               </tbody>
             </table>
@@ -6613,22 +6602,22 @@ function EstoqueDash({ produtos }){
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:10, fontSize:12, color:"var(--text-3)" }}>
             <span>{lista.length} item(ns)</span>
             <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-              <button disabled={pg<=1} onClick={function(){ setPagina(pg-1); }} style={{ ..._btnExp, opacity:pg<=1?.5:1 }}>Anterior</button>
+              <button disabled={pg<=1} onClick={function(){ setPagina(pg-1); }} className="btn-exp" style={{ opacity:pg<=1?.5:1 }}>Anterior</button>
               <span>Pág. {pg}/{totalPg}</span>
-              <button disabled={pg>=totalPg} onClick={function(){ setPagina(pg+1); }} style={{ ..._btnExp, opacity:pg>=totalPg?.5:1 }}>Próxima</button>
+              <button disabled={pg>=totalPg} onClick={function(){ setPagina(pg+1); }} className="btn-exp" style={{ opacity:pg>=totalPg?.5:1 }}>Próxima</button>
             </div>
           </div>
         </div>
         <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", flex:"1 1 280px", minWidth:260 }}>
           <div style={{ fontWeight:500, fontSize:15, color:"var(--text-strong)", marginBottom:12 }}>Estoque consolidado</div>
-          <table style={_table}>
-            <thead><tr>{["Depósito","Estoque","Custo","Valor"].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+          <table className="tabela">
+            <thead><tr>{["Depósito","Estoque","Custo","Valor"].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
             <tbody>
               <tr>
-                <td style={{ ..._td, fontWeight:500, color:"var(--text-strong)" }}>Estoque geral</td>
-                <td style={{ ..._td, fontWeight:500 }}>{totEst}</td>
-                <td style={_tdMono}>{fmt(totCusto)}</td>
-                <td style={_tdMono}>{fmt(totValor)}</td>
+                <td className="td" style={{ fontWeight:500, color:"var(--text-strong)" }}>Estoque geral</td>
+                <td className="td" style={{ fontWeight:500 }}>{totEst}</td>
+                <td className="td-num">{fmt(totCusto)}</td>
+                <td className="td-num">{fmt(totValor)}</td>
               </tr>
             </tbody>
           </table>
@@ -6704,20 +6693,20 @@ function ClientesDash({ enrichedOrders, user }){
         <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Procurar cliente..."
           style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"7px 10px", borderRadius:8, fontSize:12, minWidth:240, marginBottom:10 }} />
         <div style={{ overflowX:"auto" }}>
-          <table style={_table}>
-            <thead><tr>{["Nome","Loja","Produtos","Valor","Margem Bruta %","Lucro Venda","%","Celular","Histórico"].map(function(h){ return <th key={h} style={{ ..._th, whiteSpace:"nowrap" }}>{h}</th>; })}</tr></thead>
+          <table className="tabela">
+            <thead><tr>{["Nome","Loja","Produtos","Valor","Margem Bruta %","Lucro Venda","%","Celular","Histórico"].map(function(h){ return <th key={h} className="th" style={{ whiteSpace:"nowrap" }}>{h}</th>; })}</tr></thead>
             <tbody>
-              {alvo.length===0 ? <tr><td style={_td} colSpan={9}>Nenhum cliente.</td></tr> :
+              {alvo.length===0 ? <tr><td className="td" colSpan={9}>Nenhum cliente.</td></tr> :
               alvo.slice(0,300).map(function(c,i){ return <tr key={i}>
-                <td style={{ ..._td, fontWeight:600, color:"var(--text-strong)", maxWidth:260, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.nome}</td>
-                <td style={_td}>{loja}</td>
-                <td style={_td}>{c.produtos}</td>
-                <td style={_tdMono}>{fmt(c.valor)}</td>
-                <td style={_td}>{pct1(c.margBruta)}</td>
-                <td style={{ ..._tdMono, fontWeight:500, color:c.lucro>=0?"#0a9d4e":"#FF5252" }}>{fmt(c.lucro)}</td>
-                <td style={{ ..._td, color:c.pctLucro>=0?"#0a9d4e":"#FF5252" }}>{pct1(c.pctLucro)}</td>
-                <td style={_td}>{c.fone||"—"}</td>
-                <td style={_td}><button onClick={function(){ setCliSel(c); }} style={{ ..._btnExp, padding:"5px 10px" }}>Ver Pedidos</button></td>
+                <td className="td" style={{ fontWeight:600, color:"var(--text-strong)", maxWidth:260, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.nome}</td>
+                <td className="td">{loja}</td>
+                <td className="td">{c.produtos}</td>
+                <td className="td-num">{fmt(c.valor)}</td>
+                <td className="td">{pct1(c.margBruta)}</td>
+                <td className="td-num" style={{ fontWeight:500, color:c.lucro>=0?"#0a9d4e":"#FF5252" }}>{fmt(c.lucro)}</td>
+                <td className="td" style={{ color:c.pctLucro>=0?"#0a9d4e":"#FF5252" }}>{pct1(c.pctLucro)}</td>
+                <td className="td">{c.fone||"—"}</td>
+                <td className="td"><button onClick={function(){ setCliSel(c); }} className="btn-exp" style={{ padding:"5px 10px" }}>Ver Pedidos</button></td>
               </tr>; })}
             </tbody>
           </table>
@@ -6764,15 +6753,15 @@ function CurvaAbcDash({ enrichedOrders }){
         <span style={{ color:cor[classe], fontSize:14 }}>{ab?"▲":"▼"}</span>
       </button>
       {ab && <div style={{ overflowX:"auto", paddingBottom:8 }}>
-        <table style={_table}>
-          <thead><tr>{["Produto","Qtd","Faturamento","% acum."].map(function(h){ return <th key={h} style={_th}>{h}</th>; })}</tr></thead>
+        <table className="tabela">
+          <thead><tr>{["Produto","Qtd","Faturamento","% acum."].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
           <tbody>
-            {arr.length===0 ? <tr><td style={_td} colSpan={4}>Sem produtos.</td></tr> :
+            {arr.length===0 ? <tr><td className="td" colSpan={4}>Sem produtos.</td></tr> :
             arr.map(function(x,i){ return <tr key={i}>
-              <td style={{ ..._td, maxWidth:380, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)" }}>{x.titulo}</td>
-              <td style={_td}>{x.qtd}</td>
-              <td style={_tdMono}>{fmt(x.fat)}</td>
-              <td style={_td}>{x.pctAcc.toFixed(1)}%</td>
+              <td className="td" style={{ maxWidth:380, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)" }}>{x.titulo}</td>
+              <td className="td">{x.qtd}</td>
+              <td className="td-num">{fmt(x.fat)}</td>
+              <td className="td">{x.pctAcc.toFixed(1)}%</td>
             </tr>; })}
           </tbody>
         </table>
@@ -12695,82 +12684,7 @@ export default function App() {
 
   return (
     <div className={darkMode?"dark":""} style={{ minHeight:"100vh", background:"transparent", color:"var(--text-strong)", fontFamily:"'Inter',system-ui,sans-serif", transition:"background .2s,color .2s", display:"flex", flexDirection:"column", alignItems:"stretch" }}>
-      <style>{`
-        *{box-sizing:border-box;margin:0;padding:0}
-        body,#root{font-family:'Inter',system-ui,sans-serif}
-        input:not([type=checkbox]):not([type=radio]),textarea,select{background:var(--bg-2);color:var(--text-strong);border:1px solid var(--border)}
-        input::placeholder,textarea::placeholder{color:var(--text-3)}
-        ::-webkit-scrollbar{width:4px;height:4px}
-        ::-webkit-scrollbar-track{background:transparent}
-        ::-webkit-scrollbar-thumb{background:var(--text-4);border-radius:99px}
-        ::-webkit-scrollbar-thumb:hover{background:var(--text-3)}
-        .app-header::-webkit-scrollbar{display:none}
-        /* Barra de rolagem horizontal visível e "pegável" nas tabelas largas */
-        .scroll-x{overflow-x:auto;overflow-y:visible}
-        .scroll-x::-webkit-scrollbar{height:12px}
-        .scroll-x::-webkit-scrollbar-track{background:rgba(255,255,255,.05);border-radius:8px}
-        .scroll-x::-webkit-scrollbar-thumb{background:var(--text-4);border-radius:8px;border:2px solid transparent;background-clip:padding-box}
-        .scroll-x::-webkit-scrollbar-thumb:hover{background:#7C8AAE}
-        input:focus,textarea:focus,select:focus{outline:2px solid #768692;outline-offset:1px}
-
-        /* ── TABELAS ── */
-        table{border-collapse:collapse;width:100%}
-        th{font-family:inherit;font-size:11px;color:var(--text-3);text-transform:none;letter-spacing:0.01em;padding:11px 14px;border-bottom:1px solid var(--border);text-align:left;font-weight:500;background:var(--bg-2);white-space:nowrap}
-        td{padding:10px 14px;font-size:13px;border-bottom:1px solid var(--border);vertical-align:middle;color:var(--text-2)}
-        tr:last-child td{border-bottom:none}
-        tbody tr:hover td{background:var(--bg-2);transition:background .1s}
-        .dark th{background:var(--bg-2)!important;border-bottom-color:var(--text-2)!important;color:var(--text-2)!important}
-        .dark td{border-bottom-color:var(--bg-2)!important;color:var(--text-4)!important}
-        .dark tbody tr:hover td{background:var(--bg-2)!important}
-
-        /* ── FILTRO PERIOD ── */
-        .filter-btn{background:var(--surface);border:1px solid var(--border);color:var(--text-2);padding:5px 14px;cursor:pointer;font-family:inherit;font-size:12px;border-radius:20px;transition:all .15s;font-weight:500}
-        .filter-btn.active{background:#768692;border-color:#768692;color:#fff;font-weight:600}
-        .filter-btn:hover:not(.active){background:var(--bg-2);border-color:var(--text-4)}
-        .dark .filter-btn{background:var(--bg-2);border-color:var(--text-2);color:var(--text-3)}
-        .dark .filter-btn.active{background:var(--surface-3);color:var(--text-strong)}
-
-        /* ── SUB-ABAS (Financeiro, etc) ── */
-        .tab-btn{background:transparent;border:none;border-bottom:2px solid transparent;color:var(--text-3);padding:14px 18px;cursor:pointer;font-family:inherit;font-size:13px;transition:all .15s;font-weight:500;border-radius:0}
-        .tab-btn.active{color:var(--text-strong);border-bottom-color:var(--text-strong);font-weight:600}
-        .tab-btn:hover:not(.active){color:var(--text-2);background:var(--bg-2)}
-        .dark .tab-btn{color:var(--text-2)}
-        .dark .tab-btn.active{color:var(--text-2);border-bottom-color:var(--text-2)}
-
-        /* ── INPUTS ── */
-        .search-input{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text-strong);padding:8px 14px 8px 38px;border-radius:8px;font-family:inherit;font-size:13px;outline:none;transition:border .15s}
-        .search-input:focus{border-color:#768692;box-shadow:0 0 0 3px rgba(15,23,42,.06)}
-        .dark input{background:var(--bg-2)!important;border-color:var(--text-2)!important;color:var(--text-2)!important}
-        .dark select{background:var(--bg-2);border-color:var(--text-2);color:var(--text-2)}
-
-        /* ── MISC ── */
-        .copy-btn{background:transparent;border:none;color:var(--text-4);cursor:pointer;padding:2px 5px;border-radius:4px;font-size:11px;transition:all .15s}
-        .copy-btn:hover{background:var(--surface-3);color:var(--text-2)}
-        .title-link{color:#768692;text-decoration:none;font-weight:500;transition:color .15s}
-        .title-link:hover{color:#768692;text-decoration:underline}
-        select{background:var(--surface);border:1px solid var(--border);color:var(--text-2);padding:7px 12px;border-radius:8px;font-family:inherit;font-size:13px;cursor:pointer;font-weight:400}
-
-        /* ── CARDS ── */
-        .sl-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 3px rgba(15,23,42,.04)}
-
-        /* ── CARDS DE KPI (faturamento, lucro, etc.) — grafite no escuro, plaqueta metálica no claro ── */
-        .kpi-card{position:relative;padding:16px 18px;border-radius:12px;
-          background:linear-gradient(180deg,#333c46 0%,#28303a 100%);
-          border:1px solid rgba(255,255,255,.08);
-          box-shadow:inset 0 1px 0 rgba(255,255,255,.06), 0 2px 8px rgba(0,0,0,.35)}
-        .kpi-lbl{font-size:11px;color:var(--text-3);letter-spacing:.4px;font-weight:600}
-        :root[data-theme="light"] .kpi-card{
-          border:1px solid #b3aa9c;
-          background:radial-gradient(130% 90% at 28% -12%, rgba(255,255,255,.65), transparent 55%),
-                     linear-gradient(180deg,#ece7de 0%,#d6cfc2 47%,#c7bfb1 53%,#e1dbd0 100%);
-          box-shadow:inset 0 1px 1px rgba(255,255,255,.85), inset 0 -3px 6px rgba(0,0,0,.10), inset 0 0 0 1px rgba(255,255,255,.35), 0 3px 7px rgba(0,0,0,.20)}
-        :root[data-theme="light"] .kpi-lbl{color:#6b6053}
-
-        /* ── ANIMAÇÕES ── */
-        @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-        .fade-up{animation:fadeUp .25s ease forwards}
-        @keyframes slPulse{0%,100%{opacity:1}50%{opacity:.4}}
-      `}</style>
+      {/* As regras globais e as classes de componente ficam em src/estilos.css. */}
 
       {/* ── MENU SUPERIOR (topo) — logo + grupos com dropdown + status/usuário à direita ── */}
       <header style={{ position:"sticky", top:0, zIndex:200, display:"flex", alignItems:"center", gap:8,

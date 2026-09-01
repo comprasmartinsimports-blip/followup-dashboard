@@ -1,0 +1,183 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Flow Marketplaces — folha de estilo do sistema
+   ═══════════════════════════════════════════════════════════════════════
+   As CORES e os espaçamentos-base ficam em index.html, como variáveis CSS
+   (--bg, --surface, --text-strong, --border...). É de lá que o tema claro e
+   o escuro saem. Este arquivo é a camada de cima: os COMPONENTES.
+
+   Antes, cada cartão, cada tabela e cada botão carregavam o próprio estilo
+   escrito no meio do JavaScript, elemento por elemento. Mudar a aparência de
+   um tipo de peça exigia caçar as ocorrências uma a uma — e nenhuma
+   ferramenta visual conseguia enxergar nada. Aqui, mexer numa regra muda
+   todas as peças daquele tipo, no sistema inteiro.
+
+   Como usar: className="cartao" no lugar do style inline. Ajuste pontual de
+   uma instância continua podendo ir em style={{ ... }}, que vence a classe.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── SUPERFÍCIES ──────────────────────────────────────────────────────── */
+.cartao        { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; }
+.cartao-lg     { padding:18px 20px; }
+.cartao-sm     { padding:10px 14px; }
+.painel        { background:var(--surface); border:1px solid var(--border); border-radius:12px; }
+
+/* ── KPI: o número em destaque de cada tela ───────────────────────────── */
+.kpi           { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:13px 16px; min-width:0; }
+.kpi-rot       { font-size:11.5px; color:var(--text-3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.kpi-val       { font-size:21px; font-weight:600; margin-top:2px; font-variant-numeric:tabular-nums; }
+.kpi-nota      { font-size:10.5px; color:var(--text-4); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.kpi-faixa     { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-bottom:14px; }
+
+/* ── TABELAS ──────────────────────────────────────────────────────────── */
+.tabela-wrap   { overflow-x:auto; border:1px solid var(--border); border-radius:12px; background:var(--surface); }
+.tabela        { border-collapse:collapse; width:100%; font-size:13px; min-width:640px; }
+.tabela .th    { text-align:left; padding:10px 12px; font-size:11px; letter-spacing:.4px; color:var(--text-3);
+                 font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap; background:var(--surface-3); }
+.tabela .td    { padding:9px 12px; border-bottom:1px solid var(--border-soft); color:var(--text-2); vertical-align:middle; }
+.tabela .td-num{ padding:9px 12px; border-bottom:1px solid var(--border-soft); color:var(--text-2);
+                 font-family:'JetBrains Mono',ui-monospace,monospace; font-size:12px; font-variant-numeric:tabular-nums; }
+.linha-abre    { cursor:pointer; }
+
+/* ── BOTÕES ───────────────────────────────────────────────────────────── */
+.btn           { display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:9px 16px; border-radius:9px;
+                 font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; border:1px solid transparent; }
+.btn-pri       { background:var(--ui-accent); color:var(--ui-accent-text); border:none; }
+.btn-sec       { background:var(--surface); color:var(--text-2); border:1px solid var(--border); }
+.btn-perigo    { background:rgba(255,82,82,.10); color:#FF5252; border:1px solid rgba(255,82,82,.35); }
+.btn-bloco     { width:100%; padding:11px; }
+.btn-mini      { font-size:11px; font-weight:600; padding:4px 10px; border-radius:6px; border:none; cursor:pointer; }
+.btn-mini-ok   { background:rgba(10,157,78,.12); color:var(--ui-accent); }
+.btn-mini-sec  { background:var(--surface-3); color:var(--text-2); }
+.btn-mini-del  { background:rgba(255,82,82,.10); color:#FF5252; }
+.btn-exp       { display:inline-flex; align-items:center; gap:6px; padding:7px 13px; border-radius:8px; border:1px solid var(--border);
+                 background:var(--surface); color:var(--text-2); font-size:12px; font-weight:500; cursor:pointer; }
+.btn-pdf       { display:inline-flex; align-items:center; gap:7px; padding:9px 15px; border-radius:9px; border:1px solid var(--border);
+                 background:var(--surface); color:var(--text-strong); font-size:12.5px; font-weight:500; cursor:pointer; }
+
+/* ── FORMULÁRIO ───────────────────────────────────────────────────────── */
+.campo         { width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text-strong);
+                 padding:9px 11px; border-radius:8px; font-size:13px; outline:none; box-sizing:border-box; font-family:inherit; }
+.campo-sup     { background:var(--surface); }
+.rotulo        { display:block; font-size:11.5px; color:var(--text-3); font-weight:600; letter-spacing:.3px; margin-bottom:4px; }
+.ajuda         { font-size:10.5px; color:var(--text-4); margin-top:3px; line-height:1.4; }
+.busca         { width:100%; background:var(--surface); border:1px solid var(--border); color:var(--text-strong);
+                 padding:9px 12px 9px 34px; border-radius:9px; font-size:13px; outline:none; box-sizing:border-box; }
+.grid-campos   { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px; }
+
+/* ── ETIQUETAS DE ESTADO ──────────────────────────────────────────────── */
+.chip          { display:inline-block; font-size:11px; font-weight:600; padding:2px 9px; border-radius:20px; white-space:nowrap; background:var(--surface-3); }
+.chip-ok       { color:#0a9d4e; background:rgba(10,157,78,.14); }
+.chip-alerta   { color:#FFC107; background:rgba(255,193,7,.14); }
+.chip-ruim     { color:#FF5252; background:rgba(255,82,82,.14); }
+
+/* ── TEXTO ────────────────────────────────────────────────────────────── */
+.titulo-tela   { font-weight:600; font-size:20px; color:var(--text-strong); }
+.sub-tela      { font-size:12.5px; color:var(--text-3); margin-top:2px; }
+.titulo-sec    { font-size:13.5px; font-weight:600; color:var(--text-strong); margin-bottom:4px; }
+.nota          { font-size:11.5px; color:var(--text-3); line-height:1.6; }
+.mono          { font-family:'JetBrains Mono',ui-monospace,monospace; font-variant-numeric:tabular-nums; }
+
+/* ── AVISOS ───────────────────────────────────────────────────────────── */
+.aviso         { border-radius:10px; padding:11px 14px; font-size:12.5px; line-height:1.6; margin-top:12px; }
+.aviso-info    { background:var(--surface); border:1px solid var(--border); color:var(--text-3); }
+.aviso-alerta  { background:rgba(255,193,7,.10); border:1px solid rgba(255,193,7,.5); color:var(--text-2); }
+.aviso-erro    { background:rgba(255,82,82,.12); border:1px solid #FF5252; color:#FF5252; }
+.aviso-ok      { background:rgba(10,157,78,.12); border:1px solid #0a9d4e; color:#0a9d4e; }
+
+/* ── TELA VAZIA ───────────────────────────────────────────────────────── */
+.vazio         { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:54px 24px; text-align:center; }
+.vazio-icone   { font-size:36px; margin-bottom:10px; }
+.vazio-titulo  { font-weight:600; font-size:16px; color:var(--text-strong); }
+.vazio-texto   { font-size:13.5px; color:var(--text-3); margin-top:8px; line-height:1.65; max-width:540px; margin-left:auto; margin-right:auto; }
+
+/* ── MODAL ────────────────────────────────────────────────────────────── */
+.modal-fundo   { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:600; display:flex;
+                 align-items:flex-start; justify-content:center; padding:32px 16px; overflow-y:auto; }
+.modal-caixa   { background:var(--bg-2); border:1px solid var(--border); border-radius:14px; max-width:100%; padding:22px; }
+.tela-cheia    { position:fixed; inset:0; background:var(--bg); z-index:700; display:flex; flex-direction:column; }
+.tela-cheia-topo { border-bottom:1px solid var(--border); background:var(--bg-2); padding:14px 22px;
+                   display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+
+/* ── LAYOUT DO MÓDULO FINANCEIRO ──────────────────────────────────────── */
+.mod-abas      { display:flex; gap:2px; margin-bottom:14px; border-bottom:1px solid var(--border); }
+.mod-aba       { background:none; border:none; border-bottom:2px solid transparent; color:var(--text-3); font-weight:500;
+                 padding:9px 13px; cursor:pointer; font-size:13px; white-space:nowrap; font-family:inherit; }
+.mod-aba.on    { border-bottom-color:var(--ui-accent); color:var(--text-strong); font-weight:600; cursor:default; }
+.mod-corpo     { display:flex; gap:14px; align-items:flex-start; }
+.mod-acoes     { width:236px; flex-shrink:0; display:flex; flex-direction:column; gap:8px; }
+
+/* ═══ BASE — regras globais que estavam dentro do App.jsx ═══════════════ */
+*{box-sizing:border-box;margin:0;padding:0}
+body,#root{font-family:'Inter',system-ui,sans-serif}
+input:not([type=checkbox]):not([type=radio]),textarea,select{background:var(--bg-2);color:var(--text-strong);border:1px solid var(--border)}
+input::placeholder,textarea::placeholder{color:var(--text-3)}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--text-4);border-radius:99px}
+::-webkit-scrollbar-thumb:hover{background:var(--text-3)}
+.app-header::-webkit-scrollbar{display:none}
+/* Barra de rolagem horizontal visível e "pegável" nas tabelas largas */
+.scroll-x{overflow-x:auto;overflow-y:visible}
+.scroll-x::-webkit-scrollbar{height:12px}
+.scroll-x::-webkit-scrollbar-track{background:rgba(255,255,255,.05);border-radius:8px}
+.scroll-x::-webkit-scrollbar-thumb{background:var(--text-4);border-radius:8px;border:2px solid transparent;background-clip:padding-box}
+.scroll-x::-webkit-scrollbar-thumb:hover{background:#7C8AAE}
+input:focus,textarea:focus,select:focus{outline:2px solid #768692;outline-offset:1px}
+
+/* ── TABELAS ── */
+table{border-collapse:collapse;width:100%}
+th{font-family:inherit;font-size:11px;color:var(--text-3);text-transform:none;letter-spacing:0.01em;padding:11px 14px;border-bottom:1px solid var(--border);text-align:left;font-weight:500;background:var(--bg-2);white-space:nowrap}
+td{padding:10px 14px;font-size:13px;border-bottom:1px solid var(--border);vertical-align:middle;color:var(--text-2)}
+tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:var(--bg-2);transition:background .1s}
+.dark th{background:var(--bg-2)!important;border-bottom-color:var(--text-2)!important;color:var(--text-2)!important}
+.dark td{border-bottom-color:var(--bg-2)!important;color:var(--text-4)!important}
+.dark tbody tr:hover td{background:var(--bg-2)!important}
+
+/* ── FILTRO PERIOD ── */
+.filter-btn{background:var(--surface);border:1px solid var(--border);color:var(--text-2);padding:5px 14px;cursor:pointer;font-family:inherit;font-size:12px;border-radius:20px;transition:all .15s;font-weight:500}
+.filter-btn.active{background:#768692;border-color:#768692;color:#fff;font-weight:600}
+.filter-btn:hover:not(.active){background:var(--bg-2);border-color:var(--text-4)}
+.dark .filter-btn{background:var(--bg-2);border-color:var(--text-2);color:var(--text-3)}
+.dark .filter-btn.active{background:var(--surface-3);color:var(--text-strong)}
+
+/* ── SUB-ABAS (Financeiro, etc) ── */
+.tab-btn{background:transparent;border:none;border-bottom:2px solid transparent;color:var(--text-3);padding:14px 18px;cursor:pointer;font-family:inherit;font-size:13px;transition:all .15s;font-weight:500;border-radius:0}
+.tab-btn.active{color:var(--text-strong);border-bottom-color:var(--text-strong);font-weight:600}
+.tab-btn:hover:not(.active){color:var(--text-2);background:var(--bg-2)}
+.dark .tab-btn{color:var(--text-2)}
+.dark .tab-btn.active{color:var(--text-2);border-bottom-color:var(--text-2)}
+
+/* ── INPUTS ── */
+.search-input{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text-strong);padding:8px 14px 8px 38px;border-radius:8px;font-family:inherit;font-size:13px;outline:none;transition:border .15s}
+.search-input:focus{border-color:#768692;box-shadow:0 0 0 3px rgba(15,23,42,.06)}
+.dark input{background:var(--bg-2)!important;border-color:var(--text-2)!important;color:var(--text-2)!important}
+.dark select{background:var(--bg-2);border-color:var(--text-2);color:var(--text-2)}
+
+/* ── MISC ── */
+.copy-btn{background:transparent;border:none;color:var(--text-4);cursor:pointer;padding:2px 5px;border-radius:4px;font-size:11px;transition:all .15s}
+.copy-btn:hover{background:var(--surface-3);color:var(--text-2)}
+.title-link{color:#768692;text-decoration:none;font-weight:500;transition:color .15s}
+.title-link:hover{color:#768692;text-decoration:underline}
+select{background:var(--surface);border:1px solid var(--border);color:var(--text-2);padding:7px 12px;border-radius:8px;font-family:inherit;font-size:13px;cursor:pointer;font-weight:400}
+
+/* ── CARDS ── */
+.sl-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 3px rgba(15,23,42,.04)}
+
+/* ── CARDS DE KPI (faturamento, lucro, etc.) — grafite no escuro, plaqueta metálica no claro ── */
+.kpi-card{position:relative;padding:16px 18px;border-radius:12px;
+  background:linear-gradient(180deg,#333c46 0%,#28303a 100%);
+  border:1px solid rgba(255,255,255,.08);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06), 0 2px 8px rgba(0,0,0,.35)}
+.kpi-lbl{font-size:11px;color:var(--text-3);letter-spacing:.4px;font-weight:600}
+:root[data-theme="light"] .kpi-card{
+  border:1px solid #b3aa9c;
+  background:radial-gradient(130% 90% at 28% -12%, rgba(255,255,255,.65), transparent 55%),
+             linear-gradient(180deg,#ece7de 0%,#d6cfc2 47%,#c7bfb1 53%,#e1dbd0 100%);
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.85), inset 0 -3px 6px rgba(0,0,0,.10), inset 0 0 0 1px rgba(255,255,255,.35), 0 3px 7px rgba(0,0,0,.20)}
+:root[data-theme="light"] .kpi-lbl{color:#6b6053}
+
+/* ── ANIMAÇÕES ── */
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.fade-up{animation:fadeUp .25s ease forwards}
+@keyframes slPulse{0%,100%{opacity:1}50%{opacity:.4}}

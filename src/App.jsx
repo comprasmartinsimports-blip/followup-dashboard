@@ -5022,6 +5022,16 @@ function proximoDiaDaSemana(iso, dow) {
 }
 
 var MAX_SERIE = 260;   // teto de seguranca: 5 anos de semanal, 10 de mensal
+var FORMAS_PAGAMENTO = ["Dinheiro","Pix","Cartão","Boleto","Transferência"];
+// "Tipo" é como a conta nasceu: sozinha, dividida em parcelas ou repetindo. Sai
+// da própria conta, não de um campo à parte que alguém teria de manter.
+var TIPOS_PAGAMENTO = [["todos","Todos"],["unica","À vista / única"],["parcelada","Parcelada"],["recorrente","Recorrente"]];
+function tipoPagamentoDe(c){
+  if (c.ocorrencia === "mensal" || c.ocorrencia === "semanal") return "recorrente";
+  if (c.ocorrencia === "parcelada" || (c.serieId && c.parcelas > 1)) return "parcelada";
+  return "unica";
+}
+
 function expandirRecorrencia(base) {
   var recorrentes = ["mensal", "semanal", "parcelada"];
   if (recorrentes.indexOf(base.ocorrencia) < 0) return [base];
@@ -5339,7 +5349,7 @@ function ContaModal({ conta, onSave, onClose, contasBancarias, categorias, forne
 
           {aba==="pagamento" && <>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:12 }}>
-              <div><label style={lbl}>Forma de pagamento</label><select value={f.forma||""} onChange={function(e){ set("forma", e.target.value); }} style={campo}><option value="">Selecione</option><option>Dinheiro</option><option>Pix</option><option>Cartão</option><option>Boleto</option><option>Transferência</option></select></div>
+              <div><label style={lbl}>Forma de pagamento</label><select value={f.forma||""} onChange={function(e){ set("forma", e.target.value); }} style={campo}><option value="">Selecione</option>{FORMAS_PAGAMENTO.map(function(x){ return <option key={x}>{x}</option>; })}</select></div>
               <div><label style={lbl}>Sai de qual conta</label>
                 <select value={f.conta||""} onChange={function(e){ set("conta", e.target.value); }} style={campo}>
                   <option value="">— não definida —</option>
@@ -6370,7 +6380,15 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categori
     });
   }
   const [mostrarAcoes, setMostrarAcoes] = useState(true);
-  const [fCategoria, setFCategoria] = useState("");
+  const [fCats, setFCats] = useState([]);        // categorias marcadas; vazio = todas
+  const [catAberto, setCatAberto] = useState(false);
+  const [catBusca, setCatBusca] = useState("");
+  const [dataAberta, setDataAberta] = useState(false);
+  const [fTipoPag, setFTipoPag] = useState("todos");
+  const [fForma, setFForma] = useState("");
+  const [fVMin, setFVMin] = useState("");
+  const [fVMax, setFVMax] = useState("");
+  const [fNdoc, setFNdoc] = useState("");
   const [de, setDe] = useState("");
   const [ate, setAte] = useState("");
   var hoje = new Date().toISOString().slice(0, 10);
@@ -6385,14 +6403,36 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categori
     setDe(d.toISOString().slice(0,10)); setAte(a.toISOString().slice(0,10));
   }
   function statusReal(c){ return situacaoConta(c, hoje); }
+  var vMinNum = fVMin === "" ? null : parseFloat(fVMin);
+  var vMaxNum = fVMax === "" ? null : parseFloat(fVMax);
   var lista = (contas || []).filter(function(c){
     if (sit !== "todas" && statusReal(c) !== sit) return false;
-    if (fCategoria && String(c.categoria||"").toLowerCase().indexOf(fCategoria.toLowerCase()) < 0) return false;
+    // Nenhuma categoria marcada quer dizer "todas" — marcar uma a uma para ver
+    // tudo seria trabalho sem resultado diferente.
+    if (fCats.length && fCats.indexOf(c.categoria || "") < 0) return false;
+    if (fTipoPag !== "todos" && tipoPagamentoDe(c) !== fTipoPag) return false;
+    if (fForma && (c.forma || "") !== fForma) return false;
+    if (fNdoc.trim() && String(c.ndoc || "").toLowerCase().indexOf(fNdoc.trim().toLowerCase()) < 0) return false;
+    var vc = parseFloat(c.valorTotal || c.valor) || 0;
+    if (vMinNum != null && !isNaN(vMinNum) && vc < vMinNum) return false;
+    if (vMaxNum != null && !isNaN(vMaxNum) && vc > vMaxNum) return false;
     if (de && (c.vencimento || "") < de) return false;
     if (ate && (c.vencimento || "") > ate) return false;
-    if (busca.trim()){ var q = busca.trim().toLowerCase(); if (!((c.descricao||"").toLowerCase().indexOf(q)>=0 || (c.categoria||"").toLowerCase().indexOf(q)>=0)) return false; }
+    if (busca.trim()){ var q = busca.trim().toLowerCase(); if (!((c.descricao||"").toLowerCase().indexOf(q)>=0 || (c.categoria||"").toLowerCase().indexOf(q)>=0 || (c.historico||"").toLowerCase().indexOf(q)>=0)) return false; }
     return true;
   }).slice().sort(function(a,b){ return (a.vencimento || "").localeCompare(b.vencimento || ""); });
+
+  // As categorias que existem de fato nas contas, somadas às cadastradas.
+  var catsDisponiveis = [];
+  (categorias || []).forEach(function(x){ if (x && catsDisponiveis.indexOf(x) < 0) catsDisponiveis.push(x); });
+  (contas || []).forEach(function(c){ var k = c.categoria || ""; if (catsDisponiveis.indexOf(k) < 0) catsDisponiveis.push(k); });
+  catsDisponiveis.sort(function(a,b){
+    if (a === "") return -1; if (b === "") return 1;      // "Sem categoria" primeiro
+    return a.localeCompare(b, "pt-BR");
+  });
+  function alternarCat(k){
+    setFCats(function(v){ return v.indexOf(k) >= 0 ? v.filter(function(x){ return x !== k; }) : v.concat([k]); });
+  }
   // Em aberto é SALDO devedor, não valor de face: uma conta de R$ 1.000 com
   // R$ 400 já pagos pesa R$ 600 aqui, no fluxo de caixa e na prioridade.
   var valorTotalLista = lista.reduce(function(s,c){ return s + saldoDe(c); }, 0);
@@ -6492,27 +6532,19 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categori
   var sits = [["todas","Todas"],["pendente","Pendentes"],["vencida","Vencidas"],["paga","Pagas"],["cancelada","Canceladas"]];
   var selFiltro = { width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"7px 9px", borderRadius:8, fontSize:12.5 };
   var filtBtn = { background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"9px 12px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" };
-  function limpar(){ setSit("todas"); setFCategoria(""); setBusca(""); setDe(""); setAte(""); }
+  function limpar(){
+    setSit("todas"); setFCats([]); setCatBusca(""); setBusca(""); setDe(""); setAte("");
+    setFTipoPag("todos"); setFForma(""); setFVMin(""); setFVMax(""); setFNdoc("");
+  }
   function exportar(){ baixarCSV("contas-pagar", ["Vencimento","Fornecedor","Categoria","Valor","Situação"], lista.map(function(c){ return [c.vencimento||"", c.descricao||"", c.categoria||"", (parseFloat(c.valor)||0).toFixed(2), statusReal(c)]; })); }
   function imprimir(){ baixarPDF("contas-a-pagar", ["Vencimento","Fornecedor","Categoria","Valor","Situação"], lista.map(function(c){ return [c.vencimento?(fmtDate(c.vencimento)||c.vencimento):"—", c.descricao||"", c.categoria||"", fmt(parseFloat(c.valor)||0), statusReal(c)]; })); }
-  var temFiltro = sit!=="todas" || fCategoria || busca || de || ate;
+  var temFiltro = sit!=="todas" || fCats.length || busca || de || ate || fTipoPag!=="todos" || fForma || fVMin || fVMax || fNdoc;
   // O número grande responde à pergunta da tela: aqui é "o que me aperta agora",
   // não o total histórico.
   var venc7 = (contas||[]).filter(function(c){ var st=statusReal(c); return st==="pendente" && c.vencimento && c.vencimento <= new Date(Date.now()+7*864e5).toISOString().slice(0,10); });
   return (
     <FinanceiroShell tab={tab} setTab={setTab} titulo="Contas a pagar"
       sub="Compromissos com vencimento. A baixa aqui vira movimento em Lançamentos."
-      kpis={[
-        { rotulo:"Vencidas", valor:fmt(somaSaldo(function(c){ return statusReal(c) === "vencida"; })),
-          cor: (contas||[]).some(function(c){ return statusReal(c)==="vencida"; }) ? FIN_COR.saida : FIN_COR.fraco,
-          nota:(contas||[]).filter(function(c){ return statusReal(c)==="vencida"; }).length + " conta(s)" },
-        { rotulo:"Vencem em 7 dias", valor:fmt(venc7.reduce(function(a,c){ return a + saldoDe(c); },0)), cor: venc7.length ? FIN_COR.atencao : FIN_COR.fraco, nota:venc7.length + " conta(s)" },
-        { rotulo:"Em aberto", valor:fmt(somaSaldo(function(c){ var st = statusReal(c); return st === "pendente" || st === "vencida" || st === "parcial"; })),
-          cor:FIN_COR.neutro, nota:"saldo devedor, não valor de face" },
-        { rotulo:"Pagamento parcial", valor:fmt(somaSaldo(function(c){ return statusReal(c) === "parcial"; })),
-          cor: (contas||[]).some(function(c){ return statusReal(c)==="parcial"; }) ? FIN_COR.atencao : FIN_COR.fraco,
-          nota:(contas||[]).filter(function(c){ return statusReal(c)==="parcial"; }).length + " conta(s) · falta este valor" },
-      ]}
       acoes={<>
         <AcaoFin tipo="pri" onClick={function(){ setModal({}); }}>+ Incluir conta</AcaoFin>
         <AcaoFin onClick={function(){ setImportando(true); }}>⬆ Importar planilha</AcaoFin>
@@ -6525,6 +6557,40 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categori
           <div style={{ fontSize:18, fontWeight:600, color:"var(--text-strong)" }}>{fmt(valorTotalLista)}</div>
           <div style={{ fontSize:11, color:"var(--text-4)", marginTop:2 }}>{lista.length} de {(contas||[]).length} conta(s)</div>
         </div>
+
+        {/* O que age sobre a seleção fica junto do total, não em cima da tabela:
+            é aqui que se olha para decidir o que fazer com o que está marcado. */}
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"12px 14px", display:"flex", flexDirection:"column", gap:8 }}>
+          <div style={{ fontSize:11.5, color: selIds.length ? "var(--text-2)" : "var(--text-4)" }}>
+            {selIds.length ? selIds.length + " conta(s) selecionada(s)" : "Selecione contas na lista para agir"}
+          </div>
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={function(){ if (pagaveis.length) setBaixando(pagaveis); }} disabled={!pagaveis.length}
+              title={pagaveis.length ? "Registrar o pagamento das contas marcadas" : "Marque uma ou mais contas em aberto"}
+              className="btn" style={{ flex:1, justifyContent:"center",
+                       background: pagaveis.length ? "var(--ui-accent)" : "var(--surface-3)",
+                       color: pagaveis.length ? "var(--ui-accent-text)" : "var(--text-4)",
+                       border: pagaveis.length ? "none" : "1px solid var(--border)",
+                       cursor: pagaveis.length ? "pointer" : "not-allowed" }}>
+              Baixar pagamento{pagaveis.length ? " (" + pagaveis.length + ")" : ""}
+            </button>
+            <button onClick={excluirSelecionadas} disabled={!selIds.length} title={selIds.length ? "Excluir as contas marcadas" : "Marque uma ou mais contas"}
+              className="btn" style={{ background:"var(--surface-3)", border:"1px solid var(--border)",
+                       color: selIds.length ? "#FF5252" : "var(--text-4)", cursor: selIds.length ? "pointer" : "not-allowed", padding:"9px 13px" }}>🗑</button>
+          </div>
+        </div>
+
+        {[
+          { rotulo:"Vencidas", valor:fmt(somaSaldo(function(c){ return statusReal(c) === "vencida"; })),
+            cor: (contas||[]).some(function(c){ return statusReal(c)==="vencida"; }) ? FIN_COR.saida : FIN_COR.fraco,
+            nota:(contas||[]).filter(function(c){ return statusReal(c)==="vencida"; }).length + " conta(s)" },
+          { rotulo:"Vencem em 7 dias", valor:fmt(venc7.reduce(function(a,c){ return a + saldoDe(c); },0)), cor: venc7.length ? FIN_COR.atencao : FIN_COR.fraco, nota:venc7.length + " conta(s)" },
+          { rotulo:"Em aberto", valor:fmt(somaSaldo(function(c){ var st = statusReal(c); return st === "pendente" || st === "vencida" || st === "parcial"; })),
+            cor:FIN_COR.neutro, nota:"saldo devedor, não valor de face" },
+          { rotulo:"Pagamento parcial", valor:fmt(somaSaldo(function(c){ return statusReal(c) === "parcial"; })),
+            cor: (contas||[]).some(function(c){ return statusReal(c)==="parcial"; }) ? FIN_COR.atencao : FIN_COR.fraco,
+            nota:(contas||[]).filter(function(c){ return statusReal(c)==="parcial"; }).length + " conta(s) · falta este valor" },
+        ].map(function(k,i){ return <KpiFin key={i} rotulo={k.rotulo} valor={k.valor} cor={k.cor} nota={k.nota} />; })}
       </>}>
       <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12, flexWrap:"wrap" }}>
         <button onClick={alternarFiltros} style={{ ...filtBtn, background: mostrarFiltros?"rgba(118,133,146,.14)":"var(--surface)" }}>{mostrarFiltros ? "⟨ Filtros" : "⟩ Filtros"}</button>
@@ -6532,23 +6598,41 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categori
           <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:"var(--text-3)", fontSize:13 }}>🔍</span>
           <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Pesquise por fornecedor, categoria ou histórico" className="busca" />
         </div>
+        {/* O filtro por data virou um calendário ao lado da busca: duas caixas
+            de data ocupavam o painel inteiro para uma pergunta ocasional. */}
+        <div style={{ position:"relative" }}>
+          <button onClick={function(){ setDataAberta(!dataAberta); }} title={de || ate ? "Período: " + ((fmtDate(de)||de) || "início") + " até " + ((fmtDate(ate)||ate) || "hoje em diante") : "Filtrar por data de vencimento"}
+            style={{ ...filtBtn, background: (de || ate) ? "rgba(10,157,78,.12)" : dataAberta ? "rgba(118,133,146,.14)" : "var(--surface)",
+                     border:"1px solid " + ((de || ate) ? "var(--ui-accent)" : "var(--border)"), padding:"9px 13px", display:"flex", alignItems:"center", gap:7 }}>
+            <span style={{ fontSize:14 }}>📅</span>
+            {(de || ate) && <span style={{ fontSize:12, color:"#0a9d4e", fontWeight:600 }}>
+              {(de ? (fmtDate(de)||de) : "…") + " – " + (ate ? (fmtDate(ate)||ate) : "…")}
+            </span>}
+          </button>
+          {dataAberta && (
+            <>
+              <div onClick={function(){ setDataAberta(false); }} style={{ position:"fixed", inset:0, zIndex:29 }} />
+              <div style={{ position:"absolute", zIndex:30, top:"calc(100% + 6px)", left:0, width:250, background:"var(--bg-2)",
+                            border:"1px solid var(--border)", borderRadius:12, padding:14, boxShadow:"0 12px 32px rgba(0,0,0,.35)" }}>
+                <div style={{ fontSize:11, color:"var(--text-3)", marginBottom:6 }}>Vencimento</div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginBottom:9 }}>
+                  {[["mes","Este mês"],["prox","Próximo"],["30","30 dias"],["vencidas","Vencidas"],["","Tudo"]].map(function(o){
+                    return <button key={o[0]} onClick={function(){ periodoRapido(o[0]); }}
+                      style={{ fontSize:10.5, fontWeight:600, padding:"4px 9px", borderRadius:6, cursor:"pointer",
+                               border:"1px solid var(--border)", background:"var(--surface)", color:"var(--text-3)" }}>{o[1]}</button>;
+                  })}
+                </div>
+                <input type="date" value={de} onChange={function(e){ setDe(e.target.value); }} style={{ ...selFiltro, marginBottom:6 }} title="De" />
+                <input type="date" value={ate} onChange={function(e){ setAte(e.target.value); }} style={selFiltro} title="Até" />
+                <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                  <button onClick={function(){ setDe(""); setAte(""); }} style={{ flex:1, background:"var(--surface-3)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600, fontSize:12, padding:"7px", borderRadius:8, cursor:"pointer" }}>Limpar data</button>
+                  <button onClick={function(){ setDataAberta(false); }} style={{ flex:1, background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, fontSize:12, padding:"7px", borderRadius:8, cursor:"pointer" }}>Pronto</button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
         <div style={{ flex:1 }} />
-        {/* As ações da seleção. Ficam sempre visíveis, apagadas enquanto nada
-            está marcado, para o caminho ser aprendido antes de ser necessário. */}
-        <span className="nota" style={{ opacity: selIds.length ? 1 : .5 }}>
-          {selIds.length ? selIds.length + " selecionada(s)" : "selecione para agir"}
-        </span>
-        <button onClick={function(){ if (pagaveis.length) setBaixando(pagaveis); }} disabled={!pagaveis.length}
-          title={pagaveis.length ? "Registrar o pagamento das contas marcadas" : "Marque uma ou mais contas em aberto"}
-          className="btn" style={{ background: pagaveis.length ? "var(--ui-accent)" : "var(--surface)",
-                   color: pagaveis.length ? "var(--ui-accent-text)" : "var(--text-4)",
-                   border: pagaveis.length ? "none" : "1px solid var(--border)",
-                   cursor: pagaveis.length ? "pointer" : "not-allowed" }}>
-          Baixar pagamento{pagaveis.length ? " (" + pagaveis.length + ")" : ""}
-        </button>
-        <button onClick={excluirSelecionadas} disabled={!selIds.length} title={selIds.length ? "Excluir as contas marcadas" : "Marque uma ou mais contas"}
-          className="btn" style={{ background:"var(--surface)", border:"1px solid var(--border)",
-                   color: selIds.length ? "#FF5252" : "var(--text-4)", cursor: selIds.length ? "pointer" : "not-allowed", padding:"9px 13px" }}>🗑</button>
       </div>
       <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
         {mostrarFiltros && (
@@ -6558,21 +6642,69 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categori
               {temFiltro && <button onClick={limpar} style={{ background:"none", border:"none", color:"#768592", cursor:"pointer", fontSize:12 }}>Limpar</button>}
             </div>
             <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Opção</div><select value={sit} onChange={function(e){ setSit(e.target.value); }} style={selFiltro}>{sits.map(function(s){ return <option key={s[0]} value={s[0]}>{s[1]}</option>; })}</select></div>
-            <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Categoria</div>
-              <input value={fCategoria} onChange={function(e){ setFCategoria(e.target.value); }} placeholder="Todas categorias" list="filtro-cat-pagar" style={selFiltro} />
-              <datalist id="filtro-cat-pagar">{(categorias||[]).map(function(x){ return <option key={x} value={x} />; })}</datalist>
+            {/* Categoria com marcação múltipla: filtrar por uma só obrigava a
+                repetir a busca para comparar duas. */}
+            <div style={{ position:"relative" }}>
+              <div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Categoria</div>
+              <button onClick={function(){ setCatAberto(!catAberto); }}
+                style={{ ...selFiltro, textAlign:"left", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center", gap:6,
+                         borderColor: fCats.length ? "var(--ui-accent)" : "var(--border)", color: fCats.length ? "var(--text-strong)" : "var(--text-3)" }}>
+                <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                  {fCats.length === 0 ? "Todas categorias"
+                    : fCats.length === 1 ? (fCats[0] || "Sem categoria")
+                    : fCats.length + " categorias"}
+                </span>
+                <span style={{ color:"var(--text-4)", flexShrink:0 }}>▾</span>
+              </button>
+              {catAberto && (
+                <>
+                  <div onClick={function(){ setCatAberto(false); }} style={{ position:"fixed", inset:0, zIndex:29 }} />
+                  <div style={{ position:"absolute", zIndex:30, left:0, right:0, top:"calc(100% + 4px)", background:"var(--bg-2)",
+                                border:"1px solid var(--ui-accent)", borderRadius:10, boxShadow:"0 12px 32px rgba(0,0,0,.35)", overflow:"hidden" }}>
+                    <input autoFocus value={catBusca} onChange={function(e){ setCatBusca(e.target.value); }} placeholder="Filtrar categorias..."
+                      style={{ width:"100%", background:"var(--bg)", border:"none", borderBottom:"1px solid var(--border-soft)", color:"var(--text-strong)",
+                               padding:"9px 11px", fontSize:12.5, outline:"none", boxSizing:"border-box" }} />
+                    <div style={{ maxHeight:260, overflowY:"auto" }}>
+                      {catsDisponiveis.filter(function(k){
+                        var t = catBusca.trim().toLowerCase();
+                        return !t || (k || "sem categoria").toLowerCase().indexOf(t) >= 0;
+                      }).map(function(k){
+                        var marcada = fCats.indexOf(k) >= 0;
+                        return <label key={k || "__sem"} style={{ display:"flex", alignItems:"center", gap:9, padding:"7px 11px", cursor:"pointer",
+                                        fontSize:12.5, color:"var(--text-2)", background: marcada ? "rgba(10,157,78,.10)" : "transparent" }}>
+                          <input type="checkbox" checked={marcada} onChange={function(){ alternarCat(k); }} style={{ accentColor:"var(--ui-accent)", cursor:"pointer" }} />
+                          <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{k || "Sem categoria"}</span>
+                        </label>;
+                      })}
+                    </div>
+                    {fCats.length > 0 && (
+                      <button onClick={function(){ setFCats([]); }}
+                        style={{ width:"100%", background:"var(--surface-3)", border:"none", borderTop:"1px solid var(--border-soft)",
+                                 color:"var(--text-2)", fontWeight:600, fontSize:12, padding:"8px", cursor:"pointer" }}>Desmarcar todas</button>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
-            <div>
-              <div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Vencimento</div>
-              <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginBottom:6 }}>
-                {[["mes","Este mês"],["prox","Próximo"],["30","30 dias"],["vencidas","Vencidas"],["","Tudo"]].map(function(o){
-                  return <button key={o[0]} onClick={function(){ periodoRapido(o[0]); }}
-                    style={{ fontSize:10.5, fontWeight:600, padding:"3px 8px", borderRadius:6, cursor:"pointer",
-                             border:"1px solid var(--border)", background:"var(--surface)", color:"var(--text-3)" }}>{o[1]}</button>;
-                })}
+            <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Tipo de pagamento</div>
+              <select value={fTipoPag} onChange={function(e){ setFTipoPag(e.target.value); }} style={selFiltro}>
+                {TIPOS_PAGAMENTO.map(function(t){ return <option key={t[0]} value={t[0]}>{t[1]}</option>; })}
+              </select>
+            </div>
+            <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Forma de pagamento</div>
+              <select value={fForma} onChange={function(e){ setFForma(e.target.value); }} style={selFiltro}>
+                <option value="">Todas as formas</option>
+                {FORMAS_PAGAMENTO.map(function(x){ return <option key={x} value={x}>{x}</option>; })}
+              </select>
+            </div>
+            <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Valor da conta</div>
+              <div style={{ display:"flex", gap:6 }}>
+                <input type="number" step="0.01" value={fVMin} onChange={function(e){ setFVMin(e.target.value); }} placeholder="de" style={{ ...selFiltro, width:"50%", boxSizing:"border-box" }} />
+                <input type="number" step="0.01" value={fVMax} onChange={function(e){ setFVMax(e.target.value); }} placeholder="até" style={{ ...selFiltro, width:"50%", boxSizing:"border-box" }} />
               </div>
-              <input type="date" value={de} onChange={function(e){ setDe(e.target.value); }} style={{ ...selFiltro, marginBottom:5 }} title="De" />
-              <input type="date" value={ate} onChange={function(e){ setAte(e.target.value); }} style={selFiltro} title="Até" />
+            </div>
+            <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Nº do documento</div>
+              <input value={fNdoc} onChange={function(e){ setFNdoc(e.target.value); }} placeholder="Qualquer um" style={selFiltro} />
             </div>
             <button onClick={limpar} style={{ background:"none", border:"none", color:"var(--ui-accent)", fontWeight:600, cursor:"pointer", fontSize:12.5, textAlign:"left" }}>Limpar filtros</button>
           </div>

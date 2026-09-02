@@ -1709,11 +1709,19 @@ function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, 
       estado:estado, baixaManual:baixaManual, recebido: estado === "recebido",
     };
   });
-  var nTaxaEstimada = linhas.filter(function(r){ return r.taxaEstimada && r.estado !== "recebido"; }).length;
+  // A tela é do que ainda vai entrar. O que já foi confirmado sai daqui: ele
+  // não é mais conta a receber, é saldo em Caixas e bancos — e é lá que se
+  // estorna, se a confirmação foi errada.
+  var jaRecebidas = linhas.filter(function(r){ return r.estado === "recebido"; });
+  var recebidoTotHist = jaRecebidas.reduce(function(s,r){ return s + r.valor; }, 0);
+  linhas = linhas.filter(function(r){ return r.estado !== "recebido"; });
+
+  var nTaxaEstimada = linhas.filter(function(r){ return r.taxaEstimada; }).length;
   function somaDe(est){ return linhas.filter(function(r){ return r.estado === est; }).reduce(function(s,r){ return s + r.valor; }, 0); }
   function qtdDe(est){ return linhas.filter(function(r){ return r.estado === est; }).length; }
-  var aReceber = somaDe("a_receber"), liberado = somaDe("liberado");
-  var recebidoTot = somaDe("recebido"), semDado = somaDe("sem_dado");
+  var aReceber = somaDe("a_receber"), liberado = somaDe("liberado"), semDado = somaDe("sem_dado");
+  // O total da tela: tudo o que ainda não entrou na conta.
+  var totalAReceber = aReceber + liberado + semDado;
 
   var lista = linhas.filter(function(r){
     if (fSituacao !== "todas" && r.estado !== fSituacao) return false;
@@ -1785,11 +1793,12 @@ function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, 
           <button onClick={function(){ imprimir(); }} style={{ background:"none", border:"none", textAlign:"left", padding:"9px 10px", borderRadius:7, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" }}>Imprimir</button>
         </div>
         <BlocoKpis itens={[
+          { rotulo:"Total a receber", valor:fmt(totalAReceber), cor: totalAReceber ? FIN_COR.neutro : FIN_COR.fraco,
+            nota: linhas.length + " pedido(s) que ainda não entraram" },
           { rotulo:"A receber de verdade", valor:fmt(aReceber), cor: qtdDe("a_receber") ? FIN_COR.atencao : FIN_COR.fraco,
             nota: qtdDe("a_receber") + " pedido(s) · o ML ainda não liberou" },
           { rotulo:"Liberado, falta confirmar", valor:fmt(liberado), cor: qtdDe("liberado") ? "#0a9d4e" : FIN_COR.fraco,
             nota: qtdDe("liberado") + " pedido(s) · já é dinheiro seu" },
-          { rotulo:"Recebido", valor:fmt(recebidoTot), cor:FIN_COR.entrada, nota:qtdDe("recebido") + " confirmado(s)" },
           { rotulo:"Sem dado de repasse", valor:fmt(semDado), cor:FIN_COR.fraco,
             nota: qtdDe("sem_dado") + " pedido(s) · fora das contas acima" },
         ]} />
@@ -1807,6 +1816,14 @@ function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, 
           </div>
         </div>
       </>}>
+      {jaRecebidas.length > 0 && (
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 14px", fontSize:12, color:"var(--text-3)", lineHeight:1.6, marginBottom:12 }}>
+          <b>{jaRecebidas.length} pedido(s)</b> somando {fmt(recebidoTotHist)} já foram confirmados e saíram desta tela —
+          não são mais conta a receber, são saldo. Aparecem no extrato em <b>Caixas e bancos</b>, e é lá que se estorna
+          uma confirmação errada.
+          {setTab && <button onClick={function(){ setTab("bancos"); }} style={{ marginLeft:8, background:"none", border:"none", color:"var(--ui-accent)", cursor:"pointer", fontSize:12, fontWeight:600, padding:0 }}>Ver em Caixas e bancos →</button>}
+        </div>
+      )}
       <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12, flexWrap:"wrap" }}>
         <button onClick={alternarFiltros} style={{ ...filtBtn, background: mostrarFiltros?"rgba(118,133,146,.14)":"var(--surface)" }}>{mostrarFiltros ? "⟨ Filtros" : "⟩ Filtros"}</button>
         <div style={{ position:"relative", flex:1, minWidth:220, maxWidth:520 }}>
@@ -1825,7 +1842,6 @@ function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, 
               <option value="todas">Todas</option>
               <option value="a_receber">A receber (ML não liberou)</option>
               <option value="liberado">Liberado, falta confirmar</option>
-              <option value="recebido">Recebido</option>
               <option value="sem_dado">Sem dado de repasse</option>
             </select></div>
             <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Categoria</div><select disabled style={{ ...selFiltro, opacity:.45 }}><option>Todas categorias</option></select></div>
@@ -1856,9 +1872,7 @@ function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, 
                       <span title={rotuloReceb(r.estado)[2]} style={{ fontSize:11, fontWeight:600, padding:"2px 9px", borderRadius:20, background:"var(--surface-3)", color:rotuloReceb(r.estado)[1] }}>{rotuloReceb(r.estado)[0]}</span>
                     </td>
                     <td className="td" style={{ whiteSpace:"nowrap" }}>
-                      {r.estado === "recebido"
-                        ? <button onClick={function(){ estornar(r.id); }} style={{ background:"var(--surface-3)", border:"none", color:"var(--text-2)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Estornar</button>
-                        : <button onClick={function(){ darBaixa(r.id, r.previsao || r.dataVenda); }} style={{ background:"rgba(10,157,78,.12)", border:"none", color:"var(--ui-accent)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Confirmar</button>}
+                      <button onClick={function(){ darBaixa(r.id, r.previsao || r.dataVenda); }} style={{ background:"rgba(10,157,78,.12)", border:"none", color:"var(--ui-accent)", fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:6, cursor:"pointer" }}>Confirmar</button>
                     </td>
                   </tr>;
                 })}
@@ -2912,6 +2926,10 @@ var ROTAS_CLAIMS = [
   "/post-purchase/v2/claims/search",
   "/v1/claims/search",
 ];
+// O endpoint recusa uma busca sem filtro nenhum ("at least one filter parameter
+// must be provided"), então não existe "traga tudo" numa chamada só: a busca
+// roda uma vez por status e junta os resultados, tirando repetidos pelo id.
+var STATUS_BUSCA_CLAIMS = ["opened", "closed"];
 
 async function chamarML(caminho, tk) {
   var r = await fetch(ML(caminho), { headers: { Authorization: "Bearer " + tk } });
@@ -2926,24 +2944,40 @@ async function buscarReclamacoesML(tk, sellerId, maxPaginas) {
   var tentativas = [];
   for (var i = 0; i < ROTAS_CLAIMS.length; i++) {
     var base = ROTAS_CLAIMS[i];
-    var primeira = await chamarML(base + "?limit=50&offset=0", tk);
-    tentativas.push({ rota: base, status: primeira.status,
-                      erro: primeira.ok ? null : ((primeira.corpo && (primeira.corpo.message || primeira.corpo.error)) || "sem detalhe") });
-    if (!primeira.ok) continue;
+    var achadas = {}, ordem = [], total = 0, respondeu = false, ultimoErro = null, statusHttp = 0;
 
-    var lista = extrairLista(primeira.corpo);
-    if (lista == null) { tentativas[tentativas.length-1].erro = "resposta em formato inesperado"; continue; }
+    for (var si = 0; si < STATUS_BUSCA_CLAIMS.length; si++) {
+      var filtro = "status=" + STATUS_BUSCA_CLAIMS[si];
+      var primeira = await chamarML(base + "?" + filtro + "&limit=50&offset=0", tk);
+      statusHttp = primeira.status;
+      if (!primeira.ok) {
+        ultimoErro = (primeira.corpo && (primeira.corpo.message || primeira.corpo.error)) || "sem detalhe";
+        continue;
+      }
+      var lista = extrairLista(primeira.corpo);
+      if (lista == null) { ultimoErro = "resposta em formato inesperado"; continue; }
+      respondeu = true;
 
-    var total = (primeira.corpo && primeira.corpo.paging && primeira.corpo.paging.total) || lista.length;
-    var paginas = Math.min(maxPaginas || 12, Math.ceil(total / 50));
-    for (var p = 1; p < paginas; p++) {
-      var r = await chamarML(base + "?limit=50&offset=" + (p * 50), tk);
-      if (!r.ok) break;
-      var mais = extrairLista(r.corpo);
-      if (!mais || !mais.length) break;
-      lista = lista.concat(mais);
+      var tot = (primeira.corpo && primeira.corpo.paging && primeira.corpo.paging.total) || lista.length;
+      total += tot;
+      var paginas = Math.min(maxPaginas || 12, Math.ceil(tot / 50));
+      for (var pg = 1; pg < paginas; pg++) {
+        var r = await chamarML(base + "?" + filtro + "&limit=50&offset=" + (pg * 50), tk);
+        if (!r.ok) break;
+        var mais = extrairLista(r.corpo);
+        if (!mais || !mais.length) break;
+        lista = lista.concat(mais);
+      }
+      // Uma reclamação pode voltar em mais de uma busca; o id manda.
+      lista.forEach(function(x){
+        var id = String(x && x.id);
+        if (!id || achadas[id]) return;
+        achadas[id] = true; ordem.push(x);
+      });
     }
-    return { ok: true, rota: base, total: total, reclamacoes: lista, tentativas: tentativas };
+
+    tentativas.push({ rota: base, status: statusHttp, erro: respondeu ? null : (ultimoErro || "sem detalhe") });
+    if (respondeu) return { ok: true, rota: base, total: total, reclamacoes: ordem, tentativas: tentativas };
   }
   return { ok: false, reclamacoes: [], tentativas: tentativas };
 }
@@ -4498,6 +4532,11 @@ function projetarFluxo(opts) {
 
   // Saídas: contas em aberto. Uma conta já vencida não fica no passado — ela
   // ainda vai sair do caixa, e o dia mais cedo possível é hoje.
+  // O grau filtra o que entra na projeção. Isso deixa o saldo projetado MELHOR
+  // do que a realidade — o dinheiro das outras contas vai sair do mesmo jeito —,
+  // então o que fica de fora é somado e devolvido para a tela dizer quanto é.
+  // Um saldo otimista sem essa contrapartida seria uma mentira útil.
+  var foraDoGrau = 0, nForaDoGrau = 0;
   (opts.contasPagar || []).forEach(function(c){
     if (c.status === "cancelada") return;
     var v = saldoDe(c);        // só o saldo devedor ainda vai sair do caixa
@@ -4506,6 +4545,7 @@ function projetarFluxo(opts) {
     if (base < hoje) base = hoje;
     var d = adiam[c.id] ? somarDias(base, adiam[c.id]) : base;
     if (d > fim) return;
+    if (opts.soGrau && (c.prioridade || "") !== opts.soGrau) { foraDoGrau += v; nForaDoGrau++; return; }
     eventos.push({ data:d, tipo:"saida", valor:v, descricao:c.descricao || "(sem fornecedor)",
                    categoria:c.categoria || "Outros", origem:"conta_pagar", refId:c.id,
                    vencida: (c.vencimento || "") < hoje, adiada: !!adiam[c.id] });
@@ -4597,6 +4637,7 @@ function projetarFluxo(opts) {
     primeiroNegativo: primeiroNegativo || null,
     menor: menor || null,
     semPrevisao: semPrevisao, nSemPrevisao: nSemPrevisao,
+    foraDoGrau: foraDoGrau, nForaDoGrau: nForaDoGrau,
     entradaRepasses: entradaRepasses, nRepasses: nRepasses,
   };
 }
@@ -4609,14 +4650,26 @@ function FluxoCaixaTab({ saldoEmCaixa, temContasBancarias, contasPagar, enriched
   const [diaFixos, setDiaFixos] = useState(5);
   const [adiamentos, setAdiamentos] = useState({});   // simulação, não é gravada
   const [diaAberto, setDiaAberto] = useState(null);
+  // A projeção olha só as contas de grau altíssima. Fica gravado, e dá para
+  // voltar a ver todas num clique — o número muda muito entre os dois modos.
+  const [soAltissima, setSoAltissima] = useState(function(){
+    try { return localStorage.getItem("fluxo_todas_contas") !== "1"; } catch { return true; }
+  });
+  function alternarGrau(){
+    setSoAltissima(function(v){
+      try { localStorage.setItem("fluxo_todas_contas", v ? "1" : "0"); } catch(e) {}
+      return !v;
+    });
+  }
   var hoje = new Date().toISOString().slice(0, 10);
+  var grauFiltro = soAltissima ? "altissima" : "";
 
   var proj = projetarFluxo({
     hoje: hoje, dias: dias, saldoInicial: saldoEmCaixa || 0,
     contasPagar: contasPagar, enrichedOrders: enrichedOrders, paymentData: paymentData,
     recebiveisBaixados: recebiveisBaixados, lancamentos: lancamentos,
     custosFixos: custosFixos, incluirFixos: incluirFixos, diaFixos: diaFixos,
-    adiamentos: adiamentos,
+    adiamentos: adiamentos, soGrau: grauFiltro,
   });
   // Sem adiamento nenhum, para mostrar o efeito da simulação.
   var base = projetarFluxo({
@@ -4624,6 +4677,7 @@ function FluxoCaixaTab({ saldoEmCaixa, temContasBancarias, contasPagar, enriched
     contasPagar: contasPagar, enrichedOrders: enrichedOrders, paymentData: paymentData,
     recebiveisBaixados: recebiveisBaixados, lancamentos: lancamentos,
     custosFixos: custosFixos, incluirFixos: incluirFixos, diaFixos: diaFixos, adiamentos: {},
+    soGrau: grauFiltro,
   });
   var simulando = Object.keys(adiamentos).length > 0;
 
@@ -4681,10 +4735,32 @@ function FluxoCaixaTab({ saldoEmCaixa, temContasBancarias, contasPagar, enriched
         { rotulo:"Saldo hoje", valor:fmt(saldoEmCaixa || 0), cor:(saldoEmCaixa||0) >= 0 ? FIN_COR.neutro : FIN_COR.saida, nota:"de Caixas e bancos" },
         { rotulo:"Entra em " + dias + " dias", valor:fmt(proj.entradas), cor:FIN_COR.entrada,
           nota: proj.nRepasses ? proj.nRepasses + " repasse(s) do ML · " + fmt(proj.entradaRepasses) : "nenhum repasse previsto" },
-        { rotulo:"Sai em " + dias + " dias", valor:fmt(proj.saidas), cor:FIN_COR.saida, nota:incluirFixos ? "contas e custos fixos" : "contas a pagar" },
+        { rotulo:"Sai em " + dias + " dias", valor:fmt(proj.saidas), cor:FIN_COR.saida,
+          nota: soAltissima ? "só contas de grau altíssima" : (incluirFixos ? "contas e custos fixos" : "contas a pagar") },
         { rotulo:"Saldo ao fim", valor:fmt(proj.saldoFinal), cor:proj.saldoFinal >= 0 ? FIN_COR.entrada : FIN_COR.saida,
           nota:proj.menor ? "menor: " + fmt(proj.menor.saldo) + " em " + (fmtDate(proj.menor.data)||proj.menor.data) : "" },
       ]}>
+      {/* O aviso do que ficou de fora vem ANTES do gráfico: quem olha o saldo
+          projetado precisa saber, na mesma tela, o que ele não está contando. */}
+      <div style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap", marginBottom:14,
+                    background: soAltissima && proj.foraDoGrau > 0 ? "rgba(255,193,7,.10)" : "var(--surface)",
+                    border:"1px solid " + (soAltissima && proj.foraDoGrau > 0 ? "rgba(255,193,7,.45)" : "var(--border)"),
+                    borderRadius:10, padding:"11px 14px", fontSize:12.5, color:"var(--text-2)", lineHeight:1.6 }}>
+        <span style={{ flex:1, minWidth:260 }}>
+          {soAltissima
+            ? (proj.foraDoGrau > 0
+                ? <>A projeção conta <b>só as contas de grau altíssima</b>. Ficaram de fora <b>{proj.nForaDoGrau} conta(s)</b> somando <b>{fmt(proj.foraDoGrau)}</b> —
+                   esse dinheiro vai sair do mesmo jeito, então o saldo abaixo está melhor do que a realidade.</>
+                : <>A projeção conta só as contas de grau altíssima. Nenhuma outra conta vence no período — o saldo abaixo é o total.</>)
+            : <>A projeção conta <b>todas as contas a pagar</b> em aberto, independentemente do grau.</>}
+        </span>
+        <button onClick={alternarGrau}
+          style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", fontWeight:600,
+                   padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:12, whiteSpace:"nowrap" }}>
+          {soAltissima ? "Ver com todas as contas" : "Ver só grau altíssima"}
+        </button>
+      </div>
+
       {proj.primeiroNegativo && (
         <div style={{ background:"rgba(255,82,82,.10)", border:"1px solid rgba(255,82,82,.5)", borderRadius:10, padding:"12px 16px", marginBottom:14, fontSize:13.5, color:"var(--text-2)", lineHeight:1.6 }}>
           <b style={{ color:COR_RUIM }}>O caixa fica negativo em {fmtDate(proj.primeiroNegativo.data) || proj.primeiroNegativo.data}</b>

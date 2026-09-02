@@ -2735,6 +2735,7 @@ function FornecedorModal({ fornecedor, onSave, onClose, onExcluir }) {
   const [f, setF] = useState(function(){
     var base = Object.assign({ situacao:"ativo", codigo:"", nome:"", fantasia:"", tipoPessoa:"pj",
                            documento:"", ie:"", contribuinte:"9", nascimento:"", rg:"",
+                           prioridade:"",
                            cep:"", uf:"", cidade:"", bairro:"", endereco:"", numero:"", complemento:"",
                            email:"", emailNfe:"", celular:"", telefone:"", tipoContato:"Fornecedor",
                            contato:"", infoContato:"", condicao:"", categoriaPadrao:"", obs:"" }, fornecedor || {});
@@ -2815,9 +2816,18 @@ function FornecedorModal({ fornecedor, onSave, onClose, onExcluir }) {
                 <input type="date" value={f.nascimento||""} onChange={function(e){ set("nascimento", e.target.value); }} style={campo} /></div>
               {Campo("RG","rg")}
             </div>
-            <div style={grade("1fr 1fr")}>
+            <div style={grade("1fr 1fr 1fr")}>
               {Campo("Condição de pagamento","condicao",{ placeholder:"30/60/90 dias" })}
               {Campo("Categoria habitual","categoriaPadrao",{ placeholder:"Fornecedor, Serviços..." })}
+              <div><label style={lbl}>Grau de prioridade</label>
+                <select value={f.prioridade||""} onChange={function(e){ set("prioridade", e.target.value); }} style={campo}>
+                  <option value="">— não classificado —</option>
+                  {PRIORIDADES_CONTA.map(function(x){ return <option key={x[0]} value={x[0]}>{x[1]}</option>; })}
+                </select>
+                <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:3 }}>
+                  Ao salvar, vale para todas as contas deste fornecedor e para as próximas.
+                </div>
+              </div>
             </div>
           </>}
 
@@ -2872,9 +2882,197 @@ function FornecedorModal({ fornecedor, onSave, onClose, onExcluir }) {
     </div>
   );
 }
-function FornecedoresTab({ fornecedores, salvar, contasPagar, setTab }) {
+
+// Categorias de contas a pagar. Elas já nasciam sozinhas — toda categoria
+// digitada numa conta entra na lista ao salvar —, mas não havia onde arrumar a
+// casa: renomear a que ficou com erro de digitação, juntar duas iguais, tirar a
+// que não se usa mais. É isso que esta tela faz.
+function CategoriasPagarTab({ categorias, salvar, contasPagar, salvarContasPagar, setTab }) {
+  const [nova, setNova] = useState("");
+  const [editando, setEditando] = useState(null);   // { antes, depois }
+  const [busca, setBusca] = useState("");
+  const [aviso, setAviso] = useState(null);
+  const [erro, setErro] = useState("");
+  var hoje = new Date().toISOString().slice(0,10);
+
+  // Quanto cada categoria representa. Uma lista de nomes não ajuda a decidir o
+  // que apagar; "R$ 0,00 em 0 contas" ajuda.
+  var uso = {};
+  (contasPagar || []).forEach(function(c){
+    var k = String(c.categoria || "").trim();
+    if (!uso[k]) uso[k] = { n:0, aberto:0, pago:0, vencido:0 };
+    uso[k].n++;
+    uso[k].aberto += saldoDe(c);
+    uso[k].pago += pagoDe(c);
+    if (saldoDe(c) > 0 && c.vencimento && c.vencimento < hoje) uso[k].vencido += saldoDe(c);
+  });
+
+  // A lista junta o que está cadastrado com o que aparece nas contas: uma
+  // categoria usada mas fora do cadastro precisa aparecer para poder ser
+  // arrumada, marcada como "só nas contas".
+  var todas = [];
+  (categorias || []).forEach(function(x){ var t = String(x||"").trim(); if (t && todas.indexOf(t) < 0) todas.push(t); });
+  Object.keys(uso).forEach(function(k){ if (k && todas.indexOf(k) < 0) todas.push(k); });
+  todas.sort(function(a,b){ return a.localeCompare(b, "pt-BR"); });
+  var lista = todas.filter(function(k){
+    var t = busca.trim().toLowerCase();
+    return !t || k.toLowerCase().indexOf(t) >= 0;
+  });
+  var semCategoria = uso[""] || null;
+
+  function existe(nome){
+    return todas.some(function(x){ return x.toLowerCase() === String(nome).trim().toLowerCase(); });
+  }
+  function incluir(){
+    var t = nova.trim();
+    if (!t) return;
+    if (existe(t)) { setErro("“" + t + "” já está na lista."); return; }
+    salvar((categorias || []).concat([t]));
+    setNova(""); setErro(""); setAviso("Categoria “" + t + "” criada.");
+  }
+  // Renomear tem de levar as contas junto, senão o nome antigo continua nelas e
+  // a categoria "sumida" reaparece na lista na próxima carga.
+  function confirmarEdicao(){
+    var antes = editando.antes, depois = String(editando.depois || "").trim();
+    if (!depois) { setErro("O nome não pode ficar vazio."); return; }
+    if (depois.toLowerCase() !== antes.toLowerCase() && existe(depois)) {
+      if (!window.confirm("“" + depois + "” já existe.\n\nJuntar as duas? As contas de “" + antes + "” passam para “" + depois + "”.")) return;
+    }
+    var cats = (categorias || []).filter(function(x){ return String(x).trim() !== antes; });
+    if (!existe(depois) || depois.toLowerCase() === antes.toLowerCase()) cats = cats.concat([depois]);
+    salvar(cats);
+    var n = 0;
+    if (salvarContasPagar) {
+      var arr = (contasPagar || []).map(function(c){
+        if (String(c.categoria || "").trim() !== antes) return c;
+        n++; return Object.assign({}, c, { categoria: depois });
+      });
+      if (n) salvarContasPagar(arr);
+    }
+    setEditando(null); setErro("");
+    setAviso("“" + antes + "” virou “" + depois + "”" + (n ? ", em " + n + " conta(s)" : "") + ".");
+  }
+  function excluir(k){
+    var d = uso[k];
+    if (d && d.n > 0) {
+      if (!window.confirm("“" + k + "” está em " + d.n + " conta(s), somando " + fmt(d.aberto) + " em aberto.\n\n" +
+        "Excluir tira o nome da lista, mas as contas continuam com ele — e ele volta a aparecer aqui.\n" +
+        "Para mudar de verdade, renomeie em vez de excluir. Excluir mesmo assim?")) return;
+    } else if (!window.confirm("Excluir a categoria “" + k + "”?")) return;
+    salvar((categorias || []).filter(function(x){ return String(x).trim() !== k; }));
+    setAviso("Categoria “" + k + "” removida da lista.");
+  }
+
+  var cartao = { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"18px 20px" };
+  var campo = { background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"9px 12px", borderRadius:9, fontSize:13, outline:"none", boxSizing:"border-box" };
+  var totalAberto = Object.keys(uso).reduce(function(a,k){ return a + uso[k].aberto; }, 0);
+
+  return (
+    <div style={{ padding:2, width:"100%" }}>
+      <div style={{ marginBottom:14 }}>
+        <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Categorias de contas a pagar</div>
+        <div style={{ fontSize:12.5, color:"var(--text-3)", marginTop:2 }}>
+          Elas classificam a despesa no DRE e no filtro de Contas a pagar. Toda categoria digitada numa conta
+          entra aqui sozinha — esta tela serve para arrumar, juntar e renomear.
+        </div>
+      </div>
+
+      {aviso && (
+        <div style={{ background:"rgba(10,157,78,.10)", border:"1px solid rgba(10,157,78,.4)", borderRadius:10,
+                      padding:"10px 14px", fontSize:12.5, color:"var(--text-2)", marginBottom:12, display:"flex", gap:10, alignItems:"center" }}>
+          <span style={{ flex:1 }}>{aviso}</span>
+          <button onClick={function(){ setAviso(null); }} style={{ background:"none", border:"none", color:"var(--text-3)", cursor:"pointer", fontSize:15 }}>×</button>
+        </div>
+      )}
+      {erro && (
+        <div style={{ background:"rgba(255,82,82,.12)", border:"1px solid #FF5252", color:"#FF5252", borderRadius:10,
+                      padding:"10px 14px", fontSize:12.5, marginBottom:12 }}>{erro}</div>
+      )}
+
+      <div style={{ display:"flex", gap:10, marginBottom:14, flexWrap:"wrap", alignItems:"center" }}>
+        <input value={nova} onChange={function(e){ setNova(e.target.value); setErro(""); }}
+          onKeyDown={function(e){ if (e.key === "Enter") incluir(); }}
+          placeholder="Nome da nova categoria" style={{ ...campo, flex:1, minWidth:220, maxWidth:340 }} />
+        <button onClick={incluir} disabled={!nova.trim()}
+          style={{ background: nova.trim() ? "var(--ui-accent)" : "var(--surface-3)", border:"none",
+                   color: nova.trim() ? "var(--ui-accent-text)" : "var(--text-4)", fontWeight:600,
+                   padding:"9px 20px", borderRadius:9, cursor: nova.trim() ? "pointer" : "not-allowed", fontSize:13 }}>+ Incluir</button>
+        <div style={{ flex:1 }} />
+        <div style={{ position:"relative", minWidth:200 }}>
+          <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:"var(--text-3)", fontSize:13 }}>🔍</span>
+          <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Pesquisar categoria" className="busca" />
+        </div>
+      </div>
+
+      {lista.length === 0 ? (
+        <div style={{ ...cartao, textAlign:"center", padding:"46px 20px", color:"var(--text-3)", fontSize:13.5 }}>
+          {busca ? "Nenhuma categoria com esse nome." : "Nenhuma categoria cadastrada ainda."}
+        </div>
+      ) : (
+        <div className="tabela-wrap">
+          <table className="tabela">
+            <thead><tr>{["Categoria","Contas","Em aberto","Vencido","Já pago",""].map(function(h,i){
+              return <th key={h} className="th" style={i >= 1 && i <= 4 ? { textAlign:"right" } : null}>{h}</th>;
+            })}</tr></thead>
+            <tbody>
+              {lista.map(function(k){
+                var d = uso[k] || { n:0, aberto:0, pago:0, vencido:0 };
+                var soNasContas = (categorias || []).map(function(x){ return String(x).trim(); }).indexOf(k) < 0;
+                var edit = editando && editando.antes === k;
+                return <tr key={k}>
+                  <td className="td" style={{ color:"var(--text-strong)", fontWeight:500 }}>
+                    {edit
+                      ? <input autoFocus value={editando.depois} onChange={function(e){ setEditando({ antes:k, depois:e.target.value }); }}
+                          onKeyDown={function(e){ if (e.key === "Enter") confirmarEdicao(); if (e.key === "Escape") setEditando(null); }}
+                          style={{ ...campo, width:"100%", maxWidth:300 }} />
+                      : <>
+                          {k}
+                          {soNasContas && <span title="Aparece nas contas mas não está no cadastro" style={{ marginLeft:8, fontSize:10, color:"var(--text-4)" }}>só nas contas</span>}
+                        </>}
+                  </td>
+                  <td className="td-num">{d.n || <span style={{ color:"var(--text-4)" }}>0</span>}</td>
+                  <td className="td-num" style={{ fontWeight:600, color: d.aberto ? "var(--text-strong)" : "var(--text-4)" }}>{d.aberto ? fmt(d.aberto) : "—"}</td>
+                  <td className="td-num">{d.vencido ? <span style={{ color:"#FF5252" }}>{fmt(d.vencido)}</span> : <span style={{ color:"var(--text-4)" }}>—</span>}</td>
+                  <td className="td-num" style={{ color: d.pago ? "#0a9d4e" : "var(--text-4)" }}>{d.pago ? fmt(d.pago) : "—"}</td>
+                  <td className="td" style={{ textAlign:"right", whiteSpace:"nowrap" }}>
+                    {edit ? (
+                      <>
+                        <button onClick={confirmarEdicao} className="btn-mini btn-mini-ok" style={{ marginRight:6 }}>Salvar</button>
+                        <button onClick={function(){ setEditando(null); setErro(""); }} className="btn-mini btn-mini-sec">Cancelar</button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={function(){ setEditando({ antes:k, depois:k }); setErro(""); }} className="btn-mini btn-mini-sec" style={{ marginRight:6 }}>Renomear</button>
+                        <button onClick={function(){ excluir(k); }} className="btn-mini" style={{ background:"rgba(255,82,82,.1)", color:"#FF5252" }}>Excluir</button>
+                      </>
+                    )}
+                  </td>
+                </tr>;
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {semCategoria && semCategoria.n > 0 && (
+        <div style={{ marginTop:12, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"11px 14px", fontSize:12.5, color:"var(--text-3)", lineHeight:1.6 }}>
+          <b>{semCategoria.n} conta(s)</b> somando {fmt(semCategoria.aberto)} em aberto estão <b>sem categoria</b>.
+          No DRE elas caem em “Outros”.
+          {setTab && <button onClick={function(){ setTab("contas_pagar"); }} style={{ marginLeft:8, background:"none", border:"none", color:"var(--ui-accent)", cursor:"pointer", fontSize:12.5, fontWeight:600, padding:0 }}>Ver em Contas a pagar →</button>}
+        </div>
+      )}
+
+      <div style={{ marginTop:12, fontSize:11.5, color:"var(--text-4)" }}>
+        {todas.length} categoria(s) · {fmt(totalAberto)} em aberto no total.
+      </div>
+    </div>
+  );
+}
+
+function FornecedoresTab({ fornecedores, salvar, contasPagar, salvarContasPagar, setTab }) {
   const [modal, setModal] = useState(null);
   const [busca, setBusca] = useState("");
+  const [aviso, setAviso] = useState(null);
   function nomeDe(x){ return String((x && (x.nome || x.razaoSocial || x.fantasia)) || x || "").trim(); }
 
   // O que cada fornecedor representa em dinheiro. Sem isto a tela seria só uma
@@ -2911,8 +3109,31 @@ function FornecedoresTab({ fornecedores, salvar, contasPagar, setTab }) {
   function salvarForn(fn){
     var arr = (fornecedores || []).map(function(x){ return typeof x === "object" ? x : { id:"fn_leg_"+nomeDe(x), nome:nomeDe(x) }; });
     var i = arr.findIndex(function(x){ return x.id === fn.id; });
+    var antes = i >= 0 ? (arr[i].prioridade || "") : "";
     if (i >= 0) arr[i] = fn; else arr.push(fn);
-    salvar(arr); setModal(null);
+    salvar(arr);
+
+    // O grau do fornecedor desce para as contas dele: classificar um fornecedor
+    // e ter de repetir conta a conta seria o mesmo trabalho duas vezes. Só desce
+    // quando o grau MUDOU neste salvamento — senão, reabrir o cadastro para
+    // corrigir um telefone desfaria os graus ajustados à mão em cada conta.
+    var novo = fn.prioridade || "";
+    if (novo !== antes && salvarContasPagar) {
+      var alvo = nomeDe(fn).toLowerCase();
+      var n = 0;
+      var atualizadas = (contasPagar || []).map(function(c){
+        if (String(c.descricao || "").trim().toLowerCase() !== alvo) return c;
+        if ((c.prioridade || "") === novo) return c;
+        n++;
+        return Object.assign({}, c, { prioridade: novo });
+      });
+      if (n) {
+        salvarContasPagar(atualizadas);
+        setAviso(n + " conta(s) de " + nomeDe(fn) + " passaram para o grau " +
+          (novo ? (prioridadeInfo(novo)||["",""])[1] : "não classificado") + ".");
+      }
+    }
+    setModal(null);
   }
   function excluir(fn){
     var d = porNome[String(fn.nome||"").toLowerCase()];
@@ -2953,6 +3174,13 @@ function FornecedoresTab({ fornecedores, salvar, contasPagar, setTab }) {
         })}
       </div>
 
+      {aviso && (
+        <div style={{ background:"rgba(10,157,78,.10)", border:"1px solid rgba(10,157,78,.4)", borderRadius:10,
+                      padding:"10px 14px", fontSize:12.5, color:"var(--text-2)", marginBottom:12, display:"flex", gap:10, alignItems:"center" }}>
+          <span style={{ flex:1 }}>{aviso}</span>
+          <button onClick={function(){ setAviso(null); }} style={{ background:"none", border:"none", color:"var(--text-3)", cursor:"pointer", fontSize:15 }}>×</button>
+        </div>
+      )}
       {lista.length === 0 ? (
         <div style={{ ...cartao, textAlign:"center", padding:"54px 20px" }}>
           <div style={{ fontSize:36, marginBottom:10 }}>🏭</div>
@@ -2968,7 +3196,7 @@ function FornecedoresTab({ fornecedores, salvar, contasPagar, setTab }) {
       ) : (
         <div className="tabela-wrap">
           <table className="tabela">
-            <thead><tr>{["Fornecedor","Documento","Contato","Condição","Em aberto","Vencido","Já pago",""].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
+            <thead><tr>{["Fornecedor","Documento","Contato","Prioridade","Em aberto","Vencido","Já pago",""].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
             <tbody>
               {lista.map(function(x){
                 var sit = x.situacao || (x.ativo === false ? "inativo" : "ativo");
@@ -2982,7 +3210,15 @@ function FornecedoresTab({ fornecedores, salvar, contasPagar, setTab }) {
                   </td>
                   <td className="td-num">{x.documento || "—"}</td>
                   <td className="td">{x.contato || x.email || x.telefone || "—"}</td>
-                  <td className="td">{x.condicao || "—"}</td>
+                  <td className="td">
+                    {(function(){
+                      var pi = prioridadeInfo(x.prioridade);
+                      return pi
+                        ? <span style={{ fontSize:11, fontWeight:600, padding:"2px 8px", borderRadius:20, color:pi[2],
+                                         background: pi[0] === "baixa" ? "var(--surface-3)" : "color-mix(in srgb, " + pi[2] + " 14%, transparent)" }}>{pi[1]}</span>
+                        : <span style={{ color:"var(--text-4)" }}>—</span>;
+                    })()}
+                  </td>
                   <td className="td-num" style={{ fontWeight:600, color: x.mov.aberto ? "var(--text-strong)" : "var(--text-4)" }}>
                     {x.mov.aberto ? fmt(x.mov.aberto) : "—"}
                     {x.mov.nAberto > 0 && <div style={{ fontSize:10, color:"var(--text-4)", fontWeight:400 }}>{x.mov.nAberto} conta(s)</div>}
@@ -5290,6 +5526,14 @@ function ContaModal({ conta, onSave, onClose, contasBancarias, categorias, forne
   }
   function salvar(baixa, escopo){
     var p = Object.assign({}, f, { valorTotal: totalVal });
+    // Conta nova sem grau herda o do fornecedor. Só quando o campo está vazio:
+    // um grau escolhido à mão nesta conta manda sobre o padrão do cadastro.
+    if (!editando && !p.prioridade) {
+      var doCad = (fornecedores || []).find(function(x){
+        return nomeFornecedor(x).toLowerCase() === String(p.descricao || "").trim().toLowerCase();
+      });
+      if (doCad && doCad.prioridade) p.prioridade = doCad.prioridade;
+    }
     if (!p.descricao){ alert("Informe o fornecedor."); return; }
     if (editando && conta.serieId && !escopo && !baixa && houveMudanca()) { setAlcance(true); return; }
     if (escopo) { onSave({ conta: Object.assign({}, p), escopo: escopo, serieId: conta.serieId, vencimento: conta.vencimento }); return; }
@@ -7872,6 +8116,7 @@ function HomeTab({ enrichedOrders, currentUser, setTab }){
     ]},
     { titulo:"Configuração", itens:[
       perm.includes("admin") && { key:"admin", label:"Equipe", desc:"Usuários e permissões" },
+      { key:"categorias_pagar", label:"Categorias de contas", desc:"Classificação das despesas" },
       { key:"analise_ia", label:"Análise de anúncios", desc:"Critérios da nota e regras para a IA" },
       { key:"integracoes", label:"Integrações", desc:"Conexões e marketplaces" },
     ]},
@@ -13702,6 +13947,7 @@ export default function App() {
             ]},
             { titulo:"Configuração", itens:[
               currentUser?.permissoes?.includes("admin") && { key:"admin", label:"Equipe" },
+              { key:"categorias_pagar", label:"Categorias de contas" },
               { key:"analise_ia", label:"Análise de anúncios" },
               { key:"integracoes", label:"Integrações" },
             ]},
@@ -14288,6 +14534,8 @@ export default function App() {
         {tab === "dashboard" && (
           <DashboardTab enrichedOrders={enrichedOrders} produtos={produtos} user={user} metas={metas} salvarMetas={salvarMetas} sub={dashSub} setSub={setDashSub} />
         )}
+        {tab === "categorias_pagar" && <CategoriasPagarTab categorias={categoriasPagar} salvar={salvarCategoriasPagar}
+          contasPagar={contasPagar} salvarContasPagar={salvarContasPagar} setTab={setTab} />}
         {tab === "analise_ia" && <AnaliseIATab config={configQualidade} salvar={setConfigQualidade} enriched={enriched} />}
         {tab === "produtos" && <ProdutosTab produtos={produtos} salvar={salvarProdutos} fornecedores={fornecedores} enriched={enriched} />}
         {tab === "estoque" && <EstoqueTab produtos={produtos} />}
@@ -14328,7 +14576,7 @@ export default function App() {
         {tab === "dre" && <DreTab enrichedOrders={enrichedOrdersTodos} contasPagar={contasPagar} lancamentos={lancamentos}
           custosFixos={custosFixos} recebiveisBaixados={recebiveisBaixados} paymentData={paymentData}
           config={financeiroConfig} salvarConfig={setFinanceiroConfig} tab={tab} setTab={setTab} periodo={periodoFin} setPeriodo={setPeriodoFin} />}
-        {tab === "fornecedores" && <FornecedoresTab fornecedores={fornecedores} salvar={salvarFornecedoresCad} contasPagar={contasPagar} setTab={setTab} />}
+        {tab === "fornecedores" && <FornecedoresTab fornecedores={fornecedores} salvar={salvarFornecedoresCad} contasPagar={contasPagar} salvarContasPagar={salvarContasPagar} setTab={setTab} />}
       </div>{/* fecha a coluna do conteúdo */}
 
       {showBackup && <PainelBackup onClose={() => setShowBackup(false)} />}

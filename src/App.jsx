@@ -3550,13 +3550,6 @@ function FinanceiroShell({ tab, setTab, titulo, sub, periodo, setPeriodo, contro
         </div>
         <div style={{ flex:1 }} />
         <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
-          {acoes && (
-            <button onClick={alternarAcoes} title={acoesAbertas ? "Ocultar a coluna de ações" : "Mostrar a coluna de ações"}
-              style={{ padding:"7px 12px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600,
-                       background: acoesAbertas ? "rgba(118,133,146,.14)" : "var(--surface)", color:"var(--text-2)" }}>
-              {acoesAbertas ? "⟩ Ocultar ações" : "⟨ Ações"}
-            </button>
-          )}
           {setPeriodo && PERIODOS_FIN.map(function(p){
             var on = periodo === p[0];
             return <button key={p[0]} onClick={function(){ setPeriodo(p[0]); }}
@@ -3585,7 +3578,16 @@ function FinanceiroShell({ tab, setTab, titulo, sub, periodo, setPeriodo, contro
 
       <div style={{ display:"flex", gap:14, alignItems:"flex-start" }}>
         <div style={{ flex:1, minWidth:0 }}>{children}</div>
-        {acoes && acoesAbertas && <div className="mod-acoes">{acoes}</div>}
+        {acoes && (acoesAbertas ? (
+          <div className="mod-acoes">
+            <button onClick={alternarAcoes} title="Recolher a coluna" className="mod-acoes-topo">
+              <span>Ações e totais</span><span style={{ color:"var(--text-4)" }}>⟩</span>
+            </button>
+            {acoes}
+          </div>
+        ) : (
+          <button onClick={alternarAcoes} title="Expandir a coluna de ações e totais" className="mod-acoes-tira">⟨</button>
+        ))}
       </div>
     </div>
   );
@@ -5045,6 +5047,25 @@ function proximoDiaDaSemana(iso, dow) {
 
 var MAX_SERIE = 260;   // teto de seguranca: 5 anos de semanal, 10 de mensal
 var FORMAS_PAGAMENTO = ["Dinheiro","Pix","Cartão","Boleto","Transferência"];
+// Grau de prioridade: quem decide é o usuário. Conta sem grau fica "" e não
+// ganha nem perde ponto nenhum — não classificada não é o mesmo que baixa.
+var PRIORIDADES_CONTA = [
+  ["altissima","Altíssima","#FF5252", 25],
+  ["alta","Alta","#FF8A3D", 15],
+  ["media","Média","#FFC107", 6],
+  ["baixa","Baixa","var(--text-3)", 0],
+];
+function prioridadeInfo(k){
+  for (var i = 0; i < PRIORIDADES_CONTA.length; i++) if (PRIORIDADES_CONTA[i][0] === k) return PRIORIDADES_CONTA[i];
+  return null;
+}
+// Quando a conta pode ser protestada: vencimento mais o prazo informado. Sem
+// prazo preenchido não há data — e não se inventa uma.
+function dataProtesto(c){
+  var dias = parseInt(c.diasProtesto, 10);
+  if (!c.vencimento || isNaN(dias) || dias < 0) return "";
+  return somarDiasIso(c.vencimento, dias);
+}
 // "Tipo" é como a conta nasceu: sozinha, dividida em parcelas ou repetindo. Sai
 // da própria conta, não de um campo à parte que alguém teria de manter.
 var TIPOS_PAGAMENTO = [["todos","Todos"],["unica","À vista / única"],["parcelada","Parcelada"],["recorrente","Recorrente"]];
@@ -5239,7 +5260,7 @@ function BaixaModal({ contas, contasBancarias, onConfirmar, onClose }) {
 // Modal de conta a pagar.
 function ContaModal({ conta, onSave, onClose, contasBancarias, categorias, fornecedores, onNovoFornecedor }) {
   var hoje = new Date().toISOString().slice(0,10);
-  const [f, setF] = useState(function(){ return Object.assign({ descricao:"", categoria:"", emissao:hoje, competencia:hoje, vencimento:"", valor:"", historico:"", forma:"", conta:"", ndoc:"", juros:"0", multa:"0", ocorrencia:"unica", recorrenciaAte:"", parcelas:"12", baseValor:"cada", diaSemana:"", status:"pendente" }, conta || {}); });
+  const [f, setF] = useState(function(){ return Object.assign({ descricao:"", categoria:"", emissao:hoje, competencia:hoje, vencimento:"", valor:"", historico:"", forma:"", conta:"", ndoc:"", juros:"0", multa:"0", prioridade:"", diasProtesto:"", ocorrencia:"unica", recorrenciaAte:"", parcelas:"12", baseValor:"cada", diaSemana:"", status:"pendente" }, conta || {}); });
   const [aba, setAba] = useState("pagamento");
   const [buscaForn, setBuscaForn] = useState(null);   // null = fechado; string = termo digitado
   const [novoForn, setNovoForn] = useState(false);
@@ -5385,6 +5406,21 @@ function ContaModal({ conta, onSave, onClose, contasBancarias, categorias, forne
                 <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:3 }}>Categoria nova entra na lista ao salvar.</div>
               </div>
               <div><label style={lbl}>Nº documento</label><input value={f.ndoc||""} onChange={function(e){ set("ndoc", e.target.value); }} style={campo} /></div>
+              <div><label style={lbl}>Prioridade</label>
+                <select value={f.prioridade||""} onChange={function(e){ set("prioridade", e.target.value); }} style={campo}>
+                  <option value="">— não classificada —</option>
+                  {PRIORIDADES_CONTA.map(function(x){ return <option key={x[0]} value={x[0]}>{x[1]}</option>; })}
+                </select>
+                <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:3 }}>Sobe a conta na fila da Prioridade de pagamento.</div>
+              </div>
+              <div><label style={lbl}>Prazo para protesto (dias)</label>
+                <input type="number" min="0" step="1" value={f.diasProtesto||""} onChange={function(e){ set("diasProtesto", e.target.value); }} placeholder="não informado" style={campo} />
+                <div style={{ fontSize:10.5, color: dataProtesto(f) ? "#FF8A3D" : "var(--text-4)", marginTop:3 }}>
+                  {dataProtesto(f)
+                    ? "Protestável a partir de " + (fmtDate(dataProtesto(f)) || dataProtesto(f)) + "."
+                    : f.vencimento ? "Dias após o vencimento em que o credor pode protestar." : "Informe o vencimento para calcular a data."}
+                </div>
+              </div>
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
               <div><label style={lbl}>Juros mensal (%)</label><input type="number" step="0.01" value={f.juros||""} onChange={function(e){ set("juros", e.target.value); }} style={campo} /></div>
@@ -5708,7 +5744,22 @@ const CAMPOS_IMPORTACAO = [
   { key:"juros",      rotulo:"Juros mensal (%)", obrigatorio:false, achar:["juros","juros mensal","juros %","juros ao mes"] },
   { key:"multa",      rotulo:"Multa (%)",        obrigatorio:false, achar:["multa","multa %"] },
   { key:"historico",  rotulo:"Observação",       obrigatorio:false, achar:["observacao","observação","obs","complemento","memo"] },
+  { key:"prioridade", rotulo:"Prioridade",       obrigatorio:false, achar:["prioridade","grau","grau de prioridade","urgencia","urgência"] },
+  { key:"diasProtesto", rotulo:"Prazo p/ protesto (dias)", obrigatorio:false,
+    achar:["protesto","prazo protesto","dias protesto","prazo para protesto","dias para protesto"] },
 ];
+
+// "ALTÍSSIMA", "alta", "1" — a planilha vem de onde vier. O que não bate com
+// nenhum grau conhecido fica sem classificação, em vez de virar um chute.
+function normalizarPrioridade(v) {
+  var t = String(v || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  if (!t) return "";
+  if (t.indexOf("altissim") === 0 || t === "1" || t === "muito alta") return "altissima";
+  if (t.indexOf("alta") === 0 || t === "2") return "alta";
+  if (t.indexOf("medi") === 0 || t === "3") return "media";
+  if (t.indexOf("baix") === 0 || t === "4") return "baixa";
+  return "";
+}
 
 function normalizarCabecalho(s) {
   return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
@@ -5770,6 +5821,8 @@ function prepararLinhas(linhas, mapa, contasExistentes) {
         juros: String(parseValorBR(col("juros")) == null ? 0 : parseValorBR(col("juros"))),
         multa: String(parseValorBR(col("multa")) == null ? 0 : parseValorBR(col("multa"))),
         historico: String(col("historico") || "").trim(),
+        prioridade: normalizarPrioridade(col("prioridade")),
+        diasProtesto: (function(){ var d = parseInt(String(col("diasProtesto") || "").replace(/\D/g, ""), 10); return isNaN(d) ? "" : String(d); })(),
         status: "pendente",
       },
     };
@@ -6007,6 +6060,18 @@ function ranquearContas(contas, riscos, hojeIso) {
     // pequena com juros alto sobe; uma grande sem juros nenhum não sobe só por
     // ser grande — pagar antes o que não cobra nada por esperar é desperdício.
     var pontosCusto = valor > 0 ? Math.min(20, (custo7 / valor) * 400) : 0;
+    // O grau que o usuário deu vale ponto: ele sabe de coisas que o sistema não
+    // vê — um fornecedor que corta o fornecimento, um acordo em curso.
+    var infoPrio = prioridadeInfo(c.prioridade);
+    var pontosPrioridade = infoPrio ? infoPrio[3] : 0;
+    // Protesto é dano que não se desfaz pagando depois. Quanto mais perto da
+    // data, mais pesa; passada a data, pesa o máximo.
+    var protesto = dataProtesto(c);
+    var diasProt = protesto ? diasEntre(hojeIso, protesto) : null;
+    var pontosProtesto = diasProt == null ? 0
+      : diasProt <= 0 ? 25
+      : diasProt <= 30 ? Math.round(25 * (1 - diasProt / 30))
+      : 0;
     return {
       conta: c,
       id: c.id,
@@ -6022,7 +6087,12 @@ function ranquearContas(contas, riscos, hojeIso) {
       pontosPrazo: pontosPrazo,
       pontosRisco: pontosRisco,
       pontosCusto: pontosCusto,
-      urgencia: Math.round(pontosPrazo + pontosRisco + pontosCusto),
+      prioridade: c.prioridade || "",
+      pontosPrioridade: pontosPrioridade,
+      protesto: protesto,
+      diasProtesto: diasProt,
+      pontosProtesto: pontosProtesto,
+      urgencia: Math.round(pontosPrazo + pontosRisco + pontosCusto + pontosPrioridade + pontosProtesto),
     };
   });
   itens.sort(function(a,b){
@@ -6338,7 +6408,9 @@ function PrioridadePagamentoTab({ contas, salvarContas, config, salvarConfig, sa
               return <tr key={it.id || i} style={{ background: cabe ? "rgba(10,157,78,.05)" : "transparent" }}>
                 <td className="td" style={{ color:"var(--text-4)", width:34 }}>{i+1}</td>
                 <td className="td">
-                  <span title={"prazo " + it.pontosPrazo + " + risco " + it.pontosRisco + " + custo do atraso " + Math.round(it.pontosCusto)}
+                  <span title={"prazo " + it.pontosPrazo + " + risco " + it.pontosRisco + " + custo do atraso " + Math.round(it.pontosCusto)
+                               + (it.pontosPrioridade ? " + grau " + (prioridadeInfo(it.prioridade)||[])[1] + " " + it.pontosPrioridade : "")
+                               + (it.pontosProtesto ? " + protesto " + it.pontosProtesto : "")}
                     style={{ fontSize:12, fontWeight:700, color: it.urgencia >= 60 ? "#FF5252" : it.urgencia >= 40 ? "#FFC107" : "var(--text-3)" }}>{it.urgencia}</span>
                 </td>
                 <td className="td" style={{ color:"var(--text-strong)", maxWidth:230 }}>{it.descricao}</td>
@@ -6429,6 +6501,7 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categori
   const [fVMin, setFVMin] = useState("");
   const [fVMax, setFVMax] = useState("");
   const [fNdoc, setFNdoc] = useState("");
+  const [fPrio, setFPrio] = useState("todas");
   const [de, setDe] = useState("");
   const [ate, setAte] = useState("");
   var hoje = new Date().toISOString().slice(0, 10);
@@ -6452,6 +6525,7 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categori
     if (fCats.length && fCats.indexOf(c.categoria || "") < 0) return false;
     if (fTipoPag !== "todos" && tipoPagamentoDe(c) !== fTipoPag) return false;
     if (fForma && (c.forma || "") !== fForma) return false;
+    if (fPrio !== "todas" && (c.prioridade || "__sem__") !== fPrio) return false;
     if (fNdoc.trim() && String(c.ndoc || "").toLowerCase().indexOf(fNdoc.trim().toLowerCase()) < 0) return false;
     var vc = parseFloat(c.valorTotal || c.valor) || 0;
     if (vMinNum != null && !isNaN(vMinNum) && vc < vMinNum) return false;
@@ -6482,9 +6556,16 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categori
   var pagaveis = selecionadas.filter(function(c){ return saldoDe(c) > 0; });
 
   function alternar(id){ setSel(function(x){ var n = Object.assign({}, x); if (n[id]) delete n[id]; else n[id] = true; return n; }); }
+  // Marcar tudo soma à seleção em vez de substituí-la, e desmarcar tira só o
+  // que está à vista: quem marcou uma conta, buscou outro fornecedor e marcou
+  // de novo perdia a primeira sem nunca ter clicado nela.
   function alternarTodas(){
-    if (lista.every(function(c){ return sel[c.id]; })) { setSel({}); return; }
-    var n = {}; lista.forEach(function(c){ n[c.id] = true; }); setSel(n);
+    var todasJa = lista.length > 0 && lista.every(function(c){ return sel[c.id]; });
+    setSel(function(x){
+      var n = Object.assign({}, x);
+      lista.forEach(function(c){ if (todasJa) delete n[c.id]; else n[c.id] = true; });
+      return n;
+    });
   }
 
   // Registra os pagamentos vindos do modal. Cada um entra na lista da conta; o
@@ -6552,7 +6633,7 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categori
   // continuam de cada conta, senão a série inteira colapsaria numa data só.
   function aplicarNaSerie(pedido){
     var base = pedido.conta;
-    var campos = ["descricao","categoria","valor","valorTotal","juros","multa","forma","conta","ndoc","historico"];
+    var campos = ["descricao","categoria","valor","valorTotal","juros","multa","forma","conta","ndoc","historico","prioridade","diasProtesto"];
     var n = 0;
     var arr = (contas || []).map(function(x){
       if (x.serieId !== pedido.serieId) return x;
@@ -6574,11 +6655,20 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categori
   var filtBtn = { background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"9px 12px", borderRadius:9, cursor:"pointer", fontSize:13, whiteSpace:"nowrap" };
   function limpar(){
     setSit("todas"); setFCats([]); setCatBusca(""); setBusca(""); setDe(""); setAte("");
-    setFTipoPag("todos"); setFForma(""); setFVMin(""); setFVMax(""); setFNdoc("");
+    setFTipoPag("todos"); setFForma(""); setFVMin(""); setFVMax(""); setFNdoc(""); setFPrio("todas");
   }
-  function exportar(){ baixarCSV("contas-pagar", ["Vencimento","Fornecedor","Categoria","Valor","Situação"], lista.map(function(c){ return [c.vencimento||"", c.descricao||"", c.categoria||"", (parseFloat(c.valor)||0).toFixed(2), statusReal(c)]; })); }
-  function imprimir(){ baixarPDF("contas-a-pagar", ["Vencimento","Fornecedor","Categoria","Valor","Situação"], lista.map(function(c){ return [c.vencimento?(fmtDate(c.vencimento)||c.vencimento):"—", c.descricao||"", c.categoria||"", fmt(parseFloat(c.valor)||0), statusReal(c)]; })); }
-  var temFiltro = sit!=="todas" || fCats.length || busca || de || ate || fTipoPag!=="todos" || fForma || fVMin || fVMax || fNdoc;
+  function rotuloPrio(c){ var i = prioridadeInfo(c.prioridade); return i ? i[1] : ""; }
+  function exportar(){
+    baixarCSV("contas-pagar", ["Vencimento","Fornecedor","Categoria","Prioridade","Valor","Pago","Em aberto","Situação","Protesto a partir de"],
+      lista.map(function(c){ return [c.vencimento||"", c.descricao||"", c.categoria||"", rotuloPrio(c),
+        (parseFloat(c.valorTotal || c.valor)||0).toFixed(2), pagoDe(c).toFixed(2), saldoDe(c).toFixed(2), statusReal(c), dataProtesto(c)]; }));
+  }
+  function imprimir(){
+    baixarPDF("contas-a-pagar", ["Vencimento","Fornecedor","Categoria","Prioridade","Valor","Em aberto","Situação"],
+      lista.map(function(c){ return [c.vencimento?(fmtDate(c.vencimento)||c.vencimento):"—", c.descricao||"", c.categoria||"", rotuloPrio(c) || "—",
+        fmt(parseFloat(c.valorTotal || c.valor)||0), fmt(saldoDe(c)), statusReal(c)]; }));
+  }
+  var temFiltro = sit!=="todas" || fCats.length || busca || de || ate || fTipoPag!=="todos" || fForma || fVMin || fVMax || fNdoc || fPrio!=="todas";
   // O número grande responde à pergunta da tela: aqui é "o que me aperta agora",
   // não o total histórico.
   var venc7 = (contas||[]).filter(function(c){ var st=statusReal(c); return st==="pendente" && c.vencimento && c.vencimento <= new Date(Date.now()+7*864e5).toISOString().slice(0,10); });
@@ -6732,6 +6822,13 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categori
                 </>
               )}
             </div>
+            <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Prioridade</div>
+              <select value={fPrio} onChange={function(e){ setFPrio(e.target.value); }} style={selFiltro}>
+                <option value="todas">Todas as prioridades</option>
+                {PRIORIDADES_CONTA.map(function(x){ return <option key={x[0]} value={x[0]}>{x[1]}</option>; })}
+                <option value="__sem__">Não classificadas</option>
+              </select>
+            </div>
             <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Tipo de pagamento</div>
               <select value={fTipoPag} onChange={function(e){ setFTipoPag(e.target.value); }} style={selFiltro}>
                 {TIPOS_PAGAMENTO.map(function(t){ return <option key={t[0]} value={t[0]}>{t[1]}</option>; })}
@@ -6772,14 +6869,19 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categori
                     <input type="checkbox" checked={lista.length > 0 && lista.every(function(c){ return sel[c.id]; })}
                       onChange={alternarTodas} title="Selecionar todas as contas da lista" style={{ cursor:"pointer", accentColor:"var(--ui-accent)" }} />
                   </th>
-                  {["Vencimento","Fornecedor","Categoria","Valor","Pago","Em aberto","Situação"].map(function(h,hi){
-                    return <th key={h} className="th" style={hi >= 3 ? { textAlign:"right" } : null}>{h}</th>;
+                  {["Vencimento","Fornecedor","Categoria","Prioridade","Valor","Pago","Em aberto","Situação"].map(function(h,hi){
+                    return <th key={h} className="th" style={hi >= 4 ? { textAlign:"right" } : null}>{h}</th>;
                   })}
                 </tr></thead>
                 <tbody>
                   {lista.map(function(c,i){
                     var st = statusReal(c); var b = badge[st] || badge.pendente;
                     var pago = pagoDe(c), saldo = saldoDe(c), marcada = !!sel[c.id];
+                    var prio = prioridadeInfo(c.prioridade);
+                    // O aviso de protesto só aparece quando ainda se deve algo:
+                    // conta quitada não é protestada, por mais atrasada que tenha sido.
+                    var prot = saldo > 0 ? dataProtesto(c) : "";
+                    var protVencido = prot && prot <= hoje;
                     // A linha inteira abre a conta para edição; só a célula da
                     // caixa de seleção segura o clique, senão marcar abriria o modal.
                     return <tr key={c.id || i} onClick={function(){ setModal(c); }} title="Clique para editar a conta"
@@ -6788,12 +6890,23 @@ function ContasPagarTab({ contas, salvar, contasBancarias, tab, setTab, categori
                         <input type="checkbox" checked={marcada} onChange={function(){ alternar(c.id); }}
                           style={{ cursor:"pointer", accentColor:"var(--ui-accent)" }} />
                       </td>
-                      <td className="td">{c.vencimento ? (fmtDate(c.vencimento)||c.vencimento) : "—"}</td>
+                      <td className="td">
+                        {c.vencimento ? (fmtDate(c.vencimento)||c.vencimento) : "—"}
+                        {prot && <div style={{ fontSize:10, marginTop:1, color: protVencido ? "#FF5252" : "#FF8A3D" }}>
+                          {protVencido ? "protestável desde " : "protesto em "}{fmtDate(prot)||prot}
+                        </div>}
+                      </td>
                       <td className="td" style={{ color:"var(--text-strong)" }}>
                         {c.descricao || "—"}
                         {c.serieId && <span style={{ marginLeft:7, fontSize:10, color:"var(--text-4)" }}>{c.parcela}/{c.parcelas}</span>}
                       </td>
                       <td className="td">{c.categoria || "—"}</td>
+                      <td className="td">
+                        {prio
+                          ? <span style={{ fontSize:11, fontWeight:600, padding:"2px 8px", borderRadius:20, color:prio[2],
+                                           background: prio[0] === "baixa" ? "var(--surface-3)" : "color-mix(in srgb, " + prio[2] + " 14%, transparent)" }}>{prio[1]}</span>
+                          : <span style={{ color:"var(--text-4)" }}>—</span>}
+                      </td>
                       <td className="td-num" style={{ fontWeight:600 }}>{fmt(parseFloat(c.valorTotal || c.valor) || 0)}</td>
                       <td className="td-num" style={{ color: pago > 0 ? "#0a9d4e" : "var(--text-4)" }}>{pago > 0 ? fmt(pago) : "—"}</td>
                       <td className="td-num" style={{ fontWeight:600, color: saldo > 0 ? "var(--text-strong)" : "var(--text-4)" }}>{saldo > 0 ? fmt(saldo) : "—"}</td>

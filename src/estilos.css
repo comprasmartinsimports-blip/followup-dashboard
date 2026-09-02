@@ -111,6 +111,12 @@
                      background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
 .mod-acoes > *     { border:none !important; border-radius:0 !important; }
 .mod-acoes > * + * { border-top:1px solid var(--border-soft) !important; }
+.mod-acoes-topo    { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%;
+                     background:var(--surface-3); color:var(--text-2); font-weight:600; font-size:11.5px;
+                     font-family:inherit; padding:7px 12px; cursor:pointer; }
+.mod-acoes-tira    { width:34px; flex-shrink:0; align-self:flex-start; background:var(--surface); color:var(--text-2);
+                     border:1px solid var(--border); border-radius:9px; padding:9px 0; cursor:pointer;
+                     font-size:12px; font-weight:600; font-family:inherit; }
 
 /* ═══ BASE — regras globais que estavam dentro do App.jsx ═══════════════ */
 *{box-sizing:border-box;margin:0;padding:0}

@@ -1639,7 +1639,6 @@ function RelatoriosTab({ enrichedOrders }) {
 function rotuloReceb(estado) {
   var m = {
     a_receber: ["A receber", FIN_COR.atencao, "o ML ainda não liberou"],
-    liberado:  ["Liberado", FIN_COR.entrada, "o ML liberou · falta confirmar"],
     recebido:  ["Recebido", FIN_COR.entrada, "confirmado por você"],
     sem_dado:  ["Sem dado", FIN_COR.fraco, "o ML não informou o repasse"],
   };
@@ -1675,15 +1674,16 @@ function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, 
   // guardado sem usar.
   //
   //   a_receber  o ML ainda NÃO liberou o dinheiro. É o contas a receber de verdade.
-  //   liberado   o ML já liberou e você ainda não confirmou que caiu na conta.
-  //   recebido   você confirmou.
+  //   recebido   o ML já liberou, ou você confirmou. Dinheiro seu: sai da tela.
   //   sem_dado   o ML não devolveu informação de repasse deste pedido. Não é
   //              "a receber" nem "recebido" — é não sabido, e some do total em
   //              vez de inflá-lo.
   function classificar(o, pay, baixa) {
     if (baixa) return "recebido";
     if (!pay || !pay.releaseDate) return "sem_dado";
-    return pay.isReleased ? "liberado" : "a_receber";
+    // Liberado pelo ML já é dinheiro seu: conta como recebido e sai da tela,
+    // mesmo sem a confirmação manual.
+    return pay.isReleased ? "recebido" : "a_receber";
   }
   var linhas = (enrichedOrders || []).filter(function(o){ return o.status !== "cancelled"; }).map(function(o){
     var pay = paymentData && paymentData[String(o.id)];
@@ -1719,9 +1719,9 @@ function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, 
   var nTaxaEstimada = linhas.filter(function(r){ return r.taxaEstimada; }).length;
   function somaDe(est){ return linhas.filter(function(r){ return r.estado === est; }).reduce(function(s,r){ return s + r.valor; }, 0); }
   function qtdDe(est){ return linhas.filter(function(r){ return r.estado === est; }).length; }
-  var aReceber = somaDe("a_receber"), liberado = somaDe("liberado"), semDado = somaDe("sem_dado");
+  var aReceber = somaDe("a_receber"), semDado = somaDe("sem_dado");
   // O total da tela: tudo o que ainda não entrou na conta.
-  var totalAReceber = aReceber + liberado + semDado;
+  var totalAReceber = aReceber + semDado;
 
   var lista = linhas.filter(function(r){
     if (fSituacao !== "todas" && r.estado !== fSituacao) return false;
@@ -1733,15 +1733,6 @@ function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, 
   // ── As duas automações ───────────────────────────────────────────────────
   // A data da baixa vale: é ela que o DRE em regime de caixa usa. Marcar tudo
   // com a data de hoje jogaria meses de receita para um dia só.
-  function confirmarLiberados(){
-    var alvo = linhas.filter(function(r){ return r.estado === "liberado"; });
-    if (!alvo.length) return;
-    if (!window.confirm("Confirmar " + alvo.length + " repasse(s) que o Mercado Livre já liberou, somando " +
-        fmt(liberado) + "?\n\nCada um entra na data em que o ML liberou, não na data de hoje.")) return;
-    var n = Object.assign({}, baixados);
-    alvo.forEach(function(r){ n[String(r.id)] = r.previsao || r.dataVenda || hoje; });
-    setBaixados(n);
-  }
   function confirmarAntigosSemDado(){
     var alvo = linhas.filter(function(r){ return r.estado === "sem_dado" && (r.dataVenda || "") <= corte; });
     if (!alvo.length) return;
@@ -1767,12 +1758,7 @@ function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, 
     <FinanceiroShell tab={tab} setTab={setTab} titulo="Contas a receber"
       sub="Valores líquidos: bruto menos a taxa do Mercado Livre e o frete que você paga. O que o ML ainda não liberou é o contas a receber de verdade."
       acoes={<>
-        {qtdDe("liberado") > 0 && (
-          <AcaoFin tipo="pri" onClick={confirmarLiberados}>
-            ✓ Confirmar {qtdDe("liberado")} liberado(s)
-          </AcaoFin>
-        )}
-        {qtdDe("sem_dado") > 0 && (
+          {qtdDe("sem_dado") > 0 && (
           <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"12px 14px" }}>
             <div style={{ fontSize:12, fontWeight:600, color:"var(--text-strong)", marginBottom:4 }}>Pedidos sem dado de repasse</div>
             <div style={{ fontSize:11.5, color:"var(--text-3)", lineHeight:1.55, marginBottom:8 }}>
@@ -1797,8 +1783,6 @@ function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, 
             nota: linhas.length + " pedido(s) que ainda não entraram" },
           { rotulo:"A receber de verdade", valor:fmt(aReceber), cor: qtdDe("a_receber") ? FIN_COR.atencao : FIN_COR.fraco,
             nota: qtdDe("a_receber") + " pedido(s) · o ML ainda não liberou" },
-          { rotulo:"Liberado, falta confirmar", valor:fmt(liberado), cor: qtdDe("liberado") ? "#0a9d4e" : FIN_COR.fraco,
-            nota: qtdDe("liberado") + " pedido(s) · já é dinheiro seu" },
           { rotulo:"Sem dado de repasse", valor:fmt(semDado), cor:FIN_COR.fraco,
             nota: qtdDe("sem_dado") + " pedido(s) · fora das contas acima" },
         ]} />
@@ -1841,7 +1825,6 @@ function ContasReceberTab({ enrichedOrders, paymentData, baixados, setBaixados, 
             <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Opção</div><select value={fSituacao} onChange={function(e){ setFSituacao(e.target.value); }} style={selFiltro}>
               <option value="todas">Todas</option>
               <option value="a_receber">A receber (ML não liberou)</option>
-              <option value="liberado">Liberado, falta confirmar</option>
               <option value="sem_dado">Sem dado de repasse</option>
             </select></div>
             <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>Categoria</div><select disabled style={{ ...selFiltro, opacity:.45 }}><option>Todas categorias</option></select></div>
@@ -4562,7 +4545,9 @@ function projetarFluxo(opts) {
   var semPrevisao = 0, nSemPrevisao = 0;
   (opts.enrichedOrders || []).forEach(function(o){
     if (o.status === "cancelled") return;
-    if ((opts.recebiveisBaixados || {})[String(o.id)]) return;   // já entrou no saldo
+    // Confirmado ou liberado pelo ML já está no saldo de hoje — projetar de novo
+    // contaria o mesmo dinheiro duas vezes.
+    if (dataDeRecebimento(o, opts.recebiveisBaixados, opts.paymentData)) return;
     // Mesmo liquido que Contas a receber mostra: bruto menos a taxa do ML menos
     // o frete. Antes vinha do netAmount da API, que tinha outra base — as duas
     // telas mostrariam valores diferentes para o mesmo dinheiro.
@@ -4991,15 +4976,18 @@ function movimentosConsolidados({ lancamentos, contasPagar, enrichedOrders, rece
 
   (enrichedOrders || []).forEach(function(o){
     if (o.status === "cancelled") return;
-    var d = (recebiveisBaixados || {})[String(o.id)];
+    // Mesma regra das outras telas: confirmado por você, ou liberado pelo ML.
+    var d = dataDeRecebimento(o, recebiveisBaixados, paymentData);
     if (!d) return;
     var pay = paymentData && paymentData[String(o.id)];
     var v = pay && pay.netAmount ? pay.netAmount : (o.price || 0) * (o.qty || 1);
     if (!v) return;
+    var manual = !!(recebiveisBaixados || {})[String(o.id)];
     mov.push({
-      id: "rec:" + o.id, data: String(d).slice(0, 10), tipo: "entrada",
-      descricao: "Repasse ML · pedido #" + o.id, categoria: "Vendas",
-      valor: v, conta: contaML ? contaML.id : "", origem: "recebivel", refId: o.id,
+      id: "rec:" + o.id, data: d, tipo: "entrada",
+      descricao: "Repasse ML · pedido #" + o.id + (manual ? "" : " · liberado pelo ML"),
+      categoria: "Vendas",
+      valor: v, conta: contaML ? contaML.id : "", origem: "recebivel", refId: o.id, porLiberacao: !manual,
     });
   });
 
@@ -5593,12 +5581,8 @@ function LancamentosTab({ lancamentos, salvar, movimentos, contasBancarias, cate
 //
 // regime  "caixa"      → conta no dia em que o dinheiro entra ou sai
 //         "competencia"→ conta no dia da venda ou da compra
-// repasse "confirmado" → o repasse do Mercado Livre só vira receita quando o
-//                        usuário confirma que caiu na conta
-//         "previsto"   → vale a data de liberação anunciada pelo ML
 const FINANCEIRO_PADRAO = {
   regime: "caixa",
-  repasse: "confirmado",
   // De onde saem as despesas do DRE. "pagas" é o certo no regime de caixa:
   // é dinheiro que saiu de verdade. "configurados" usa os custos fixos de
   // Financeiro → Impostos, útil enquanto Contas a pagar ainda está sendo
@@ -5612,18 +5596,25 @@ const FINANCEIRO_PADRAO = {
 
 function financeiroConfigPadrao() { return JSON.parse(JSON.stringify(FINANCEIRO_PADRAO)); }
 
-// Um pedido virou dinheiro? No regime de competência, a venda conta na data em
-// que foi feita. No de caixa, só quando o recebimento é confirmado — e a data
-// que vale é a da confirmação, não a da venda.
-function dataDeReceita(o, cfg, baixas, paymentData) {
-  if (cfg.regime !== "caixa") return o.date || "";
+// Quando o dinheiro de um pedido passou a ser seu. Duas respostas valem, nesta
+// ordem: a data que você confirmou, e a data em que o Mercado Livre liberou o
+// repasse. Liberado é dinheiro seu — não é mais conta a receber —, e essa é a
+// mesma regra em Contas a receber, em Caixas e bancos, no Fluxo de caixa e no
+// DRE. Ter uma regra por tela era o que fazia os números não baterem entre elas.
+// Sem nenhuma das duas datas, não é dinheiro ainda e devolve "".
+function dataDeRecebimento(o, baixas, paymentData) {
   var manual = baixas && baixas[String(o.id)];
   if (manual) return String(manual).slice(0, 10);
-  if (cfg.repasse === "previsto") {
-    var pay = paymentData && paymentData[String(o.id)];
-    if (pay && pay.isReleased) return String(pay.releaseDate || o.date || "").slice(0, 10);
-  }
-  return "";     // ainda não é dinheiro
+  var pay = paymentData && paymentData[String(o.id)];
+  if (pay && pay.isReleased && pay.releaseDate) return String(pay.releaseDate).slice(0, 10);
+  return "";
+}
+
+// Um pedido virou receita? No regime de competência, na data da venda. No de
+// caixa, na data em que o dinheiro passou a ser seu.
+function dataDeReceita(o, cfg, baixas, paymentData) {
+  if (cfg.regime !== "caixa") return o.date || "";
+  return dataDeRecebimento(o, baixas, paymentData);
 }
 
 // Quanto de uma conta a pagar entra no resultado, e em que data. No regime de
@@ -5785,7 +5776,7 @@ function DreTab({ enrichedOrders, contasPagar, custosFixos, recebiveisBaixados, 
   return (
     <FinanceiroShell tab={tab} setTab={setTab} titulo="DRE — Demonstrativo de resultado"
       sub={"Regime de " + (caixa ? "caixa · conta no dia em que o dinheiro entra ou sai" : "competência · conta no dia da venda ou da compra")
-           + (caixa && cfg.repasse === "confirmado" ? " · repasse do ML só quando você confirma" : "")}
+           + (caixa ? " · repasse do ML na data em que ele libera" : "")}
       periodo={periodo} setPeriodo={setPeriodo}
       controles={<>
         <button onClick={function(){ setComparar(function(v){ return !v; }); }} disabled={periodo === "tudo"}
@@ -5817,10 +5808,12 @@ function DreTab({ enrichedOrders, contasPagar, custosFixos, recebiveisBaixados, 
             </div>
             <div>
               <label style={{ fontSize:11.5, color:"var(--text-3)", fontWeight:600, display:"block", marginBottom:4 }}>Repasse do Mercado Livre</label>
-              <select value={cfg.repasse} onChange={function(e){ setCfg("repasse", e.target.value); }} style={{ ...selAjuste, width:"100%" }} disabled={!caixa}>
-                <option value="confirmado">Só quando eu confirmo o recebimento</option>
-                <option value="previsto">Na data de liberação do ML</option>
-              </select>
+              <div style={{ ...selAjuste, width:"100%", display:"flex", alignItems:"center", color:"var(--text-3)", cursor:"default" }}>
+                Na data em que o ML libera
+              </div>
+              <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:3, lineHeight:1.5 }}>
+                Liberado é dinheiro seu. A mesma regra vale em Contas a receber, Caixas e bancos e Fluxo de caixa.
+              </div>
             </div>
             <div>
               <label style={{ fontSize:11.5, color:"var(--text-3)", fontWeight:600, display:"block", marginBottom:4 }}>Despesas vêm de</label>
@@ -13321,6 +13314,17 @@ export default function App() {
       return;
     }
     if (m.origem === "recebivel") {
+      // O que decide não é de onde a linha veio, e sim se o estorno mudaria
+      // alguma coisa. Com o repasse já liberado pelo ML, tirar a confirmação
+      // manual não tira o dinheiro do saldo — ele volta pela liberação na
+      // mesma hora. Um botão que confirma e não muda nada é pior que um aviso.
+      var payRec = (paymentData || {})[String(m.refId)];
+      if (payRec && payRec.isReleased) {
+        window.alert("O Mercado Livre já liberou o dinheiro do pedido #" + m.refId + ", então ele é seu e continua no saldo.\n\n" +
+          "Não há o que estornar aqui: mesmo tirando a sua confirmação, a entrada permanece pela liberação do ML. " +
+          "Se o ML reverter a liberação, ela sai sozinha na próxima atualização.");
+        return;
+      }
       if (!window.confirm("Estornar o recebimento do pedido #" + m.refId + ", de " + fmt(m.valor) + "?\n\n" +
           "Ele volta para Contas a receber como não confirmado, sai do saldo e deixa de contar como receita no DRE.")) return;
       var n = Object.assign({}, recebiveisBaixados); delete n[String(m.refId)];

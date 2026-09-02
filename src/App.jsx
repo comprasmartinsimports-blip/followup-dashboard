@@ -2887,6 +2887,635 @@ function FornecedorModal({ fornecedor, onSave, onClose, onExcluir }) {
 // digitada numa conta entra na lista ao salvar —, mas não havia onde arrumar a
 // casa: renomear a que ficou com erro de digitação, juntar duas iguais, tirar a
 // que não se usa mais. É isso que esta tela faz.
+
+// ══════════════════════════════════════════════════════════════════════════
+//  CENTRAL DE RECLAMAÇÕES
+// ══════════════════════════════════════════════════════════════════════════
+// A API de pós-venda do ML mudou de caminho e de versão algumas vezes, e o que
+// cada conta enxerga depende dos escopos liberados no DevCenter. Em vez de
+// fixar um caminho e quebrar sem explicação, a busca tenta os conhecidos em
+// ordem e a tela DIZ qual respondeu e o que os outros devolveram — assim, se o
+// da sua conta for outro, dá para ver o erro exato em vez de uma tela vazia.
+
+// Data e hora legíveis a partir do ISO que o ML devolve. Uma data inválida
+// vira "—" em vez de "Invalid Date".
+function fmtDataHora(iso) {
+  try {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "—";
+    return d.toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" });
+  } catch (e) { return "—"; }
+}
+
+var ROTAS_CLAIMS = [
+  "/post-purchase/v1/claims/search",
+  "/post-purchase/v2/claims/search",
+  "/v1/claims/search",
+];
+
+async function chamarML(caminho, tk) {
+  var r = await fetch(ML(caminho), { headers: { Authorization: "Bearer " + tk } });
+  var corpo = null;
+  try { corpo = await r.json(); } catch (e) { corpo = null; }
+  return { ok: r.ok, status: r.status, corpo: corpo };
+}
+
+// Busca as reclamações paginando até o fim (ou até o teto, para não travar a
+// tela numa conta com milhares). Devolve também o diagnóstico da tentativa.
+async function buscarReclamacoesML(tk, sellerId, maxPaginas) {
+  var tentativas = [];
+  for (var i = 0; i < ROTAS_CLAIMS.length; i++) {
+    var base = ROTAS_CLAIMS[i];
+    var primeira = await chamarML(base + "?limit=50&offset=0", tk);
+    tentativas.push({ rota: base, status: primeira.status,
+                      erro: primeira.ok ? null : ((primeira.corpo && (primeira.corpo.message || primeira.corpo.error)) || "sem detalhe") });
+    if (!primeira.ok) continue;
+
+    var lista = extrairLista(primeira.corpo);
+    if (lista == null) { tentativas[tentativas.length-1].erro = "resposta em formato inesperado"; continue; }
+
+    var total = (primeira.corpo && primeira.corpo.paging && primeira.corpo.paging.total) || lista.length;
+    var paginas = Math.min(maxPaginas || 12, Math.ceil(total / 50));
+    for (var p = 1; p < paginas; p++) {
+      var r = await chamarML(base + "?limit=50&offset=" + (p * 50), tk);
+      if (!r.ok) break;
+      var mais = extrairLista(r.corpo);
+      if (!mais || !mais.length) break;
+      lista = lista.concat(mais);
+    }
+    return { ok: true, rota: base, total: total, reclamacoes: lista, tentativas: tentativas };
+  }
+  return { ok: false, reclamacoes: [], tentativas: tentativas };
+}
+
+// O ML já devolveu a lista em `data`, em `results` e na raiz, conforme a versão.
+function extrairLista(corpo) {
+  if (!corpo) return null;
+  if (Array.isArray(corpo)) return corpo;
+  if (Array.isArray(corpo.data)) return corpo.data;
+  if (Array.isArray(corpo.results)) return corpo.results;
+  return null;
+}
+
+// Um pedido pode aparecer no claim como resource_id, como resource ou dentro de
+// um objeto de recurso, dependendo da versão. Procura em todos.
+function pedidoDaReclamacao(r) {
+  var cand = [r.resource_id, r.order_id, r.resource && r.resource.id,
+              r.related_entities && r.related_entities.order_id];
+  for (var i = 0; i < cand.length; i++) {
+    var v = cand[i];
+    if (v != null && String(v).match(/^\d+$/)) return String(v);
+  }
+  return "";
+}
+
+var STATUS_RECL = {
+  opened:   ["Aberta", "#FFC107"],
+  closed:   ["Fechada", "var(--text-3)"],
+  cancelled:["Cancelada", "var(--text-4)"],
+};
+var ESTAGIO_RECL = {
+  claim:     "Reclamação",
+  dispute:   "Mediação do ML",
+  recontact: "Recontato",
+  stale:     "Parada",
+  none:      "—",
+};
+var TIPO_RECL = {
+  mediations:      "Mediação",
+  cancel_purchase: "Cancelamento",
+  return:          "Devolução",
+  fulfillment:     "Fulfillment",
+  change:          "Troca",
+  service:         "Serviço",
+};
+
+// A causa é NOSSA classificação, não a do ML: o motivo que o ML devolve é um
+// código genérico ("PDD" e afins) e não separa "veio quebrado" de "veio errado"
+// — que é exatamente o que muda a decisão do que corrigir.
+var CAUSAS_RECLAMACAO = [
+  ["avaria_transporte", "Avaria no transporte"],
+  ["produto_errado",    "Produto errado enviado"],
+  ["anuncio_divergente","Anúncio divergente do produto"],
+  ["defeito",           "Produto com defeito"],
+  ["atraso",            "Atraso na entrega"],
+  ["nao_entregue",      "Não entregue / extraviado"],
+  ["arrependimento",    "Arrependimento do comprador"],
+  ["faltou_item",       "Faltou item no pacote"],
+  ["nota_fiscal",       "Problema com nota fiscal"],
+  ["outra",             "Outra"],
+];
+function rotuloCausa(k){
+  for (var i = 0; i < CAUSAS_RECLAMACAO.length; i++) if (CAUSAS_RECLAMACAO[i][0] === k) return CAUSAS_RECLAMACAO[i][1];
+  return "";
+}
+
+// O custo de uma reclamação, parcela por parcela e com a origem de cada uma.
+// O ML não devolve o que a reclamação custou ao vendedor: devolve o estado dela.
+// Então cada parcela sai de um lugar declarado — do pedido, informada à mão, ou
+// nenhum — e o que não se sabe aparece como não informado, nunca como zero.
+function custoDaReclamacao(rec, pedido, a) {
+  a = a || {};
+  var linhas = [];
+  function push(rot, valor, origem, nota) { linhas.push({ rotulo: rot, valor: valor, origem: origem, nota: nota || "" }); }
+
+  var num = function(v){ var n = parseFloat(v); return isNaN(n) ? null : n; };
+  var reembolso = num(a.reembolso);
+  if (reembolso == null && pedido && a.reembolsouTudo) reembolso = (pedido.price || 0) * (pedido.qty || 1);
+  push("Reembolso ao comprador", reembolso, reembolso == null ? "faltando" : (a.reembolso != null && a.reembolso !== "" ? "manual" : "pedido"),
+       reembolso == null ? "informe quanto voltou para o comprador" : "");
+
+  var freteDev = num(a.freteDevolucao);
+  push("Frete da devolução", freteDev, freteDev == null ? "faltando" : "manual",
+       freteDev == null ? "quanto o retorno custou a você" : "");
+
+  // O produto voltou? Se não voltou, o custo dele foi perdido. Sem resposta, a
+  // parcela fica em aberto — presumir que voltou barateia a reclamação sozinho.
+  var cmv = pedido ? (pedido.cost || 0) * (pedido.qty || 1) : null;
+  if (a.produtoVoltou === "nao") push("Produto não retornou (custo perdido)", cmv, cmv ? "pedido" : "faltando", "custo do produto no pedido");
+  else if (a.produtoVoltou === "sim") push("Produto retornou", 0, "pedido", "sem perda de mercadoria");
+  else push("Produto retornou?", null, "faltando", "responda para contar ou não o custo da mercadoria");
+
+  var outros = num(a.outros);
+  if (outros != null && outros !== 0) push(a.outrosRotulo || "Outros custos", outros, "manual", "");
+
+  // A taxa do ML costuma voltar junto com o reembolso — mas só quando ele é
+  // total. Fica como crédito informado, não como suposição.
+  var taxaVolta = num(a.taxaDevolvida);
+  if (taxaVolta != null && taxaVolta !== 0) push("Taxa do ML devolvida", -taxaVolta, "manual", "entra como crédito");
+
+  var conhecidas = linhas.filter(function(l){ return l.valor != null; });
+  var faltando = linhas.filter(function(l){ return l.valor == null; });
+  var total = conhecidas.reduce(function(s,l){ return s + l.valor; }, 0);
+  return { linhas: linhas, total: total, completo: faltando.length === 0, faltando: faltando.length };
+}
+
+function ReclamacoesTab({ enrichedOrders, token, cache, salvarCache, analise, salvarAnalise, setTab }) {
+  const [estado, setEstado] = useState("idle");     // idle | carregando | erro
+  const [diag, setDiag] = useState(null);
+  const [aberta, setAberta] = useState(null);       // reclamação aberta no painel
+  const [detalhe, setDetalhe] = useState(null);     // { carregando, detail, mensagens, retorno, erros[] }
+  const [busca, setBusca] = useState("");
+  const [fStatus, setFStatus] = useState("todas");
+  const [fCausa, setFCausa] = useState("todas");
+  const [periodo, setPeriodo] = useState("90");
+  const [visao, setVisao] = useState("lista");      // lista | causas
+
+  var recs = (cache && cache.reclamacoes) || [];
+  var porPedido = {};
+  (enrichedOrders || []).forEach(function(o){ porPedido[String(o.id)] = o; });
+
+  async function carregar() {
+    if (!token) { setEstado("erro"); setDiag({ semToken: true }); return; }
+    setEstado("carregando"); setDiag(null);
+    try {
+      var r = await buscarReclamacoesML(token);
+      setDiag(r);
+      if (r.ok) {
+        salvarCache({ reclamacoes: r.reclamacoes, rota: r.rota, total: r.total, em: new Date().toISOString() });
+        setEstado("idle");
+      } else setEstado("erro");
+    } catch (e) {
+      setDiag({ excecao: (e && e.message) || String(e) }); setEstado("erro");
+    }
+  }
+
+  async function abrir(rec) {
+    setAberta(rec);
+    setDetalhe({ carregando: true, erros: [] });
+    var id = rec.id;
+    var partes = [
+      ["detail",    "/post-purchase/v1/claims/" + id + "/detail"],
+      ["mensagens", "/post-purchase/v1/claims/" + id + "/messages"],
+      ["retorno",   "/post-purchase/v1/claims/" + id + "/returns"],
+    ];
+    var out = { carregando: false, erros: [] };
+    for (var i = 0; i < partes.length; i++) {
+      try {
+        var r = await chamarML(partes[i][1], token);
+        if (r.ok) out[partes[i][0]] = r.corpo;
+        else out.erros.push(partes[i][0] + ": HTTP " + r.status);
+      } catch (e) { out.erros.push(partes[i][0] + ": " + ((e && e.message) || "falhou")); }
+    }
+    setDetalhe(out);
+  }
+
+  function anotar(id, campo, valor) {
+    var atual = (analise || {})[id] || {};
+    var novo = Object.assign({}, analise);
+    novo[id] = Object.assign({}, atual, { [campo]: valor });
+    salvarAnalise(novo);
+  }
+
+  var hoje = new Date().toISOString().slice(0,10);
+  var corte = periodo === "tudo" ? "" : new Date(Date.now() - parseInt(periodo,10) * 864e5).toISOString().slice(0,10);
+
+  var linhas = recs.map(function(r){
+    var pid = pedidoDaReclamacao(r);
+    var ped = porPedido[pid] || null;
+    var a = (analise || {})[r.id] || {};
+    var custo = custoDaReclamacao(r, ped, a);
+    return {
+      rec: r, id: r.id, pedido: pid, ordem: ped,
+      data: String(r.date_created || r.date || "").slice(0,10),
+      status: r.status || "", stage: r.stage || "", tipo: r.type || "",
+      causa: a.causa || "", custo: custo, analise: a,
+    };
+  }).filter(function(l){
+    if (corte && l.data && l.data < corte) return false;
+    if (fStatus !== "todas" && l.status !== fStatus) return false;
+    if (fCausa !== "todas" && (l.causa || "__sem__") !== fCausa) return false;
+    if (busca.trim()) {
+      var q = busca.trim().toLowerCase();
+      var alvo = [l.id, l.pedido, l.ordem && l.ordem.title, l.ordem && l.ordem.buyerName, l.rec.reason_id].join(" ").toLowerCase();
+      if (alvo.indexOf(q) < 0) return false;
+    }
+    return true;
+  }).sort(function(a,b){ return String(b.data).localeCompare(String(a.data)); });
+
+  var abertas = linhas.filter(function(l){ return l.status === "opened"; });
+  var emMediacao = linhas.filter(function(l){ return l.stage === "dispute"; });
+  var custoApurado = linhas.reduce(function(s,l){ return s + l.custo.total; }, 0);
+  var semCusto = linhas.filter(function(l){ return !l.custo.completo; }).length;
+  var semCausa = linhas.filter(function(l){ return !l.causa; }).length;
+  // Peso sobre as vendas do mesmo período — uma reclamação só ganha tamanho
+  // quando comparada ao que ela custa sobre o faturamento.
+  var vendasPeriodo = (enrichedOrders || []).filter(function(o){
+    return o.status !== "cancelled" && (!corte || (o.date || "") >= corte);
+  });
+  var faturamento = vendasPeriodo.reduce(function(s,o){ return s + (o.price||0)*(o.qty||1); }, 0);
+
+  // Ranking de causas: o que mais dói, em dinheiro e em quantidade.
+  var porCausa = {};
+  linhas.forEach(function(l){
+    var k = l.causa || "__sem__";
+    if (!porCausa[k]) porCausa[k] = { n:0, custo:0, comCusto:0 };
+    porCausa[k].n++; porCausa[k].custo += l.custo.total;
+    if (l.custo.completo) porCausa[k].comCusto++;
+  });
+  var causasOrdenadas = Object.keys(porCausa).map(function(k){
+    return Object.assign({ chave:k, rotulo: k === "__sem__" ? "Sem causa classificada" : rotuloCausa(k) }, porCausa[k]);
+  }).sort(function(a,b){ return b.custo - a.custo || b.n - a.n; });
+
+  var cartao = { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px" };
+  var sel = { background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"8px 10px", borderRadius:9, fontSize:12.5 };
+
+  return (
+    <div style={{ padding:2, width:"100%" }}>
+      <div style={{ display:"flex", alignItems:"flex-start", gap:12, marginBottom:14, flexWrap:"wrap" }}>
+        <div style={{ minWidth:0 }}>
+          <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Central de reclamações</div>
+          <div style={{ fontSize:12.5, color:"var(--text-3)", marginTop:2 }}>
+            Reclamações, devoluções e mediações do Mercado Livre, com a causa e o custo de cada uma.
+          </div>
+        </div>
+        <div style={{ flex:1 }} />
+        <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
+          {[["30","30 dias"],["90","90 dias"],["180","180 dias"],["tudo","Tudo"]].map(function(p){
+            var on = periodo === p[0];
+            return <button key={p[0]} onClick={function(){ setPeriodo(p[0]); }}
+              style={{ padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer", fontSize:12, fontWeight:600,
+                       background: on ? "#768692" : "var(--surface)", color: on ? "#fff" : "var(--text-3)" }}>{p[1]}</button>;
+          })}
+          <button onClick={carregar} disabled={estado === "carregando"}
+            style={{ padding:"7px 16px", borderRadius:8, border:"none", cursor: estado === "carregando" ? "wait" : "pointer",
+                     fontSize:12.5, fontWeight:600, background:"var(--ui-accent)", color:"var(--ui-accent-text)" }}>
+            {estado === "carregando" ? "Buscando..." : "Buscar no Mercado Livre"}
+          </button>
+        </div>
+      </div>
+
+      {/* Diagnóstico: sem isto, um escopo faltando no DevCenter vira uma tela
+          vazia sem explicação — o erro exato do ML é o que resolve. */}
+      {estado === "erro" && (
+        <div style={{ background:"rgba(255,82,82,.10)", border:"1px solid #FF5252", borderRadius:12, padding:"14px 16px", marginBottom:14, fontSize:12.5, color:"var(--text-2)", lineHeight:1.6 }}>
+          <div style={{ fontWeight:600, color:"#FF5252", marginBottom:6 }}>Não deu para ler as reclamações.</div>
+          {diag && diag.semToken
+            ? <>Sem conexão ativa com o Mercado Livre. Reconecte no topo da tela.</>
+            : diag && diag.excecao
+              ? <>A chamada falhou: {diag.excecao}</>
+              : <>
+                  O ML recusou todos os caminhos conhecidos. Isto costuma ser escopo faltando
+                  no DevCenter — a permissão de pós-venda é separada da de pedidos.
+                  <div style={{ marginTop:8, fontFamily:"ui-monospace,monospace", fontSize:11.5, color:"var(--text-3)" }}>
+                    {(diag && diag.tentativas || []).map(function(t,i){
+                      return <div key={i}>{t.rota} → HTTP {t.status}{t.erro ? " · " + t.erro : ""}</div>;
+                    })}
+                  </div>
+                  <div style={{ marginTop:8 }}>Me mande estas linhas e eu ajusto o caminho.</div>
+                </>}
+        </div>
+      )}
+
+      {cache && cache.em && (
+        <div style={{ fontSize:11.5, color:"var(--text-4)", marginBottom:12 }}>
+          {recs.length} reclamação(ões) lidas de <code>{cache.rota}</code> em {fmtDataHora(cache.em)}.
+          {cache.total > recs.length && <> O ML informa {cache.total} no total — busque de novo para trazer o resto.</>}
+        </div>
+      )}
+
+      {recs.length === 0 && estado !== "erro" ? (
+        <div style={{ ...cartao, textAlign:"center", padding:"54px 20px" }}>
+          <div style={{ fontSize:36, marginBottom:10 }}>🗳️</div>
+          <div style={{ fontWeight:600, fontSize:16, color:"var(--text-strong)" }}>Nenhuma reclamação carregada ainda.</div>
+          <div style={{ fontSize:13.5, color:"var(--text-3)", marginTop:8, lineHeight:1.65, maxWidth:560, margin:"8px auto 0" }}>
+            Aperte <b>Buscar no Mercado Livre</b>. A leitura usa a mesma conexão das vendas e precisa do
+            escopo de pós-venda liberado no DevCenter — se ele faltar, a tela mostra o erro exato que o ML devolveu.
+          </div>
+        </div>
+      ) : recs.length > 0 && (
+        <>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:10, marginBottom:14 }}>
+            {[
+              { r:"Abertas", v:String(abertas.length), c: abertas.length ? FIN_COR.atencao : FIN_COR.fraco, n:"esperando resposta ou prazo" },
+              { r:"Em mediação do ML", v:String(emMediacao.length), c: emMediacao.length ? FIN_COR.saida : FIN_COR.fraco, n:"o ML decide" },
+              { r:"Custo apurado", v:fmt(custoApurado), c: custoApurado ? FIN_COR.saida : FIN_COR.fraco,
+                n: semCusto ? semCusto + " sem custo completo" : "todas apuradas" },
+              { r:"Peso sobre as vendas", v: faturamento > 0 ? ((custoApurado / faturamento) * 100).toFixed(2).replace(".", ",") + "%" : "—",
+                c:FIN_COR.neutro, n: faturamento > 0 ? "do faturamento do período" : "sem vendas no período" },
+              { r:"Reclamações no período", v:String(linhas.length), c:FIN_COR.neutro,
+                n: vendasPeriodo.length ? (linhas.length / vendasPeriodo.length * 100).toFixed(1).replace(".",",") + "% dos pedidos" : "sem pedidos para comparar" },
+            ].map(function(k,i){ return <KpiFin key={i} rotulo={k.r} valor={k.v} cor={k.c} nota={k.n} />; })}
+          </div>
+
+          <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap", alignItems:"center" }}>
+            {[["lista","Lista"],["causas","Por causa"]].map(function(v){
+              var on = visao === v[0];
+              return <button key={v[0]} onClick={function(){ setVisao(v[0]); }}
+                style={{ padding:"7px 14px", borderRadius:8, border:"1px solid " + (on ? "var(--ui-accent)" : "var(--border)"),
+                         background: on ? "rgba(118,133,146,.14)" : "var(--surface)", color:"var(--text-2)",
+                         cursor:"pointer", fontSize:12.5, fontWeight:600 }}>{v[1]}</button>;
+            })}
+            <select value={fStatus} onChange={function(e){ setFStatus(e.target.value); }} style={sel}>
+              <option value="todas">Todos os status</option>
+              <option value="opened">Abertas</option>
+              <option value="closed">Fechadas</option>
+            </select>
+            <select value={fCausa} onChange={function(e){ setFCausa(e.target.value); }} style={sel}>
+              <option value="todas">Todas as causas</option>
+              {CAUSAS_RECLAMACAO.map(function(x){ return <option key={x[0]} value={x[0]}>{x[1]}</option>; })}
+              <option value="__sem__">Sem causa classificada</option>
+            </select>
+            <div style={{ position:"relative", flex:1, minWidth:200, maxWidth:360 }}>
+              <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:"var(--text-3)", fontSize:13 }}>🔍</span>
+              <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Pedido, produto, comprador ou nº da reclamação" className="busca" />
+            </div>
+          </div>
+
+          {semCausa > 0 && visao === "lista" && (
+            <div style={{ background:"rgba(255,193,7,.10)", border:"1px solid rgba(255,193,7,.45)", borderRadius:10, padding:"10px 14px", fontSize:12.5, color:"var(--text-2)", marginBottom:12, lineHeight:1.6 }}>
+              <b>{semCausa}</b> reclamação(ões) sem causa classificada. O motivo que o ML devolve é um código genérico;
+              a causa que resolve o problema — avaria, produto errado, anúncio divergente — é você quem sabe.
+              Abra cada uma e classifique: é o que faz o ranking por causa valer alguma coisa.
+            </div>
+          )}
+
+          {visao === "causas" ? (
+            <div className="tabela-wrap"><table className="tabela">
+              <thead><tr>{["Causa","Reclamações","Custo apurado","Custo médio","Apuradas"].map(function(h,i){
+                return <th key={h} className="th" style={i ? { textAlign:"right" } : null}>{h}</th>; })}</tr></thead>
+              <tbody>
+                {causasOrdenadas.map(function(c){
+                  return <tr key={c.chave} style={{ cursor:"pointer" }} onClick={function(){ setFCausa(c.chave); setVisao("lista"); }}>
+                    <td className="td" style={{ color: c.chave === "__sem__" ? "var(--text-3)" : "var(--text-strong)", fontWeight:500 }}>{c.rotulo}</td>
+                    <td className="td-num">{c.n}</td>
+                    <td className="td-num" style={{ fontWeight:600, color: c.custo ? "#FF5252" : "var(--text-4)" }}>{c.custo ? fmt(c.custo) : "—"}</td>
+                    <td className="td-num">{c.comCusto ? fmt(c.custo / c.comCusto) : <span style={{ color:"var(--text-4)" }}>—</span>}</td>
+                    <td className="td-num" style={{ color: c.comCusto === c.n ? "#0a9d4e" : "var(--text-3)" }}>{c.comCusto} de {c.n}</td>
+                  </tr>;
+                })}
+              </tbody>
+            </table></div>
+          ) : linhas.length === 0 ? (
+            <div style={{ ...cartao, textAlign:"center", padding:"40px 20px", color:"var(--text-3)", fontSize:13.5 }}>Nenhuma reclamação com esses filtros.</div>
+          ) : (
+            <div className="tabela-wrap"><table className="tabela">
+              <thead><tr>{["Data","Reclamação","Pedido / produto","Tipo","Estágio","Causa","Custo","Situação"].map(function(h,i){
+                return <th key={h} className="th" style={i === 6 ? { textAlign:"right" } : null}>{h}</th>; })}</tr></thead>
+              <tbody>
+                {linhas.map(function(l){
+                  var st = STATUS_RECL[l.status] || [l.status || "—", "var(--text-3)"];
+                  return <tr key={l.id} onClick={function(){ abrir(l.rec); }} style={{ cursor:"pointer" }} title="Abrir a reclamação">
+                    <td className="td">{l.data ? (fmtDate(l.data) || l.data) : "—"}</td>
+                    <td className="td" style={{ fontFamily:"ui-monospace,monospace", fontSize:11.5 }}>{l.id}</td>
+                    <td className="td" style={{ color:"var(--text-strong)", maxWidth:300 }}>
+                      {l.ordem ? <>
+                        <div style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{l.ordem.title || "(sem título)"}</div>
+                        <div style={{ fontSize:10.5, color:"var(--text-4)" }}>#{l.pedido} · {l.ordem.buyerName || "comprador"} · {fmt((l.ordem.price||0)*(l.ordem.qty||1))}</div>
+                      </> : <>
+                        <div style={{ fontSize:12 }}>#{l.pedido || "—"}</div>
+                        <div style={{ fontSize:10.5, color:"var(--text-4)" }}>pedido fora do período carregado</div>
+                      </>}
+                    </td>
+                    <td className="td">{TIPO_RECL[l.tipo] || l.tipo || "—"}</td>
+                    <td className="td">{ESTAGIO_RECL[l.stage] || l.stage || "—"}</td>
+                    <td className="td">
+                      {l.causa
+                        ? <span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background:"var(--surface-3)", color:"var(--text-2)" }}>{rotuloCausa(l.causa)}</span>
+                        : <span style={{ color:"#FFC107", fontSize:11.5 }}>classificar</span>}
+                    </td>
+                    <td className="td-num" style={{ fontWeight:600, color: l.custo.total ? "#FF5252" : "var(--text-4)" }}>
+                      {l.custo.total ? fmt(l.custo.total) : "—"}
+                      {!l.custo.completo && <div style={{ fontSize:9.5, color:"var(--text-4)", fontWeight:400 }}>{l.custo.faltando} em aberto</div>}
+                    </td>
+                    <td className="td"><span style={{ fontSize:11, fontWeight:500, color:st[1] }}>{st[0]}</span></td>
+                  </tr>;
+                })}
+              </tbody>
+            </table></div>
+          )}
+        </>
+      )}
+
+      {aberta && <ReclamacaoModal rec={aberta} detalhe={detalhe} pedido={porPedido[pedidoDaReclamacao(aberta)] || null}
+        analise={(analise || {})[aberta.id] || {}} anotar={function(campo, valor){ anotar(aberta.id, campo, valor); }}
+        onClose={function(){ setAberta(null); setDetalhe(null); }} setTab={setTab} />}
+    </div>
+  );
+}
+
+// A ficha de uma reclamação: o que o ML conta, o que a venda diz, e os campos
+// que só você sabe responder. O custo aparece parcela por parcela com a origem
+// de cada uma — um total sozinho não deixa discordar com fundamento.
+function ReclamacaoModal({ rec, detalhe, pedido, analise, anotar, onClose, setTab }) {
+  const [aba, setAba] = useState("resumo");
+  var custo = custoDaReclamacao(rec, pedido, analise);
+  var campo = { width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"8px 10px", borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box" };
+  var lbl = { fontSize:11.5, color:"var(--text-3)", fontWeight:600, marginBottom:4, display:"block" };
+  var st = STATUS_RECL[rec.status] || [rec.status || "—", "var(--text-3)"];
+  function TabBtn(id, label){
+    var a = aba === id;
+    return <button onClick={function(){ setAba(id); }} style={{ background:"none", border:"none", borderBottom: a?"2px solid var(--ui-accent)":"2px solid transparent",
+      padding:"10px 4px", marginRight:20, cursor:"pointer", fontSize:13, fontWeight: a?700:500, color: a?"var(--text-strong)":"var(--text-3)" }}>{label}</button>;
+  }
+  var msgs = (detalhe && detalhe.mensagens) || null;
+  var listaMsgs = Array.isArray(msgs) ? msgs : (msgs && (msgs.messages || msgs.data)) || [];
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:600, display:"flex", alignItems:"flex-start", justifyContent:"center", padding:"24px 16px", overflowY:"auto" }} onClick={onClose}>
+      <div onClick={function(e){ e.stopPropagation(); }} style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:14, width:860, maxWidth:"100%", display:"flex", flexDirection:"column", maxHeight:"92vh" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", padding:"18px 22px 8px", gap:12 }}>
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontWeight:600, fontSize:17.5, color:"var(--text-strong)" }}>
+              Reclamação {rec.id} · <span style={{ color:st[1], fontWeight:600 }}>{st[0]}</span>
+            </div>
+            <div style={{ fontSize:12, color:"var(--text-3)", marginTop:2 }}>
+              {(TIPO_RECL[rec.type] || rec.type || "—")} · {(ESTAGIO_RECL[rec.stage] || rec.stage || "—")}
+              {rec.date_created && <> · aberta em {fmtDate(String(rec.date_created).slice(0,10)) || String(rec.date_created).slice(0,10)}</>}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background:"none", border:"none", color:"var(--text-3)", fontSize:22, cursor:"pointer" }}>×</button>
+        </div>
+
+        <div style={{ padding:"0 22px", borderBottom:"1px solid var(--border)" }}>
+          {TabBtn("resumo","Resumo e custo")}{TabBtn("mensagens","Mensagens")}{TabBtn("bruto","Dados do ML")}
+        </div>
+
+        <div style={{ padding:"16px 22px", overflowY:"auto" }}>
+          {aba === "resumo" && <>
+            {pedido ? (
+              <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"12px 14px", marginBottom:14 }}>
+                <div style={{ fontSize:13, fontWeight:600, color:"var(--text-strong)", marginBottom:6 }}>{pedido.title || "(sem título)"}</div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:18 }}>
+                  {[["Pedido", "#" + pedido.id], ["Comprador", pedido.buyerName || "—"], ["Data da venda", fmtDate(pedido.date) || pedido.date || "—"],
+                    ["Valor da venda", fmt((pedido.price||0)*(pedido.qty||1))], ["Custo do produto", pedido.cost ? fmt(pedido.cost*(pedido.qty||1)) : "não cadastrado"],
+                    ["Taxa do ML", fmt((pedido.fee||0)*(pedido.qty||1))], ["Frete que você pagou", fmt((pedido.freteSeller||0)*(pedido.qty||1))]].map(function(x,i){
+                    return <div key={i}><div style={{ fontSize:10.5, color:"var(--text-3)" }}>{x[0]}</div>
+                      <div style={{ fontSize:12.5, fontWeight:600, color:"var(--text-strong)" }}>{x[1]}</div></div>;
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div style={{ background:"rgba(255,193,7,.10)", border:"1px solid rgba(255,193,7,.45)", borderRadius:10, padding:"11px 14px", fontSize:12.5, color:"var(--text-2)", marginBottom:14, lineHeight:1.6 }}>
+                O pedido <b>#{pedidoDaReclamacao(rec) || "—"}</b> desta reclamação não está entre os pedidos carregados,
+                então valor da venda, custo do produto e taxa não entram no cálculo. Carregue um período maior em Vendas
+                {setTab && <button onClick={function(){ setTab("orders"); }} style={{ marginLeft:6, background:"none", border:"none", color:"var(--ui-accent)", cursor:"pointer", fontSize:12.5, fontWeight:600, padding:0 }}>ir para Vendas →</button>}
+              </div>
+            )}
+
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:14 }}>
+              <div><label style={lbl}>Causa (sua classificação)</label>
+                <select value={analise.causa || ""} onChange={function(e){ anotar("causa", e.target.value); }} style={campo}>
+                  <option value="">— não classificada —</option>
+                  {CAUSAS_RECLAMACAO.map(function(x){ return <option key={x[0]} value={x[0]}>{x[1]}</option>; })}
+                </select>
+                <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:3 }}>
+                  O ML devolve o motivo como código{rec.reason_id ? " (" + rec.reason_id + ")" : ""}; a causa que resolve é esta.
+                </div>
+              </div>
+              <div><label style={lbl}>O produto retornou?</label>
+                <div style={{ display:"flex", gap:6 }}>
+                  {[["sim","Voltou"],["nao","Não voltou"],["","Não sei"]].map(function(o){
+                    var on = (analise.produtoVoltou || "") === o[0];
+                    return <button key={o[0] || "ns"} onClick={function(){ anotar("produtoVoltou", o[0]); }}
+                      style={{ flex:1, padding:"8px 6px", borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:600,
+                               border:"1px solid " + (on ? "var(--ui-accent)" : "var(--border)"),
+                               background: on ? "rgba(118,133,146,.16)" : "var(--surface)", color: on ? "var(--text-strong)" : "var(--text-3)" }}>{o[1]}</button>;
+                  })}
+                </div>
+                <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:3 }}>Sem resposta, o custo da mercadoria fica em aberto.</div>
+              </div>
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:14 }}>
+              <div><label style={lbl}>Reembolso ao comprador (R$)</label>
+                <input type="number" step="0.01" value={analise.reembolso || ""} onChange={function(e){ anotar("reembolso", e.target.value); }} placeholder="0,00" style={campo} /></div>
+              <div><label style={lbl}>Frete da devolução (R$)</label>
+                <input type="number" step="0.01" value={analise.freteDevolucao || ""} onChange={function(e){ anotar("freteDevolucao", e.target.value); }} placeholder="0,00" style={campo} /></div>
+              <div><label style={lbl}>Taxa do ML devolvida (R$)</label>
+                <input type="number" step="0.01" value={analise.taxaDevolvida || ""} onChange={function(e){ anotar("taxaDevolvida", e.target.value); }} placeholder="0,00" style={campo} /></div>
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 2fr", gap:12, marginBottom:14 }}>
+              <div><label style={lbl}>Outros custos (R$)</label>
+                <input type="number" step="0.01" value={analise.outros || ""} onChange={function(e){ anotar("outros", e.target.value); }} placeholder="0,00" style={campo} /></div>
+              <div><label style={lbl}>O que foram esses outros custos</label>
+                <input value={analise.outrosRotulo || ""} onChange={function(e){ anotar("outrosRotulo", e.target.value); }} placeholder="reparo, reenvio, brinde de desculpa..." style={campo} /></div>
+            </div>
+
+            <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, overflow:"hidden", marginBottom:14 }}>
+              <div style={{ padding:"9px 14px", borderBottom:"1px solid var(--border-soft)", fontSize:12.5, fontWeight:600, color:"var(--text-strong)" }}>
+                O que esta reclamação custou
+              </div>
+              {custo.linhas.map(function(l,i){
+                return <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:10, padding:"8px 14px", borderTop: i ? "1px solid var(--border-soft)" : "none" }}>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontSize:12.5, color: l.valor == null ? "var(--text-3)" : "var(--text-2)" }}>{l.rotulo}</div>
+                    <div style={{ fontSize:10, color:"var(--text-4)" }}>
+                      {l.origem === "manual" ? "informado por você" : l.origem === "pedido" ? "veio do pedido" : "não informado"}
+                      {l.nota ? " · " + l.nota : ""}
+                    </div>
+                  </div>
+                  <div style={{ fontSize:13, fontWeight:600, whiteSpace:"nowrap", color: l.valor == null ? "var(--text-4)" : l.valor < 0 ? "#0a9d4e" : "var(--text-strong)" }}>
+                    {l.valor == null ? "—" : fmt(l.valor)}
+                  </div>
+                </div>;
+              })}
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", padding:"10px 14px", borderTop:"1px solid var(--border)", background:"var(--surface-3)" }}>
+                <div style={{ fontSize:12.5, fontWeight:600, color:"var(--text-strong)" }}>
+                  Total{!custo.completo && <span style={{ fontWeight:400, color:"var(--text-3)" }}> · {custo.faltando} parcela(s) ainda em aberto</span>}
+                </div>
+                <div style={{ fontSize:16, fontWeight:700, color: custo.total ? "#FF5252" : "var(--text-3)" }}>{fmt(custo.total)}</div>
+              </div>
+            </div>
+
+            <div><label style={lbl}>Observações</label>
+              <textarea value={analise.obs || ""} onChange={function(e){ anotar("obs", e.target.value); }} rows={3}
+                placeholder="O que aconteceu, o que foi feito, o que evitar da próxima vez." style={{ ...campo, resize:"vertical", fontFamily:"inherit" }} /></div>
+          </>}
+
+          {aba === "mensagens" && (
+            detalhe && detalhe.carregando ? <div style={{ color:"var(--text-3)", fontSize:13 }}>Carregando as mensagens...</div>
+            : listaMsgs.length === 0
+              ? <div style={{ color:"var(--text-3)", fontSize:13, lineHeight:1.6 }}>
+                  Nenhuma mensagem devolvida pelo ML para esta reclamação.
+                  {detalhe && detalhe.erros && detalhe.erros.length > 0 && (
+                    <div style={{ marginTop:8, fontFamily:"ui-monospace,monospace", fontSize:11.5, color:"var(--text-4)" }}>{detalhe.erros.join(" · ")}</div>
+                  )}
+                </div>
+              : <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                  {listaMsgs.map(function(m,i){
+                    var deMim = String(m.sender_role || m.from && m.from.role || "").toLowerCase().indexOf("respondent") >= 0
+                             || String(m.sender_role || "").toLowerCase() === "seller";
+                    return <div key={i} style={{ alignSelf: deMim ? "flex-end" : "flex-start", maxWidth:"78%",
+                                  background: deMim ? "rgba(118,133,146,.16)" : "var(--surface)", border:"1px solid var(--border)",
+                                  borderRadius:10, padding:"9px 12px" }}>
+                      <div style={{ fontSize:10.5, color:"var(--text-4)", marginBottom:3 }}>
+                        {(m.sender_role || (m.from && (m.from.role || m.from.user_id)) || "—")}
+                        {m.date_created ? " · " + fmtDataHora(m.date_created) : ""}
+                      </div>
+                      <div style={{ fontSize:12.5, color:"var(--text-2)", lineHeight:1.55, whiteSpace:"pre-wrap" }}>{m.message || m.text || ""}</div>
+                    </div>;
+                  })}
+                </div>
+          )}
+
+          {aba === "bruto" && (
+            <div style={{ fontSize:11.5, color:"var(--text-3)", lineHeight:1.6 }}>
+              <div style={{ marginBottom:8 }}>
+                Tudo o que o ML devolveu, sem interpretação. Serve para conferir um número que a tela mostrou
+                {detalhe && detalhe.erros && detalhe.erros.length > 0 && <> — e o que ele recusou: <b>{detalhe.erros.join(" · ")}</b></>}.
+              </div>
+              {[["Reclamação", rec], ["Detalhe", detalhe && detalhe.detail], ["Devolução", detalhe && detalhe.retorno]].map(function(x,i){
+                if (!x[1]) return null;
+                return <div key={i} style={{ marginBottom:12 }}>
+                  <div style={{ fontWeight:600, color:"var(--text-2)", marginBottom:4 }}>{x[0]}</div>
+                  <pre style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:8, padding:"10px 12px",
+                                overflowX:"auto", fontSize:11, color:"var(--text-2)", margin:0 }}>{JSON.stringify(x[1], null, 2)}</pre>
+                </div>;
+              })}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display:"flex", justifyContent:"flex-end", gap:10, padding:"12px 22px", borderTop:"1px solid var(--border-soft)" }}>
+          <span style={{ flex:1, fontSize:11, color:"var(--text-4)", alignSelf:"center" }}>O que você preenche aqui é salvo na hora.</span>
+          <button onClick={onClose} style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600, padding:"9px 24px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Fechar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CategoriasPagarTab({ categorias, salvar, contasPagar, salvarContasPagar, setTab }) {
   const [nova, setNova] = useState("");
   const [editando, setEditando] = useState(null);   // { antes, depois }
@@ -8089,6 +8718,7 @@ function HomeTab({ enrichedOrders, currentUser, setTab }){
       { key:"vincular", label:"Vincular anúncios", desc:"Ligar anúncios aos produtos" },
       perm.includes("listings") && { key:"precificacao", label:"Precificação", desc:"Preços, taxas e margem" },
       perm.includes("orders") && { key:"orders", label:"Vendas", desc:"Pedidos e margem por venda" },
+      perm.includes("orders") && { key:"reclamacoes", label:"Reclamações", desc:"Causas e custo de cada reclamação" },
       { key:"expedicao", label:"Expedição", desc:"Status de envio dos pedidos" },
       { key:"compras", label:"Compras", desc:"Pedidos de compra e reposição" },
       { key:"estoque", label:"Estoque", desc:"Saldo e estoque mínimo" },
@@ -9225,6 +9855,7 @@ const BACKUP_KEYS = [
   { key: "contas_bancarias",        label: "Caixas e Bancos" },
   { key: "lancamentos",             label: "Lançamentos Financeiros" },
   { key: "categorias_pagar",        label: "Categorias" },
+  { key: "reclamacoes_analise",     label: "Análise de reclamações" },
   { key: "produtos_cadastro",       label: "Produtos" },
   { key: "fornecedores_cadastro",   label: "Fornecedores" },
   { key: "notas_fiscais_entrada",   label: "Notas Fiscais" },
@@ -12628,6 +13259,25 @@ export default function App() {
     }
   }
 
+  // As reclamações lidas do ML ficam em cache local para a tela abrir sem
+  // esperar a API; a análise (causa, custos, observações) é dado nosso e
+  // sincroniza entre os usuários como o resto do cadastro.
+  const [reclamacoesCache, setReclamacoesCacheState] = useState(function(){
+    try { var v = JSON.parse(localStorage.getItem("reclamacoes_cache") || "null"); return v && typeof v === "object" ? v : null; } catch { return null; }
+  });
+  function salvarReclamacoesCache(v) {
+    setReclamacoesCacheState(v);
+    try { localStorage.setItem("reclamacoes_cache", JSON.stringify(v)); } catch(e) {}
+  }
+  const [reclamacoesAnalise, setReclamacoesAnaliseState] = useState(function(){
+    try { var v = JSON.parse(localStorage.getItem("reclamacoes_analise") || "{}"); return v && typeof v === "object" ? v : {}; } catch { return {}; }
+  });
+  function salvarReclamacoesAnalise(mapa) {
+    setReclamacoesAnaliseState(mapa);
+    try { localStorage.setItem("reclamacoes_analise", JSON.stringify(mapa)); } catch(e) {}
+    try { kvSyncPush("reclamacoes_analise", mapa); } catch(e) {}
+  }
+
   const [extratoBancario, setExtratoBancarioState] = useState(function(){
     try { var v = JSON.parse(localStorage.getItem("extrato_bancario") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
   });
@@ -12946,7 +13596,7 @@ export default function App() {
     "custos_fixos_config","impostos_config","irpj_csll_config","icms_por_estado","icms_regime_config","lancamentos",
     "mov_estoque","metaMensal","min_stock_anuncios","real_fees_config","pedidos_compra",
     "precificacao_extras","precos_pendentes_ml","custos_extras_config","depositos_estoque","estoque_depositos",
-    "envios_full","vendas_estoque_baixadas","sku_overrides","analise_ia_config","prioridade_pagamento_config","financeiro_config","recebiveis_baixados","extrato_bancario","conciliacoes_manuais",
+    "envios_full","vendas_estoque_baixadas","sku_overrides","analise_ia_config","prioridade_pagamento_config","financeiro_config","recebiveis_baixados","extrato_bancario","conciliacoes_manuais","reclamacoes_analise",
   ]).current;
   // Para os dados guardados como dicionário (chave→valor, ex: custo por anúncio), mesclar em
   // vez de substituir por inteiro — evita que um "pull" com dados parciais do servidor apague
@@ -12988,6 +13638,7 @@ export default function App() {
     recebiveis_baixados: mesclarSetter(setRecebiveisBaixadosState),
     extrato_bancario: setExtratoBancarioState,
     conciliacoes_manuais: mesclarSetter(setConciliacoesManuaisState),
+    reclamacoes_analise: mesclarSetter(setReclamacoesAnaliseState),
   }).current;
   // Tipo esperado de cada chave — usado para blindar contra um valor no formato errado
   // (ex: um objeto onde deveria vir uma lista) travando a tela com "x.filter is not a function".
@@ -13003,7 +13654,7 @@ export default function App() {
     custos_extras_config: "object", analise_ia_config: "object",
     prioridade_pagamento_config: "object",
     financeiro_config: "object", recebiveis_baixados: "object",
-    extrato_bancario: "array", conciliacoes_manuais: "object",
+    extrato_bancario: "array", conciliacoes_manuais: "object", reclamacoes_analise: "object",
   }).current;
   const lastSyncRef = useRef({}); // key -> string JSON já sincronizado (evita reenviar/reaplicar sem necessidade)
 
@@ -13920,6 +14571,7 @@ export default function App() {
               { key:"vincular", label:"Vincular anúncios" },
               currentUser?.permissoes?.includes("listings") && { key:"precificacao", label:"Precificação" },
               currentUser?.permissoes?.includes("orders") && { key:"orders", label:"Vendas" },
+              currentUser?.permissoes?.includes("orders") && { key:"reclamacoes", label:"Reclamações" },
               { key:"expedicao", label:"Expedição" },
               { key:"compras", label:"Compras" },
               { key:"estoque", label:"Estoque" },
@@ -14534,6 +15186,9 @@ export default function App() {
         {tab === "dashboard" && (
           <DashboardTab enrichedOrders={enrichedOrders} produtos={produtos} user={user} metas={metas} salvarMetas={salvarMetas} sub={dashSub} setSub={setDashSub} />
         )}
+        {tab === "reclamacoes" && <ReclamacoesTab enrichedOrders={enrichedOrdersTodos} token={token}
+          cache={reclamacoesCache} salvarCache={salvarReclamacoesCache}
+          analise={reclamacoesAnalise} salvarAnalise={salvarReclamacoesAnalise} setTab={setTab} />}
         {tab === "categorias_pagar" && <CategoriasPagarTab categorias={categoriasPagar} salvar={salvarCategoriasPagar}
           contasPagar={contasPagar} salvarContasPagar={salvarContasPagar} setTab={setTab} />}
         {tab === "analise_ia" && <AnaliseIATab config={configQualidade} salvar={setConfigQualidade} enriched={enriched} />}

@@ -57,6 +57,19 @@ const SYNC_KEYS_PERMITIDAS = [
   "chat_interno_mensagens",
   "chat_interno_tarefas",
   "sku_overrides",
+  "reclamacoes_analise",
+  // Estas sete o navegador já tentava sincronizar, mas não estavam aqui: o
+  // _sync respondia 400 e o erro era engolido, então cada usuário ficava com a
+  // sua própria versão sem ninguém perceber. Entre elas estão coisas que
+  // PRECISAM ser iguais para todos — quais recebimentos foram confirmados, o
+  // regime de caixa, as regras da IA e os custos de etiqueta/embalagem.
+  "recebiveis_baixados",
+  "extrato_bancario",
+  "conciliacoes_manuais",
+  "financeiro_config",
+  "prioridade_pagamento_config",
+  "analise_ia_config",
+  "custos_extras_config",
 ];
 
 function falhaPersistencia(e) {

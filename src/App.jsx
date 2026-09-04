@@ -51,6 +51,15 @@ async function kvSyncPull(key) {
     return v;
   } catch { return null; }
 }
+// Um valor que não carrega informação nenhuma. Número e texto nunca contam
+// como vazio — só ausência, lista sem itens e objeto sem chaves.
+function valorVazio(v) {
+  if (v === null || v === undefined) return true;
+  if (Array.isArray(v)) return v.length === 0;
+  if (typeof v === "object") return Object.keys(v).length === 0;
+  return false;
+}
+
 async function kvSyncPush(key, value) {
   try {
     await fetch("/api/ml/_sync", {
@@ -13773,6 +13782,15 @@ export default function App() {
                 v = Object.keys(byId).map(function(k){ return byId[k]; });
               }
             } catch(e) {}
+          }
+          // Vazio do servidor nunca apaga o que este navegador tem. Foi assim
+          // que a última cópia dos custos quase se perdeu: o servidor já estava
+          // zerado e o pull regravava {} por cima do mapa cheio que ainda
+          // existia aqui. Quem tem dado é a fonte; o vazio espera.
+          if (valorVazio(v)) {
+            var localAtual = null;
+            try { localAtual = JSON.parse(localStorage.getItem(key) || "null"); } catch(e) {}
+            if (!valorVazio(localAtual)) return;
           }
           var raw = JSON.stringify(v);
           if (lastSyncRef.current[key] === raw) return; // já é o que temos

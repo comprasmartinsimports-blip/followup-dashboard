@@ -94,7 +94,11 @@ export async function syncGet(ns, chave) {
   return rows.length ? rows[0].valor : null;
 }
 
-// Grava (upsert) um valor de negócio no flow.sync_store.
+// Grava (upsert) um valor de negócio no flow.sync_store. A versão anterior é
+// guardada em flow.sync_historico por um gatilho do próprio banco — não por
+// aqui: em código, o histórico dependeria de todo caminho de gravação lembrar
+// de chamá-lo, e foi justamente um caminho esquecido que apagou os custos de
+// todos os anúncios.
 export async function syncSet(ns, chave, valor) {
   const sql = getSql();
   if (!sql) return false;
@@ -104,6 +108,30 @@ export async function syncSet(ns, chave, valor) {
     on conflict (ns, chave) do update set valor = excluded.valor, atualizado_em = now()
   `;
   return true;
+}
+
+// Lista as versões guardadas de uma chave, sem trazer o conteúdo (que pode ser
+// grande): só o tamanho e a data, para escolher qual restaurar.
+export async function syncHistoricoLista(ns, chave) {
+  const sql = getSql();
+  if (!sql) return [];
+  const rows = await sql`
+    select id, itens, gravado_em, pg_column_size(valor) as bytes
+    from flow.sync_historico where ns = ${ns} and chave = ${chave}
+    order by gravado_em desc limit 30
+  `;
+  return rows;
+}
+
+// Devolve o conteúdo de uma versão guardada.
+export async function syncHistoricoValor(ns, chave, id) {
+  const sql = getSql();
+  if (!sql) return null;
+  const rows = await sql`
+    select valor from flow.sync_historico
+    where ns = ${ns} and chave = ${chave} and id = ${id} limit 1
+  `;
+  return rows.length ? rows[0].valor : null;
 }
 
 // ── Usuários do sistema ──────────────────────────────────────────────────────

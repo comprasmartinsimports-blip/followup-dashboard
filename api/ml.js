@@ -16,7 +16,7 @@ import {
   armazenamentoUsuarios,
   ErroPersistencia,
 } from "./_lib/auth.js";
-import { dbEnabled, syncGet, syncSet, upsertConexaoMl, listConexoesMl, listCacheListings, listCacheOrders, getConexaoMl, sqlClient } from "./_lib/db.js";
+import { dbEnabled, syncGet, syncSet, syncHistoricoLista, syncHistoricoValor, upsertConexaoMl, listConexoesMl, listCacheListings, listCacheOrders, getConexaoMl, sqlClient } from "./_lib/db.js";
 import { syncListings, syncOrders, garantirToken, syncOneListing, syncOneOrder, syncPromocoes } from "./_lib/mlsync.js";
 
 // A sincronização do cache do ML (/_sync_ml) puxa centenas de itens — pede mais tempo que o
@@ -899,6 +899,12 @@ export default async function handler(req, res) {
       if (!key || !SYNC_KEYS_PERMITIDAS.includes(key)) {
         return res.status(400).json({ error: "Chave de sincronização inválida" });
       }
+      // ?historico=1 → as versões guardadas desta chave, sem o conteúdo.
+      if (qs.get("historico")) {
+        if (!dbEnabled()) return res.status(200).json({ key, versoes: [] });
+        const versoes = await syncHistoricoLista(nsScopePara(key, ns), key);
+        return res.status(200).json({ key, versoes });
+      }
       // Dual-mode: Postgres (flow.sync_store) como fonte primária; se a chave ainda não
       // existir lá (dado antigo), lê do KV como fallback (read-through). Qualquer erro no
       // Postgres cai no KV — o _sync nunca quebra por causa do banco novo.
@@ -920,6 +926,16 @@ export default async function handler(req, res) {
       const key = body.key;
       if (!key || !SYNC_KEYS_PERMITIDAS.includes(key)) {
         return res.status(400).json({ error: "Chave de sincronização inválida" });
+      }
+      // Restaurar uma versão guardada. Vem por aqui, e não por uma rota nova,
+      // para reaproveitar a mesma checagem de sessão e de chave permitida.
+      if (body.restaurarVersao) {
+        if (!dbEnabled()) return res.status(400).json({ error: "Histórico indisponível sem banco" });
+        const antigo = await syncHistoricoValor(nsScopePara(key, body.ns), key, body.restaurarVersao);
+        if (antigo == null) return res.status(404).json({ error: "Versão não encontrada" });
+        await syncSet(nsScopePara(key, body.ns), key, antigo);   // a versão atual vai para o histórico
+        try { await kvSet(kvKeyPara(key, body.ns), antigo); } catch (e) {}
+        return res.status(200).json({ ok: true, restaurado: key, valor: antigo });
       }
       // Rede de segurança contra apagamento acidental. Um navegador sem o dado
       // salvo localmente já sobrescreveu o servidor com {} e apagou os custos de

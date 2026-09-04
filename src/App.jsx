@@ -3542,6 +3542,283 @@ function ReclamacaoModal({ rec, detalhe, pedido, analise, anotar, onClose, setTa
   );
 }
 
+
+// ══════════════════════════════════════════════════════════════════════════
+//  BACKUP E RECUPERAÇÃO
+// ══════════════════════════════════════════════════════════════════════════
+// Existiam dois painéis de backup no código, nenhum com botão que abrisse —
+// código morto. Esta tela é a única, fica no menu, e cobre TODAS as chaves
+// sincronizadas, não uma lista escrita à mão que envelhece a cada dado novo.
+
+// O que cada chave guarda, em português. O que não estiver aqui aparece pelo
+// próprio nome — melhor um nome técnico do que a chave sumir da lista.
+var ROTULO_DADO = {
+  costs_config: "Custo por anúncio",
+  fretes_config: "Frete por anúncio",
+  precos_venda_config: "Preço de venda",
+  descontos_config: "Descontos",
+  real_fees_config: "Taxas reais do ML",
+  custos_extras_config: "Etiqueta, embalagem e ICMS por anúncio",
+  precificacao_extras: "Produtos da Precificação",
+  precos_pendentes_ml: "Preços a enviar ao ML",
+  produtos_cadastro: "Produtos",
+  fornecedores_cadastro: "Fornecedores",
+  contas_pagar: "Contas a pagar",
+  contas_bancarias: "Caixas e bancos",
+  categorias_pagar: "Categorias de contas",
+  lancamentos: "Lançamentos",
+  custos_fixos_config: "Custos fixos",
+  impostos_config: "Impostos",
+  irpj_csll_config: "IRPJ e CSLL",
+  icms_por_estado: "ICMS por estado",
+  icms_regime_config: "Regime de ICMS",
+  notas_fiscais_entrada: "Notas fiscais de entrada",
+  mov_estoque: "Movimentação de estoque",
+  min_stock_anuncios: "Estoque mínimo",
+  depositos_estoque: "Depósitos",
+  estoque_depositos: "Estoque por depósito",
+  envios_full: "Envios Full",
+  vendas_estoque_baixadas: "Vendas já baixadas do estoque",
+  pedidos_compra: "Pedidos de compra",
+  sku_overrides: "SKUs corrigidos à mão",
+  analise_ia_config: "Regras da análise por IA",
+  prioridade_pagamento_config: "Regras de prioridade de pagamento",
+  financeiro_config: "Configuração do financeiro",
+  recebiveis_baixados: "Recebimentos confirmados",
+  extrato_bancario: "Extrato bancário importado",
+  conciliacoes_manuais: "Conciliações feitas à mão",
+  reclamacoes_analise: "Análise das reclamações",
+  metaMensal: "Meta mensal",
+};
+function rotuloDado(k){ return ROTULO_DADO[k] || k; }
+
+function contarItens(v) {
+  if (v === null || v === undefined) return 0;
+  if (Array.isArray(v)) return v.length;
+  if (typeof v === "object") return Object.keys(v).length;
+  return 1;
+}
+
+function BackupTab({ chaves, ns }) {
+  const [resultado, setResultado] = useState(null);
+  const [erro, setErro] = useState("");
+  const [historico, setHistorico] = useState(null);   // { chave, versoes, carregando }
+  const [restaurando, setRestaurando] = useState(false);
+
+  // O inventário sai do localStorage, que é o que a exportação leva.
+  var linhas = (chaves || []).map(function(k){
+    var v = null, tem = false;
+    try { var raw = localStorage.getItem(k); if (raw != null) { v = JSON.parse(raw); tem = true; } } catch(e) {}
+    return { chave:k, rotulo:rotuloDado(k), itens: tem ? contarItens(v) : null, tem:tem };
+  }).sort(function(a,b){ return (b.itens || 0) - (a.itens || 0); });
+  var comDado = linhas.filter(function(l){ return l.itens > 0; });
+  var totalItens = comDado.reduce(function(s,l){ return s + l.itens; }, 0);
+
+  function exportar(){
+    var bk = { versao: 3, data: new Date().toISOString(), conta: ns || "", dados: {} };
+    var n = 0;
+    (chaves || []).forEach(function(k){
+      try { var raw = localStorage.getItem(k); if (raw == null) return; bk.dados[k] = JSON.parse(raw); n++; } catch(e) {}
+    });
+    var blob = new Blob([JSON.stringify(bk, null, 2)], { type:"application/json" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "flow_backup_" + new Date().toLocaleDateString("sv-SE") + ".json";
+    a.click();
+    setErro(""); setResultado("Backup de " + n + " conjunto(s) de dados baixado.");
+  }
+
+  // Restaurar NUNCA apaga: só acrescenta o que o arquivo tem e o sistema não.
+  // Um backup antigo restaurado por cima apagaria tudo o que veio depois dele.
+  function importar(arquivo){
+    var leitor = new FileReader();
+    leitor.onload = function(ev){
+      try {
+        var bk = JSON.parse(ev.target.result);
+        var dados = bk && bk.dados;
+        if (!dados || typeof dados !== "object") { setErro("Arquivo não parece um backup do sistema."); return; }
+        var mudou = [], ignorou = [];
+        Object.keys(dados).forEach(function(k){
+          if ((chaves || []).indexOf(k) < 0) return;
+          var doArquivo = dados[k];
+          if (contarItens(doArquivo) === 0) return;                    // vazio não restaura nada
+          var atual = null;
+          try { atual = JSON.parse(localStorage.getItem(k) || "null"); } catch(e) {}
+          var juntos = doArquivo;
+          if (Array.isArray(doArquivo) && Array.isArray(atual)) {
+            var porId = {};
+            doArquivo.forEach(function(x){ if (x && x.id) porId[x.id] = x; });
+            atual.forEach(function(x){ if (x && x.id) porId[x.id] = x; });   // o atual vence
+            juntos = Object.keys(porId).map(function(id){ return porId[id]; });
+          } else if (doArquivo && typeof doArquivo === "object" && !Array.isArray(doArquivo)) {
+            juntos = Object.assign({}, doArquivo, atual || {});             // o atual vence
+          } else if (contarItens(atual) > 0) { ignorou.push(rotuloDado(k)); return; }
+          var antes = contarItens(atual), depois = contarItens(juntos);
+          if (depois === antes) return;
+          try { localStorage.setItem(k, JSON.stringify(juntos)); } catch(e) {}
+          try { kvSyncPush(k, juntos); } catch(e) {}
+          mudou.push(rotuloDado(k) + ": " + antes + " → " + depois);
+        });
+        setErro("");
+        setResultado(mudou.length
+          ? "Restaurado, sem apagar nada: " + mudou.join(" · ") + ". Recarregue a página para ver."
+          : "Nada a restaurar — o sistema já tem tudo o que está no arquivo." +
+            (ignorou.length ? " (" + ignorou.join(", ") + " já tinham valor e foram mantidos.)" : ""));
+      } catch (e) { setErro("Não deu para ler o arquivo: " + ((e && e.message) || "formato inválido")); }
+    };
+    leitor.readAsText(arquivo);
+  }
+
+  async function verHistorico(chave){
+    setHistorico({ chave: chave, carregando: true, versoes: [] });
+    try {
+      var r = await fetch("/api/ml/_sync?key=" + encodeURIComponent(chave) + "&historico=1&ns=" + encodeURIComponent(ns || ""));
+      var d = await r.json();
+      setHistorico({ chave: chave, carregando: false, versoes: (d && d.versoes) || [] });
+    } catch (e) { setHistorico({ chave: chave, carregando: false, versoes: [], erro: (e && e.message) || "falhou" }); }
+  }
+  async function restaurarVersao(chave, id, itens){
+    if (!window.confirm("Restaurar a versão de " + rotuloDado(chave) + " com " + itens + " item(ns)?\n\n" +
+        "A versão de agora vai para o histórico antes, então dá para voltar atrás.")) return;
+    setRestaurando(true);
+    try {
+      var r = await fetch("/api/ml/_sync", { method:"POST", headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ key: chave, ns: ns || "", restaurarVersao: id }) });
+      var d = await r.json();
+      if (!r.ok) { setErro(d && (d.detalhe || d.error) || "Não deu para restaurar."); }
+      else {
+        try { localStorage.setItem(chave, JSON.stringify(d.valor)); } catch(e) {}
+        setErro(""); setResultado(rotuloDado(chave) + " restaurado com " + contarItens(d.valor) + " item(ns). Recarregue a página para ver.");
+        setHistorico(null);
+      }
+    } catch (e) { setErro((e && e.message) || "Não deu para restaurar."); }
+    setRestaurando(false);
+  }
+
+  var cartao = { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px" };
+
+  return (
+    <div style={{ padding:2, width:"100%" }}>
+      <div style={{ marginBottom:14 }}>
+        <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Backup e recuperação</div>
+        <div style={{ fontSize:12.5, color:"var(--text-3)", marginTop:2 }}>
+          Uma cópia dos seus dados em arquivo, e as versões que o servidor guarda de cada um.
+        </div>
+      </div>
+
+      {resultado && (
+        <div style={{ background:"rgba(10,157,78,.10)", border:"1px solid rgba(10,157,78,.4)", borderRadius:10,
+                      padding:"10px 14px", fontSize:12.5, color:"var(--text-2)", marginBottom:12, lineHeight:1.6, display:"flex", gap:10 }}>
+          <span style={{ flex:1 }}>{resultado}</span>
+          <button onClick={function(){ setResultado(null); }} style={{ background:"none", border:"none", color:"var(--text-3)", cursor:"pointer", fontSize:15 }}>×</button>
+        </div>
+      )}
+      {erro && (
+        <div style={{ background:"rgba(255,82,82,.12)", border:"1px solid #FF5252", color:"#FF5252", borderRadius:10,
+                      padding:"10px 14px", fontSize:12.5, marginBottom:12 }}>{erro}</div>
+      )}
+
+      <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:14 }}>
+        <div style={{ ...cartao, flex:1, minWidth:280 }}>
+          <div style={{ fontSize:13.5, fontWeight:600, color:"var(--text-strong)", marginBottom:4 }}>Baixar backup</div>
+          <div style={{ fontSize:12, color:"var(--text-3)", lineHeight:1.6, marginBottom:12 }}>
+            Um arquivo com {comDado.length} conjunto(s) de dados e {totalItens.toLocaleString("pt-BR")} registros.
+            Guarde fora do computador — é a cópia que não depende de nada nosso.
+          </div>
+          <button onClick={exportar}
+            style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600,
+                     padding:"10px 22px", borderRadius:9, cursor:"pointer", fontSize:13 }}>Baixar backup agora</button>
+        </div>
+        <div style={{ ...cartao, flex:1, minWidth:280 }}>
+          <div style={{ fontSize:13.5, fontWeight:600, color:"var(--text-strong)", marginBottom:4 }}>Restaurar de um arquivo</div>
+          <div style={{ fontSize:12, color:"var(--text-3)", lineHeight:1.6, marginBottom:12 }}>
+            A restauração <b>só acrescenta</b> o que falta: nada do que existe hoje é apagado ou trocado.
+            Um backup antigo restaurado por cima levaria embora tudo o que veio depois dele.
+          </div>
+          <label style={{ display:"block", background:"var(--bg-2)", border:"2px dashed var(--border)", borderRadius:9,
+                          padding:"12px", textAlign:"center", cursor:"pointer", fontSize:12.5, color:"var(--text-2)" }}>
+            Escolher arquivo .json
+            <input type="file" accept="application/json,.json" style={{ display:"none" }}
+              onChange={function(e){ var f = e.target.files && e.target.files[0]; if (f) importar(f); e.target.value = ""; }} />
+          </label>
+        </div>
+      </div>
+
+      <div style={{ ...cartao, padding:0, overflow:"hidden" }}>
+        <div style={{ padding:"12px 16px", borderBottom:"1px solid var(--border-soft)" }}>
+          <div style={{ fontSize:13.5, fontWeight:600, color:"var(--text-strong)" }}>O que está guardado</div>
+          <div style={{ fontSize:11.5, color:"var(--text-3)", marginTop:2, lineHeight:1.55 }}>
+            O servidor guarda as 30 versões mais recentes de cada dado. Se algo sumir, dá para voltar
+            à versão anterior sem depender de arquivo nenhum.
+          </div>
+        </div>
+        <div className="tabela-wrap">
+          <table className="tabela">
+            <thead><tr>{["Dado","Registros neste navegador",""].map(function(h,i){
+              return <th key={h} className="th" style={i===1?{ textAlign:"right" }:null}>{h}</th>; })}</tr></thead>
+            <tbody>
+              {linhas.map(function(l){
+                return <tr key={l.chave}>
+                  <td className="td" style={{ color:"var(--text-strong)" }}>
+                    {l.rotulo}
+                    <div style={{ fontSize:10, color:"var(--text-4)", fontFamily:"ui-monospace,monospace" }}>{l.chave}</div>
+                  </td>
+                  <td className="td-num" style={{ fontWeight:600, color: l.itens > 0 ? "var(--text-strong)" : "var(--text-4)" }}>
+                    {l.itens == null ? "—" : l.itens.toLocaleString("pt-BR")}
+                    {l.itens === 0 && <div style={{ fontSize:9.5, color:"var(--text-4)", fontWeight:400 }}>vazio aqui</div>}
+                  </td>
+                  <td className="td" style={{ textAlign:"right", whiteSpace:"nowrap" }}>
+                    <button onClick={function(){ verHistorico(l.chave); }} className="btn-mini btn-mini-sec">Versões</button>
+                  </td>
+                </tr>;
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {historico && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:600, display:"flex", alignItems:"flex-start",
+                      justifyContent:"center", padding:"32px 16px", overflowY:"auto" }} onClick={function(){ setHistorico(null); }}>
+          <div onClick={function(e){ e.stopPropagation(); }} style={{ background:"var(--bg-2)", border:"1px solid var(--border)",
+                        borderRadius:14, width:620, maxWidth:"100%", padding:20 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
+              <div style={{ fontWeight:600, fontSize:16, color:"var(--text-strong)" }}>Versões de {rotuloDado(historico.chave)}</div>
+              <button onClick={function(){ setHistorico(null); }} style={{ background:"none", border:"none", color:"var(--text-3)", fontSize:22, cursor:"pointer" }}>×</button>
+            </div>
+            <div style={{ fontSize:12, color:"var(--text-3)", marginBottom:14, lineHeight:1.6 }}>
+              Cada linha é como o dado estava antes de uma alteração. Restaurar guarda a versão de agora
+              no histórico primeiro, então dá para voltar atrás.
+            </div>
+            {historico.carregando
+              ? <div style={{ fontSize:13, color:"var(--text-3)" }}>Carregando...</div>
+              : historico.versoes.length === 0
+                ? <div style={{ fontSize:13, color:"var(--text-3)", lineHeight:1.6 }}>
+                    Nenhuma versão guardada ainda para este dado. O histórico começa a partir da próxima alteração.
+                    {historico.erro && <div style={{ marginTop:6, color:"#FF5252", fontSize:12 }}>{historico.erro}</div>}
+                  </div>
+                : <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                    {historico.versoes.map(function(v){
+                      return <div key={v.id} style={{ display:"flex", alignItems:"center", gap:12, background:"var(--surface)",
+                                    border:"1px solid var(--border)", borderRadius:9, padding:"9px 12px" }}>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:13, fontWeight:600, color:"var(--text-strong)" }}>
+                            {v.itens != null ? v.itens.toLocaleString("pt-BR") + " registro(s)" : "conteúdo guardado"}
+                          </div>
+                          <div style={{ fontSize:11, color:"var(--text-4)" }}>{fmtDataHora(v.gravado_em)}</div>
+                        </div>
+                        <button disabled={restaurando} onClick={function(){ restaurarVersao(historico.chave, v.id, v.itens); }}
+                          className="btn-mini btn-mini-ok" style={{ cursor: restaurando ? "wait" : "pointer" }}>Restaurar</button>
+                      </div>;
+                    })}
+                  </div>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CategoriasPagarTab({ categorias, salvar, contasPagar, salvarContasPagar, setTab }) {
   const [nova, setNova] = useState("");
   const [editando, setEditando] = useState(null);   // { antes, depois }
@@ -8825,6 +9102,7 @@ function HomeTab({ enrichedOrders, currentUser, setTab }){
     { titulo:"Configuração", itens:[
       perm.includes("admin") && { key:"admin", label:"Equipe", desc:"Usuários e permissões" },
       { key:"categorias_pagar", label:"Categorias de contas", desc:"Classificação das despesas" },
+      { key:"backup", label:"Backup e recuperação", desc:"Cópia dos dados e versões guardadas" },
       { key:"analise_ia", label:"Análise de anúncios", desc:"Critérios da nota e regras para a IA" },
       { key:"integracoes", label:"Integrações", desc:"Conexões e marketplaces" },
     ]},
@@ -14708,6 +14986,7 @@ export default function App() {
             { titulo:"Configuração", itens:[
               currentUser?.permissoes?.includes("admin") && { key:"admin", label:"Equipe" },
               { key:"categorias_pagar", label:"Categorias de contas" },
+              { key:"backup", label:"Backup e recuperação" },
               { key:"analise_ia", label:"Análise de anúncios" },
               { key:"integracoes", label:"Integrações" },
             ]},
@@ -15294,6 +15573,7 @@ export default function App() {
         {tab === "dashboard" && (
           <DashboardTab enrichedOrders={enrichedOrders} produtos={produtos} user={user} metas={metas} salvarMetas={salvarMetas} sub={dashSub} setSub={setDashSub} />
         )}
+        {tab === "backup" && <BackupTab chaves={SYNC_ALL_KEYS} ns={syncNamespace()} />}
         {tab === "reclamacoes" && <ReclamacoesTab enrichedOrders={enrichedOrdersTodos} token={token}
           cache={reclamacoesCache} salvarCache={salvarReclamacoesCache}
           analise={reclamacoesAnalise} salvarAnalise={salvarReclamacoesAnalise} setTab={setTab} />}

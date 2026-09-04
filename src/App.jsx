@@ -972,7 +972,229 @@ function ProdutoPagina({ produto, produtos, fornecedores, enriched, onSave, onCl
 }
 
 // Catálogo de produtos: importar CSV, novo produto e clicar para editar. Grava via salvar().
-function ProdutosTab({ produtos, salvar, fornecedores, enriched }) {
+
+// ── Etiquetas (tags) ───────────────────────────────────────────────────────
+// Uma etiqueta é sua, não do Mercado Livre: "curva A", "queima", "importado".
+// Ela é guardada por ITEM, e item aqui é tanto o anúncio (MLB…) quanto o
+// produto do cadastro. Guardar só no produto deixaria Vendas de fora, porque a
+// venda conhece o anúncio, não o produto; guardar só no anúncio deixaria de
+// fora o produto que ainda não tem anúncio. Guardando nos dois, as três telas
+// falam da mesma etiqueta.
+function tagsDe(mapa, id) {
+  var t = mapa && id ? mapa[String(id)] : null;
+  return Array.isArray(t) ? t : [];
+}
+// As etiquetas de um produto são as dele mais as dos anúncios ligados a ele.
+function tagsDoProduto(mapa, p) {
+  if (!p) return [];
+  var out = tagsDe(mapa, p.id).slice();
+  var mlbs = p.mlbsVinculados || (p.mlbVinculado ? [p.mlbVinculado] : []);
+  (mlbs || []).forEach(function(mlb){
+    tagsDe(mapa, mlb).forEach(function(t){ if (out.indexOf(t) < 0) out.push(t); });
+  });
+  return out;
+}
+function todasAsTags(mapa) {
+  var vistas = {};
+  Object.keys(mapa || {}).forEach(function(id){
+    tagsDe(mapa, id).forEach(function(t){ if (t) vistas[t] = true; });
+  });
+  return Object.keys(vistas).sort(function(a,b){ return a.localeCompare(b, "pt-BR"); });
+}
+// Normaliza o que o usuário digita: sem espaço sobrando, sem duplicata, sem
+// diferença de caixa entre "Curva A" e "curva a".
+function normalizarTag(t) { return String(t || "").trim().replace(/\s+/g, " "); }
+function mesmaTag(a, b) { return normalizarTag(a).toLowerCase() === normalizarTag(b).toLowerCase(); }
+
+// Aplica etiquetas a vários ids de uma vez. Devolve um mapa novo — o antigo não
+// é tocado, para o React enxergar a mudança.
+function aplicarTagsEm(mapa, ids, tags, modo) {
+  var novo = Object.assign({}, mapa || {});
+  var limpas = (tags || []).map(normalizarTag).filter(Boolean);
+  (ids || []).forEach(function(id){
+    if (!id) return;
+    var atuais = tagsDe(novo, id).slice();
+    if (modo === "remover") {
+      atuais = atuais.filter(function(t){ return !limpas.some(function(x){ return mesmaTag(x, t); }); });
+    } else {
+      limpas.forEach(function(t){ if (!atuais.some(function(x){ return mesmaTag(x, t); })) atuais.push(t); });
+    }
+    if (atuais.length) novo[String(id)] = atuais;
+    else delete novo[String(id)];
+  });
+  return novo;
+}
+
+function ChipsTags({ tags, max }) {
+  var lista = tags || [];
+  if (!lista.length) return null;
+  var mostra = max ? lista.slice(0, max) : lista;
+  return (
+    <span style={{ display:"inline-flex", gap:4, flexWrap:"wrap", verticalAlign:"middle" }}>
+      {mostra.map(function(t,i){
+        return <span key={i} style={{ fontSize:10, fontWeight:600, padding:"1px 7px", borderRadius:20,
+                      background:"var(--surface-3)", color:"var(--text-2)", whiteSpace:"nowrap" }}>{t}</span>;
+      })}
+      {max && lista.length > max && (
+        <span style={{ fontSize:10, color:"var(--text-4)" }}>+{lista.length - max}</span>
+      )}
+    </span>
+  );
+}
+
+// Filtro por etiqueta, usado igual nas três telas. Nenhuma marcada = todas.
+function FiltroTags({ disponiveis, marcadas, setMarcadas, compacto }) {
+  const [aberto, setAberto] = useState(false);
+  const [busca, setBusca] = useState("");
+  var achadas = (disponiveis || []).filter(function(t){
+    var q = busca.trim().toLowerCase();
+    return !q || t.toLowerCase().indexOf(q) >= 0;
+  });
+  function alternar(t){
+    setMarcadas(marcadas.indexOf(t) >= 0 ? marcadas.filter(function(x){ return x !== t; }) : marcadas.concat([t]));
+  }
+  var campo = { width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-2)",
+                padding:"7px 9px", borderRadius:8, fontSize:12.5, boxSizing:"border-box" };
+  return (
+    <div style={{ position:"relative", minWidth: compacto ? 150 : undefined }}>
+      <button onClick={function(){ setAberto(!aberto); }}
+        style={{ ...campo, textAlign:"left", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center", gap:6,
+                 borderColor: marcadas.length ? "var(--ui-accent)" : "var(--border)",
+                 borderWidth: marcadas.length ? 1.5 : 1,
+                 color: marcadas.length ? "var(--text-strong)" : "var(--text-3)" }}>
+        <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+          {marcadas.length === 0 ? "Todas as etiquetas" : marcadas.length === 1 ? marcadas[0] : marcadas.length + " etiquetas"}
+        </span>
+        <span style={{ color:"var(--text-4)", flexShrink:0 }}>▾</span>
+      </button>
+      {aberto && (
+        <>
+          <div onClick={function(){ setAberto(false); }} style={{ position:"fixed", inset:0, zIndex:29 }} />
+          <div style={{ position:"absolute", zIndex:30, left:0, right:0, minWidth:210, top:"calc(100% + 4px)", background:"var(--bg-2)",
+                        border:"1px solid var(--border)", borderRadius:10, boxShadow:"0 12px 32px rgba(0,0,0,.35)", overflow:"hidden" }}>
+            {(disponiveis || []).length === 0 ? (
+              <div style={{ padding:"14px 12px", fontSize:12, color:"var(--text-3)", lineHeight:1.55 }}>
+                Nenhuma etiqueta criada ainda. Marque produtos em <b>Produtos</b> e use <b>Etiquetas</b> para criar a primeira.
+              </div>
+            ) : <>
+              <input autoFocus value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Filtrar etiquetas..."
+                style={{ ...campo, border:"none", borderBottom:"1px solid var(--border-soft)", borderRadius:0, background:"var(--bg)" }} />
+              <div style={{ maxHeight:240, overflowY:"auto" }}>
+                {achadas.map(function(t){
+                  var on = marcadas.indexOf(t) >= 0;
+                  return <label key={t} style={{ display:"flex", alignItems:"center", gap:9, padding:"7px 11px", cursor:"pointer",
+                                  fontSize:12.5, color: on ? "var(--text-strong)" : "var(--text-2)", fontWeight: on ? 600 : 400,
+                                  background: on ? "var(--surface-3)" : "transparent" }}>
+                    <input type="checkbox" checked={on} onChange={function(){ alternar(t); }} style={{ accentColor:"var(--ui-accent)", cursor:"pointer" }} />
+                    <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{t}</span>
+                  </label>;
+                })}
+              </div>
+              {marcadas.length > 0 && (
+                <button onClick={function(){ setMarcadas([]); }}
+                  style={{ width:"100%", background:"var(--surface-3)", border:"none", borderTop:"1px solid var(--border-soft)",
+                           color:"var(--text-2)", fontWeight:600, fontSize:12, padding:"8px", cursor:"pointer" }}>Desmarcar todas</button>
+              )}
+            </>}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Aplicar ou tirar etiquetas de vários itens de uma vez.
+function ModalTags({ quantos, existentes, onAplicar, onClose }) {
+  const [escolhidas, setEscolhidas] = useState([]);
+  const [nova, setNova] = useState("");
+  const [modo, setModo] = useState("adicionar");
+  function incluirNova(){
+    var t = normalizarTag(nova);
+    if (!t) return;
+    if (!escolhidas.some(function(x){ return mesmaTag(x, t); })) setEscolhidas(escolhidas.concat([t]));
+    setNova("");
+  }
+  var campo = { width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)",
+                padding:"9px 11px", borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box" };
+  var disponiveis = (existentes || []).filter(function(t){ return !escolhidas.some(function(x){ return mesmaTag(x, t); }); });
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:600, display:"flex", alignItems:"flex-start",
+                  justifyContent:"center", padding:"32px 16px", overflowY:"auto" }} onClick={onClose}>
+      <div onClick={function(e){ e.stopPropagation(); }} style={{ background:"var(--bg-2)", border:"1px solid var(--border)",
+                    borderRadius:14, width:520, maxWidth:"100%", padding:20 }}>
+        <div style={{ fontWeight:600, fontSize:17, color:"var(--text-strong)", marginBottom:2 }}>Etiquetas</div>
+        <div style={{ fontSize:12, color:"var(--text-3)", marginBottom:14 }}>
+          {quantos} item(ns) selecionado(s). A etiqueta vale para o produto e para os anúncios dele.
+        </div>
+
+        <div style={{ display:"flex", gap:6, marginBottom:14 }}>
+          {[["adicionar","Adicionar"],["remover","Tirar"]].map(function(m){
+            var on = modo === m[0];
+            return <button key={m[0]} onClick={function(){ setModo(m[0]); }}
+              style={{ flex:1, padding:"8px", borderRadius:8, cursor:"pointer", fontSize:12.5, fontWeight:600,
+                       border:"1px solid " + (on ? "var(--ui-accent)" : "var(--border)"),
+                       background: on ? "rgba(118,133,146,.16)" : "var(--surface)",
+                       color: on ? "var(--text-strong)" : "var(--text-3)" }}>{m[1]}</button>;
+          })}
+        </div>
+
+        <label style={{ fontSize:11.5, color:"var(--text-3)", fontWeight:600, display:"block", marginBottom:4 }}>Nova etiqueta</label>
+        <div style={{ display:"flex", gap:6, marginBottom:12 }}>
+          <input value={nova} onChange={function(e){ setNova(e.target.value); }}
+            onKeyDown={function(e){ if (e.key === "Enter") { e.preventDefault(); incluirNova(); } }}
+            placeholder="curva A, queima, importado..." style={{ ...campo, flex:1 }} />
+          <button onClick={incluirNova} disabled={!nova.trim()}
+            style={{ background: nova.trim() ? "var(--ui-accent)" : "var(--surface-3)", border:"none",
+                     color: nova.trim() ? "var(--ui-accent-text)" : "var(--text-4)", fontWeight:600,
+                     padding:"9px 16px", borderRadius:8, cursor: nova.trim() ? "pointer" : "not-allowed", fontSize:12.5 }}>Incluir</button>
+        </div>
+
+        {disponiveis.length > 0 && (
+          <div style={{ marginBottom:12 }}>
+            <div style={{ fontSize:11.5, color:"var(--text-3)", fontWeight:600, marginBottom:5 }}>Ou escolha uma que já existe</div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+              {disponiveis.map(function(t){
+                return <button key={t} onClick={function(){ setEscolhidas(escolhidas.concat([t])); }}
+                  style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)",
+                           fontSize:11.5, padding:"4px 10px", borderRadius:20, cursor:"pointer" }}>{t}</button>;
+              })}
+            </div>
+          </div>
+        )}
+
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:9, padding:"10px 12px", marginBottom:16, minHeight:44 }}>
+          <div style={{ fontSize:11, color:"var(--text-3)", marginBottom:6 }}>
+            {modo === "remover" ? "Vai tirar destes itens:" : "Vai aplicar nestes itens:"}
+          </div>
+          {escolhidas.length === 0
+            ? <div style={{ fontSize:12, color:"var(--text-4)" }}>Nenhuma escolhida ainda.</div>
+            : <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+                {escolhidas.map(function(t,i){
+                  return <span key={i} style={{ display:"inline-flex", alignItems:"center", gap:6, background:"var(--surface-3)",
+                                color:"var(--text-strong)", fontSize:11.5, fontWeight:600, padding:"3px 6px 3px 10px", borderRadius:20 }}>
+                    {t}
+                    <button onClick={function(){ setEscolhidas(escolhidas.filter(function(x,j){ return j !== i; })); }}
+                      style={{ background:"none", border:"none", color:"var(--text-3)", cursor:"pointer", fontSize:13, lineHeight:1, padding:0 }}>×</button>
+                  </span>;
+                })}
+              </div>}
+        </div>
+
+        <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
+          <button onClick={onClose} style={{ background:"none", border:"none", color:"var(--text-3)", fontWeight:600, padding:"10px 16px", cursor:"pointer", fontSize:13 }}>Cancelar</button>
+          <button onClick={function(){ onAplicar(escolhidas, modo); }} disabled={!escolhidas.length}
+            style={{ background: escolhidas.length ? "var(--ui-accent)" : "var(--surface-3)", border:"none",
+                     color: escolhidas.length ? "var(--ui-accent-text)" : "var(--text-4)", fontWeight:600,
+                     padding:"10px 24px", borderRadius:9, cursor: escolhidas.length ? "pointer" : "not-allowed", fontSize:13 }}>
+            {modo === "remover" ? "Tirar de " + quantos : "Aplicar em " + quantos}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProdutosTab({ produtos, salvar, fornecedores, enriched, tags, salvarTags }) {
   const [busca, setBusca] = useState("");
   const [editando, setEditando] = useState(null);
   // Fica guardado: quem fecha os filtros para ganhar largura não quer reabri-los
@@ -1001,7 +1223,8 @@ function ProdutosTab({ produtos, salvar, fornecedores, enriched }) {
   const [fTipo, setFTipo] = useState("todos");
   const [fAtivo, setFAtivo] = useState("todos");
   const [fNcm, setFNcm] = useState("");
-  const [fTags, setFTags] = useState("");
+  const [fTags, setFTags] = useState([]);      // etiquetas marcadas; vazio = todas
+  const [modalTags, setModalTags] = useState(false);
   const [fImagens, setFImagens] = useState("todos");
   const [fAnuncios, setFAnuncios] = useState("todos");
   const [fCodForn, setFCodForn] = useState("");
@@ -1022,7 +1245,12 @@ function ProdutosTab({ produtos, salvar, fornecedores, enriched }) {
     if (fAtivo === "ativos" && String(p.status || "Ativo") !== "Ativo") return false;
     if (fAtivo === "inativos" && String(p.status || "Ativo") === "Ativo") return false;
     if (fNcm && String(p.ncm||"").indexOf(fNcm) < 0) return false;
-    if (fTags && String(p.tags||"").toLowerCase().indexOf(fTags.toLowerCase()) < 0) return false;
+    // Etiqueta: o produto entra se tiver TODAS as marcadas — marcar duas é
+    // pedir a interseção, que é o que se quer ao cruzar "curva A" com "queima".
+    if (fTags.length) {
+      var doProduto = tagsDoProduto(tags, p);
+      if (!fTags.every(function(t){ return doProduto.indexOf(t) >= 0; })) return false;
+    }
     if (fImagens === "com" && !((p.imagens||[]).length)) return false;
     if (fImagens === "sem" && (p.imagens||[]).length) return false;
     if (fAnuncios === "com" && !qtdAnuncios(p)) return false;
@@ -1033,11 +1261,11 @@ function ProdutosTab({ produtos, salvar, fornecedores, enriched }) {
   const total = (produtos || []).length;
   function limparFiltros(){
     setFSituacao("todos"); setFEstoque("todos"); setFMarca(""); setFFornecedor("");
-    setFCategoria(""); setFTipo("todos"); setFAtivo("todos"); setFNcm(""); setFTags("");
+    setFCategoria(""); setFTipo("todos"); setFAtivo("todos"); setFNcm(""); setFTags([]);
     setFImagens("todos"); setFAnuncios("todos"); setFCodForn("");
   }
   var temFiltro = fSituacao!=="todos" || fEstoque!=="todos" || fMarca || fFornecedor ||
-    fCategoria || fTipo!=="todos" || fAtivo!=="todos" || fNcm || fTags ||
+    fCategoria || fTipo!=="todos" || fAtivo!=="todos" || fNcm || fTags.length ||
     fImagens!=="todos" || fAnuncios!=="todos" || fCodForn;
   const idsSel = Object.keys(sel).filter(function(k){ return sel[k]; });
   function toggleSel(id){ setSel(function(s){ var n=Object.assign({},s); if(n[id]) delete n[id]; else n[id]=true; return n; }); }
@@ -1141,7 +1369,7 @@ function ProdutosTab({ produtos, salvar, fornecedores, enriched }) {
             <Campo label="Anúncios"><select value={fAnuncios} onChange={function(e){ setFAnuncios(e.target.value); }} style={selFiltro}><option value="todos">Todos</option><option value="com">Com anúncio vinculado</option><option value="sem">Sem anúncio</option></select></Campo>
             <Campo label="Imagens"><select value={fImagens} onChange={function(e){ setFImagens(e.target.value); }} style={selFiltro}><option value="todos">Todas</option><option value="com">Com imagem</option><option value="sem">Sem imagem</option></select></Campo>
             <Campo label="NCM"><input value={fNcm} onChange={function(e){ setFNcm(e.target.value); }} placeholder="8708" style={selFiltro} /></Campo>
-            <Campo label="Etiquetas"><input value={fTags} onChange={function(e){ setFTags(e.target.value); }} placeholder="Etiqueta" style={selFiltro} /></Campo>
+            <Campo label="Etiquetas"><FiltroTags disponiveis={todasAsTags(tags)} marcadas={fTags} setMarcadas={setFTags} /></Campo>
             <Campo label="Cód. fornecedor"><input value={fCodForn} onChange={function(e){ setFCodForn(e.target.value); }} placeholder="Código" style={selFiltro} /></Campo>
             <div style={{ fontSize:10, color:"var(--text-4)", lineHeight:1.4 }}>Todos estes filtros leem o cadastro do produto desta tela. Um filtro vazio de resultados costuma significar que o campo ainda não foi preenchido — abra o produto e complete o cadastro.</div>
           </div>
@@ -1151,6 +1379,7 @@ function ProdutosTab({ produtos, salvar, fornecedores, enriched }) {
           {idsSel.length > 0 && (
             <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8, background:"rgba(118,133,146,.10)", border:"1px solid var(--border)", borderRadius:9, padding:"7px 12px", fontSize:12 }}>
               <span style={{ color:"var(--text-2)" }}>{idsSel.length} selecionado(s)</span>
+              <button onClick={function(){ setModalTags(true); }} className="btn-exp">🏷 Etiquetas</button>
               <button onClick={exportarPlanilha} className="btn-exp">Exportar</button>
               <button onClick={excluirSelecionados} className="btn-exp" style={{ color:"#FF5252" }}>Excluir</button>
               <button onClick={function(){ setSel({}); }} className="btn-exp" style={{ borderColor:"transparent", background:"transparent" }}>Limpar</button>
@@ -1178,7 +1407,13 @@ function ProdutosTab({ produtos, salvar, fornecedores, enriched }) {
                         {img
                           ? <img src={img} alt="" style={{ width:28, height:28, borderRadius:5, objectFit:"cover", flexShrink:0 }} />
                           : <span style={{ width:28, height:28, borderRadius:5, background:"var(--surface-3)", flexShrink:0 }} />}
-                        <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{nomeProd(p)}</span>
+                        <span style={{ minWidth:0 }}>
+                          <span style={{ display:"block", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{nomeProd(p)}</span>
+                          {(function(){
+                            var tp = tagsDoProduto(tags, p);
+                            return tp.length ? <span style={{ display:"block", marginTop:3 }}><ChipsTags tags={tp} max={4} /></span> : null;
+                          })()}
+                        </span>
                       </span>
                     </td>
                     <td className="td-num">{cod} <button className="copy-btn" onClick={function(e){ e.stopPropagation(); copiar(cod); }}>⎘</button></td>
@@ -1230,6 +1465,23 @@ function ProdutosTab({ produtos, salvar, fornecedores, enriched }) {
           </div>
         )}
       </div>
+      {modalTags && (
+        <ModalTags quantos={idsSel.length} existentes={todasAsTags(tags)}
+          onClose={function(){ setModalTags(false); }}
+          onAplicar={function(escolhidas, modo){
+            // A etiqueta vai no produto E nos anúncios ligados a ele: Vendas e
+            // Anúncios conhecem o anúncio, não o produto.
+            var alvos = [];
+            (produtos || []).forEach(function(p){
+              if (!sel[p.id]) return;
+              alvos.push(p.id);
+              var mlbs = p.mlbsVinculados || (p.mlbVinculado ? [p.mlbVinculado] : []);
+              (mlbs || []).forEach(function(m){ if (m) alvos.push(m); });
+            });
+            salvarTags(aplicarTagsEm(tags, alvos, escolhidas, modo));
+            setModalTags(false);
+          }} />
+      )}
       {editando && <ProdutoPagina
         produto={editando.id ? editando : null}
         produtos={produtos}
@@ -1969,6 +2221,12 @@ function VendasTab({ enrichedOrders }) {
              margem: fat ? lucro / fat * 100 : 0, rotuloImp: rotuloImposto(o) };
   }
   var lista = (enrichedOrders || []).filter(function(o){
+    // Etiqueta do anúncio vendido: a venda conhece o anúncio, e é por ele que
+    // ela herda a etiqueta. Marcar duas pede a interseção.
+    if (fTags.length) {
+      var doAnuncio = tagsDe(tags, o.listing_id);
+      if (!fTags.every(function(t){ return doAnuncio.indexOf(t) >= 0; })) return false;
+    }
     if (situacao === "ativas") return o.status !== "cancelled";
     if (situacao === "canceladas") return o.status === "cancelled";
     return true;
@@ -13421,6 +13679,8 @@ export default function App() {
   const [showClienteDetalhe, setShowClienteDetalhe] = useState(null);
   const [pedidoDetalhe, setPedidoDetalhe] = useState(null); // venda selecionada p/ ver detalhes (drawer)
   const [statusFilter, setStatusFilter] = useState("all");
+  const [fTagsAnuncio, setFTagsAnuncio] = useState([]);   // etiquetas marcadas na tela de Anúncios
+  const [fTagsVenda, setFTagsVenda] = useState([]);      // e na de Vendas
   const [filterListingExtra, setFilterListingExtra] = useState("all");
   // Anúncio cujo campo de custo está sendo editado agora: fica isento do filtro "Sem custo"
   // enquanto digita, senão a linha some no 1º dígito (custo passa a >0) e não dá pra terminar.
@@ -13629,6 +13889,17 @@ export default function App() {
   // As reclamações lidas do ML ficam em cache local para a tela abrir sem
   // esperar a API; a análise (causa, custos, observações) é dado nosso e
   // sincroniza entre os usuários como o resto do cadastro.
+  // Etiquetas por item (anúncio ou produto). Sincroniza como o resto do
+  // cadastro: quem etiqueta num computador vê no outro.
+  const [tagsItens, setTagsItensState] = useState(function(){
+    try { var v = JSON.parse(localStorage.getItem("tags_itens") || "{}"); return v && typeof v === "object" ? v : {}; } catch { return {}; }
+  });
+  function salvarTagsItens(mapa) {
+    setTagsItensState(mapa);
+    try { localStorage.setItem("tags_itens", JSON.stringify(mapa)); } catch(e) {}
+    try { kvSyncPush("tags_itens", mapa); } catch(e) {}
+  }
+
   const [reclamacoesCache, setReclamacoesCacheState] = useState(function(){
     try { var v = JSON.parse(localStorage.getItem("reclamacoes_cache") || "null"); return v && typeof v === "object" ? v : null; } catch { return null; }
   });
@@ -13963,7 +14234,7 @@ export default function App() {
     "custos_fixos_config","impostos_config","irpj_csll_config","icms_por_estado","icms_regime_config","lancamentos",
     "mov_estoque","metaMensal","min_stock_anuncios","real_fees_config","pedidos_compra",
     "precificacao_extras","precos_pendentes_ml","custos_extras_config","depositos_estoque","estoque_depositos",
-    "envios_full","vendas_estoque_baixadas","sku_overrides","analise_ia_config","prioridade_pagamento_config","financeiro_config","recebiveis_baixados","extrato_bancario","conciliacoes_manuais","reclamacoes_analise",
+    "envios_full","vendas_estoque_baixadas","sku_overrides","analise_ia_config","prioridade_pagamento_config","financeiro_config","recebiveis_baixados","extrato_bancario","conciliacoes_manuais","reclamacoes_analise","tags_itens",
   ]).current;
   // Para os dados guardados como dicionário (chave→valor, ex: custo por anúncio), mesclar em
   // vez de substituir por inteiro — evita que um "pull" com dados parciais do servidor apague
@@ -14006,6 +14277,7 @@ export default function App() {
     extrato_bancario: setExtratoBancarioState,
     conciliacoes_manuais: mesclarSetter(setConciliacoesManuaisState),
     reclamacoes_analise: mesclarSetter(setReclamacoesAnaliseState),
+    tags_itens: mesclarSetter(setTagsItensState),
   }).current;
   // Tipo esperado de cada chave — usado para blindar contra um valor no formato errado
   // (ex: um objeto onde deveria vir uma lista) travando a tela com "x.filter is not a function".
@@ -14021,7 +14293,7 @@ export default function App() {
     custos_extras_config: "object", analise_ia_config: "object",
     prioridade_pagamento_config: "object",
     financeiro_config: "object", recebiveis_baixados: "object",
-    extrato_bancario: "array", conciliacoes_manuais: "object", reclamacoes_analise: "object",
+    extrato_bancario: "array", conciliacoes_manuais: "object", reclamacoes_analise: "object", tags_itens: "object",
   }).current;
   const lastSyncRef = useRef({}); // key -> string JSON já sincronizado (evita reenviar/reaplicar sem necessidade)
 
@@ -14599,6 +14871,13 @@ export default function App() {
     }
     if (statusFilter === "active") results = results.filter(l => l.status === "active");
     if (statusFilter === "paused") results = results.filter(l => l.status === "paused");
+    // Etiquetas: o anúncio entra se tiver TODAS as marcadas.
+    if (fTagsAnuncio.length) {
+      results = results.filter(function(l){
+        var t = tagsDe(tagsItens, l.id);
+        return fTagsAnuncio.every(function(x){ return t.indexOf(x) >= 0; });
+      });
+    }
     if (filterListingExtra === "sem_custo")  results = results.filter(l => l.id === editandoCustoId || !(costs[l.id] > 0));
     if (filterListingExtra === "com_promo")  results = results.filter(l => l.hasPromo);
     // Não verificado fica de fora: melhor uma lista menor e correta do que uma
@@ -14699,8 +14978,16 @@ export default function App() {
     } else if (orderStatusFilter === "mediation") {
       results = results.filter(o => o.tags?.some(t => t.includes("mediation")) || o.status === "in_mediation");
     }
+    // Etiqueta do anúncio vendido: a venda conhece o anúncio, e é por ele que
+    // ela herda a etiqueta. Marcar duas pede a interseção.
+    if (fTagsVenda.length) {
+      results = results.filter(function(o){
+        var t = tagsDe(tagsItens, o.listing_id);
+        return fTagsVenda.every(function(x){ return t.indexOf(x) >= 0; });
+      });
+    }
     return results;
-  }, [rawOrders, periodOrders, searchOrders, orderStatusFilter, dateFrom, dateTo]);
+  }, [rawOrders, periodOrders, searchOrders, orderStatusFilter, dateFrom, dateTo, fTagsVenda, tagsItens]);
 
   // Aplicar filtro de envio no enrichedOrders
 
@@ -15118,6 +15405,10 @@ export default function App() {
                         onClick={function(){setStatusFilter(f.key);}} />;
                     })}
                   </FiltroGrupo>
+                  <div>
+                    <div style={{ fontSize:9, color:"#b0b8c4", fontWeight:500, letterSpacing:0.7, marginBottom:4 }}>Etiquetas</div>
+                    <FiltroTags disponiveis={todasAsTags(tagsItens)} marcadas={fTagsAnuncio} setMarcadas={function(v){ setFTagsAnuncio(v); setPaginaAnuncios(1); }} compacto />
+                  </div>
                   <FiltroGrupo titulo="Situação">
                     {[{k:"all",l:"Todos"},{k:"sem_custo",l:"⚠️ Sem custo",cor:"#FF5252",bg:"rgba(255,82,82,.12)"},{k:"sem_atacado",l:"🏷 Sem preço atacado",cor:"#768592",bg:"rgba(118,133,146,.14)"},{k:"com_promo",l:"🔥 Com promoção",cor:"#768592",bg:"rgba(118,133,146,.14)"},{k:"sem_promo",l:"○ Sem promoção",cor:"var(--text-2)",bg:"var(--surface-3)"},{k:"frete_alto",l:"🚚 Frete acima do config.",cor:"#FFC107",bg:"rgba(255,193,7,.10)"}].map(function(f){
                       return <FiltroBotao key={f.k} label={f.l} active={filterListingExtra===f.k}
@@ -15385,6 +15676,10 @@ export default function App() {
                       return <FiltroBotao key={f.key} label={f.l} active={orderStatusFilter===f.key} cor="var(--text-strong)" bg="var(--surface-3)" onClick={function(){setOrderStatusFilter(f.key);}} />;
                     })}
                   </FiltroGrupo>
+                  <div>
+                    <div style={{ fontSize:9, color:"#b0b8c4", fontWeight:500, letterSpacing:0.7, marginBottom:4 }}>Etiquetas</div>
+                    <FiltroTags disponiveis={todasAsTags(tagsItens)} marcadas={fTagsVenda} setMarcadas={function(v){ setFTagsVenda(v); setPaginaPedidos(1); }} compacto />
+                  </div>
                   <FiltroGrupo titulo="Tipo de Envio">
                     {[{key:"todos",l:"Todos"},{key:"FULL",l:"FULL",c:"#768692",bg:"rgba(118,134,146,.14)"},{key:"Flex",l:"Flex",c:"#768592",bg:"rgba(118,133,146,.14)"},{key:"ME2",l:"ME2",c:"#0e7490",bg:"rgba(0,240,255,.10)"},{key:"ME1",l:"ME1",c:"#768692",bg:"rgba(118,134,146,.2)"}].map(function(e){
                       return <FiltroBotao key={e.key} label={e.l} active={filterEnvio===e.key} cor={e.c||"var(--text-strong)"} bg={e.bg||"var(--surface-3)"} onClick={function(){setFilterEnvio(e.key);setPaginaPedidos(1);}} />;
@@ -15580,7 +15875,7 @@ export default function App() {
         {tab === "categorias_pagar" && <CategoriasPagarTab categorias={categoriasPagar} salvar={salvarCategoriasPagar}
           contasPagar={contasPagar} salvarContasPagar={salvarContasPagar} setTab={setTab} />}
         {tab === "analise_ia" && <AnaliseIATab config={configQualidade} salvar={setConfigQualidade} enriched={enriched} />}
-        {tab === "produtos" && <ProdutosTab produtos={produtos} salvar={salvarProdutos} fornecedores={fornecedores} enriched={enriched} />}
+        {tab === "produtos" && <ProdutosTab produtos={produtos} salvar={salvarProdutos} fornecedores={fornecedores} enriched={enriched} tags={tagsItens} salvarTags={salvarTagsItens} />}
         {tab === "estoque" && <EstoqueTab produtos={produtos} />}
         {tab === "vincular" && <VincularTab enriched={enriched} produtos={produtos} salvar={salvarProdutos} />}
         {tab === "relatorios" && <RelatoriosTab enrichedOrders={enrichedOrders} />}

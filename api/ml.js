@@ -58,6 +58,7 @@ const SYNC_KEYS_PERMITIDAS = [
   "chat_interno_tarefas",
   "sku_overrides",
   "reclamacoes_analise",
+  "tags_itens",
   // Estas sete o navegador já tentava sincronizar, mas não estavam aqui: o
   // _sync respondia 400 e o erro era engolido, então cada usuário ficava com a
   // sua própria versão sem ninguém perceber. Entre elas estão coisas que

@@ -1194,6 +1194,13 @@ function ModalTags({ quantos, existentes, onAplicar, onClose }) {
   );
 }
 
+// Rótulo + campo do painel de filtros. Precisa morar aqui fora: declarado dentro
+// do componente, cada render criaria um tipo novo e o React remontaria o campo,
+// que perderia o foco no meio da digitação.
+function CampoFiltro(props){
+  return <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>{props.label}</div>{props.children}</div>;
+}
+
 function ProdutosTab({ produtos, salvar, fornecedores, enriched, tags, salvarTags }) {
   const [busca, setBusca] = useState("");
   const [editando, setEditando] = useState(null);
@@ -1333,7 +1340,6 @@ function ProdutosTab({ produtos, salvar, fornecedores, enriched, tags, salvarTag
   var menuItem = { background:"none", border:"none", textAlign:"left", padding:"7px 10px", borderRadius:6, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" };
   var acaoItem = { background:"none", border:"none", textAlign:"left", padding:"9px 10px", borderRadius:7, cursor:"pointer", fontSize:12.5, color:"var(--text-2)", width:"100%" };
   var acaoSub = { background:"none", border:"none", textAlign:"left", padding:"5px 2px", cursor:"pointer", fontSize:12, color:"var(--text-2)", width:"100%", display:"block" };
-  function Campo(props){ return <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>{props.label}</div>{props.children}</div>; }
   return (
     <div style={{ padding:2 }}>
       <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display:"none" }} onChange={function(e){ if (e.target.files && e.target.files[0]) importarCSV(e.target.files[0]); e.target.value=""; }} />
@@ -1358,19 +1364,19 @@ function ProdutosTab({ produtos, salvar, fornecedores, enriched, tags, salvarTag
               <span style={{ fontWeight:600, fontSize:14, color:"var(--text-strong)" }}>Filtrar</span>
               {temFiltro && <button onClick={limparFiltros} style={{ background:"none", border:"none", color:"#768592", cursor:"pointer", fontSize:12 }}>Limpar</button>}
             </div>
-            <Campo label="Situação"><select value={fSituacao} onChange={function(e){ setFSituacao(e.target.value); }} style={selFiltro}><option value="todos">Todos</option><option value="com_custo">Com custo</option><option value="sem_custo">Sem custo</option></select></Campo>
-            <Campo label="Estoque"><select value={fEstoque} onChange={function(e){ setFEstoque(e.target.value); }} style={selFiltro}><option value="todos">Todos</option><option value="com">Com estoque</option><option value="sem">Sem estoque</option><option value="abaixo">Abaixo do mínimo</option></select></Campo>
-            <Campo label="Marca"><input value={fMarca} onChange={function(e){ setFMarca(e.target.value); }} placeholder="Marca" style={selFiltro} /></Campo>
-            <Campo label="Fornecedor"><input value={fFornecedor} onChange={function(e){ setFFornecedor(e.target.value); }} placeholder="Fornecedor" style={selFiltro} /></Campo>
-            <Campo label="Categoria"><input value={fCategoria} onChange={function(e){ setFCategoria(e.target.value); }} placeholder="Categoria" list="filtro-categorias" style={selFiltro} /></Campo>
+            <CampoFiltro label="Situação"><select value={fSituacao} onChange={function(e){ setFSituacao(e.target.value); }} style={selFiltro}><option value="todos">Todos</option><option value="com_custo">Com custo</option><option value="sem_custo">Sem custo</option></select></CampoFiltro>
+            <CampoFiltro label="Estoque"><select value={fEstoque} onChange={function(e){ setFEstoque(e.target.value); }} style={selFiltro}><option value="todos">Todos</option><option value="com">Com estoque</option><option value="sem">Sem estoque</option><option value="abaixo">Abaixo do mínimo</option></select></CampoFiltro>
+            <CampoFiltro label="Marca"><input value={fMarca} onChange={function(e){ setFMarca(e.target.value); }} placeholder="Marca" style={selFiltro} /></CampoFiltro>
+            <CampoFiltro label="Fornecedor"><input value={fFornecedor} onChange={function(e){ setFFornecedor(e.target.value); }} placeholder="Fornecedor" style={selFiltro} /></CampoFiltro>
+            <CampoFiltro label="Categoria"><input value={fCategoria} onChange={function(e){ setFCategoria(e.target.value); }} placeholder="Categoria" list="filtro-categorias" style={selFiltro} /></CampoFiltro>
             <datalist id="filtro-categorias">{Array.from(new Set((produtos||[]).map(function(p){ return p.categoria; }).filter(Boolean))).map(function(c){ return <option key={c} value={c} />; })}</datalist>
-            <Campo label="Tipo"><select value={fTipo} onChange={function(e){ setFTipo(e.target.value); }} style={selFiltro}><option value="todos">Todos</option><option value="simples">Simples</option><option value="kit">Kit / composição</option><option value="variacao">Com variações</option><option value="materia">Matéria-prima</option><option value="servico">Serviço</option></select></Campo>
-            <Campo label="Ativo/Inativo"><select value={fAtivo} onChange={function(e){ setFAtivo(e.target.value); }} style={selFiltro}><option value="todos">Todos</option><option value="ativos">Ativos</option><option value="inativos">Inativos</option></select></Campo>
-            <Campo label="Anúncios"><select value={fAnuncios} onChange={function(e){ setFAnuncios(e.target.value); }} style={selFiltro}><option value="todos">Todos</option><option value="com">Com anúncio vinculado</option><option value="sem">Sem anúncio</option></select></Campo>
-            <Campo label="Imagens"><select value={fImagens} onChange={function(e){ setFImagens(e.target.value); }} style={selFiltro}><option value="todos">Todas</option><option value="com">Com imagem</option><option value="sem">Sem imagem</option></select></Campo>
-            <Campo label="NCM"><input value={fNcm} onChange={function(e){ setFNcm(e.target.value); }} placeholder="8708" style={selFiltro} /></Campo>
-            <Campo label="Etiquetas"><FiltroTags disponiveis={todasAsTags(tags)} marcadas={fTags} setMarcadas={setFTags} /></Campo>
-            <Campo label="Cód. fornecedor"><input value={fCodForn} onChange={function(e){ setFCodForn(e.target.value); }} placeholder="Código" style={selFiltro} /></Campo>
+            <CampoFiltro label="Tipo"><select value={fTipo} onChange={function(e){ setFTipo(e.target.value); }} style={selFiltro}><option value="todos">Todos</option><option value="simples">Simples</option><option value="kit">Kit / composição</option><option value="variacao">Com variações</option><option value="materia">Matéria-prima</option><option value="servico">Serviço</option></select></CampoFiltro>
+            <CampoFiltro label="Ativo/Inativo"><select value={fAtivo} onChange={function(e){ setFAtivo(e.target.value); }} style={selFiltro}><option value="todos">Todos</option><option value="ativos">Ativos</option><option value="inativos">Inativos</option></select></CampoFiltro>
+            <CampoFiltro label="Anúncios"><select value={fAnuncios} onChange={function(e){ setFAnuncios(e.target.value); }} style={selFiltro}><option value="todos">Todos</option><option value="com">Com anúncio vinculado</option><option value="sem">Sem anúncio</option></select></CampoFiltro>
+            <CampoFiltro label="Imagens"><select value={fImagens} onChange={function(e){ setFImagens(e.target.value); }} style={selFiltro}><option value="todos">Todas</option><option value="com">Com imagem</option><option value="sem">Sem imagem</option></select></CampoFiltro>
+            <CampoFiltro label="NCM"><input value={fNcm} onChange={function(e){ setFNcm(e.target.value); }} placeholder="8708" style={selFiltro} /></CampoFiltro>
+            <CampoFiltro label="Etiquetas"><FiltroTags disponiveis={todasAsTags(tags)} marcadas={fTags} setMarcadas={setFTags} /></CampoFiltro>
+            <CampoFiltro label="Cód. fornecedor"><input value={fCodForn} onChange={function(e){ setFCodForn(e.target.value); }} placeholder="Código" style={selFiltro} /></CampoFiltro>
             <div style={{ fontSize:10, color:"var(--text-4)", lineHeight:1.4 }}>Todos estes filtros leem o cadastro do produto desta tela. Um filtro vazio de resultados costuma significar que o campo ainda não foi preenchido — abra o produto e complete o cadastro.</div>
           </div>
         )}
@@ -2442,6 +2448,21 @@ function ExpedicaoTab({ rawOrders }) {
 //  operação de fato vendeu — e é sobre isso que se decide preço e compra.
 // ════════════════════════════════════════════════════════════
 
+function Variacao({ pct }) {
+  // Sem base de comparação não se inventa 0%: dizer "estável" seria mentira.
+  if (pct === null || pct === undefined) {
+    return <span style={{ fontSize:11, color:"var(--text-3)" }}>sem base anterior</span>;
+  }
+  var sobe = pct >= 0;
+  var cor = Math.abs(pct) < 1 ? "var(--text-3)" : sobe ? "#0a9d4e" : "#FF5252";
+  var fundo = Math.abs(pct) < 1 ? "var(--bg-2)" : sobe ? "rgba(10,157,78,.12)" : "rgba(255,82,82,.12)";
+  return (
+    <span style={{ fontSize:12, fontWeight:600, color:cor, background:fundo, padding:"3px 9px", borderRadius:20, whiteSpace:"nowrap" }}>
+      {sobe ? "▲" : "▼"} {Math.abs(pct).toFixed(1)}%
+    </span>
+  );
+}
+
 function TendenciasTab({ setTab, setBuscaPrecificacao, enriched }) {
   const [dias, setDias] = useState(30);
   const [dados, setDados] = useState(null);
@@ -2559,20 +2580,6 @@ function TendenciasTab({ setTab, setBuscaPrecificacao, enriched }) {
     return function(){ cancelado = true; };
   }, [dias]);
 
-  function Variacao({ pct }) {
-    // Sem base de comparação não se inventa 0%: dizer "estável" seria mentira.
-    if (pct === null || pct === undefined) {
-      return <span style={{ fontSize:11, color:"var(--text-3)" }}>sem base anterior</span>;
-    }
-    var sobe = pct >= 0;
-    var cor = Math.abs(pct) < 1 ? "var(--text-3)" : sobe ? "#0a9d4e" : "#FF5252";
-    var fundo = Math.abs(pct) < 1 ? "var(--bg-2)" : sobe ? "rgba(10,157,78,.12)" : "rgba(255,82,82,.12)";
-    return (
-      <span style={{ fontSize:12, fontWeight:600, color:cor, background:fundo, padding:"3px 9px", borderRadius:20, whiteSpace:"nowrap" }}>
-        {sobe ? "▲" : "▼"} {Math.abs(pct).toFixed(1)}%
-      </span>
-    );
-  }
 
   var periodos = [[7,"7 dias"],[30,"30 dias"],[90,"90 dias"]];
 
@@ -11290,6 +11297,19 @@ function ImpostosTab(props) {
   );
 }
 
+// Uma linha da lista de custos fixos. Mora aqui fora para o React não remontar
+// a lista inteira a cada render do painel.
+function LinhaCustoFixo({ item, valor, onRemove }) {
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 0", borderBottom:"1px solid var(--border-soft)" }}>
+      <div style={{ flex:1, fontSize:13, color:"var(--text-strong)", fontWeight:500 }}>{item.nome}</div>
+      <div style={{ fontSize:13, fontWeight:500, color:"var(--text-2)" }}>{item.tipo==="%" ? item.valor+"%" : fmt(parseFloat(item.valor)||0)}</div>
+      <div style={{ fontSize:12, color:"var(--text-3)" }}>= {fmt(valor)}</div>
+      <button onClick={function(){ onRemove(item.id); }} style={{ background:"rgba(255,82,82,.12)", border:"none", color:"#FF5252", width:24, height:24, borderRadius:6, cursor:"pointer", fontSize:11, flexShrink:0 }}>✕</button>
+    </div>
+  );
+}
+
 function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, faturamentoMes, irpjCsllConfig, setIrpjCsllConfig, icmsRegime, setIcmsRegime, icmsConfig, setIcmsConfig }) {
   const [novoCusto, setNovoCusto] = useState({ nome:"", valor:"", tipo:"R$" });
   // Persiste no localStorage — o loop de sincronização (pushMudancasLocais) envia daqui para o KV
@@ -11342,17 +11362,6 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
   var irpjTotal = parseFloat(irpjPct||0) + parseFloat(irpjAdicionalPct||0);
   var csllTotalCalc = parseFloat(csllPct||0);
   var totalImpFixo = faturamentoMes * ((irpjTotal+csllTotalCalc)/100);
-
-  function ItemRow({ item, onRemove }) {
-    return (
-      <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 0", borderBottom:"1px solid var(--border-soft)" }}>
-        <div style={{ flex:1, fontSize:13, color:"var(--text-strong)", fontWeight:500 }}>{item.nome}</div>
-        <div style={{ fontSize:13, fontWeight:500, color:"var(--text-2)" }}>{item.tipo==="%" ? item.valor+"%" : fmt(parseFloat(item.valor)||0)}</div>
-        <div style={{ fontSize:12, color:"var(--text-3)" }}>= {fmt(calcValor(item, faturamentoMes))}</div>
-        <button onClick={function(){ onRemove(item.id); }} style={{ background:"rgba(255,82,82,.12)", border:"none", color:"#FF5252", width:24, height:24, borderRadius:6, cursor:"pointer", fontSize:11, flexShrink:0 }}>✕</button>
-      </div>
-    );
-  }
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
@@ -11556,7 +11565,7 @@ function ImpostosCompacto({ impostos, setImpostos, custosFixos, setCustosFixos, 
                   <div>= R$ mensal</div>
                   <div style={{ width:24 }}></div>
                 </div>
-                {custosFixos.map(function(c){ return <ItemRow key={c.id} item={c} onRemove={removeCusto} />; })}
+                {custosFixos.map(function(c){ return <LinhaCustoFixo key={c.id} item={c} valor={calcValor(c, faturamentoMes)} onRemove={removeCusto} />; })}
               </div>
             )
           }

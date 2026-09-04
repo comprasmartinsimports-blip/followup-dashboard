@@ -72,6 +72,15 @@ const SYNC_KEYS_PERMITIDAS = [
   "custos_extras_config",
 ];
 
+// "Vazio" é o que não carrega informação nenhuma: nulo, lista sem itens ou
+// objeto sem chaves. Um número ou texto nunca é vazio para este fim.
+function vazio(v) {
+  if (v === null || v === undefined) return true;
+  if (Array.isArray(v)) return v.length === 0;
+  if (typeof v === "object") return Object.keys(v).length === 0;
+  return false;
+}
+
 function falhaPersistencia(e) {
   const detalhe = e instanceof ErroPersistencia ? " (" + e.message + ")" : "";
   return "Armazenamento de usuários indisponível" + detalhe + ". Nada foi alterado — tente de novo em instantes.";
@@ -911,6 +920,25 @@ export default async function handler(req, res) {
       const key = body.key;
       if (!key || !SYNC_KEYS_PERMITIDAS.includes(key)) {
         return res.status(400).json({ error: "Chave de sincronização inválida" });
+      }
+      // Rede de segurança contra apagamento acidental. Um navegador sem o dado
+      // salvo localmente já sobrescreveu o servidor com {} e apagou os custos de
+      // todos os anúncios de uma vez. Escrever vazio por cima de algo cheio quase
+      // nunca é intenção — e quando é, o usuário apaga item a item, não de uma
+      // vez. Quem quiser mesmo zerar manda permitirVazio: true.
+      if (vazio(body.value) && !body.permitirVazio) {
+        try {
+          const atual = dbEnabled()
+            ? (await syncGet(nsScopePara(key, body.ns), key)) ?? (await kvGet(kvKeyPara(key, body.ns)))
+            : await kvGet(kvKeyPara(key, body.ns));
+          if (!vazio(atual)) {
+            return res.status(409).json({
+              error: "Gravação vazia recusada",
+              detalhe: "O servidor tem dados em “" + key + "” e a gravação chegou vazia. Nada foi alterado.",
+              chave: key,
+            });
+          }
+        } catch (e) { /* não deu para conferir: segue o fluxo normal */ }
       }
       // Dual-write durante a transição: grava no Postgres E mantém o KV atualizado,
       // para um rollback seguro. Se o Postgres falhar, ainda grava no KV.

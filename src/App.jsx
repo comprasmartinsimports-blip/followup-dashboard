@@ -13920,7 +13920,13 @@ export default function App() {
       const produtosSincronizados = syncListingsToProdutos(listings, produtosAtuais);
       localStorage.setItem("produtos_cadastro", JSON.stringify(produtosSincronizados));
       setProdutos(produtosSincronizados);
-      const costsExistentes = JSON.parse(localStorage.getItem("costs_config") || "{}");
+      // Custos vindos do cadastro de produtos, para anúncios que ainda não têm um.
+      // ATENÇÃO: este trecho já apagou os custos de todos os anúncios uma vez.
+      // Ele lia o mapa do localStorage DESTE navegador e regravava o resultado —
+      // então, aberto num navegador sem os custos salvos (máquina nova, cache
+      // limpo, outro usuário), lia {}, não achava nada para acrescentar e
+      // gravava {} por cima do que estava no servidor. Agora só escreve quando
+      // tem algo NOVO para acrescentar, e nunca escreve um mapa vazio.
       const costsFromProdutos = {};
       produtosSincronizados.forEach(function(p) {
         if (!p.precoCusto) return;
@@ -13929,7 +13935,11 @@ export default function App() {
         var mlbs = p.mlbsVinculados || (p.mlbVinculado ? [p.mlbVinculado] : []);
         mlbs.forEach(function(mlb) { costsFromProdutos[mlb] = custo; });
       });
-      setCostsAndSave(Object.assign({}, costsExistentes, costsFromProdutos));
+      if (Object.keys(costsFromProdutos).length > 0) {
+        // Parte do estado atual (que já recebeu o que veio do servidor), não do
+        // localStorage, e o que já existe manda sobre o custo do cadastro.
+        setCostsAndSave(function(prev){ return Object.assign({}, costsFromProdutos, prev || {}); });
+      }
 
       // Pedidos: também do CACHE (instantâneo), com fallback ao ML.
       setLoadingMsg("Carregando pedidos...");

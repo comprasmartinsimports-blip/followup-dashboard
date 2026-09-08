@@ -16,7 +16,7 @@ import {
   armazenamentoUsuarios,
   ErroPersistencia,
 } from "./_lib/auth.js";
-import { dbEnabled, syncGet, syncGetMany, syncSet, syncHistoricoLista, syncHistoricoValor, upsertConexaoMl, listConexoesMl, listCacheListings, listCacheOrders, getConexaoMl, sqlClient } from "./_lib/db.js";
+import { dbEnabled, syncGet, syncGetMany, syncCarimbos, syncSet, syncHistoricoLista, syncHistoricoValor, upsertConexaoMl, listConexoesMl, listCacheListings, listCacheOrders, getConexaoMl, sqlClient } from "./_lib/db.js";
 import { syncListings, syncOrders, garantirToken, syncOneListing, syncOneOrder, syncPromocoes } from "./_lib/mlsync.js";
 
 // A sincronização do cache do ML (/_sync_ml) puxa centenas de itens — pede mais tempo que o
@@ -897,6 +897,39 @@ export default async function handler(req, res) {
       const qs = new URLSearchParams(path.split("?")[1] || "");
       const key = qs.get("key");
       const ns = qs.get("ns");
+
+      // Carimbos: só a data da última alteração de cada chave. O navegador pergunta
+      // "mudou alguma coisa?" gastando alguns bytes e só baixa de verdade o que mudou.
+      // Antes ele rebaixava todos os dados a cada ciclo — 20 GB de transferência no mês.
+      const carimbosParam = qs.get("carimbos");
+      if (carimbosParam) {
+        const pedidas = carimbosParam.split(",").map(function(x){ return x.trim(); })
+          .filter(function(x){ return x && SYNC_KEYS_PERMITIDAS.includes(x); });
+        if (!pedidas.length) {
+          return res.status(400).json({ error: "Nenhuma chave de sincronização válida" });
+        }
+        // Sem banco não há data de alteração: responde 501 para o navegador saber
+        // que precisa continuar baixando os valores, em vez de achar que nada mudou.
+        if (!dbEnabled()) return res.status(501).json({ error: "Carimbos indisponíveis sem banco" });
+        const carimbos = {};
+        const porEscopoC = {};
+        pedidas.forEach(function(k){
+          const escopo = nsScopePara(k, ns);
+          (porEscopoC[escopo] = porEscopoC[escopo] || []).push(k);
+        });
+        try {
+          for (const escopo of Object.keys(porEscopoC)) {
+            Object.assign(carimbos, await syncCarimbos(escopo, porEscopoC[escopo]));
+          }
+        } catch (e) {
+          return res.status(501).json({ error: "Carimbos indisponíveis" });
+        }
+        // Chave sem linha no banco vira null: o navegador busca uma vez e, enquanto
+        // continuar null, entende que ninguém gravou nada — toda gravação passa pelo
+        // banco, então uma alteração sempre cria a linha e muda o carimbo.
+        pedidas.forEach(function(k){ if (carimbos[k] === undefined) carimbos[k] = null; });
+        return res.status(200).json({ carimbos });
+      }
 
       // Lote: o navegador pede TODAS as chaves numa requisição só. Antes era uma
       // requisição por chave a cada ciclo de sincronização — 37 delas, de 15 em 15

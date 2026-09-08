@@ -73,6 +73,25 @@ async function kvSyncPullMuitos(keys) {
   } catch { return null; }
 }
 
+// Pergunta ao servidor só a DATA da última alteração de cada chave. É uma
+// resposta de alguns bytes que diz o que mudou — assim os dados de verdade só
+// são baixados quando mudaram. Sem isso o navegador rebaixava tudo a cada 15
+// segundos, e era esse download repetido que consumia a cota de transferência.
+// Devolve null quando o servidor não sabe responder (versão antiga no ar ou sem
+// banco): nesse caso quem chamou baixa tudo, como antes.
+async function kvSyncCarimbos(keys) {
+  try {
+    const res = await fetch("/api/ml/_sync?carimbos=" + encodeURIComponent(keys.join(","))
+      + "&ns=" + encodeURIComponent(syncNamespace()));
+    if (!res.ok) return null;
+    const d = await res.json();
+    if (!d || !d.carimbos || typeof d.carimbos !== "object") return null;
+    return d.carimbos;
+  } catch { return null; }
+}
+
+const CHAVES_CHAT = ["chat_interno_mensagens", "chat_interno_tarefas"];
+
 // Aba em segundo plano não precisa consultar o servidor: ninguém está olhando.
 // Uma aba esquecida aberta no iPad consultava a noite inteira.
 function abaOculta() {
@@ -13021,6 +13040,7 @@ function rotuloDataChat(iso){
 }
 function ChatInternoWidget({ currentUser }) {
   const [open, setOpen] = useState(false);
+  const carimbosChatRef = useRef({}); // data da última versão já aplicada de cada chave do chat
   const [aba, setAba] = useState("conversa"); // conversa | tarefas
   const [mensagens, setMensagens] = useState(getChatMensagens);
   const [tarefas, setTarefas] = useState(getTarefas);
@@ -13049,8 +13069,14 @@ function ChatInternoWidget({ currentUser }) {
   // de usuários, pra um usuário criado depois já aparecer nas conversas diretas sem precisar
   // recarregar a página inteira.
   useEffect(function(){
-    // As duas chaves na mesma requisição.
-    kvSyncPullMuitos(["chat_interno_mensagens", "chat_interno_tarefas"]).then(function(lote){
+    // Lê o carimbo ANTES de baixar: se algo mudar no meio, o carimbo guardado fica
+    // atrasado e a próxima consulta baixa de novo. O contrário perderia a alteração.
+    // Sem isto, a primeira consulta do laço rebaixaria as mesmas mensagens.
+    kvSyncCarimbos(CHAVES_CHAT).then(function(carimbosIniciais){
+    kvSyncPullMuitos(CHAVES_CHAT).then(function(lote){
+      if (carimbosIniciais && lote) {
+        CHAVES_CHAT.forEach(function(k){ carimbosChatRef.current[k] = carimbosIniciais[k]; });
+      }
       var fresh = lote ? lote["chat_interno_mensagens"] : undefined;
       var freshT = lote ? lote["chat_interno_tarefas"] : undefined;
       if (!lote) {
@@ -13064,6 +13090,7 @@ function ChatInternoWidget({ currentUser }) {
       }
       if (Array.isArray(fresh)) { setMensagens(fresh); try { localStorage.setItem("chat_interno_mensagens", JSON.stringify(fresh)); } catch {} }
       if (Array.isArray(freshT)) { setTarefas(freshT); try { localStorage.setItem("chat_interno_tarefas", JSON.stringify(freshT)); } catch {} }
+    });
     });
     sincronizarUsuariosDoServidor().then(function(r){
       setUsuarios((r.usuarios || []).filter(function(u){ return u.ativo; }));
@@ -13098,12 +13125,33 @@ function ChatInternoWidget({ currentUser }) {
         try { localStorage.setItem("chat_interno_tarefas", JSON.stringify(freshT)); } catch {}
       }
     }
-    function buscar(){
+    function baixarChat(alvo){
+      if (!alvo.length) return Promise.resolve(false);
       // Mensagens e tarefas vêm juntas, numa requisição só.
-      kvSyncPullMuitos(["chat_interno_mensagens", "chat_interno_tarefas"]).then(function(lote){
-        if (lote) { aplicarMensagens(lote["chat_interno_mensagens"]); aplicarTarefas(lote["chat_interno_tarefas"]); return; }
+      return kvSyncPullMuitos(alvo).then(function(lote){
+        if (lote) {
+          if (alvo.indexOf("chat_interno_mensagens") >= 0) aplicarMensagens(lote["chat_interno_mensagens"]);
+          if (alvo.indexOf("chat_interno_tarefas") >= 0) aplicarTarefas(lote["chat_interno_tarefas"]);
+          return true;
+        }
         kvSyncPull("chat_interno_mensagens").then(aplicarMensagens);
         kvSyncPull("chat_interno_tarefas").then(aplicarTarefas);
+        return false;
+      });
+    }
+    function buscar(){
+      // A lista de mensagens passa de 70 kB. Baixá-la de 4 em 4 segundos sem nada
+      // ter mudado era o maior consumo de transferência do sistema. Agora pergunta
+      // primeiro, e na maioria das vezes a resposta é "nada mudou".
+      kvSyncCarimbos(CHAVES_CHAT).then(function(carimbos){
+        if (!carimbos) { baixarChat(CHAVES_CHAT); return; }
+        var alvo = CHAVES_CHAT.filter(function(k){
+          return !(k in carimbosChatRef.current) || carimbosChatRef.current[k] !== carimbos[k];
+        });
+        if (!alvo.length) return;
+        baixarChat(alvo).then(function(deuCerto){
+          if (deuCerto) alvo.forEach(function(k){ carimbosChatRef.current[k] = carimbos[k]; });
+        });
       });
     }
     // Com o chat aberto, quase em tempo real. Fechado, o suficiente para o aviso de
@@ -14411,20 +14459,34 @@ export default function App() {
       // da Precificação) para que a mudança de outro usuário apareça na hora, sem reload.
       try { window.dispatchEvent(new CustomEvent("mlmargem-sync", { detail: { key: key, value: v } })); } catch(e) {}
     }
-    function puxarDoServidor() {
-      // Uma requisição com todas as chaves. Era uma por chave: 37 por ciclo,
-      // a cada 15 segundos, por aba aberta.
-      return kvSyncPullMuitos(SYNC_ALL_KEYS).then(function(lote){
+    // Baixa estas chaves e aplica. Uma requisição para todas; se o servidor não
+    // souber responder em lote, volta ao modo uma por chave — ficar sem
+    // sincronizar seria pior do que gastar requisições.
+    function baixarEAplicar(keys) {
+      if (!keys.length) return Promise.resolve();
+      return kvSyncPullMuitos(keys).then(function(lote){
         if (lote) {
-          SYNC_ALL_KEYS.forEach(function(key){ aplicarDoServidor(key, lote[key]); });
+          keys.forEach(function(key){ aplicarDoServidor(key, lote[key]); });
           return;
         }
-        // Lote indisponível (servidor mais antigo que esta versão do site, ou falha
-        // de rede): volta ao modo uma requisição por chave. Ficar sem sincronizar
-        // seria pior do que gastar requisições.
-        return Promise.all(SYNC_ALL_KEYS.map(function(key){
+        return Promise.all(keys.map(function(key){
           return kvSyncPull(key).then(function(v){ aplicarDoServidor(key, v); });
         }));
+      });
+    }
+    var carimbosVistos = {}; // chave -> data da versão que já está aplicada aqui
+    function puxarDoServidor() {
+      // Primeiro pergunta o que mudou (resposta minúscula), depois baixa só isso.
+      // Na maioria dos ciclos nada mudou e nenhum dado trafega.
+      return kvSyncCarimbos(SYNC_ALL_KEYS).then(function(carimbos){
+        if (!carimbos) return baixarEAplicar(SYNC_ALL_KEYS); // servidor sem carimbos: baixa tudo
+        var mudaram = SYNC_ALL_KEYS.filter(function(k){
+          return !(k in carimbosVistos) || carimbosVistos[k] !== carimbos[k];
+        });
+        if (!mudaram.length) return;
+        return baixarEAplicar(mudaram).then(function(){
+          mudaram.forEach(function(k){ carimbosVistos[k] = carimbos[k]; });
+        });
       });
     }
 

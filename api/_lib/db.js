@@ -106,6 +106,21 @@ export async function syncGetMany(ns, chaves) {
   return fora;
 }
 
+// Só a data da última alteração de cada chave — sem o conteúdo. É o que permite
+// ao navegador perguntar "mudou alguma coisa?" gastando alguns bytes, em vez de
+// rebaixar todos os dados a cada 15 segundos. Era esse download repetido que
+// consumia a cota de transferência da hospedagem.
+export async function syncCarimbos(ns, chaves) {
+  const sql = getSql();
+  if (!sql || !chaves || !chaves.length) return {};
+  const rows = await sql`select chave, atualizado_em from flow.sync_store where ns = ${ns} and chave in ${sql(chaves)}`;
+  const fora = {};
+  rows.forEach(function(r){
+    fora[r.chave] = r.atualizado_em instanceof Date ? r.atualizado_em.toISOString() : String(r.atualizado_em);
+  });
+  return fora;
+}
+
 // Grava (upsert) um valor de negócio no flow.sync_store. A versão anterior é
 // guardada em flow.sync_historico por um gatilho do próprio banco — não por
 // aqui: em código, o histórico dependeria de todo caminho de gravação lembrar

@@ -94,6 +94,18 @@ export async function syncGet(ns, chave) {
   return rows.length ? rows[0].valor : null;
 }
 
+// Lê várias chaves do mesmo escopo numa consulta só. O navegador pedia uma
+// requisição por chave — 37 por ciclo, a cada 15 segundos — e foi isso que
+// estourou a cota da hospedagem e derrubou o sistema. Uma consulta, uma resposta.
+export async function syncGetMany(ns, chaves) {
+  const sql = getSql();
+  if (!sql || !chaves || !chaves.length) return {};
+  const rows = await sql`select chave, valor from flow.sync_store where ns = ${ns} and chave in ${sql(chaves)}`;
+  const fora = {};
+  rows.forEach(function(r){ fora[r.chave] = r.valor; });
+  return fora;
+}
+
 // Grava (upsert) um valor de negócio no flow.sync_store. A versão anterior é
 // guardada em flow.sync_historico por um gatilho do próprio banco — não por
 // aqui: em código, o histórico dependeria de todo caminho de gravação lembrar

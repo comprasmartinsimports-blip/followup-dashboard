@@ -16,7 +16,7 @@ import {
   armazenamentoUsuarios,
   ErroPersistencia,
 } from "./_lib/auth.js";
-import { dbEnabled, syncGet, syncSet, syncHistoricoLista, syncHistoricoValor, upsertConexaoMl, listConexoesMl, listCacheListings, listCacheOrders, getConexaoMl, sqlClient } from "./_lib/db.js";
+import { dbEnabled, syncGet, syncGetMany, syncSet, syncHistoricoLista, syncHistoricoValor, upsertConexaoMl, listConexoesMl, listCacheListings, listCacheOrders, getConexaoMl, sqlClient } from "./_lib/db.js";
 import { syncListings, syncOrders, garantirToken, syncOneListing, syncOneOrder, syncPromocoes } from "./_lib/mlsync.js";
 
 // A sincronização do cache do ML (/_sync_ml) puxa centenas de itens — pede mais tempo que o
@@ -897,6 +897,45 @@ export default async function handler(req, res) {
       const qs = new URLSearchParams(path.split("?")[1] || "");
       const key = qs.get("key");
       const ns = qs.get("ns");
+
+      // Lote: o navegador pede TODAS as chaves numa requisição só. Antes era uma
+      // requisição por chave a cada ciclo de sincronização — 37 delas, de 15 em 15
+      // segundos, por aba aberta. Isso sozinho consumiu a cota do plano e a
+      // hospedagem pausou o sistema inteiro.
+      const keysParam = qs.get("keys");
+      if (keysParam) {
+        const pedidas = keysParam.split(",").map(function(x){ return x.trim(); })
+          .filter(function(x){ return x && SYNC_KEYS_PERMITIDAS.includes(x); });
+        if (!pedidas.length) {
+          return res.status(400).json({ error: "Nenhuma chave de sincronização válida" });
+        }
+        const values = {};
+        // As chaves da equipe vivem num escopo, as de negócio no da conta do ML:
+        // agrupa por escopo para resolver cada grupo numa consulta.
+        const porEscopo = {};
+        pedidas.forEach(function(k){
+          const escopo = nsScopePara(k, ns);
+          (porEscopo[escopo] = porEscopo[escopo] || []).push(k);
+        });
+        if (dbEnabled()) {
+          try {
+            for (const escopo of Object.keys(porEscopo)) {
+              Object.assign(values, await syncGetMany(escopo, porEscopo[escopo]));
+            }
+          } catch (e) { /* segue para o KV abaixo */ }
+        }
+        // O que o Postgres ainda não tem (dado antigo) continua no KV.
+        const faltando = pedidas.filter(function(k){ return values[k] === undefined || values[k] === null; });
+        await Promise.all(faltando.map(async function(k){
+          try {
+            const v = await kvGet(kvKeyPara(k, ns));
+            if (v !== undefined && v !== null) values[k] = v;
+          } catch (e) {}
+        }));
+        pedidas.forEach(function(k){ if (values[k] === undefined) values[k] = null; });
+        return res.status(200).json({ values });
+      }
+
       if (!key || !SYNC_KEYS_PERMITIDAS.includes(key)) {
         return res.status(400).json({ error: "Chave de sincronização inválida" });
       }

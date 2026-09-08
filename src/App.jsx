@@ -51,6 +51,34 @@ async function kvSyncPull(key) {
     return v;
   } catch { return null; }
 }
+// Puxa VÁRIAS chaves numa requisição só. Uma por chave, a cada 15 segundos, com
+// 37 chaves, era o que consumia a cota da hospedagem por aba aberta.
+// Devolve null (e não um objeto vazio) quando o lote falha, para quem chamou
+// poder voltar ao modo antigo em vez de concluir que o servidor está vazio.
+async function kvSyncPullMuitos(keys) {
+  try {
+    const res = await fetch("/api/ml/_sync?keys=" + encodeURIComponent(keys.join(","))
+      + "&ns=" + encodeURIComponent(syncNamespace()));
+    if (!res.ok) return null;
+    const d = await res.json();
+    if (!d || !d.values || typeof d.values !== "object") return null;
+    const fora = {};
+    Object.keys(d.values).forEach(function(k){
+      var v = d.values[k];
+      // Mesmo cuidado do pull avulso com o formato antigo embrulhado em {value:"..."}.
+      if (v && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === 1 && typeof v.value === "string") v = null;
+      fora[k] = v;
+    });
+    return fora;
+  } catch { return null; }
+}
+
+// Aba em segundo plano não precisa consultar o servidor: ninguém está olhando.
+// Uma aba esquecida aberta no iPad consultava a noite inteira.
+function abaOculta() {
+  try { return document.visibilityState === "hidden"; } catch (e) { return false; }
+}
+
 // Um valor que não carrega informação nenhuma. Número e texto nunca contam
 // como vazio — só ausência, lista sem itens e objeto sem chaves.
 function valorVazio(v) {
@@ -13021,10 +13049,20 @@ function ChatInternoWidget({ currentUser }) {
   // de usuários, pra um usuário criado depois já aparecer nas conversas diretas sem precisar
   // recarregar a página inteira.
   useEffect(function(){
-    kvSyncPull("chat_interno_mensagens").then(function(fresh){
+    // As duas chaves na mesma requisição.
+    kvSyncPullMuitos(["chat_interno_mensagens", "chat_interno_tarefas"]).then(function(lote){
+      var fresh = lote ? lote["chat_interno_mensagens"] : undefined;
+      var freshT = lote ? lote["chat_interno_tarefas"] : undefined;
+      if (!lote) {
+        kvSyncPull("chat_interno_mensagens").then(function(x){
+          if (Array.isArray(x)) { setMensagens(x); try { localStorage.setItem("chat_interno_mensagens", JSON.stringify(x)); } catch {} }
+        });
+        kvSyncPull("chat_interno_tarefas").then(function(x){
+          if (Array.isArray(x)) { setTarefas(x); try { localStorage.setItem("chat_interno_tarefas", JSON.stringify(x)); } catch {} }
+        });
+        return;
+      }
       if (Array.isArray(fresh)) { setMensagens(fresh); try { localStorage.setItem("chat_interno_mensagens", JSON.stringify(fresh)); } catch {} }
-    });
-    kvSyncPull("chat_interno_tarefas").then(function(freshT){
       if (Array.isArray(freshT)) { setTarefas(freshT); try { localStorage.setItem("chat_interno_tarefas", JSON.stringify(freshT)); } catch {} }
     });
     sincronizarUsuariosDoServidor().then(function(r){
@@ -13035,6 +13073,7 @@ function ChatInternoWidget({ currentUser }) {
   // Atualiza a lista de usuários periodicamente também (não só ao abrir o widget)
   useEffect(function(){
     var userInterval = setInterval(function(){
+      if (abaOculta()) return; // aba em segundo plano não precisa atualizar a equipe
       sincronizarUsuariosDoServidor().then(function(r){
         setUsuarios((r.usuarios || []).filter(function(u){ return u.ativo; }));
       });
@@ -13045,24 +13084,36 @@ function ChatInternoWidget({ currentUser }) {
   // Polling para chegar mensagens/tarefas de outros usuários (em qualquer computador) —
   // busca do servidor compartilhado, não só do localStorage deste navegador.
   useEffect(function(){
-    var interval = setInterval(function(){
-      kvSyncPull("chat_interno_mensagens").then(function(fresh){
-        if (!Array.isArray(fresh)) return;
-        if (JSON.stringify(fresh) !== JSON.stringify(mensagens)) {
-          setMensagens(fresh);
-          try { localStorage.setItem("chat_interno_mensagens", JSON.stringify(fresh)); } catch {}
-        }
+    function aplicarMensagens(fresh){
+      if (!Array.isArray(fresh)) return;
+      if (JSON.stringify(fresh) !== JSON.stringify(mensagens)) {
+        setMensagens(fresh);
+        try { localStorage.setItem("chat_interno_mensagens", JSON.stringify(fresh)); } catch {}
+      }
+    }
+    function aplicarTarefas(freshT){
+      if (!Array.isArray(freshT)) return;
+      if (JSON.stringify(freshT) !== JSON.stringify(tarefas)) {
+        setTarefas(freshT);
+        try { localStorage.setItem("chat_interno_tarefas", JSON.stringify(freshT)); } catch {}
+      }
+    }
+    function buscar(){
+      // Mensagens e tarefas vêm juntas, numa requisição só.
+      kvSyncPullMuitos(["chat_interno_mensagens", "chat_interno_tarefas"]).then(function(lote){
+        if (lote) { aplicarMensagens(lote["chat_interno_mensagens"]); aplicarTarefas(lote["chat_interno_tarefas"]); return; }
+        kvSyncPull("chat_interno_mensagens").then(aplicarMensagens);
+        kvSyncPull("chat_interno_tarefas").then(aplicarTarefas);
       });
-      kvSyncPull("chat_interno_tarefas").then(function(freshT){
-        if (!Array.isArray(freshT)) return;
-        if (JSON.stringify(freshT) !== JSON.stringify(tarefas)) {
-          setTarefas(freshT);
-          try { localStorage.setItem("chat_interno_tarefas", JSON.stringify(freshT)); } catch {}
-        }
-      });
-    }, 4000); // 4s — chat precisa parecer quase em tempo real
-    return function(){ clearInterval(interval); };
-  }, [mensagens, tarefas]);
+    }
+    // Com o chat aberto, quase em tempo real. Fechado, o suficiente para o aviso de
+    // mensagem nova chegar rápido sem consultar o servidor 15 vezes por minuto.
+    // Aba escondida não consulta nada; ao voltar, busca na hora.
+    var interval = setInterval(function(){ if (!abaOculta()) buscar(); }, open ? 4000 : 20000);
+    function aoVoltar(){ if (!abaOculta()) buscar(); }
+    document.addEventListener("visibilitychange", aoVoltar);
+    return function(){ clearInterval(interval); document.removeEventListener("visibilitychange", aoVoltar); };
+  }, [mensagens, tarefas, open]);
 
   function marcarComoLidas() {
     var next = mensagens.map(function(m){
@@ -14318,51 +14369,63 @@ export default function App() {
         } catch(e) {}
       });
     }
+    // Aplica neste navegador o valor que o servidor tem para uma chave.
+    function aplicarDoServidor(key, v) {
+      if (v == null) return;
+      // Blindagem: se a chave tem um tipo esperado (lista/objeto) e o valor que veio do
+      // servidor não bate, ignora — evita aplicar um dado corrompido/incompatível que
+      // quebraria qualquer tela que faça .filter()/.map()/.forEach() nele.
+      var tipoEsperado = SYNC_TIPO_ESPERADO[key];
+      if (tipoEsperado === "array" && !Array.isArray(v)) return;
+      if (tipoEsperado === "object" && (Array.isArray(v) || typeof v !== "object" || v === null)) return;
+      // Produtos precificados (extras): MESCLA por id — o pull nunca remove um extra local que
+      // o servidor DESSA conta ainda não tem. Evita perder a precificação ao trocar de conta ML
+      // (namespace por vendedor) ou quando o servidor devolve uma lista vazia/desatualizada.
+      if (key === "precificacao_extras" && Array.isArray(v)) {
+        try {
+          var localArr = JSON.parse(localStorage.getItem(key) || "[]");
+          if (Array.isArray(localArr) && localArr.length) {
+            var byId = {};
+            v.forEach(function(x){ if (x && x.id) byId[x.id] = x; });           // servidor vence em conflito
+            localArr.forEach(function(x){ if (x && x.id && !byId[x.id]) byId[x.id] = x; }); // mantém extras locais
+            v = Object.keys(byId).map(function(k){ return byId[k]; });
+          }
+        } catch(e) {}
+      }
+      // Vazio do servidor nunca apaga o que este navegador tem. Foi assim
+      // que a última cópia dos custos quase se perdeu: o servidor já estava
+      // zerado e o pull regravava {} por cima do mapa cheio que ainda
+      // existia aqui. Quem tem dado é a fonte; o vazio espera.
+      if (valorVazio(v)) {
+        var localAtual = null;
+        try { localAtual = JSON.parse(localStorage.getItem(key) || "null"); } catch(e) {}
+        if (!valorVazio(localAtual)) return;
+      }
+      var raw = JSON.stringify(v);
+      if (lastSyncRef.current[key] === raw) return; // já é o que temos
+      lastSyncRef.current[key] = raw;
+      try { localStorage.setItem(key, raw); } catch(e) {}
+      var setter = SYNC_ROOT_SETTERS[key];
+      if (setter) setter(v);
+      // Avisa componentes que leem essa chave direto do localStorage (ex: produtos extras
+      // da Precificação) para que a mudança de outro usuário apareça na hora, sem reload.
+      try { window.dispatchEvent(new CustomEvent("mlmargem-sync", { detail: { key: key, value: v } })); } catch(e) {}
+    }
     function puxarDoServidor() {
-      var promessas = SYNC_ALL_KEYS.map(function(key){
-        return kvSyncPull(key).then(function(v){
-          if (v == null) return;
-          // Blindagem: se a chave tem um tipo esperado (lista/objeto) e o valor que veio do
-          // servidor não bate, ignora — evita aplicar um dado corrompido/incompatível que
-          // quebraria qualquer tela que faça .filter()/.map()/.forEach() nele.
-          var tipoEsperado = SYNC_TIPO_ESPERADO[key];
-          if (tipoEsperado === "array" && !Array.isArray(v)) return;
-          if (tipoEsperado === "object" && (Array.isArray(v) || typeof v !== "object" || v === null)) return;
-          // Produtos precificados (extras): MESCLA por id — o pull nunca remove um extra local que
-          // o servidor DESSA conta ainda não tem. Evita perder a precificação ao trocar de conta ML
-          // (namespace por vendedor) ou quando o servidor devolve uma lista vazia/desatualizada.
-          if (key === "precificacao_extras" && Array.isArray(v)) {
-            try {
-              var localArr = JSON.parse(localStorage.getItem(key) || "[]");
-              if (Array.isArray(localArr) && localArr.length) {
-                var byId = {};
-                v.forEach(function(x){ if (x && x.id) byId[x.id] = x; });           // servidor vence em conflito
-                localArr.forEach(function(x){ if (x && x.id && !byId[x.id]) byId[x.id] = x; }); // mantém extras locais
-                v = Object.keys(byId).map(function(k){ return byId[k]; });
-              }
-            } catch(e) {}
-          }
-          // Vazio do servidor nunca apaga o que este navegador tem. Foi assim
-          // que a última cópia dos custos quase se perdeu: o servidor já estava
-          // zerado e o pull regravava {} por cima do mapa cheio que ainda
-          // existia aqui. Quem tem dado é a fonte; o vazio espera.
-          if (valorVazio(v)) {
-            var localAtual = null;
-            try { localAtual = JSON.parse(localStorage.getItem(key) || "null"); } catch(e) {}
-            if (!valorVazio(localAtual)) return;
-          }
-          var raw = JSON.stringify(v);
-          if (lastSyncRef.current[key] === raw) return; // já é o que temos
-          lastSyncRef.current[key] = raw;
-          try { localStorage.setItem(key, raw); } catch(e) {}
-          var setter = SYNC_ROOT_SETTERS[key];
-          if (setter) setter(v);
-          // Avisa componentes que leem essa chave direto do localStorage (ex: produtos extras
-          // da Precificação) para que a mudança de outro usuário apareça na hora, sem reload.
-          try { window.dispatchEvent(new CustomEvent("mlmargem-sync", { detail: { key: key, value: v } })); } catch(e) {}
-        });
+      // Uma requisição com todas as chaves. Era uma por chave: 37 por ciclo,
+      // a cada 15 segundos, por aba aberta.
+      return kvSyncPullMuitos(SYNC_ALL_KEYS).then(function(lote){
+        if (lote) {
+          SYNC_ALL_KEYS.forEach(function(key){ aplicarDoServidor(key, lote[key]); });
+          return;
+        }
+        // Lote indisponível (servidor mais antigo que esta versão do site, ou falha
+        // de rede): volta ao modo uma requisição por chave. Ficar sem sincronizar
+        // seria pior do que gastar requisições.
+        return Promise.all(SYNC_ALL_KEYS.map(function(key){
+          return kvSyncPull(key).then(function(v){ aplicarDoServidor(key, v); });
+        }));
       });
-      return Promise.all(promessas);
     }
 
     var pushInterval, pullInterval;
@@ -14371,8 +14434,11 @@ export default function App() {
     // mudanças locais para enviar.
     puxarDoServidor().finally(function(){
       pushMudancasLocais();
-      pushInterval = setInterval(pushMudancasLocais, 12000); // envia mudanças locais a cada 12s
-      pullInterval = setInterval(puxarDoServidor, 15000); // busca o que outros editaram a cada 15s
+      // Com a aba escondida nada é consultado: ao esconder já mandamos o que mudou
+      // (aoMudarVisibilidade) e ao voltar puxamos na hora. Uma aba esquecida aberta
+      // consultava o servidor a noite inteira sem ninguém olhando.
+      pushInterval = setInterval(function(){ if (!abaOculta()) pushMudancasLocais(); }, 12000);
+      pullInterval = setInterval(function(){ if (!abaOculta()) puxarDoServidor(); }, 15000);
     });
 
     // Ao esconder a aba: envia o que mudou. Ao voltar para a aba: puxa na hora o que os outros
@@ -14765,6 +14831,7 @@ export default function App() {
       setTimeout(function(){ refreshOrdersIncrementalRef.current(); }, 600);
     }
     var intervalId = setInterval(function(){
+      if (abaOculta()) return; // com a aba escondida, espera ela voltar
       refreshOrdersIncrementalRef.current();
       refrescarAnunciosDoCacheRef.current(); // relê anúncios do cache (mudanças via webhook/cron)
     }, 180000); // 3 minutos

@@ -6,6 +6,8 @@ import {
 } from "recharts";
 import { BR_VIEWBOX, BR_ESTADOS } from "./brazilMap.js";
 
+import { freteML, FRETE_ML_TABELA_VERSAO, FRETE_ML_TABELA_FONTE } from "./freteML.js";
+
 const ML = (path) => `/api/ml${path}`;
 // Separador de milhar importa numa tela de dinheiro: "R$ 10100,00" e
 // "R$ 101000,00" se confundem de relance, "R$ 10.100,00" não. Só exibição —
@@ -678,6 +680,63 @@ function PSel(props){
 
 // ── Cadastro de produto em página inteira ───────────────────────────────────
 // Substituiu o modal de 8 campos: um cadastro de produto de verdade tem mais
+// O produto cadastrado por trás de um anúncio: pelo vínculo de MLB e, na falta
+// dele, pelo SKU. É por aqui que a Precificação alcança as medidas da caixa.
+function produtoDoAnuncioML(produtos, mlb, sku) {
+  var lista = produtos || [];
+  var p = lista.find(function(x){ return (x.mlbsVinculados || []).indexOf(mlb) >= 0 || x.mlbVinculado === mlb; });
+  if (p) return p;
+  if (sku) {
+    var q = lista.find(function(x){ return x.sku && String(x.sku).toLowerCase() === String(sku).toLowerCase(); });
+    if (q) return q;
+  }
+  return null;
+}
+
+// ── Peso que o Mercado Livre usa para cobrar o frete ─────────────────────────
+// O ML não cobra pelo peso da balança: cobra pelo MAIOR entre o peso real e o
+// peso cubado (comprimento × largura × altura ÷ 4000, medidas em cm). O divisor
+// 4000 é do Mercado Envios e é diferente do 6000 das transportadoras comuns.
+// Para peça de carro isso importa nos dois sentidos: um retrovisor numa caixa
+// grande paga pelo tamanho, e um disco de freio pequeno e pesado paga pela
+// balança. Usar só um dos dois erraria metade do catálogo.
+function pesoCubadoML(p) {
+  if (!p) return null;
+  var c = parseFloat(p.profundidade), l = parseFloat(p.largura), a = parseFloat(p.altura);
+  if (!(c > 0) || !(l > 0) || !(a > 0)) return null; // sem as três medidas não há cubagem
+  return (c * l * a) / 4000;
+}
+function pesoRealDe(p) {
+  if (!p) return null;
+  var bruto = parseFloat(p.pesoBruto);
+  if (bruto > 0) return bruto;
+  var liq = parseFloat(p.pesoLiquido);
+  return liq > 0 ? liq : null;
+}
+// O peso considerado e de onde ele veio. Devolve null quando não dá para saber —
+// um frete "estimado" a partir de medida faltando seria um chute com cara de conta.
+function pesoConsideradoML(p) {
+  var cub = pesoCubadoML(p), real = pesoRealDe(p);
+  if (cub == null && real == null) return null;
+  if (cub == null) return { peso: real, origem: "balança", cubado: null, real: real };
+  if (real == null) return { peso: cub, origem: "cubagem", cubado: cub, real: null };
+  return real >= cub
+    ? { peso: real, origem: "balança", cubado: cub, real: real }
+    : { peso: cub, origem: "cubagem", cubado: cub, real: real };
+}
+
+// Custo de envio de um produto a um determinado preço de venda. Junta as duas
+// metades: o peso que o ML considera (balança ou cubagem) e a tabela de custos.
+// Devolve null quando falta o peso ou o preço — e a tela diz qual falta, em vez
+// de mostrar um frete que ninguém sabe de onde veio.
+function freteMLdoProduto(produto, preco, tabelaEditada) {
+  var pm = pesoConsideradoML(produto);
+  if (!pm || !(preco > 0)) return null;
+  var r = freteML(pm.peso, preco, tabelaEditada);
+  if (!r) return null;
+  return Object.assign({}, r, { peso: pm.peso, origemPeso: pm.origem });
+}
+
 // informação do que cabe numa caixinha, e boa parte dela (peso, NCM, dimensões)
 // só serve quando está toda junta. As abas separam por assunto para a tela não
 // virar um formulário de 50 campos empilhados.
@@ -754,6 +813,10 @@ function ProdutoPagina({ produto, produtos, fornecedores, enriched, onSave, onCl
   var markup = custoN > 0 ? ((vendaN - custoN) / custoN) * 100 : null;
   // Peso cubado: o que as transportadoras cobram quando o volume pesa mais que a balança.
   var cubado = (parseFloat(f.largura)||0) * (parseFloat(f.altura)||0) * (parseFloat(f.profundidade)||0) / 6000;
+  // Peso pela regra do Mercado Livre (÷ 4000, contra o peso real) — é ele que define a faixa de frete.
+  var pesoML = pesoConsideradoML(f);
+  // Frete do ML para este produto no preço de venda cadastrado.
+  var freteDoProduto = freteMLdoProduto(f, parseFloat(f.precoVenda) || 0);
 
   var mlbs = (f.mlbsVinculados || []).slice();
   if (f.mlbVinculado && mlbs.indexOf(f.mlbVinculado) < 0) mlbs.unshift(f.mlbVinculado);
@@ -888,10 +951,52 @@ function ProdutoPagina({ produto, produtos, fornecedores, enriched, onSave, onCl
               <PSel f={f} set={set} k="tipoEmbalagem" label="Tipo de embalagem" opcoes={[["","—"],["envelope","Envelope"],["caixa","Caixa"],["pacote","Pacote / saco"],["rolo","Rolo / cilindro"]]} />
             </div>
             <div style={{ marginTop:16, paddingTop:14, borderTop:"1px solid var(--border-soft)" }}>
-              <div style={{ fontSize:11, color:"var(--text-3)" }}>Peso cubado (L × A × P ÷ 6000)</div>
-              <div style={{ fontSize:19, fontWeight:600, color:"var(--text-2)" }}>{cubado > 0 ? cubado.toFixed(3) + " kg" : "—"}</div>
-              <div style={dica}>Transportadora cobra pelo maior entre o peso real e o cubado. Se o cubado
-                estiver acima do peso bruto, o frete se define pelo tamanho da caixa, não pela balança.</div>
+              <div style={{ fontSize:11, color:"var(--text-3)" }}>Peso que o Mercado Livre considera</div>
+              <div style={{ fontSize:22, fontWeight:600, color: pesoML ? "var(--text-strong)" : "var(--text-3)" }}>
+                {pesoML ? pesoML.peso.toFixed(3) + " kg" : "—"}
+              </div>
+              {pesoML ? (
+                <div style={{ fontSize:11.5, color:"var(--text-3)", marginTop:3 }}>
+                  pela <b>{pesoML.origem}</b>
+                  {pesoML.cubado != null && pesoML.real != null &&
+                    " — cubado " + pesoML.cubado.toFixed(3) + " kg contra " + pesoML.real.toFixed(3) + " kg na balança"}
+                  {pesoML.cubado == null && " — faltam as três medidas para calcular a cubagem"}
+                  {pesoML.real == null && " — falta o peso bruto para comparar com a cubagem"}
+                </div>
+              ) : (
+                <div style={{ fontSize:11.5, color:"var(--text-3)", marginTop:3 }}>
+                  Preencha o peso bruto ou as três medidas. Sem isso não dá para saber a faixa de frete.
+                </div>
+              )}
+              <div style={dica}>O Mercado Livre cobra pelo maior entre o peso da balança e o peso cubado
+                (comprimento × largura × altura ÷ 4000). É esse peso que define a faixa da tabela de frete.</div>
+              <div style={{ fontSize:11, color:"var(--text-4)", marginTop:8 }}>
+                Cubagem de outras transportadoras (÷ 6000): {cubado > 0 ? cubado.toFixed(3) + " kg" : "—"}
+              </div>
+            </div>
+
+            <div style={{ marginTop:14, paddingTop:14, borderTop:"1px solid var(--border-soft)" }}>
+              <div style={{ fontSize:11, color:"var(--text-3)" }}>Custo de envio no Mercado Livre</div>
+              {freteDoProduto ? (
+                <>
+                  <div style={{ fontSize:22, fontWeight:600, color:"#FFC107" }}>{fmt(freteDoProduto.valor)}</div>
+                  <div style={{ fontSize:11.5, color:"var(--text-3)", marginTop:3 }}>
+                    {freteDoProduto.faixaPeso} · anúncio em {freteDoProduto.faixaPreco}
+                    {freteDoProduto.observacao ? " · " + freteDoProduto.observacao : ""}
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontSize:12.5, color:"var(--text-3)", marginTop:2 }}>
+                  {!pesoML
+                    ? "Falta o peso ou as medidas."
+                    : "Falta o preço de venda — o custo do envio muda conforme a faixa de preço do anúncio."}
+                </div>
+              )}
+              <div style={dica}>
+                O custo vale para toda venda, mesmo quando o comprador paga o envio. Muda com o preço
+                do anúncio: o mesmo produto a R$ 78 e a R$ 79 cai em faixas diferentes.
+              </div>
+              <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:6 }}>{FRETE_ML_TABELA_VERSAO}</div>
             </div>
           </div>}
 
@@ -11891,7 +11996,7 @@ function NovoProdutoPrecForm({ onSave, onClose, marketplaceInicial, shopeeDoc })
   );
 }
 
-function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFretesAndSave, descontosConfig, setDescontosAndSave, precosVendaConfig, setPrecosVendaAndSave, pendentesAtualizacao, setPendentesAndSave, setSkuOverridesAndSave, rawOrders, icmsPct, buscaInicial, custosExtras, setCustosExtrasAndSave }) {
+function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFretesAndSave, descontosConfig, setDescontosAndSave, precosVendaConfig, setPrecosVendaAndSave, pendentesAtualizacao, setPendentesAndSave, setSkuOverridesAndSave, rawOrders, icmsPct, buscaInicial, custosExtras, setCustosExtrasAndSave, produtos }) {
   // ICMS projetado da venda (Financeiro → Impostos). Aqui ainda não há comprador, então vale a
   // alíquota interestadual — o cenário da maior parte das vendas e o mais conservador no preço.
   var icmsVendaPct = parseFloat(icmsPct) || 0;
@@ -12370,7 +12475,6 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
               var taxa = l.fee || bruto * 0.13;
               var freteReal = l.freteSeller || 0;
               var freteConfig = parseFloat(fretesConfig&&fretesConfig[l.id]||0);
-              var frete = freteConfig > 0 ? freteConfig : freteReal;
               var precoVendaDesejado = parseFloat(precosVendaConfig&&precosVendaConfig[l.id]||0);
               var descPct = parseFloat(descontosConfig&&descontosConfig[l.id]||0);
 
@@ -12384,6 +12488,15 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
               var precoBase = precoParaAnunciar > 0 ? precoParaAnunciar : bruto;
               // Preço que o cliente efetivamente paga (com desconto aplicado)
               var precoComDesc = precoVendaDesejado > 0 ? precoVendaDesejado : (descPct > 0 ? bruto * (1 - descPct/100) : bruto);
+              // Frete, em ordem de confiança: o que você fixou à mão vence sempre; depois o
+              // que o ML cobrou de fato neste anúncio; e, na falta dos dois, a tabela de
+              // custos de envio, aplicada às medidas do produto e ao preço desta simulação.
+              // A tabela depende do preço, então o valor acompanha o que você está simulando.
+              var prodDoAnuncio = produtoDoAnuncioML(produtos, l.id, l.seller_sku || l.sku);
+              var freteTabela = freteMLdoProduto(prodDoAnuncio, precoComDesc);
+              var frete = freteConfig > 0 ? freteConfig
+                        : freteReal > 0 ? freteReal
+                        : (freteTabela ? freteTabela.valor : 0);
               // Taxa ML padronizada por tipo de anúncio: Clássico 12% / Premium 17%.
               var _tipo = l.listing_type_id || "";
               var ehShopee = (mktSel === "shopee") || (l.marketplace === "shopee");
@@ -12562,12 +12675,24 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                         autoFocus
                         style={{ width:72, background:"var(--surface)", border:"1px solid #0e7490", color:"var(--text-strong)", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
                     ) : (
-                      <span onClick={function(){setEditingFreteId(l.id);}} title="Frete esperado"
+                      <span onClick={function(){setEditingFreteId(l.id);}}
+                        title={freteConfig>0 ? "Frete fixado por você — clique para mudar"
+                             : freteTabela ? "Tabela de custos de envio do Mercado Livre: " + freteTabela.faixaPeso
+                                 + " (" + freteTabela.peso.toFixed(3) + " kg pela " + freteTabela.origemPeso + "), anúncio em "
+                                 + freteTabela.faixaPreco + (freteTabela.observacao ? " — " + freteTabela.observacao : "")
+                                 + ". Clique para fixar outro valor."
+                             : prodDoAnuncio ? "O produto “" + nomeProd(prodDoAnuncio) + "” está sem peso e sem medidas: sem eles não dá para achar a faixa da tabela."
+                             : "Nenhum produto cadastrado vinculado a este anúncio — é do cadastro do produto que saem as medidas da caixa."}
                         style={{ cursor:"pointer", fontSize:12, fontWeight:600,
-                          color:freteConfig>0?"#FFC107":"var(--text-3)",
+                          color:freteConfig>0?"#FFC107":freteTabela?"var(--text-2)":"var(--text-3)",
                           background:freteConfig>0?"transparent":"var(--bg-2)",
-                          padding:freteConfig>0?"0":"2px 6px", borderRadius:4 }}>
-                        {freteConfig>0?"R$ "+freteConfig.toFixed(2).replace(".",","):"✎ definir"}
+                          padding:freteConfig>0?"0":"2px 6px", borderRadius:4,
+                          borderBottom: freteTabela && !(freteConfig>0) ? "1px dashed var(--text-4)" : "none" }}>
+                        {freteConfig>0
+                          ? "R$ "+freteConfig.toFixed(2).replace(".",",")
+                          : freteTabela
+                            ? "R$ "+freteTabela.valor.toFixed(2).replace(".",",")
+                            : "✎ definir"}
                       </span>
                     )}
                   </td>
@@ -15973,6 +16098,7 @@ export default function App() {
 
         {tab === "precificacao" && currentUser?.permissoes?.includes("listings") && (
           <PrecificacaoTab
+            produtos={produtos}
             custosExtras={custosExtras} setCustosExtrasAndSave={setCustosExtrasAndSave}
             buscaInicial={buscaPrecificacao}
             icmsPct={icmsPctProjetado}

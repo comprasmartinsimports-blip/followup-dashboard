@@ -12137,8 +12137,14 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
   function custoExtraDe(id) {
     var c = (custosExtras || {})[id] || {};
     var et = parseFloat(c.etiqueta) || 0, em = parseFloat(c.embalagem) || 0;
+    // O ICMS geral (Impostos) sempre valeu para quem não tem valor próprio — mas a
+    // coluna escrevia "definir", como se nada estivesse sendo aplicado. Agora o
+    // valor herdado aparece, e `icmsProprio` guarda o que é exceção declarada.
+    var ic = parseFloat(c.icms) || 0;
     return {
-      icms: parseFloat(c.icms) || 0,
+      icmsProprio: ic,
+      icms: ic > 0 ? ic : icmsVendaPct,
+      icmsDoPadrao: !(ic > 0) && icmsVendaPct > 0,
       etiqueta: et > 0 ? et : etiquetaPadrao,
       embalagem: em > 0 ? em : embalagemPadrao,
       etiquetaDoPadrao: !(et > 0) && etiquetaPadrao > 0,
@@ -12624,7 +12630,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
               // O ICMS da linha, quando preenchido, vale no lugar do regime geral —
               // é uma exceção declarada para aquele produto, não um acréscimo.
               var extras = custoExtraDe(l.id);
-              var icmsLinhaPct = extras.icms > 0 ? extras.icms : icmsVendaPct;
+              var icmsLinhaPct = extras.icms; // já é o próprio ou, na falta dele, o geral
               var icmsValorLinha = precoComDesc * (icmsLinhaPct / 100);
               var custosFixosLinha = extras.etiqueta + extras.embalagem;
 
@@ -12718,16 +12724,20 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                   {/* ICMS % — editável por anúncio */}
                   <td style={{ padding:"6px 8px" }}>
                     {editingCustoExtra === l.id + "|icms" ? (
-                      <input type="number" step="0.01" min="0" defaultValue={extras.icms || ""} placeholder="0,00" autoFocus
+                      <input type="number" step="0.01" min="0" defaultValue={extras.icmsProprio || ""}
+                        placeholder={icmsVendaPct > 0 ? icmsVendaPct.toFixed(2).replace(".",",") : "0,00"} autoFocus
                         onBlur={function(e){ salvarCustoExtra(l.id, "icms", parseFloat(e.target.value)||0); setEditingCustoExtra(null); }}
                         style={{ width:58, background:"var(--surface)", border:"1px solid #0e7490", color:"var(--text-strong)", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
                     ) : (
                       <span onClick={function(){ setEditingCustoExtra(l.id + "|icms"); }}
-                        title={extras.icms > 0 ? "ICMS deste produto" : "Sem valor aqui, vale o ICMS configurado em Impostos (" + icmsVendaPct.toFixed(2).replace(".",",") + "%)"}
+                        title={extras.icmsDoPadrao
+                          ? "ICMS geral, de Configuração → Impostos. Já está entrando na margem deste anúncio. Clique para usar outra alíquota só aqui."
+                          : extras.icms > 0 ? "ICMS próprio deste anúncio, no lugar do geral" : "Nenhum ICMS configurado em Impostos"}
                         style={{ cursor:"pointer", fontSize:12, fontWeight:600,
-                          color: extras.icms > 0 ? "#FF5252" : "var(--text-3)",
+                          color: extras.icmsDoPadrao ? "var(--text-2)" : extras.icms > 0 ? "#FF5252" : "var(--text-3)",
                           background: extras.icms > 0 ? "transparent" : "var(--bg-2)",
-                          padding: extras.icms > 0 ? "0" : "2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
+                          padding: extras.icms > 0 ? "0" : "2px 6px", borderRadius:4, whiteSpace:"nowrap",
+                          borderBottom: extras.icmsDoPadrao ? "1px dashed var(--text-4)" : "none" }}>
                         {extras.icms > 0 ? extras.icms.toFixed(2).replace(".",",")+"%" : "✎ definir"}
                       </span>
                     )}

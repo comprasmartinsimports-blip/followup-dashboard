@@ -14605,8 +14605,14 @@ export default function App() {
   // vez de substituir por inteiro — evita que um "pull" com dados parciais do servidor apague
   // entradas que este navegador já tinha (ex: taxas reais do ML buscadas aos poucos, ou um
   // custo editado localmente que ainda não chegou ao servidor).
+  // Mesclar protege o que este navegador tem de ser apagado por uma resposta
+  // atrasada — mas mesclar NUNCA remove nada, e remover é uma operação legítima.
+  // Por isso existe o modo substituir: quando o servidor está numa versão
+  // posterior à que temos aplicada aqui e não há nada local esperando envio, a
+  // versão dele é mais recente do que tudo o que sabemos, remoções incluídas.
   function mesclarSetter(setter) {
-    return function(pulled) {
+    return function(pulled, opcoes) {
+      if ((opcoes && opcoes.substituir) || valorVazio(pulled)) { setter(pulled); return; }
       setter(function(prev) { return Object.assign({}, prev || {}, pulled || {}); });
     };
   }
@@ -14676,8 +14682,16 @@ export default function App() {
       });
     }
     // Aplica neste navegador o valor que o servidor tem para uma chave.
-    function aplicarDoServidor(key, v) {
+    function aplicarDoServidor(key, v, carimboServidor) {
       if (v == null) return;
+      // Há algo editado aqui que ainda não foi enviado? Se houver, a resposta do
+      // servidor não pode substituir a nossa cópia — só somar ao que temos.
+      var rawLocalAntes = null;
+      try { rawLocalAntes = localStorage.getItem(key); } catch(e) {}
+      var semPendenciaLocal = lastSyncRef.current[key] === undefined
+                           || lastSyncRef.current[key] === rawLocalAntes;
+      var nossaVersao = carimbosVistos[key];
+      var servidorMaisNovo = !!(carimboServidor && nossaVersao && String(carimboServidor) > String(nossaVersao));
       // Uma leitura que saiu ANTES do último envio deste navegador traz o valor
       // velho. Aplicá-la desfaria o que o usuário acabou de fazer — e, como a
       // mesclagem não sabe apagar, um item removido voltaria para sempre.
@@ -14704,21 +14718,30 @@ export default function App() {
           }
         } catch(e) {}
       }
-      // Vazio do servidor nunca apaga o que este navegador tem. Foi assim
-      // que a última cópia dos custos quase se perdeu: o servidor já estava
-      // zerado e o pull regravava {} por cima do mapa cheio que ainda
-      // existia aqui. Quem tem dado é a fonte; o vazio espera.
+      // Vazio do servidor não apaga o que este navegador tem — a não ser que dê
+      // para provar que o vazio é MAIS NOVO do que a cópia daqui.
+      //
+      // A regra existe porque a última cópia dos custos quase se perdeu assim: o
+      // servidor já estava zerado e a leitura regravava {} por cima do mapa cheio
+      // que ainda existia neste navegador. Mas, sem exceção nenhuma, ela também
+      // impedia o caso legítimo: apagar o último item no computador e o iPad
+      // continuar mostrando o item para sempre.
+      //
+      // O carimbo resolve os dois. Se o servidor está numa versão posterior à que
+      // temos aplicada aqui, então alguém apagou depois de nós, e apagar é o certo.
+      // Sem carimbo (servidor antigo, ou banco fora do ar) não dá para provar nada
+      // e continua valendo a regra conservadora: o vazio espera.
       if (valorVazio(v)) {
         var localAtual = null;
         try { localAtual = JSON.parse(localStorage.getItem(key) || "null"); } catch(e) {}
-        if (!valorVazio(localAtual)) return;
+        if (!valorVazio(localAtual) && !servidorMaisNovo) return;
       }
       var raw = JSON.stringify(v);
       if (lastSyncRef.current[key] === raw) return; // já é o que temos
       lastSyncRef.current[key] = raw;
       try { localStorage.setItem(key, raw); } catch(e) {}
       var setter = SYNC_ROOT_SETTERS[key];
-      if (setter) setter(v);
+      if (setter) setter(v, { substituir: servidorMaisNovo && semPendenciaLocal });
       // Avisa componentes que leem essa chave direto do localStorage (ex: produtos extras
       // da Precificação) para que a mudança de outro usuário apareça na hora, sem reload.
       try { window.dispatchEvent(new CustomEvent("mlmargem-sync", { detail: { key: key, value: v } })); } catch(e) {}
@@ -14726,30 +14749,39 @@ export default function App() {
     // Baixa estas chaves e aplica. Uma requisição para todas; se o servidor não
     // souber responder em lote, volta ao modo uma por chave — ficar sem
     // sincronizar seria pior do que gastar requisições.
-    function baixarEAplicar(keys) {
+    function baixarEAplicar(keys, carimbos) {
       if (!keys.length) return Promise.resolve();
+      var carimboDe = function(k){ return carimbos ? carimbos[k] : null; };
       return kvSyncPullMuitos(keys).then(function(lote){
         if (lote) {
-          keys.forEach(function(key){ aplicarDoServidor(key, lote[key]); });
+          keys.forEach(function(key){ aplicarDoServidor(key, lote[key], carimboDe(key)); });
           return;
         }
         return Promise.all(keys.map(function(key){
-          return kvSyncPull(key).then(function(v){ aplicarDoServidor(key, v); });
+          return kvSyncPull(key).then(function(v){ aplicarDoServidor(key, v, carimboDe(key)); });
         }));
       });
     }
-    var carimbosVistos = {}; // chave -> data da versão que já está aplicada aqui
+    // Qual versão do servidor cada chave já tem aplicada aqui. Guardado no
+    // navegador porque é o que permite reconhecer, depois de recarregar, que o
+    // servidor mudou desde a cópia que este aparelho carrega.
+    var carimbosVistos = {};
+    try { carimbosVistos = JSON.parse(localStorage.getItem("sync_carimbos_vistos") || "{}") || {}; } catch(e) { carimbosVistos = {}; }
+    function guardarCarimbos(){
+      try { localStorage.setItem("sync_carimbos_vistos", JSON.stringify(carimbosVistos)); } catch(e) {}
+    }
     function puxarDoServidor() {
       // Primeiro pergunta o que mudou (resposta minúscula), depois baixa só isso.
       // Na maioria dos ciclos nada mudou e nenhum dado trafega.
       return kvSyncCarimbos(SYNC_ALL_KEYS).then(function(carimbos){
-        if (!carimbos) return baixarEAplicar(SYNC_ALL_KEYS); // servidor sem carimbos: baixa tudo
+        if (!carimbos) return baixarEAplicar(SYNC_ALL_KEYS, null); // servidor sem carimbos: baixa tudo
         var mudaram = SYNC_ALL_KEYS.filter(function(k){
           return !(k in carimbosVistos) || carimbosVistos[k] !== carimbos[k];
         });
         if (!mudaram.length) return;
-        return baixarEAplicar(mudaram).then(function(){
+        return baixarEAplicar(mudaram, carimbos).then(function(){
           mudaram.forEach(function(k){ carimbosVistos[k] = carimbos[k]; });
+          guardarCarimbos();
         });
       });
     }

@@ -1353,6 +1353,92 @@ function CampoFiltro(props){
   return <div><div style={{ fontSize:11, color:"var(--text-3)", marginBottom:3 }}>{props.label}</div>{props.children}</div>;
 }
 
+// Custos que se repetem em toda venda — a etiqueta que sai da mesma impressora e
+// a caixa que é quase sempre a mesma. Preenchidos uma vez aqui, valem para todos
+// os anúncios; a Precificação continua aceitando um valor diferente por anúncio,
+// e esse valor é que manda naquela linha.
+function CustosPadraoTab({ custosPadrao, salvar, custosExtras }) {
+  const [etiqueta, setEtiqueta] = useState(function(){ var v = (custosPadrao||{}).etiqueta; return v > 0 ? String(v) : ""; });
+  const [embalagem, setEmbalagem] = useState(function(){ var v = (custosPadrao||{}).embalagem; return v > 0 ? String(v) : ""; });
+  const [salvo, setSalvo] = useState(false);
+
+  // Quantos anúncios têm valor próprio: é o que o padrão NÃO alcança, e quem
+  // mexe aqui precisa saber disso antes de estranhar o resultado.
+  var comEtiquetaPropria = 0, comEmbalagemPropria = 0;
+  Object.keys(custosExtras || {}).forEach(function(id){
+    var c = custosExtras[id] || {};
+    if (parseFloat(c.etiqueta) > 0) comEtiquetaPropria++;
+    if (parseFloat(c.embalagem) > 0) comEmbalagemPropria++;
+  });
+
+  function aplicar(){
+    salvar({ etiqueta: parseFloat(etiqueta) || 0, embalagem: parseFloat(embalagem) || 0 });
+    setSalvo(true);
+    setTimeout(function(){ setSalvo(false); }, 2500);
+  }
+  var mudou = String((custosPadrao||{}).etiqueta || "") !== String(parseFloat(etiqueta) || "")
+           || String((custosPadrao||{}).embalagem || "") !== String(parseFloat(embalagem) || "");
+
+  var lbl = { display:"block", fontSize:11, color:"var(--text-3)", fontWeight:600, marginBottom:4 };
+  var campo = { width:"100%", background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)",
+                padding:"9px 10px", borderRadius:8, fontSize:14, boxSizing:"border-box" };
+
+  return (
+    <div style={{ padding:2, maxWidth:660 }}>
+      <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Custos padrão por peça</div>
+      <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:16, lineHeight:1.5 }}>
+        Etiqueta e embalagem custam quase sempre o mesmo em toda venda. Preencha uma vez aqui e
+        a Precificação usa esses valores em todos os anúncios, sem você preencher item por item.
+      </div>
+
+      <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"18px 20px" }}>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(200px, 1fr))", gap:16 }}>
+          <div>
+            <label style={lbl}>Etiqueta (R$ por peça)</label>
+            <input type="number" step="0.01" min="0" value={etiqueta} placeholder="0,00"
+              onChange={function(e){ setEtiqueta(e.target.value); }} style={campo} />
+            <div style={{ fontSize:11, color:"var(--text-4)", marginTop:4 }}>Papel, ribbon e tinta de uma etiqueta.</div>
+          </div>
+          <div>
+            <label style={lbl}>Embalagem (R$ por peça)</label>
+            <input type="number" step="0.01" min="0" value={embalagem} placeholder="0,00"
+              onChange={function(e){ setEmbalagem(e.target.value); }} style={campo} />
+            <div style={{ fontSize:11, color:"var(--text-4)", marginTop:4 }}>Caixa ou saco, fita e o que vai de proteção dentro.</div>
+          </div>
+        </div>
+
+        <div style={{ display:"flex", alignItems:"center", gap:12, marginTop:18 }}>
+          <button onClick={aplicar} disabled={!mudou}
+            style={{ background: mudou ? "var(--ui-accent)" : "var(--surface-3)", border:"none",
+                     color: mudou ? "var(--ui-accent-text)" : "var(--text-4)", fontWeight:600,
+                     padding:"10px 22px", borderRadius:8, cursor: mudou ? "pointer" : "not-allowed", fontSize:13 }}>
+            Salvar
+          </button>
+          {salvo && <span style={{ fontSize:12.5, color:"#0a9d4e", fontWeight:600 }}>Salvo — já vale para toda a Precificação.</span>}
+        </div>
+      </div>
+
+      <div style={{ marginTop:16, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 18px" }}>
+        <div style={{ fontSize:12.5, color:"var(--text-2)", lineHeight:1.6 }}>
+          <b>Quem manda quando os dois existem.</b> Um valor preenchido direto na linha da Precificação
+          vale só para aquele anúncio e vence o padrão. É para a exceção — a peça que vai em caixa
+          reforçada, a que leva duas etiquetas.
+        </div>
+        <div style={{ fontSize:12.5, color:"var(--text-3)", marginTop:10, lineHeight:1.6 }}>
+          {comEtiquetaPropria + comEmbalagemPropria === 0
+            ? "Nenhum anúncio tem valor próprio hoje: o padrão vale para todos."
+            : "Hoje " + comEtiquetaPropria + " anúncio(s) têm etiqueta própria e " + comEmbalagemPropria +
+              " têm embalagem própria. Nesses, o padrão não se aplica — para que ele volte a valer, apague o valor da linha na Precificação."}
+        </div>
+      </div>
+
+      <div style={{ fontSize:11.5, color:"var(--text-4)", marginTop:14, lineHeight:1.55 }}>
+        Estes custos entram na margem da Precificação e no lucro de cada venda, por peça vendida.
+      </div>
+    </div>
+  );
+}
+
 function ProdutosTab({ produtos, salvar, fornecedores, enriched, tags, salvarTags }) {
   const [busca, setBusca] = useState("");
   const [editando, setEditando] = useState(null);
@@ -3983,6 +4069,7 @@ var ROTULO_DADO = {
   contas_pagar: "Contas a pagar",
   contas_bancarias: "Caixas e bancos",
   categorias_pagar: "Categorias de contas",
+  custos_padrao_config: "Custos padrão de etiqueta e embalagem",
   lancamentos: "Lançamentos",
   custos_fixos_config: "Custos fixos",
   impostos_config: "Impostos",
@@ -9519,6 +9606,7 @@ function HomeTab({ enrichedOrders, currentUser, setTab }){
     { titulo:"Configuração", itens:[
       perm.includes("admin") && { key:"admin", label:"Equipe", desc:"Usuários e permissões" },
       { key:"categorias_pagar", label:"Categorias de contas", desc:"Classificação das despesas" },
+      perm.includes("listings") && { key:"custos_padrao", label:"Custos padrão por peça", desc:"Etiqueta e embalagem de toda venda" },
       { key:"backup", label:"Backup e recuperação", desc:"Cópia dos dados e versões guardadas" },
       { key:"analise_ia", label:"Análise de anúncios", desc:"Critérios da nota e regras para a IA" },
       { key:"integracoes", label:"Integrações", desc:"Conexões e marketplaces" },
@@ -11996,7 +12084,7 @@ function NovoProdutoPrecForm({ onSave, onClose, marketplaceInicial, shopeeDoc })
   );
 }
 
-function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFretesAndSave, descontosConfig, setDescontosAndSave, precosVendaConfig, setPrecosVendaAndSave, pendentesAtualizacao, setPendentesAndSave, setSkuOverridesAndSave, rawOrders, icmsPct, buscaInicial, custosExtras, setCustosExtrasAndSave, produtos }) {
+function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFretesAndSave, descontosConfig, setDescontosAndSave, precosVendaConfig, setPrecosVendaAndSave, pendentesAtualizacao, setPendentesAndSave, setSkuOverridesAndSave, rawOrders, icmsPct, buscaInicial, custosExtras, setCustosExtrasAndSave, produtos, custosPadrao }) {
   // ICMS projetado da venda (Financeiro → Impostos). Aqui ainda não há comprador, então vale a
   // alíquota interestadual — o cenário da maior parte das vendas e o mais conservador no preço.
   var icmsVendaPct = parseFloat(icmsPct) || 0;
@@ -12027,12 +12115,20 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
       return atual.includes(id) ? atual.filter(function(x){ return x !== id; }) : atual.concat([id]);
     });
   }
+  // Etiqueta e embalagem: o valor preenchido na linha vale só para aquele anúncio
+  // e vence; sem ele, entra o padrão de Configuração → Custos padrão por peça.
+  // `padrao` marca de onde veio cada um, para a tela poder dizer isso.
+  var etiquetaPadrao = parseFloat((custosPadrao || {}).etiqueta) || 0;
+  var embalagemPadrao = parseFloat((custosPadrao || {}).embalagem) || 0;
   function custoExtraDe(id) {
     var c = (custosExtras || {})[id] || {};
+    var et = parseFloat(c.etiqueta) || 0, em = parseFloat(c.embalagem) || 0;
     return {
       icms: parseFloat(c.icms) || 0,
-      etiqueta: parseFloat(c.etiqueta) || 0,
-      embalagem: parseFloat(c.embalagem) || 0,
+      etiqueta: et > 0 ? et : etiquetaPadrao,
+      embalagem: em > 0 ? em : embalagemPadrao,
+      etiquetaDoPadrao: !(et > 0) && etiquetaPadrao > 0,
+      embalagemDoPadrao: !(em > 0) && embalagemPadrao > 0,
     };
   }
   function salvarCustoExtra(id, campo, valor) {
@@ -12630,11 +12726,15 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                         onBlur={function(e){ salvarCustoExtra(l.id, "etiqueta", parseFloat(e.target.value)||0); setEditingCustoExtra(null); }}
                         style={{ width:64, background:"var(--surface)", border:"1px solid #0e7490", color:"var(--text-strong)", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
                     ) : (
-                      <span onClick={function(){ setEditingCustoExtra(l.id + "|etiqueta"); }} title="Custo de etiqueta por peça"
+                      <span onClick={function(){ setEditingCustoExtra(l.id + "|etiqueta"); }}
+                        title={extras.etiquetaDoPadrao
+                          ? "Custo padrão de etiqueta, de Configuração → Custos padrão por peça. Clique para usar outro valor só neste anúncio."
+                          : "Custo de etiqueta por peça"}
                         style={{ cursor:"pointer", fontSize:12, fontWeight:600,
-                          color: extras.etiqueta > 0 ? "#FFC107" : "var(--text-3)",
+                          color: extras.etiquetaDoPadrao ? "var(--text-2)" : extras.etiqueta > 0 ? "#FFC107" : "var(--text-3)",
                           background: extras.etiqueta > 0 ? "transparent" : "var(--bg-2)",
-                          padding: extras.etiqueta > 0 ? "0" : "2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
+                          padding: extras.etiqueta > 0 ? "0" : "2px 6px", borderRadius:4, whiteSpace:"nowrap",
+                          borderBottom: extras.etiquetaDoPadrao ? "1px dashed var(--text-4)" : "none" }}>
                         {extras.etiqueta > 0 ? "R$ "+extras.etiqueta.toFixed(2).replace(".",",") : "✎ definir"}
                       </span>
                     )}
@@ -12647,11 +12747,15 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                         onBlur={function(e){ salvarCustoExtra(l.id, "embalagem", parseFloat(e.target.value)||0); setEditingCustoExtra(null); }}
                         style={{ width:64, background:"var(--surface)", border:"1px solid #0e7490", color:"var(--text-strong)", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
                     ) : (
-                      <span onClick={function(){ setEditingCustoExtra(l.id + "|embalagem"); }} title="Custo de embalagem por peça"
+                      <span onClick={function(){ setEditingCustoExtra(l.id + "|embalagem"); }}
+                        title={extras.embalagemDoPadrao
+                          ? "Custo padrão de embalagem, de Configuração → Custos padrão por peça. Clique para usar outro valor só neste anúncio."
+                          : "Custo de embalagem por peça"}
                         style={{ cursor:"pointer", fontSize:12, fontWeight:600,
-                          color: extras.embalagem > 0 ? "#FFC107" : "var(--text-3)",
+                          color: extras.embalagemDoPadrao ? "var(--text-2)" : extras.embalagem > 0 ? "#FFC107" : "var(--text-3)",
                           background: extras.embalagem > 0 ? "transparent" : "var(--bg-2)",
-                          padding: extras.embalagem > 0 ? "0" : "2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
+                          padding: extras.embalagem > 0 ? "0" : "2px 6px", borderRadius:4, whiteSpace:"nowrap",
+                          borderBottom: extras.embalagemDoPadrao ? "1px dashed var(--text-4)" : "none" }}>
                         {extras.embalagem > 0 ? "R$ "+extras.embalagem.toFixed(2).replace(".",",") : "✎ definir"}
                       </span>
                     )}
@@ -13829,6 +13933,20 @@ export default function App() {
       return next;
     });
   }
+  // Etiqueta e embalagem valem quase sempre o mesmo em toda a operação: a mesma
+  // impressora, a mesma caixa. Estes são os valores padrão, usados em todo anúncio
+  // que não tiver um valor próprio preenchido na Precificação.
+  const [custosPadrao, setCustosPadrao] = useState(function() {
+    try { return JSON.parse(localStorage.getItem("custos_padrao_config") || "{}"); } catch { return {}; }
+  });
+  function setCustosPadraoAndSave(updater) {
+    setCustosPadrao(function(prev) {
+      var next = typeof updater === "function" ? updater(prev) : updater;
+      try { localStorage.setItem("custos_padrao_config", JSON.stringify(next)); } catch {}
+      kvSyncPush("custos_padrao_config", next);
+      return next;
+    });
+  }
   // SKU editado manualmente pelo usuário na Precificação (por anúncio) — sobrepõe o SKU do ML.
   const [skuOverrides, setSkuOverrides] = useState(function() {
     try { return JSON.parse(localStorage.getItem("sku_overrides") || "{}"); } catch { return {}; }
@@ -14467,7 +14585,7 @@ export default function App() {
     "custos_fixos_config","impostos_config","irpj_csll_config","icms_por_estado","icms_regime_config","lancamentos",
     "mov_estoque","metaMensal","min_stock_anuncios","real_fees_config","pedidos_compra",
     "precificacao_extras","precos_pendentes_ml","custos_extras_config","depositos_estoque","estoque_depositos",
-    "envios_full","vendas_estoque_baixadas","sku_overrides","analise_ia_config","prioridade_pagamento_config","financeiro_config","recebiveis_baixados","extrato_bancario","conciliacoes_manuais","reclamacoes_analise","tags_itens",
+    "envios_full","vendas_estoque_baixadas","sku_overrides","analise_ia_config","prioridade_pagamento_config","financeiro_config","recebiveis_baixados","extrato_bancario","conciliacoes_manuais","reclamacoes_analise","tags_itens","custos_padrao_config",
   ]).current;
   // Para os dados guardados como dicionário (chave→valor, ex: custo por anúncio), mesclar em
   // vez de substituir por inteiro — evita que um "pull" com dados parciais do servidor apague
@@ -14503,6 +14621,7 @@ export default function App() {
     real_fees_config: mesclarSetter(setRealFees),
     sku_overrides: mesclarSetter(setSkuOverrides),
     custos_extras_config: mesclarSetter(setCustosExtras),
+    custos_padrao_config: mesclarSetter(setCustosPadrao),
     analise_ia_config: function(v){ setConfigQualidade(v); },
     prioridade_pagamento_config: mesclarSetter(setConfigPrioridadeState),
     financeiro_config: mesclarSetter(setFinanceiroConfigState),
@@ -14523,7 +14642,7 @@ export default function App() {
     precos_venda_config: "object", precos_pendentes_ml: "object", irpj_csll_config: "object",
     icms_regime_config: "object", icms_por_estado: "object",
     min_stock_anuncios: "object", real_fees_config: "object", sku_overrides: "object",
-    custos_extras_config: "object", analise_ia_config: "object",
+    custos_extras_config: "object", custos_padrao_config: "object", analise_ia_config: "object",
     prioridade_pagamento_config: "object",
     financeiro_config: "object", recebiveis_baixados: "object",
     extrato_bancario: "array", conciliacoes_manuais: "object", reclamacoes_analise: "object", tags_itens: "object",
@@ -15271,7 +15390,7 @@ export default function App() {
   // que se deve receber, independente do que esta filtrado na tela ao lado.
   const enrichedOrdersTodos = useMemo(function(){
     return (rawOrders || []).map(enriquecerPedido);
-  }, [rawOrders, listings, costs, paymentData, shipmentCosts, shippingData, realFees, custosExtras, impostos, icmsRegime, icmsTabela]); // eslint-disable-line
+  }, [rawOrders, listings, costs, paymentData, shipmentCosts, shippingData, realFees, custosExtras, custosPadrao, impostos, icmsRegime, icmsTabela]); // eslint-disable-line
   function enriquecerPedido(o) {
     const listing = listings.find(l => l.id === o.listing_id);
     const cost = costs[listing?.id] ?? 0;
@@ -15286,8 +15405,11 @@ export default function App() {
     // Custos preenchidos na Precificação para este anúncio: ICMS próprio, etiqueta
     // e embalagem. Mesma chave dos custos acima — o código do anúncio.
     const extrasDoAnuncio = custosExtras[o.listing_id] ?? {};
-    const etiquetaUnit = parseFloat(extrasDoAnuncio.etiqueta) || 0;
-    const embalagemUnit = parseFloat(extrasDoAnuncio.embalagem) || 0;
+    // Mesma regra da Precificação: o valor do anúncio vence, senão vale o padrão.
+    // Se as duas telas usassem critérios diferentes, a margem simulada e o lucro
+    // realizado do mesmo item não fechariam.
+    const etiquetaUnit = parseFloat(extrasDoAnuncio.etiqueta) || parseFloat((custosPadrao||{}).etiqueta) || 0;
+    const embalagemUnit = parseFloat(extrasDoAnuncio.embalagem) || parseFloat((custosPadrao||{}).embalagem) || 0;
     const icmsDoAnuncio = parseFloat(extrasDoAnuncio.icms) || 0;
     // ICMS conforme o destino: dentro da UF de origem vs. interestadual (ver Financeiro → Impostos).
     // Um ICMS preenchido na Precificação vale para aquele anúncio, no lugar do regime.
@@ -15536,6 +15658,7 @@ export default function App() {
             { titulo:"Configuração", itens:[
               currentUser?.permissoes?.includes("admin") && { key:"admin", label:"Equipe" },
               { key:"categorias_pagar", label:"Categorias de contas" },
+              currentUser?.permissoes?.includes("listings") && { key:"custos_padrao", label:"Custos padrão por peça" },
               { key:"backup", label:"Backup e recuperação" },
               { key:"analise_ia", label:"Análise de anúncios" },
               { key:"integracoes", label:"Integrações" },
@@ -16100,6 +16223,7 @@ export default function App() {
           <PrecificacaoTab
             produtos={produtos}
             custosExtras={custosExtras} setCustosExtrasAndSave={setCustosExtrasAndSave}
+            custosPadrao={custosPadrao}
             buscaInicial={buscaPrecificacao}
             icmsPct={icmsPctProjetado}
             enriched={enriched}
@@ -16138,6 +16262,7 @@ export default function App() {
           analise={reclamacoesAnalise} salvarAnalise={salvarReclamacoesAnalise} setTab={setTab} />}
         {tab === "categorias_pagar" && <CategoriasPagarTab categorias={categoriasPagar} salvar={salvarCategoriasPagar}
           contasPagar={contasPagar} salvarContasPagar={salvarContasPagar} setTab={setTab} />}
+        {tab === "custos_padrao" && <CustosPadraoTab custosPadrao={custosPadrao} salvar={setCustosPadraoAndSave} custosExtras={custosExtras} />}
         {tab === "analise_ia" && <AnaliseIATab config={configQualidade} salvar={setConfigQualidade} enriched={enriched} />}
         {tab === "produtos" && <ProdutosTab produtos={produtos} salvar={salvarProdutos} fornecedores={fornecedores} enriched={enriched} tags={tagsItens} salvarTags={salvarTagsItens} />}
         {tab === "estoque" && <EstoqueTab produtos={produtos} />}

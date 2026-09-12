@@ -71,6 +71,7 @@ const SYNC_KEYS_PERMITIDAS = [
   "prioridade_pagamento_config",
   "analise_ia_config",
   "custos_extras_config",
+  "custos_padrao_config",
 ];
 
 // "Vazio" é o que não carrega informação nenhuma: nulo, lista sem itens ou

@@ -109,12 +109,26 @@ function valorVazio(v) {
   return false;
 }
 
-async function kvSyncPush(key, value) {
+// O que este navegador acabou de enviar, por chave. Serve para não aplicar por
+// cima uma resposta de leitura que já estava em trânsito quando o envio saiu —
+// ela traz o valor ANTERIOR e desfaria a alteração recém-feita.
+const ultimoEnvioLocal = {};
+
+// `permitirVazio` diz ao servidor que este vazio é intencional: quem chamou
+// tinha o dado e apagou o último item. Sem essa distinção o servidor recusa
+// toda gravação vazia (a trava que existe desde que um navegador sem dados
+// zerou os custos de todos os anúncios), e o último item removido de qualquer
+// lista voltava sozinho na leitura seguinte.
+async function kvSyncPush(key, value, opcoes) {
   try {
+    ultimoEnvioLocal[key] = { raw: JSON.stringify(value), em: Date.now() };
     await fetch("/api/ml/_sync", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key, value, ns: syncNamespace() }),
+      body: JSON.stringify({
+        key, value, ns: syncNamespace(),
+        permitirVazio: !!(opcoes && opcoes.permitirVazio),
+      }),
     });
   } catch {}
 }
@@ -13929,7 +13943,7 @@ export default function App() {
     setCustosExtras(function(prev) {
       var next = typeof updater === "function" ? updater(prev) : updater;
       try { localStorage.setItem("custos_extras_config", JSON.stringify(next)); } catch {}
-      kvSyncPush("custos_extras_config", next);
+      kvSyncPush("custos_extras_config", next, { permitirVazio: !valorVazio(prev) });
       return next;
     });
   }
@@ -13943,7 +13957,7 @@ export default function App() {
     setCustosPadrao(function(prev) {
       var next = typeof updater === "function" ? updater(prev) : updater;
       try { localStorage.setItem("custos_padrao_config", JSON.stringify(next)); } catch {}
-      kvSyncPush("custos_padrao_config", next);
+      kvSyncPush("custos_padrao_config", next, { permitirVazio: !valorVazio(prev) });
       return next;
     });
   }
@@ -13955,7 +13969,7 @@ export default function App() {
     setSkuOverrides(function(prev) {
       var next = typeof updater === "function" ? updater(prev) : updater;
       try { localStorage.setItem("sku_overrides", JSON.stringify(next)); } catch {}
-      kvSyncPush("sku_overrides", next);
+      kvSyncPush("sku_overrides", next, { permitirVazio: !valorVazio(prev) });
       return next;
     });
   }
@@ -13963,7 +13977,7 @@ export default function App() {
     setFretesConfig(function(prev) {
       var next = typeof updater === "function" ? updater(prev) : updater;
       try { localStorage.setItem("fretes_config", JSON.stringify(next)); } catch {}
-      kvSyncPush("fretes_config", next);
+      kvSyncPush("fretes_config", next, { permitirVazio: !valorVazio(prev) });
       return next;
     });
   }
@@ -13971,7 +13985,7 @@ export default function App() {
     setCosts(function(prev) {
       var next = typeof updater === "function" ? updater(prev) : updater;
       try { localStorage.setItem("costs_config", JSON.stringify(next)); } catch {}
-      kvSyncPush("costs_config", next);
+      kvSyncPush("costs_config", next, { permitirVazio: !valorVazio(prev) });
       return next;
     });
   }
@@ -13979,7 +13993,7 @@ export default function App() {
     setDescontosConfig(function(prev) {
       var next = typeof updater === "function" ? updater(prev) : updater;
       try { localStorage.setItem("descontos_config", JSON.stringify(next)); } catch {}
-      kvSyncPush("descontos_config", next);
+      kvSyncPush("descontos_config", next, { permitirVazio: !valorVazio(prev) });
       return next;
     });
   }
@@ -13987,7 +14001,7 @@ export default function App() {
     setPrecosVendaConfig(function(prev) {
       var next = typeof updater === "function" ? updater(prev) : updater;
       try { localStorage.setItem("precos_venda_config", JSON.stringify(next)); } catch {}
-      kvSyncPush("precos_venda_config", next);
+      kvSyncPush("precos_venda_config", next, { permitirVazio: !valorVazio(prev) });
       return next;
     });
   }
@@ -13995,7 +14009,7 @@ export default function App() {
     setPendentesAtualizacao(function(prev) {
       var next = typeof updater === "function" ? updater(prev) : updater;
       try { localStorage.setItem("precos_pendentes_ml", JSON.stringify(next)); } catch {}
-      kvSyncPush("precos_pendentes_ml", next);
+      kvSyncPush("precos_pendentes_ml", next, { permitirVazio: !valorVazio(prev) });
       return next;
     });
   }
@@ -14664,6 +14678,12 @@ export default function App() {
     // Aplica neste navegador o valor que o servidor tem para uma chave.
     function aplicarDoServidor(key, v) {
       if (v == null) return;
+      // Uma leitura que saiu ANTES do último envio deste navegador traz o valor
+      // velho. Aplicá-la desfaria o que o usuário acabou de fazer — e, como a
+      // mesclagem não sabe apagar, um item removido voltaria para sempre.
+      // Dentro da janela abaixo, só aceitamos o que bate com o que enviamos.
+      var envio = ultimoEnvioLocal[key];
+      if (envio && Date.now() - envio.em < 20000 && JSON.stringify(v) !== envio.raw) return;
       // Blindagem: se a chave tem um tipo esperado (lista/objeto) e o valor que veio do
       // servidor não bate, ignora — evita aplicar um dado corrompido/incompatível que
       // quebraria qualquer tela que faça .filter()/.map()/.forEach() nele.

@@ -242,10 +242,14 @@ export async function syncPromocoes(sellerId, token, ate) {
     left join flow.ml_promocao p on p.item_id = l.id
     where l.seller_id = ${String(sellerId)}
       and coalesce(l.raw->>'status', '') = 'active'
-      -- Revisita de 1h para acompanhar o agendamento horário: com 6h, a passada de
-      -- hora em hora encontraria tudo "já verificado" e não faria nada. Como o
-      -- catálogo ativo cabe numa passada, revisitar mais vezes não pesa.
-      and (p.item_id is null or p.verificado_em < now() - interval '1 hour')
+      -- Revisita de 15 minutos, casada com a frequência real do agendamento. Com
+      -- 1 hora, ativar uma promoção e só vê-la aparecer 50 minutos depois era o
+      -- comportamento normal, não um defeito — e ninguém entendia por quê.
+      -- O catálogo ativo (cerca de 130 anúncios) cabe inteiro numa passada: são
+      -- ~16s de espera entre chamadas ao ML, dentro do orçamento de 25s. Se
+      -- crescer além disso, a ordem por verificado_em faz as passadas se
+      -- revezarem, sem nenhum anúncio ficar para trás.
+      and (p.item_id is null or p.verificado_em < now() - interval '15 minutes')
     order by p.verificado_em nulls first
     limit 400
   `;

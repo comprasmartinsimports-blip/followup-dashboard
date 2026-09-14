@@ -14114,11 +14114,24 @@ export default function App() {
   const [promoServidor, setPromoServidor] = useState({ carregado: false, itens: {} });
   useEffect(function(){
     let vivo = true;
-    fetch("/api/ml/cache_promocoes")
-      .then(function(r){ return r.ok ? r.json() : null; })
-      .then(function(d){ if (vivo && d && d.cache) setPromoServidor({ carregado: true, itens: d.itens || {} }); })
-      .catch(function(){});
-    return function(){ vivo = false; };
+    function buscarPromocoes(){
+      if (abaOculta()) return; // aba em segundo plano não consulta
+      fetch("/api/ml/cache_promocoes")
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(d){ if (vivo && d && d.cache) setPromoServidor({ carregado: true, itens: d.itens || {} }); })
+        .catch(function(){});
+    }
+    buscarPromocoes();
+    // Sem isto, esta busca acontecia UMA vez, ao abrir a página. Quem deixa o
+    // sistema aberto o dia inteiro — o caso normal — ativava uma promoção no
+    // Mercado Livre e nunca via a mudança, por mais que o servidor já soubesse.
+    var id = setInterval(buscarPromocoes, 180000); // 3 min, igual ao dos anúncios
+    function aoVoltar(){ if (!abaOculta()) buscarPromocoes(); }
+    document.addEventListener("visibilitychange", aoVoltar);
+    return function(){
+      vivo = false; clearInterval(id);
+      document.removeEventListener("visibilitychange", aoVoltar);
+    };
   }, []);
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");

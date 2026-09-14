@@ -45,6 +45,7 @@ const SYNC_KEYS_PERMITIDAS = [
   "lancamentos",
   "mov_estoque",
   "metaMensal",
+  "margem_alvo_config",
   "min_stock_anuncios",
   "real_fees_config",
   "pedidos_compra",

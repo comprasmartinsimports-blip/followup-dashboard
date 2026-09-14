@@ -4107,6 +4107,7 @@ var ROTULO_DADO = {
   conciliacoes_manuais: "Conciliações feitas à mão",
   reclamacoes_analise: "Análise das reclamações",
   metaMensal: "Meta mensal",
+  margem_alvo_config: "Margem alvo da precificação",
 };
 function rotuloDado(k){ return ROTULO_DADO[k] || k; }
 
@@ -12098,7 +12099,7 @@ function NovoProdutoPrecForm({ onSave, onClose, marketplaceInicial, shopeeDoc })
   );
 }
 
-function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFretesAndSave, descontosConfig, setDescontosAndSave, precosVendaConfig, setPrecosVendaAndSave, pendentesAtualizacao, setPendentesAndSave, setSkuOverridesAndSave, rawOrders, icmsPct, buscaInicial, custosExtras, setCustosExtrasAndSave, produtos, custosPadrao }) {
+function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFretesAndSave, descontosConfig, setDescontosAndSave, precosVendaConfig, setPrecosVendaAndSave, pendentesAtualizacao, setPendentesAndSave, setSkuOverridesAndSave, rawOrders, icmsPct, buscaInicial, custosExtras, setCustosExtrasAndSave, produtos, custosPadrao, margemAlvo, salvarMargemAlvo }) {
   // ICMS projetado da venda (Financeiro → Impostos). Aqui ainda não há comprador, então vale a
   // alíquota interestadual — o cenário da maior parte das vendas e o mais conservador no preço.
   var icmsVendaPct = parseFloat(icmsPct) || 0;
@@ -12106,7 +12107,12 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
   const [buscaTipo, setBuscaTipo] = useState("all"); // all | title | sku | mlb
   // Chegou pela tela de Tendências: aplica o filtro do produto escolhido lá.
   useEffect(function(){ if (buscaInicial) setBusca(buscaInicial); }, [buscaInicial]);
-  const [margemAlvo, setMargemAlvo] = useState(20);
+  // O que está digitado no campo, que pode estar vazio ou incompleto ("1." a
+  // caminho de "1.5"). O valor válido mais recente é o que vem de fora.
+  const [margemTexto, setMargemTexto] = useState(String(margemAlvo));
+  useEffect(function(){
+    if (parseFloat(margemTexto) !== margemAlvo) setMargemTexto(String(margemAlvo));
+  }, [margemAlvo]); // eslint-disable-line
   // Casa um item (anúncio ou produto novo) com a busca conforme o tipo escolhido.
   function casaBusca(sku, id, titulo) {
     var q = busca.trim().toLowerCase();
@@ -12354,7 +12360,19 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:7, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 16px" }}>
           <span style={{ fontSize:13, color:"var(--text-2)", fontWeight:600 }}>Margem alvo:</span>
-          <input type="number" min="1" max="99" value={margemAlvo} onChange={function(e){setMargemAlvo(parseFloat(e.target.value)||20);}}
+          <input type="number" min="1" max="99" value={margemTexto}
+            onChange={function(e){
+              var t = e.target.value;
+              setMargemTexto(t);
+              var n = parseFloat(t);
+              if (isFinite(n) && n > 0 && n < 100) salvarMargemAlvo(n);
+            }}
+            onBlur={function(){
+              // Campo apagado ou inválido volta ao último valor que valeu, em vez
+              // de saltar para 20% e mudar o preço de tudo sem ninguém pedir.
+              var n = parseFloat(margemTexto);
+              if (!isFinite(n) || n <= 0 || n >= 100) setMargemTexto(String(margemAlvo));
+            }}
             style={{ width:60, background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"6px 10px", borderRadius:8, fontSize:15, fontWeight:500, outline:"none", textAlign:"center" }} />
           <span style={{ fontSize:15, fontWeight:500, color:"var(--text-strong)" }}>%</span>
         </div>
@@ -14138,6 +14156,20 @@ export default function App() {
     try { document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light"); } catch(e) {}
   }, [darkMode]);
   const [metaMensal, setMetaMensal] = useState(() => parseFloat(localStorage.getItem("metaMensal") || "0"));
+  // Margem alvo da Precificação. Morava dentro da tela, então sumia ao trocar de
+  // aba e voltava para 20% — o usuário reconfigurava toda vez. É uma política de
+  // preço da operação, não uma preferência da sessão: fica guardada e sincronizada.
+  const [margemAlvo, setMargemAlvoState] = useState(function(){
+    var v = parseFloat(localStorage.getItem("margem_alvo_config"));
+    return isFinite(v) && v > 0 ? v : 20;
+  });
+  function salvarMargemAlvo(n) {
+    if (!isFinite(n) || n <= 0) return;
+    setMargemAlvoState(n);
+    // Só grava aqui; o ciclo de envio leva ao servidor. Enviar a cada tecla
+    // digitada seria uma requisição por letra.
+    try { localStorage.setItem("margem_alvo_config", String(n)); } catch(e) {}
+  }
   const [impostos, setImpostos] = useState(() => {
     try { var v = JSON.parse(localStorage.getItem("impostos_config") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
   });
@@ -14607,7 +14639,7 @@ export default function App() {
     "notas_fiscais_entrada","costs_config","fretes_config","descontos_config","precos_venda_config",
     "produtos_cadastro","fornecedores_cadastro","contas_pagar","contas_bancarias","categorias_pagar",
     "custos_fixos_config","impostos_config","irpj_csll_config","icms_por_estado","icms_regime_config","lancamentos",
-    "mov_estoque","metaMensal","min_stock_anuncios","real_fees_config","pedidos_compra",
+    "mov_estoque","metaMensal","margem_alvo_config","min_stock_anuncios","real_fees_config","pedidos_compra",
     "precificacao_extras","precos_pendentes_ml","custos_extras_config","depositos_estoque","estoque_depositos",
     "envios_full","vendas_estoque_baixadas","sku_overrides","analise_ia_config","prioridade_pagamento_config","financeiro_config","recebiveis_baixados","extrato_bancario","conciliacoes_manuais","reclamacoes_analise","tags_itens","custos_padrao_config",
   ]).current;
@@ -14647,6 +14679,7 @@ export default function App() {
     icms_por_estado: mesclarSetter(setIcmsTabelaState),
     lancamentos: setLancamentos,
     metaMensal: function(v){ setMetaMensal(parseFloat(v)||0); },
+    margem_alvo_config: function(v){ var n = parseFloat(v); if (isFinite(n) && n > 0) setMargemAlvoState(n); },
     min_stock_anuncios: mesclarSetter(setMinStock),
     real_fees_config: mesclarSetter(setRealFees),
     sku_overrides: mesclarSetter(setSkuOverrides),
@@ -16286,6 +16319,7 @@ export default function App() {
             produtos={produtos}
             custosExtras={custosExtras} setCustosExtrasAndSave={setCustosExtrasAndSave}
             custosPadrao={custosPadrao}
+            margemAlvo={margemAlvo} salvarMargemAlvo={salvarMargemAlvo}
             buscaInicial={buscaPrecificacao}
             icmsPct={icmsPctProjetado}
             enriched={enriched}

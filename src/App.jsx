@@ -14726,7 +14726,28 @@ export default function App() {
   const lastSyncRef = useRef({}); // key -> string JSON já sincronizado (evita reenviar/reaplicar sem necessidade)
 
   useEffect(function(){
+    // De qual conta é o que está guardado neste navegador. Sem esta marca, o
+    // localStorage não sabe a quem pertence: trocar de conta ML deixava os dados
+    // da empresa anterior no aparelho, e o ciclo de envio os gravava na conta
+    // nova. Havia uma limpeza no caminho de conectar, mas ela não cobria os
+    // outros caminhos (restaurar de snapshot, por exemplo) e não adiantava depois
+    // que o servidor já estava contaminado.
+    function contaLocalConfere() {
+      var atual = syncNamespace();
+      if (!atual) return true; // conta ainda não identificada: não mexe em nada
+      var marcada = null;
+      try { marcada = localStorage.getItem("sync_conta_local"); } catch(e) {}
+      if (marcada === atual) return true;
+      if (!marcada) { try { localStorage.setItem("sync_conta_local", atual); } catch(e) {} return true; }
+      // A conta mudou: o que está aqui é da anterior e não pode ir para esta.
+      SYNC_ALL_KEYS.forEach(function(k){ try { localStorage.removeItem(k); } catch(e) {} });
+      try { localStorage.removeItem("sync_carimbos_vistos"); } catch(e) {}
+      try { localStorage.setItem("sync_conta_local", atual); } catch(e) {}
+      lastSyncRef.current = {};
+      return false; // nada a enviar neste ciclo; o próximo pull traz a conta certa
+    }
     function pushMudancasLocais() {
+      if (!contaLocalConfere()) return;
       SYNC_ALL_KEYS.forEach(function(key){
         try {
           var raw = localStorage.getItem(key);
@@ -14760,20 +14781,14 @@ export default function App() {
       var tipoEsperado = SYNC_TIPO_ESPERADO[key];
       if (tipoEsperado === "array" && !Array.isArray(v)) return;
       if (tipoEsperado === "object" && (Array.isArray(v) || typeof v !== "object" || v === null)) return;
-      // Produtos precificados (extras): MESCLA por id — o pull nunca remove um extra local que
-      // o servidor DESSA conta ainda não tem. Evita perder a precificação ao trocar de conta ML
-      // (namespace por vendedor) ou quando o servidor devolve uma lista vazia/desatualizada.
-      if (key === "precificacao_extras" && Array.isArray(v)) {
-        try {
-          var localArr = JSON.parse(localStorage.getItem(key) || "[]");
-          if (Array.isArray(localArr) && localArr.length) {
-            var byId = {};
-            v.forEach(function(x){ if (x && x.id) byId[x.id] = x; });           // servidor vence em conflito
-            localArr.forEach(function(x){ if (x && x.id && !byId[x.id]) byId[x.id] = x; }); // mantém extras locais
-            v = Object.keys(byId).map(function(k){ return byId[k]; });
-          }
-        } catch(e) {}
-      }
+      // Aqui havia uma mescla para "precificacao_extras" que preservava os extras
+      // deste navegador que o servidor da conta atual não tinha. A intenção era não
+      // perder precificação ao trocar de conta — e o efeito foi o oposto: um
+      // navegador que já tinha sido usado com OUTRA empresa carregava os produtos
+      // dela para dentro da conta nova e os regravava no servidor. Foi assim que
+      // 124 SKUs de outra empresa entraram no painel da Martins e voltavam toda vez
+      // que eram apagados. Extra de uma conta não pertence a outra: o servidor da
+      // conta conectada é a fonte, sem exceção.
       // Vazio do servidor não apaga o que este navegador tem — a não ser que dê
       // para provar que o vazio é MAIS NOVO do que a cópia daqui.
       //

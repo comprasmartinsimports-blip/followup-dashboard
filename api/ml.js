@@ -1002,6 +1002,24 @@ export default async function handler(req, res) {
       if (!key || !SYNC_KEYS_PERMITIDAS.includes(key)) {
         return res.status(400).json({ error: "Chave de sincronização inválida" });
       }
+      // Isolamento entre contas, na fronteira. O navegador diz de qual conta é o
+      // dado que está mandando (ns); o cookie diz qual conta está conectada AGORA.
+      // Divergência significa dado de uma empresa a caminho do espaço de outra —
+      // foi assim que 124 produtos de uma conta apareceram no painel da outra.
+      // Recusar aqui vale mais do que confiar em cada caminho do navegador.
+      {
+        const contaCookie = cookiesSync.ml_user_id && String(cookiesSync.ml_user_id).trim();
+        const contaCliente = body.ns && String(body.ns).trim();
+        if (contaCookie && contaCliente && contaCookie !== contaCliente
+            && !CHAVES_COMPARTILHADAS.includes(key)) {
+          return res.status(409).json({
+            error: "Conta divergente",
+            detalhe: "A gravação veio marcada como da conta " + contaCliente
+                   + ", mas a conta conectada é " + contaCookie + ". Nada foi alterado.",
+            chave: key,
+          });
+        }
+      }
       // Restaurar uma versão guardada. Vem por aqui, e não por uma rota nova,
       // para reaproveitar a mesma checagem de sessão e de chave permitida.
       if (body.restaurarVersao) {

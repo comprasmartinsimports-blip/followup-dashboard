@@ -12017,9 +12017,50 @@ function BadgeTipoEnvio({ tipo }) {
 //  ABA PRECIFICAÇÃO — Calculadora vinculada aos anúncios
 // ════════════════════════════════════════════════════════════
 
-function NovoProdutoPrecForm({ onSave, onClose, marketplaceInicial, shopeeDoc }) {
+function NovoProdutoPrecForm({ onSave, onClose, marketplaceInicial, shopeeDoc, produtos }) {
   const [f, setF] = useState({ nome:"", sku:"", custo:"", precoVenda:"", frete:"", taxaMl:"12", desconto:"0", marketplace: marketplaceInicial || "ml" });
   var set = function(k,v){ setF(function(p){ return Object.assign({},p,{[k]:v}); }); };
+
+  // ── Digitou o SKU: se o produto já existe no cadastro, traz o que ele sabe ──
+  // O cadastro tem nome, custo, preço e as medidas da caixa. Redigitar tudo isso
+  // aqui, com o dado já guardado a uma tela de distância, só cria divergência
+  // entre as duas telas.
+  const [achado, setAchado] = useState(null);
+  function produtoPorSku(sku) {
+    var alvo = String(sku || "").trim().toLowerCase();
+    if (!alvo) return null;
+    return (produtos || []).find(function(p){
+      return String(p.sku || "").trim().toLowerCase() === alvo
+          || String(p.codigo || "").trim().toLowerCase() === alvo;
+    }) || null;
+  }
+  function mudarSku(v) {
+    var prod = produtoPorSku(v);
+    setAchado(prod);
+    setF(function(p){
+      var novo = Object.assign({}, p, { sku: v });
+      if (!prod) return novo;
+      // Preenche só o que está em branco: o que você digitou continua valendo.
+      if (!String(novo.nome || "").trim()) novo.nome = nomeProd(prod);
+      if (!String(novo.custo || "").trim() && parseFloat(prod.precoCusto) > 0) novo.custo = String(parseFloat(prod.precoCusto));
+      if (!String(novo.precoVenda || "").trim() && parseFloat(prod.precoVenda) > 0) novo.precoVenda = String(parseFloat(prod.precoVenda));
+      // Frete pela tabela do Mercado Livre, a partir das medidas do cadastro e do
+      // preço — a mesma conta da tabela de precificação, para não divergirem.
+      if (!String(novo.frete || "").trim() && novo.marketplace === "ml") {
+        var fr = freteMLdoProduto(prod, parseFloat(novo.precoVenda) || 0);
+        if (fr) novo.frete = fr.valor.toFixed(2);
+      }
+      return novo;
+    });
+  }
+  // O que o cadastro NÃO tinha, para a tela dizer em vez de deixar um campo
+  // vazio sem explicação.
+  var faltando = [];
+  if (achado) {
+    if (!(parseFloat(achado.precoCusto) > 0)) faltando.push("preço de custo");
+    if (!(parseFloat(achado.precoVenda) > 0)) faltando.push("preço de venda");
+    if (!pesoConsideradoML(achado)) faltando.push("peso ou medidas (sem eles não dá para calcular o frete)");
+  }
   var ehShopee = f.marketplace === "shopee";
   var custo=parseFloat(f.custo||0), bruto=parseFloat(f.precoVenda||0);
   var taxa = ehShopee ? calcTaxaShopee(bruto, shopeeDoc) : bruto*(parseFloat(f.taxaMl||12)/100);
@@ -12048,8 +12089,11 @@ function NovoProdutoPrecForm({ onSave, onClose, marketplaceInicial, shopeeDoc })
         </div>
         <div>
           <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:3, fontWeight:600, textTransform:"none" }}>SKU *</div>
-          <input value={f.sku} onChange={function(e){set("sku",e.target.value);}} placeholder="Ex: 1234"
-            style={{ width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none", fontFamily:"monospace" }} />
+          <input value={f.sku} onChange={function(e){ mudarSku(e.target.value); }} placeholder="Ex: 1234"
+            style={{ width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)",
+                     color:"var(--text-strong)", padding:"8px 10px", borderRadius:8, fontSize:12,
+                     outline:"none", fontFamily:"monospace",
+                     borderColor: achado ? "#0a9d4e" : "var(--border)" }} />
         </div>
         <div>
           <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:3, fontWeight:600, textTransform:"none" }}>Custo (R$)</div>
@@ -12081,6 +12125,18 @@ function NovoProdutoPrecForm({ onSave, onClose, marketplaceInicial, shopeeDoc })
           )}
         </div>
       </div>
+      {achado && (
+        <div style={{ background:"rgba(10,157,78,.10)", border:"1px solid rgba(10,157,78,.35)", borderRadius:8,
+                      padding:"9px 12px", fontSize:11.5, color:"var(--text-2)", lineHeight:1.55 }}>
+          Este SKU já está no cadastro: <b style={{ color:"var(--text-strong)" }}>{nomeProd(achado)}</b>.
+          {" "}Os campos em branco foram preenchidos com o que está lá; o que você digitar vale por cima.
+          {faltando.length > 0 && (
+            <div style={{ marginTop:4, color:"var(--text-3)" }}>
+              Faltando no cadastro: {faltando.join(", ")}.
+            </div>
+          )}
+        </div>
+      )}
       {bruto > 0 && custo > 0 && (
         <div style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:"10px 14px", display:"flex", gap:16 }}>
           <div><div style={{ fontSize:10, color:"var(--text-3)" }}>Lucro</div><div style={{ fontWeight:500, color:lucro>=0?"#0e7490":"#FF5252" }}>R$ {lucro.toFixed(2).replace(".",",")}</div></div>
@@ -12510,6 +12566,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
           <div style={{ background:"var(--surface)", borderRadius:14, width:480, padding:20 }}>
             <div style={{ fontWeight:500, fontSize:15, marginBottom:14 }}>+ Precificar Novo Produto</div>
             <NovoProdutoPrecForm
+              produtos={produtos}
               marketplaceInicial={mktSel}
               shopeeDoc={shopeeDoc}
               onSave={function(p){

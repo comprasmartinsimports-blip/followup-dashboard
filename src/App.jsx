@@ -12026,6 +12026,9 @@ function NovoProdutoPrecForm({ onSave, onClose, marketplaceInicial, shopeeDoc, p
   // aqui, com o dado já guardado a uma tela de distância, só cria divergência
   // entre as duas telas.
   const [achado, setAchado] = useState(null);
+  // O frete só é recalculado enquanto ninguém o digitou. A partir do momento em
+  // que você escreve um valor ali, ele é seu e o sistema não mexe mais.
+  const [freteAutomatico, setFreteAutomatico] = useState(true);
   function produtoPorSku(sku) {
     var alvo = String(sku || "").trim().toLowerCase();
     if (!alvo) return null;
@@ -12046,9 +12049,36 @@ function NovoProdutoPrecForm({ onSave, onClose, marketplaceInicial, shopeeDoc, p
       if (!String(novo.precoVenda || "").trim() && parseFloat(prod.precoVenda) > 0) novo.precoVenda = String(parseFloat(prod.precoVenda));
       // Frete pela tabela do Mercado Livre, a partir das medidas do cadastro e do
       // preço — a mesma conta da tabela de precificação, para não divergirem.
-      if (!String(novo.frete || "").trim() && novo.marketplace === "ml") {
+      if (freteAutomatico && novo.marketplace === "ml") {
         var fr = freteMLdoProduto(prod, parseFloat(novo.precoVenda) || 0);
         if (fr) novo.frete = fr.valor.toFixed(2);
+      }
+      return novo;
+    });
+  }
+  // A tabela de frete do Mercado Livre depende da faixa de PREÇO, não só do peso.
+  // Por isso o valor não podia sair no momento do SKU quando o cadastro não tinha
+  // preço: faltava metade da conta. Agora ele aparece assim que o preço é digitado.
+  function mudarPreco(v) {
+    setF(function(p){
+      var novo = Object.assign({}, p, { precoVenda: v });
+      if (achado && freteAutomatico && novo.marketplace === "ml") {
+        var fr = freteMLdoProduto(achado, parseFloat(v) || 0);
+        novo.frete = fr ? fr.valor.toFixed(2) : "";
+      }
+      return novo;
+    });
+  }
+  // Shopee não usa a tabela do Mercado Livre: um frete calculado por ela ali seria
+  // um número errado com cara de certo. Sai da tela até alguém digitar o de lá.
+  function mudarMarketplace(mkt) {
+    setF(function(p){
+      var novo = Object.assign({}, p, { marketplace: mkt });
+      if (!freteAutomatico) return novo;
+      if (mkt !== "ml") { novo.frete = ""; return novo; }
+      if (achado) {
+        var fr = freteMLdoProduto(achado, parseFloat(novo.precoVenda) || 0);
+        novo.frete = fr ? fr.valor.toFixed(2) : "";
       }
       return novo;
     });
@@ -12060,6 +12090,7 @@ function NovoProdutoPrecForm({ onSave, onClose, marketplaceInicial, shopeeDoc, p
     if (!(parseFloat(achado.precoCusto) > 0)) faltando.push("preço de custo");
     if (!(parseFloat(achado.precoVenda) > 0)) faltando.push("preço de venda");
     if (!pesoConsideradoML(achado)) faltando.push("peso ou medidas (sem eles não dá para calcular o frete)");
+    else if (!(parseFloat(achado.precoVenda) > 0)) faltando.push("o frete sai assim que você digitar o preço de venda");
   }
   var ehShopee = f.marketplace === "shopee";
   var custo=parseFloat(f.custo||0), bruto=parseFloat(f.precoVenda||0);
@@ -12076,7 +12107,7 @@ function NovoProdutoPrecForm({ onSave, onClose, marketplaceInicial, shopeeDoc, p
         <div style={{ display:"flex", gap:6 }}>
           {[{k:"ml",l:"🟡 Mercado Livre",c:"#FFC107"},{k:"shopee",l:"🛒 Shopee",c:"#EE4D2D"}].map(function(m){
             var a=f.marketplace===m.k;
-            return <button key={m.k} onClick={function(){ set("marketplace",m.k); }}
+            return <button key={m.k} onClick={function(){ mudarMarketplace(m.k); }}
               style={{ flex:1, background:a?m.c:"var(--surface)", color:a?"#fff":"var(--text-2)", border:"1px solid "+(a?m.c:"var(--border)"), borderRadius:8, padding:"8px", fontSize:12, fontWeight:500, cursor:"pointer" }}>{m.l}</button>;
           })}
         </div>
@@ -12102,12 +12133,18 @@ function NovoProdutoPrecForm({ onSave, onClose, marketplaceInicial, shopeeDoc, p
         </div>
         <div>
           <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:3, fontWeight:600, textTransform:"none" }}>Preço de Venda (R$)</div>
-          <input type="number" step="0.01" value={f.precoVenda} onChange={function(e){set("precoVenda",e.target.value);}} placeholder="0,00"
+          <input type="number" step="0.01" value={f.precoVenda} onChange={function(e){ mudarPreco(e.target.value); }} placeholder="0,00"
             style={{ width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
         </div>
         <div>
-          <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:3, fontWeight:600, textTransform:"none" }}>Frete (R$)</div>
-          <input type="number" step="0.01" value={f.frete} onChange={function(e){set("frete",e.target.value);}} placeholder="0,00"
+          <div style={{ fontSize:10, color:"var(--text-3)", marginBottom:3, fontWeight:600, textTransform:"none" }}>
+            Frete (R$)
+            {achado && freteAutomatico && f.marketplace === "ml" && String(f.frete || "").trim() !== "" && (
+              <span style={{ color:"#0a9d4e", fontWeight:500 }}> · tabela do ML</span>
+            )}
+          </div>
+          <input type="number" step="0.01" value={f.frete}
+            onChange={function(e){ setFreteAutomatico(false); set("frete", e.target.value); }} placeholder="0,00"
             style={{ width:"100%", background:"var(--bg-2)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"8px 10px", borderRadius:8, fontSize:12, outline:"none" }} />
         </div>
         <div>

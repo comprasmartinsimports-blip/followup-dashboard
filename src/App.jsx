@@ -3445,7 +3445,7 @@ const ROTAS_DIAGNOSTICO = [
     porque:"Entradas, retiradas e ajustes do estoque no galpão do ML." },
 ];
 
-function DiagnosticoApisML({ user }) {
+function DiagnosticoApisML({ user, token }) {
   const [rodando, setRodando] = useState(false);
   const [resultados, setResultados] = useState(null);
 
@@ -3482,6 +3482,13 @@ function DiagnosticoApisML({ user }) {
         que mudam de versão. O teste abaixo pergunta a cada uma e mostra o que a <b>sua conta</b>
         {" "}responde, sem interpretar: é o que diz se falta permissão ou se a rota mudou de endereço.
       </div>
+      {!token && (
+        <div style={{ marginTop:10, fontSize:12.5, color:"#FFC107", background:"rgba(255,193,7,.10)",
+                      border:"1px solid rgba(255,193,7,.35)", borderRadius:8, padding:"9px 12px" }}>
+          A conta do Mercado Livre não está conectada neste navegador. O teste até roda, mas todas as
+          rotas vão responder erro de autenticação — conecte antes, pelo botão acima.
+        </div>
+      )}
       <button onClick={rodar} disabled={rodando}
         style={{ marginTop:12, background: rodando ? "var(--surface-3)" : "var(--ui-accent)", border:"none",
                  color: rodando ? "var(--text-4)" : "var(--ui-accent-text)", fontWeight:600,
@@ -3558,7 +3565,7 @@ function IntegracoesTab({ token, user, lastUpdate }) {
           </div>;
         })}
       </div>
-      {token && <DiagnosticoApisML user={user} />}
+      <DiagnosticoApisML user={user} token={token} />
     </div>
   );
 }

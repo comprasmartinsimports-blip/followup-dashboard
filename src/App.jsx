@@ -1667,6 +1667,341 @@ function CustosPadraoTab({ custosPadrao, salvar, custosExtras }) {
   );
 }
 
+// ── Full: reposição do estoque no galpão do Mercado Livre ────────────────────
+// A pergunta que esta tela responde é uma só: quanto mandar de cada anúncio,
+// para não faltar nem sobrar. A conta precisa de três coisas — a velocidade de
+// venda, o estoque que está no Full agora, e o tempo até a mercadoria chegar lá.
+
+function ehAnuncioFull(l) {
+  return /fulfillment/i.test(String((l && l.shipping && l.shipping.logistic_type) || (l && l.logistic_type) || ""));
+}
+
+// `limitarPeloEstoque` vem DESLIGADO de propósito. Para um anúncio do Full, a
+// quantidade que o Mercado Livre informa é a que está no galpão DELE — e o
+// cadastro de produtos é preenchido a partir dela. Usar esse número como "meu
+// estoque" limitaria a sugestão pelo próprio estoque que se quer repor, o que dá
+// um plano errado sem nada na tela denunciando. Quem tem controle de estoque
+// próprio confiável liga o limite.
+const FULL_PADRAO = { prazoColeta: 7, diasCobertura: 20, minimoLocal: 0, diasMedia: 30, limitarPeloEstoque: false };
+function fullCfgCompleta(cfg) {
+  var c = Object.assign({}, FULL_PADRAO, cfg || {});
+  ["prazoColeta","diasCobertura","minimoLocal","diasMedia"].forEach(function(k){
+    var v = parseInt(c[k], 10);
+    c[k] = isFinite(v) && v >= 0 ? v : FULL_PADRAO[k];
+  });
+  c.limitarPeloEstoque = !!c.limitarPeloEstoque;
+  if (c.diasMedia < 1) c.diasMedia = 1;
+  return c;
+}
+
+// Vendas por anúncio e por dia, a partir dos pedidos. Cancelado não conta: não
+// consumiu estoque e inflaria a média de venda, que é a base de toda a conta.
+function vendasDiariasPorAnuncio(pedidos, diasJanela) {
+  var hoje = new Date();
+  var limite = new Date(hoje); limite.setDate(limite.getDate() - diasJanela);
+  var limiteStr = limite.toISOString().slice(0, 10);
+  var porAnuncio = {};
+  (pedidos || []).forEach(function(o){
+    if (!o || o.status === "cancelled") return;
+    var dia = String(o.date || "").slice(0, 10);
+    if (!dia || dia < limiteStr) return;
+    var id = o.listing_id;
+    if (!id) return;
+    if (!porAnuncio[id]) porAnuncio[id] = { total: 0, porDia: {} };
+    var q = o.qty || 1;
+    porAnuncio[id].total += q;
+    porAnuncio[id].porDia[dia] = (porAnuncio[id].porDia[dia] || 0) + q;
+  });
+  return porAnuncio;
+}
+
+// A sugestão de envio. Devolve também o porquê de cada número, porque uma
+// sugestão de reposição sem a conta à vista é um palpite que ninguém confere.
+function sugestaoFull(linha, cfg) {
+  var mediaDia = linha.vendas30 / cfg.diasMedia;
+  var estoque = linha.estoqueFull;
+  // Sem venda no período não dá para projetar consumo: não é "zero a repor", é
+  // "não dá para saber". Quem olha decide com o que sabe do produto.
+  if (!(mediaDia > 0)) {
+    return { mediaDia: 0, cobertura: null, sugerido: 0, motivo: "sem vendas na janela — não dá para projetar consumo" };
+  }
+  var cobertura = estoque / mediaDia;                      // dias que o estoque atual aguenta
+  var alvo = (cfg.diasCobertura + cfg.prazoColeta) * mediaDia; // o que precisa existir lá quando a coleta chegar
+  var bruto = Math.ceil(alvo - estoque);
+  if (bruto <= 0) {
+    return { mediaDia: mediaDia, cobertura: cobertura, sugerido: 0,
+             motivo: "estoque no Full cobre o alvo de " + (cfg.diasCobertura + cfg.prazoColeta) + " dias" };
+  }
+  // Por padrão a sugestão é o que o Full PEDE. Só vira "o que dá para mandar"
+  // quando o limite pelo estoque próprio está ligado.
+  if (!cfg.limitarPeloEstoque) {
+    return { mediaDia: mediaDia, cobertura: cobertura, sugerido: bruto, necessario: bruto, motivo: "" };
+  }
+  var disponivel = Math.max(0, linha.estoqueLocal - cfg.minimoLocal);
+  var sugerido = Math.min(bruto, disponivel);
+  var motivo = "";
+  if (sugerido < bruto) {
+    motivo = linha.temEstoqueLocal
+      ? "o Full pede " + bruto + ", mas o seu estoque só permite " + sugerido + " (reserva de " + cfg.minimoLocal + " mantida)"
+      : "sem estoque próprio cadastrado para este SKU";
+  }
+  return { mediaDia: mediaDia, cobertura: cobertura, sugerido: sugerido, necessario: bruto, motivo: motivo };
+}
+
+function FullTab({ enriched, enrichedOrders, produtos, cfg, salvar }) {
+  const [busca, setBusca] = useState("");
+  const [soRepor, setSoRepor] = useState(false);
+  const [sel, setSel] = useState({});
+  const [abrirCfg, setAbrirCfg] = useState(false);
+  const c = fullCfgCompleta(cfg);
+
+  var ultimosDias = [];
+  for (var i = 6; i >= 0; i--) {
+    var d = new Date(); d.setDate(d.getDate() - i);
+    ultimosDias.push(d.toISOString().slice(0, 10));
+  }
+  var vendas = vendasDiariasPorAnuncio(enrichedOrders, c.diasMedia);
+
+  // Estoque local por SKU, do cadastro de produtos.
+  var estoquePorSku = {};
+  (produtos || []).forEach(function(p){
+    var sku = String(p.sku || "").trim().toLowerCase();
+    if (!sku) return;
+    var e = parseInt(p.estoqueAtual, 10);
+    if (isFinite(e)) estoquePorSku[sku] = (estoquePorSku[sku] || 0) + e;
+  });
+
+  var linhas = (enriched || []).filter(ehAnuncioFull).map(function(l){
+    var sku = String(l.seller_sku || l.sku || "").trim();
+    var v = vendas[l.id] || { total: 0, porDia: {} };
+    var temLocal = Object.prototype.hasOwnProperty.call(estoquePorSku, sku.toLowerCase());
+    var linha = {
+      id: l.id, titulo: l.title || l.id, sku: sku,
+      estoqueFull: parseInt(l.available_quantity, 10) || 0,
+      estoqueLocal: temLocal ? estoquePorSku[sku.toLowerCase()] : 0,
+      temEstoqueLocal: temLocal,
+      vendas30: v.total, porDia: v.porDia,
+      preco: l.price || 0,
+    };
+    linha.calc = sugestaoFull(linha, c);
+    return linha;
+  });
+
+  var q = busca.trim().toLowerCase();
+  var lista = linhas.filter(function(x){
+    if (soRepor && !(x.calc.sugerido > 0)) return false;
+    if (!q) return true;
+    return (x.titulo || "").toLowerCase().indexOf(q) >= 0
+        || (x.sku || "").toLowerCase().indexOf(q) >= 0
+        || (x.id || "").toLowerCase().indexOf(q) >= 0;
+  }).sort(function(a, b){
+    // Quem vai faltar primeiro aparece primeiro; sem cobertura conhecida vai ao fim.
+    var ca = a.calc.cobertura == null ? Infinity : a.calc.cobertura;
+    var cb = b.calc.cobertura == null ? Infinity : b.calc.cobertura;
+    return ca - cb;
+  });
+
+  var precisaRepor = linhas.filter(function(x){ return x.calc.sugerido > 0; }).length;
+  var vendasDia = linhas.reduce(function(s, x){ return s + x.calc.mediaDia; }, 0);
+  var idsSel = Object.keys(sel).filter(function(k){ return sel[k]; });
+  var totalSel = linhas.filter(function(x){ return sel[x.id]; }).reduce(function(s, x){ return s + x.calc.sugerido; }, 0);
+
+  function exportarPlano() {
+    var alvo = idsSel.length ? linhas.filter(function(x){ return sel[x.id]; }) : lista.filter(function(x){ return x.calc.sugerido > 0; });
+    var cols = ["MLB","SKU","Anúncio","Estoque no Full","Vendas/dia","Cobertura (dias)","Enviar","Observação"];
+    var rows = alvo.map(function(x){
+      return [x.id, x.sku, x.titulo, x.estoqueFull, x.calc.mediaDia.toFixed(2),
+              x.calc.cobertura == null ? "" : x.calc.cobertura.toFixed(1), x.calc.sugerido, x.calc.motivo];
+    });
+    baixarCSV("plano-envio-full", cols, rows);
+  }
+
+  var th = { fontSize:10.5, color:"var(--text-2)", fontWeight:600, padding:"8px 8px",
+             borderBottom:"1px solid var(--border)", whiteSpace:"nowrap", textAlign:"right" };
+  var td = { fontSize:12, padding:"7px 8px", borderBottom:"1px solid var(--border-soft)", textAlign:"right", whiteSpace:"nowrap" };
+
+  return (
+    <div style={{ padding:2 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:12 }}>
+        <div>
+          <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Full</div>
+          <div style={{ fontSize:13, color:"var(--text-3)" }}>Quanto mandar de cada anúncio para o galpão do Mercado Livre.</div>
+        </div>
+        <div style={{ flex:1 }} />
+        <button onClick={function(){ setAbrirCfg(true); }} className="btn-exp">⚙ Configurações do Full</button>
+        <button onClick={exportarPlano} className="btn-exp" disabled={!lista.length}>Baixar plano</button>
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:10, marginBottom:12 }}>
+        {[
+          { l:"Anúncios no Full", v:String(linhas.length) },
+          { l:"Vendas por dia", v:vendasDia.toFixed(1), sub:"média dos últimos " + c.diasMedia + " dias" },
+          { l:"Precisa repor", v:String(precisaRepor), cor: precisaRepor ? "#FFC107" : "var(--text-2)" },
+          { l:"Selecionados", v:String(idsSel.length), sub: idsSel.length ? totalSel + " unidade(s) a enviar" : null },
+        ].map(function(k, i){
+          return <div key={i} style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:11, padding:"12px 14px" }}>
+            <div style={{ fontSize:11, color:"var(--text-3)" }}>{k.l}</div>
+            <div style={{ fontSize:22, fontWeight:600, color: k.cor || "var(--text-strong)" }}>{k.v}</div>
+            {k.sub && <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:2 }}>{k.sub}</div>}
+          </div>;
+        })}
+      </div>
+
+      <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:10, flexWrap:"wrap" }}>
+        <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Buscar por MLB, SKU ou título"
+          style={{ flex:1, minWidth:240, maxWidth:520, background:"var(--surface)", border:"1px solid var(--border)",
+                   color:"var(--text-strong)", padding:"9px 12px", borderRadius:9, fontSize:13, outline:"none" }} />
+        <button onClick={function(){ setSoRepor(!soRepor); }}
+          style={{ background: soRepor ? "rgba(255,193,7,.16)" : "var(--surface)", border:"1px solid " + (soRepor ? "#FFC107" : "var(--border)"),
+                   color: soRepor ? "#FFC107" : "var(--text-2)", padding:"9px 14px", borderRadius:9, cursor:"pointer", fontSize:12.5, fontWeight:600 }}>
+          Precisa repor ({precisaRepor})
+        </button>
+      </div>
+
+      {!linhas.length ? (
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"18px 20px",
+                      fontSize:13, color:"var(--text-3)", lineHeight:1.6 }}>
+          Nenhum anúncio com envio pelo Full foi encontrado. Esta tela olha o tipo de logística que vem do
+          Mercado Livre em cada anúncio — se você usa Full e nada aparece aqui, atualize os anúncios no menu
+          e me avise.
+        </div>
+      ) : (
+        <div className="tabela-wrap">
+          <table className="tabela">
+            <thead>
+              <tr>
+                <th className="th" style={{ width:30 }}></th>
+                <th className="th" style={{ textAlign:"left" }}>Produto</th>
+                <th className="th" style={{ textAlign:"left" }}>SKU</th>
+                {ultimosDias.map(function(d){
+                  return <th key={d} style={th} title={fmtDate(d)}>{d.slice(8,10) + "/" + d.slice(5,7)}</th>;
+                })}
+                <th style={th}>No Full</th>
+                <th style={th}>Vendas/dia</th>
+                <th style={th}>Cobertura</th>
+                <th style={th}>Enviar</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lista.slice(0, 300).map(function(x){
+                var cob = x.calc.cobertura;
+                var corCob = cob == null ? "var(--text-4)"
+                  : cob < c.prazoColeta ? "#FF5252"
+                  : cob < c.prazoColeta + c.diasCobertura / 2 ? "#FFC107" : "#0a9d4e";
+                return (
+                  <tr key={x.id}>
+                    <td className="td">
+                      <input type="checkbox" checked={!!sel[x.id]}
+                        onChange={function(){ setSel(function(p){ var n = Object.assign({}, p); if (n[x.id]) delete n[x.id]; else n[x.id] = true; return n; }); }}
+                        style={{ cursor:"pointer" }} />
+                    </td>
+                    <td className="td" style={{ maxWidth:340 }}>
+                      <div style={{ fontSize:12, color:"var(--text-strong)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{x.titulo}</div>
+                      <div style={{ fontSize:10.5, color:"var(--text-4)" }}>{x.id}</div>
+                    </td>
+                    <td className="td" style={{ fontSize:11.5, color:"var(--text-3)" }}>{x.sku || "—"}</td>
+                    {ultimosDias.map(function(d){
+                      var qtd = x.porDia[d] || 0;
+                      return <td key={d} style={Object.assign({}, td, { color: qtd ? "var(--text-2)" : "var(--text-4)" })}>{qtd || "·"}</td>;
+                    })}
+                    <td style={Object.assign({}, td, { fontWeight:600, color:"var(--text-strong)" })}>{x.estoqueFull}</td>
+                    <td style={td}>{x.calc.mediaDia > 0 ? x.calc.mediaDia.toFixed(2) : "—"}</td>
+                    <td style={Object.assign({}, td, { color: corCob, fontWeight:600 })}>
+                      {cob == null ? "—" : cob.toFixed(0) + "d"}
+                    </td>
+                    <td style={Object.assign({}, td, { fontWeight:700, color: x.calc.sugerido > 0 ? "#FFC107" : "var(--text-4)" })}
+                        title={x.calc.motivo || ""}>
+                      {x.calc.sugerido > 0 ? x.calc.sugerido : "—"}
+                      {x.calc.motivo && x.calc.sugerido > 0 ? " *" : ""}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div style={{ fontSize:11.5, color:"var(--text-4)", marginTop:12, lineHeight:1.6, maxWidth:760 }}>
+        A sugestão é <b>(dias de cobertura + prazo de coleta) × venda por dia − o que já está no Full</b>. Um
+        asterisco no número quer dizer que há uma observação: passe o mouse para ver. Se você tem controle de
+        estoque próprio confiável, ligue o limite nas configurações para a sugestão nunca pedir mais do que dá
+        para mandar. O envio em si continua sendo criado no Mercado Livre — aqui sai o plano do que mandar.
+      </div>
+
+      {abrirCfg && (
+        <ConfigFullModal cfg={c} onSalvar={function(novo){ salvar(novo); setAbrirCfg(false); }} onClose={function(){ setAbrirCfg(false); }} />
+      )}
+    </div>
+  );
+}
+
+function ConfigFullModal({ cfg, onSalvar, onClose }) {
+  const [f, setF] = useState({ prazoColeta:String(cfg.prazoColeta), diasCobertura:String(cfg.diasCobertura),
+                               minimoLocal:String(cfg.minimoLocal), diasMedia:String(cfg.diasMedia),
+                               limitarPeloEstoque: !!cfg.limitarPeloEstoque });
+  function set(k, v){ setF(function(p){ return Object.assign({}, p, { [k]: v }); }); }
+  var campo = { width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)",
+                padding:"9px 11px", borderRadius:8, fontSize:14, boxSizing:"border-box" };
+  var rot = { display:"block", fontSize:11.5, color:"var(--text-3)", fontWeight:600, marginBottom:4 };
+  var dica = { fontSize:10.5, color:"var(--text-4)", marginTop:4, lineHeight:1.5 };
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:600, display:"flex",
+                  alignItems:"flex-start", justifyContent:"center", padding:"40px 16px", overflowY:"auto" }} onClick={onClose}>
+      <div onClick={function(e){ e.stopPropagation(); }}
+        style={{ background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:14, width:520, maxWidth:"100%", padding:22 }}>
+        <div style={{ fontWeight:600, fontSize:17, color:"var(--text-strong)" }}>Configurações do Full</div>
+        <div style={{ fontSize:12.5, color:"var(--text-3)", marginTop:4, marginBottom:16, lineHeight:1.55 }}>
+          Estes números entram no cálculo da sugestão de reposição. Ajuste para a realidade da sua operação.
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+          <div>
+            <label style={rot}>Prazo de coleta (dias)</label>
+            <input type="number" min="0" value={f.prazoColeta} onChange={function(e){ set("prazoColeta", e.target.value); }} style={campo} />
+            <div style={dica}>Do envio criado até a mercadoria estar disponível no Full.</div>
+          </div>
+          <div>
+            <label style={rot}>Dias de cobertura</label>
+            <input type="number" min="1" value={f.diasCobertura} onChange={function(e){ set("diasCobertura", e.target.value); }} style={campo} />
+            <div style={dica}>Por quantos dias você quer manter estoque lá.</div>
+          </div>
+          <div>
+            <label style={rot}>Mínimo a manter aqui</label>
+            <input type="number" min="0" value={f.minimoLocal} onChange={function(e){ set("minimoLocal", e.target.value); }}
+              style={campo} disabled={!f.limitarPeloEstoque} />
+            <div style={dica}>Reserva do seu estoque. Só vale com o limite abaixo ligado.</div>
+          </div>
+          <div>
+            <label style={rot}>Janela da média (dias)</label>
+            <input type="number" min="1" value={f.diasMedia} onChange={function(e){ set("diasMedia", e.target.value); }} style={campo} />
+            <div style={dica}>Quantos dias de venda entram na média. Janela curta reage rápido; longa é mais estável.</div>
+          </div>
+        </div>
+        <label style={{ display:"flex", gap:9, alignItems:"flex-start", marginTop:16, cursor:"pointer",
+                        background:"var(--surface)", border:"1px solid var(--border)", borderRadius:9, padding:"11px 13px" }}>
+          <input type="checkbox" checked={!!f.limitarPeloEstoque}
+            onChange={function(e){ set("limitarPeloEstoque", e.target.checked); }}
+            style={{ marginTop:2, accentColor:"var(--ui-accent)", cursor:"pointer" }} />
+          <span style={{ fontSize:12.5, color:"var(--text-2)", lineHeight:1.55 }}>
+            <b>Limitar a sugestão pelo meu estoque</b>
+            <div style={{ fontSize:11, color:"var(--text-3)", marginTop:3 }}>
+              Deixe desligado se o seu controle de estoque não for confiável. Para anúncios do Full, a
+              quantidade que vem do Mercado Livre é a do galpão dele — usá-la como estoque próprio
+              limitaria a sugestão pelo mesmo estoque que se quer repor.
+            </div>
+          </span>
+        </label>
+        <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:20 }}>
+          <button onClick={onClose} style={{ background:"none", border:"none", color:"var(--text-3)", fontWeight:600, padding:"10px 16px", cursor:"pointer", fontSize:13 }}>Cancelar</button>
+          <button onClick={function(){ onSalvar(fullCfgCompleta(f)); }}
+            style={{ background:"var(--ui-accent)", border:"none", color:"var(--ui-accent-text)", fontWeight:600,
+                     padding:"10px 20px", borderRadius:8, cursor:"pointer", fontSize:13 }}>Salvar configurações</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProdutosTab({ produtos, salvar, fornecedores, enriched, tags, salvarTags }) {
   const [busca, setBusca] = useState("");
   const [editando, setEditando] = useState(null);
@@ -4478,6 +4813,7 @@ var ROTULO_DADO = {
   custos_padrao_config: "Custos padrão de etiqueta e embalagem",
   frete_ml_tabela: "Tabela de custos de envio do ML",
   custos_ml_faturamento: "Cobranças do ML por dia",
+  full_config: "Configurações do Full",
   lancamentos: "Lançamentos",
   custos_fixos_config: "Custos fixos",
   impostos_config: "Impostos",
@@ -10215,6 +10551,7 @@ function HomeTab({ enrichedOrders, currentUser, setTab }){
       { key:"expedicao", label:"Expedição", desc:"Status de envio dos pedidos" },
       { key:"compras", label:"Compras", desc:"Pedidos de compra e reposição" },
       { key:"estoque", label:"Estoque", desc:"Saldo e estoque mínimo" },
+      perm.includes("listings") && { key:"full", label:"Full", desc:"Reposição do estoque no galpão do Mercado Livre" },
       { key:"notas_fiscais", label:"Notas fiscais", desc:"Emissão e consulta" },
     ]},
     { titulo:"Financeiro", itens:[
@@ -14785,6 +15122,17 @@ export default function App() {
 
   // Cobranças do ML já carregadas da fatura, por dia e por tipo, mais quais
   // tipos são publicidade. Alimenta o cartão de Ads do Dashboard.
+  // Parâmetros da reposição do Full. Valem para a operação toda, então vão
+  // junto com o resto dos dados e não ficam presos a um navegador.
+  const [fullCfg, setFullCfg] = useState(function() {
+    try { return JSON.parse(localStorage.getItem("full_config") || "{}"); } catch { return {}; }
+  });
+  function salvarFullCfg(cfg) {
+    setFullCfg(cfg);
+    try { localStorage.setItem("full_config", JSON.stringify(cfg)); } catch {}
+    kvSyncPush("full_config", cfg, { permitirVazio: true });
+  }
+
   const [custosMLCfg, setCustosMLCfg] = useState(function() {
     try { return JSON.parse(localStorage.getItem("custos_ml_faturamento") || "{}"); } catch { return {}; }
   });
@@ -15470,7 +15818,7 @@ export default function App() {
     "custos_fixos_config","impostos_config","irpj_csll_config","icms_por_estado","icms_regime_config","lancamentos",
     "mov_estoque","metaMensal","margem_alvo_config","min_stock_anuncios","real_fees_config","pedidos_compra",
     "precificacao_extras","precos_pendentes_ml","custos_extras_config","depositos_estoque","estoque_depositos",
-    "envios_full","vendas_estoque_baixadas","sku_overrides","analise_ia_config","prioridade_pagamento_config","financeiro_config","recebiveis_baixados","extrato_bancario","conciliacoes_manuais","reclamacoes_analise","tags_itens","custos_padrao_config","frete_ml_tabela","custos_ml_faturamento",
+    "envios_full","vendas_estoque_baixadas","sku_overrides","analise_ia_config","prioridade_pagamento_config","financeiro_config","recebiveis_baixados","extrato_bancario","conciliacoes_manuais","reclamacoes_analise","tags_itens","custos_padrao_config","frete_ml_tabela","custos_ml_faturamento","full_config",
   ]).current;
   // Para os dados guardados como dicionário (chave→valor, ex: custo por anúncio), mesclar em
   // vez de substituir por inteiro — evita que um "pull" com dados parciais do servidor apague
@@ -15516,6 +15864,7 @@ export default function App() {
     custos_padrao_config: mesclarSetter(setCustosPadrao),
     frete_ml_tabela: function(v){ setFreteTabelaCfg(v && typeof v === "object" ? v : {}); },
     custos_ml_faturamento: mesclarSetter(setCustosMLCfg),
+    full_config: mesclarSetter(setFullCfg),
     analise_ia_config: function(v){ setConfigQualidade(v); },
     prioridade_pagamento_config: mesclarSetter(setConfigPrioridadeState),
     financeiro_config: mesclarSetter(setFinanceiroConfigState),
@@ -15536,7 +15885,7 @@ export default function App() {
     precos_venda_config: "object", precos_pendentes_ml: "object", irpj_csll_config: "object",
     icms_regime_config: "object", icms_por_estado: "object",
     min_stock_anuncios: "object", real_fees_config: "object", sku_overrides: "object",
-    custos_extras_config: "object", custos_padrao_config: "object", frete_ml_tabela: "object", custos_ml_faturamento: "object", analise_ia_config: "object",
+    custos_extras_config: "object", custos_padrao_config: "object", frete_ml_tabela: "object", custos_ml_faturamento: "object", full_config: "object", analise_ia_config: "object",
     prioridade_pagamento_config: "object",
     financeiro_config: "object", recebiveis_baixados: "object",
     extrato_bancario: "array", conciliacoes_manuais: "object", reclamacoes_analise: "object", tags_itens: "object",
@@ -16580,6 +16929,7 @@ export default function App() {
               { key:"expedicao", label:"Expedição" },
               { key:"compras", label:"Compras" },
               { key:"estoque", label:"Estoque" },
+              currentUser?.permissoes?.includes("listings") && { key:"full", label:"Full" },
               { key:"notas_fiscais", label:"Notas fiscais" },
             ]},
             { titulo:"Financeiro", itens:[
@@ -17219,6 +17569,7 @@ export default function App() {
         {tab === "analise_ia" && <AnaliseIATab config={configQualidade} salvar={setConfigQualidade} enriched={enriched} />}
         {tab === "produtos" && <ProdutosTab produtos={produtos} salvar={salvarProdutos} fornecedores={fornecedores} enriched={enriched} tags={tagsItens} salvarTags={salvarTagsItens} />}
         {tab === "estoque" && <EstoqueTab produtos={produtos} />}
+        {tab === "full" && <FullTab enriched={enriched} enrichedOrders={enrichedOrdersTodos} produtos={produtos} cfg={fullCfg} salvar={salvarFullCfg} />}
         {tab === "vincular" && <VincularTab enriched={enriched} produtos={produtos} salvar={salvarProdutos} />}
         {tab === "relatorios" && <RelatoriosTab enrichedOrders={enrichedOrders} />}
         {tab === "expedicao" && <EmConstrucao tab="expedicao" />}

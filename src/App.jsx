@@ -3412,6 +3412,119 @@ function TendenciasTab({ setTab, setBuscaPrecificacao, enriched }) {
 }
 
 // Integrações: status das conexões do sistema.
+// Diagnóstico das APIs de Publicidade e de custos do Full.
+//
+// Estas duas famílias de endpoint dependem de permissão concedida no DevCenter e
+// mudam de versão com alguma frequência. Antes de construir as telas em cima
+// delas, é preciso saber o que ESTA conta responde — chutar a rota custa uma ida
+// e volta inteira, como já aconteceu com a central de reclamações.
+//
+// O painel mostra o status HTTP e o começo da resposta de cada rota, sem
+// interpretar nada: é o que permite distinguir "a conta não tem permissão" de
+// "a rota mudou de endereço".
+const ROTAS_DIAGNOSTICO = [
+  { grupo:"Publicidade (Product Ads)", nome:"Anunciante da conta",
+    caminho:"/advertising/advertisers?product_id=PADS", cabecalhos:{ "api-version":"1" },
+    porque:"Diz se a conta tem cadastro de anunciante e qual o id usado nas demais chamadas." },
+  { grupo:"Publicidade (Product Ads)", nome:"Anunciante sem cabeçalho de versão",
+    caminho:"/advertising/advertisers?product_id=PADS",
+    porque:"Mesma rota sem o Api-Version, para saber se o cabeçalho é mesmo exigido." },
+  { grupo:"Publicidade (Product Ads)", nome:"Campanhas",
+    caminho:"/advertising/product_ads/campaigns?limit=3", cabecalhos:{ "api-version":"1" },
+    porque:"Lista de campanhas. Pode exigir o id do anunciante da primeira linha." },
+  { grupo:"Custos e faturamento", nome:"Períodos de faturamento",
+    caminho:"/billing/integration/periods?group=ML&document_type=BILL&offset=0&limit=3",
+    cabecalhos:{ "x-format-new":"true" },
+    porque:"É por aqui que vêm os períodos cobrados; o detalhe de cada um traz envio, retirada e armazenamento." },
+  { grupo:"Custos e faturamento", nome:"Períodos mensais",
+    caminho:"/billing/integration/monthly/periods?group=ML&document_type=BILL&limit=3",
+    cabecalhos:{ "x-format-new":"true" },
+    porque:"Variante mensal da rota acima — uma das duas costuma responder." },
+  { grupo:"Full (estoque e armazenamento)", nome:"Operações de estoque no Full",
+    caminho:"/stock/fulfillment/operations/search?limit=3",
+    porque:"Entradas, retiradas e ajustes do estoque no galpão do ML." },
+];
+
+function DiagnosticoApisML({ user }) {
+  const [rodando, setRodando] = useState(false);
+  const [resultados, setResultados] = useState(null);
+
+  async function rodar() {
+    setRodando(true);
+    var saida = [];
+    for (var i = 0; i < ROTAS_DIAGNOSTICO.length; i++) {
+      var r = ROTAS_DIAGNOSTICO[i];
+      var caminho = r.caminho.replace("{user_id}", (user && user.id) || "");
+      var linha = { nome: r.nome, grupo: r.grupo, caminho: caminho, porque: r.porque };
+      try {
+        var res = await fetch(ML(caminho), { headers: Object.assign({}, r.cabecalhos || {}) });
+        linha.status = res.status;
+        var txt = await res.text();
+        linha.corpo = txt.slice(0, 400);
+      } catch (e) {
+        linha.status = 0;
+        linha.corpo = "falhou antes de responder: " + ((e && e.message) || "erro de rede");
+      }
+      saida.push(linha);
+      setResultados(saida.slice());
+    }
+    setRodando(false);
+  }
+
+  var grupos = [];
+  (resultados || []).forEach(function(l){ if (grupos.indexOf(l.grupo) < 0) grupos.push(l.grupo); });
+
+  return (
+    <div style={{ marginTop:22, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px" }}>
+      <div style={{ fontWeight:600, fontSize:15, color:"var(--text-strong)" }}>Publicidade e custos do Full</div>
+      <div style={{ fontSize:12.5, color:"var(--text-3)", marginTop:4, lineHeight:1.55, maxWidth:720 }}>
+        Estas informações dependem de permissões concedidas no DevCenter do Mercado Livre e de rotas
+        que mudam de versão. O teste abaixo pergunta a cada uma e mostra o que a <b>sua conta</b>
+        {" "}responde, sem interpretar: é o que diz se falta permissão ou se a rota mudou de endereço.
+      </div>
+      <button onClick={rodar} disabled={rodando}
+        style={{ marginTop:12, background: rodando ? "var(--surface-3)" : "var(--ui-accent)", border:"none",
+                 color: rodando ? "var(--text-4)" : "var(--ui-accent-text)", fontWeight:600,
+                 padding:"9px 18px", borderRadius:8, cursor: rodando ? "wait" : "pointer", fontSize:13 }}>
+        {rodando ? "Consultando..." : "Testar acesso"}
+      </button>
+
+      {grupos.map(function(g){
+        return (
+          <div key={g} style={{ marginTop:16 }}>
+            <div style={{ fontSize:12, fontWeight:600, color:"var(--text-2)", marginBottom:6 }}>{g}</div>
+            {(resultados || []).filter(function(l){ return l.grupo === g; }).map(function(l, i){
+              var ok = l.status >= 200 && l.status < 300;
+              return (
+                <div key={i} style={{ border:"1px solid var(--border)", borderRadius:9, padding:"10px 12px", marginBottom:8,
+                                      background: ok ? "rgba(10,157,78,.07)" : "rgba(255,82,82,.06)" }}>
+                  <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+                    <span style={{ fontWeight:600, fontSize:13, color:"var(--text-strong)" }}>{l.nome}</span>
+                    <span style={{ fontSize:11, fontWeight:700, color: ok ? "#0a9d4e" : "#FF5252" }}>
+                      {l.status === 0 ? "sem resposta" : "HTTP " + l.status}
+                    </span>
+                  </div>
+                  <div style={{ fontSize:11, color:"var(--text-3)", marginTop:3 }}>{l.porque}</div>
+                  <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:4, fontFamily:"monospace", wordBreak:"break-all" }}>{l.caminho}</div>
+                  <pre style={{ fontSize:10.5, color:"var(--text-2)", background:"var(--bg)", borderRadius:6,
+                                padding:"7px 9px", marginTop:6, whiteSpace:"pre-wrap", wordBreak:"break-all", maxHeight:150, overflow:"auto" }}>{l.corpo}</pre>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+
+      {resultados && !rodando && (
+        <div style={{ fontSize:12, color:"var(--text-3)", marginTop:6, lineHeight:1.55 }}>
+          Mande um print deste resultado. Com ele dá para construir as telas de campanhas e de custos
+          do Full em cima do que a sua conta realmente devolve, em vez de adivinhar.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function IntegracoesTab({ token, user, lastUpdate }) {
   var mins = lastUpdate ? Math.round((Date.now() - parseInt(lastUpdate)) / 60000) : null;
   var badgeStatus = { conectado:["#0a9d4e","rgba(0,200,83,.14)","● Conectado"], disponivel:["#768692","rgba(118,134,146,.14)","Disponível"], construcao:["#FFC107","rgba(255,193,7,.14)","🚧 Em construção"] };
@@ -3445,7 +3558,7 @@ function IntegracoesTab({ token, user, lastUpdate }) {
           </div>;
         })}
       </div>
-
+      {token && <DiagnosticoApisML user={user} />}
     </div>
   );
 }

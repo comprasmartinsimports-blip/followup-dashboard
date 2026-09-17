@@ -1098,6 +1098,17 @@ export default async function handler(req, res) {
 
   const mlUrl = `https://api.mercadolibre.com${path}`;
 
+  // Alguns serviços do ML exigem cabeçalho próprio: a API de Publicidade pede
+  // Api-Version e a de faturamento pede x-format-new. Repassamos só esta lista —
+  // encaminhar qualquer cabeçalho que o navegador mandasse seria abrir a porta
+  // para ele influenciar a chamada de formas que ninguém revisou.
+  const CABECALHOS_EXTRA = ["api-version", "x-format-new"];
+  const extras = {};
+  CABECALHOS_EXTRA.forEach(function(h){
+    var v = req.headers[h];
+    if (v) extras[h] = String(v);
+  });
+
   try {
     const mlRes = await fetch(mlUrl, {
       method: req.method,
@@ -1105,6 +1116,7 @@ export default async function handler(req, res) {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
         "Accept": "application/json",
+        ...extras,
       },
       body: req.method !== "GET" && req.method !== "HEAD" ? JSON.stringify(req.body) : undefined,
     });
@@ -1125,6 +1137,7 @@ export default async function handler(req, res) {
               Authorization: `Bearer ${refreshData.access_token}`,
               "Content-Type": "application/json",
               "Accept": "application/json",
+              ...extras,
             },
             body: req.method !== "GET" ? JSON.stringify(req.body) : undefined,
           });

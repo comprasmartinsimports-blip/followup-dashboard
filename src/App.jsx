@@ -4477,6 +4477,7 @@ var ROTULO_DADO = {
   categorias_pagar: "Categorias de contas",
   custos_padrao_config: "Custos padrão de etiqueta e embalagem",
   frete_ml_tabela: "Tabela de custos de envio do ML",
+  custos_ml_faturamento: "Cobranças do ML por dia",
   lancamentos: "Lançamentos",
   custos_fixos_config: "Custos fixos",
   impostos_config: "Impostos",
@@ -5676,7 +5677,34 @@ function agruparCustosML(linhas) {
   return { lista: lista, total: total };
 }
 
-function CustosMLTab({ tab, setTab }) {
+// O gasto com publicidade é cobrado pelo próprio ML e vem nesta mesma fatura.
+// Não sei de cor o texto exato que o ML usa, e errar o texto faria o painel
+// mostrar zero — que é indistinguível de "não gastei nada". Então o sistema
+// sugere pelo nome e deixa a marcação na mão de quem conhece a fatura.
+function pareceePublicidade(nome) {
+  return /public|ads\b|patrocinad/i.test(String(nome || ""));
+}
+
+// Guarda por DIA e por tipo. O período do faturamento do ML (30/07 a 12/10, por
+// exemplo) não bate com o período que se escolhe no Dashboard; sem a data de
+// cada cobrança, cruzar os dois daria um percentual errado com cara de certo.
+function agregarPorDia(linhas) {
+  var dias = {};
+  (linhas || []).forEach(function(l){
+    var dia = String((l && l.creation_date_time) || "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) return;
+    var nome = String((l && l.transaction_detail) || "").trim() || "(sem descrição)";
+    var v = parseFloat(l && l.detail_amount);
+    if (!isFinite(v)) v = 0;
+    var tipo = String((l && l.detail_type) || "").toUpperCase();
+    if ((tipo === "REFUND" || tipo === "BONIFICATION") && v > 0) v = -v;
+    if (!dias[dia]) dias[dia] = {};
+    dias[dia][nome] = Math.round(((dias[dia][nome] || 0) + v) * 100) / 100;
+  });
+  return dias;
+}
+
+function CustosMLTab({ tab, setTab, cfg, salvar }) {
   const [periodos, setPeriodos] = useState(null);
   const [erroPeriodos, setErroPeriodos] = useState("");
   const [chave, setChave] = useState("");
@@ -5701,8 +5729,34 @@ function CustosMLTab({ tab, setTab }) {
     var r = await buscarDetalhePeriodoML(chave, function(qtd, total){ setProgresso({ qtd: qtd, total: total }); });
     setDetalhe(r);
     setCarregando(false);
+    // Só guarda período completo: um agregado pela metade viraria um percentual
+    // errado no Dashboard, e lá não haveria como saber que faltava dado.
+    if (r.linhas && r.linhas.length && !r.parcial && !r.erro) {
+      var p = (periodos || []).find(function(x){ return x.key === chave; });
+      var novosDias = agregarPorDia(r.linhas);
+      var atual = cfg || {};
+      var marcadas = atual.publicidade;
+      if (!Array.isArray(marcadas) || !marcadas.length) {
+        // Primeira carga: sugere pelo nome. Quem confere a fatura ajusta.
+        marcadas = Object.keys(agruparCustosML(r.linhas).lista.reduce(function(acc, x){ acc[x.nome] = 1; return acc; }, {}))
+          .filter(pareceePublicidade);
+      }
+      salvar({
+        periodos: Object.assign({}, atual.periodos, {
+          [chave]: { de: p && p.period && p.period.date_from, ate: p && p.period && p.period.date_to, carregadoEm: new Date().toISOString() },
+        }),
+        dias: Object.assign({}, atual.dias, novosDias),
+        publicidade: marcadas,
+      });
+    }
   }
 
+  var marcadasPub = (cfg && Array.isArray(cfg.publicidade)) ? cfg.publicidade : [];
+  function ehPublicidade(nome){ return marcadasPub.indexOf(nome) >= 0; }
+  function alternarPublicidade(nome){
+    var nova = ehPublicidade(nome) ? marcadasPub.filter(function(x){ return x !== nome; }) : marcadasPub.concat([nome]);
+    salvar(Object.assign({}, cfg || {}, { publicidade: nova }));
+  }
   var periodoAtual = (periodos || []).find(function(p){ return p.key === chave; });
   var agrupado = detalhe && detalhe.linhas ? agruparCustosML(detalhe.linhas) : null;
 
@@ -5803,6 +5857,7 @@ function CustosMLTab({ tab, setTab }) {
                   <th className="th" style={{ textAlign:"right" }}>Qtd.</th>
                   <th className="th" style={{ textAlign:"right" }}>Valor</th>
                   <th className="th" style={{ textAlign:"right" }}>% do total</th>
+                  <th className="th" style={{ textAlign:"center" }} title="Marque a cobrança que é publicidade. O Dashboard usa essa marcação.">É publicidade?</th>
                 </tr></thead>
                 <tbody>
                   {agrupado.lista.map(function(x, i){
@@ -5819,6 +5874,11 @@ function CustosMLTab({ tab, setTab }) {
                         <td className="td" style={{ textAlign:"right", fontSize:12.5, fontWeight:600,
                               color: x.valor < 0 ? "#0a9d4e" : "var(--text-strong)" }}>{fmt(x.valor)}</td>
                         <td className="td" style={{ textAlign:"right", fontSize:12, color:"var(--text-3)" }}>{pct.toFixed(1)}%</td>
+                        <td className="td" style={{ textAlign:"center" }}>
+                          <input type="checkbox" checked={ehPublicidade(x.nome)}
+                            onChange={function(){ alternarPublicidade(x.nome); }}
+                            style={{ accentColor:"var(--ui-accent)", cursor:"pointer" }} />
+                        </td>
                       </tr>
                     );
                   })}
@@ -10198,7 +10258,7 @@ function HomeTab({ enrichedOrders, currentUser, setTab }){
   );
 }
 
-function DashboardTab({ enrichedOrders, produtos, user, metas, salvarMetas, sub, setSub }){
+function DashboardTab({ enrichedOrders, produtos, user, metas, salvarMetas, sub, setSub, custosML, setTab }){
   var subs=[["geral","Visão geral"],["estados","Estados"],["margem","Margem por pedido"],["clientes","Clientes"],["abc","Curva ABC"],["metas","Metas"]];
   return (
     <div style={{ padding:"2px" }}>
@@ -10206,7 +10266,7 @@ function DashboardTab({ enrichedOrders, produtos, user, metas, salvarMetas, sub,
         {subs.map(function(t){ var a=sub===t[0]; return <button key={t[0]} onClick={function(){ setSub(t[0]); }}
           style={{ padding:"10px 16px", border:"none", borderBottom:a?"2px solid #768692":"2px solid transparent", marginBottom:-2, background:"transparent", color:a?"var(--text-strong)":"var(--text-3)", fontWeight:a?700:500, fontSize:13, cursor:"pointer", whiteSpace:"nowrap", fontFamily:"inherit" }}>{t[1]}</button>; })}
       </div>
-      {sub==="geral" && <DashboardGeral enrichedOrders={enrichedOrders} />}
+      {sub==="geral" && <DashboardGeral enrichedOrders={enrichedOrders} custosML={custosML} setTab={setTab} />}
       {sub==="estados" && <EstadosDash enrichedOrders={enrichedOrders} />}
       {sub==="margem" && <MargemPedidoDash enrichedOrders={enrichedOrders} />}
       {sub==="clientes" && <ClientesDash enrichedOrders={enrichedOrders} user={user} />}
@@ -10216,7 +10276,41 @@ function DashboardTab({ enrichedOrders, produtos, user, metas, salvarMetas, sub,
   );
 }
 
-function DashboardGeral({ enrichedOrders }) {
+// Gasto com publicidade no período escolhido, a partir das cobranças da fatura
+// do ML já carregadas. Devolve também o que NÃO se sabe: sem isso, um período
+// sem dado carregado apareceria como "gastei R$ 0 em Ads", que é mentira.
+function adsNoPeriodo(custosML, noPeriodo) {
+  var cfg = custosML || {};
+  var marcadas = Array.isArray(cfg.publicidade) ? cfg.publicidade : [];
+  var dias = cfg.dias || {};
+  var periodos = cfg.periodos || {};
+  var temAlgumPeriodo = Object.keys(periodos).length > 0;
+  if (!temAlgumPeriodo) return { estado: "sem_dados" };
+  if (!marcadas.length) return { estado: "sem_marcacao" };
+
+  // Até onde os períodos carregados cobrem — é o que diz se o percentual vale
+  // para o período inteiro ou só para um pedaço dele.
+  var cobreDe = null, cobreAte = null;
+  Object.keys(periodos).forEach(function(k){
+    var p = periodos[k] || {};
+    if (p.de && (!cobreDe || p.de < cobreDe)) cobreDe = p.de;
+    if (p.ate && (!cobreAte || p.ate > cobreAte)) cobreAte = p.ate;
+  });
+
+  var total = 0, diasComDado = 0, diasNoPeriodo = 0;
+  Object.keys(dias).forEach(function(dia){
+    if (!noPeriodo(dia)) return;
+    diasNoPeriodo++;
+    var porTipo = dias[dia] || {};
+    var soma = 0;
+    marcadas.forEach(function(t){ soma += parseFloat(porTipo[t]) || 0; });
+    if (soma) diasComDado++;
+    total += soma;
+  });
+  return { estado: "ok", valor: total, cobreDe: cobreDe, cobreAte: cobreAte, diasNoPeriodo: diasNoPeriodo };
+}
+
+function DashboardGeral({ enrichedOrders, custosML, setTab }) {
   const [periodo, setPeriodo] = useState("30"); // hoje | 7 | 30 | mesatual | custom
   const [deData, setDeData] = useState(function(){ return presetRange("30").de; });
   const [ateData, setAteData] = useState(function(){ return presetRange("30").ate; });
@@ -10260,6 +10354,8 @@ function DashboardGeral({ enrichedOrders }) {
   var fatLiq = fat - taxas - frete;              // faturamento líquido = bruto − taxas de venda − frete grátis pago pelo vendedor
   var ticket = nPed ? fat / nPed : 0;
   var margem = fat ? (lucro / fat * 100) : 0;
+  var ads = adsNoPeriodo(custosML, noPeriodo);
+  var adsPct = (ads.estado === "ok" && fat > 0) ? (ads.valor / fat) * 100 : null;
   var kpis = [
     { l:"Faturamento bruto", v:fmt(fat), c:"var(--text-strong)" },
     { l:"Faturamento líquido", v:fmt(fatLiq), c:"var(--text-strong)", sub:"após taxas de venda e frete grátis" },
@@ -10272,7 +10368,28 @@ function DashboardGeral({ enrichedOrders }) {
     { l:"Frete grátis (seu custo)", v:"- " + fmt(frete), c:"var(--kpi-neg)" },
     { l:"Impostos", v:"- " + fmt(impostos), c:"var(--kpi-neg)" },
     { l:"Custo dos produtos", v:"- " + fmt(custo), c:"var(--kpi-neg)" },
+    // Publicidade tem um KPI próprio porque a pergunta não é quanto se gastou, e
+    // sim quanto do faturamento foi para Ads.
+    { l:"Publicidade (Ads)",
+      v: ads.estado === "ok" ? "- " + fmt(ads.valor) : "não carregado",
+      c: ads.estado === "ok" ? "var(--kpi-neg)" : "var(--text-3)",
+      sub: ads.estado === "ok"
+        ? (adsPct != null ? adsPct.toFixed(2) + "% do faturamento" : "sem faturamento no período")
+        : ads.estado === "sem_marcacao"
+          ? "nenhuma cobrança marcada como publicidade"
+          : "carregue a fatura em Financeiro → Custos do ML" },
   ];
+  // O período escolhido aqui pode ir além do que já foi baixado da fatura do ML.
+  // Sem dizer isso, um "0,4% em Ads" pareceria o número do período inteiro
+  // quando na verdade é de um pedaço dele.
+  var avisoAds = null;
+  if (ads.estado === "ok") {
+    var iniPeriodo = periodo === "custom" ? deData : (periodo === "hoje" ? hojeStr : (periodo === "mesatual" ? hojeStr.slice(0,7) + "-01" : cutoff));
+    if (ads.cobreDe && iniPeriodo && iniPeriodo < ads.cobreDe) {
+      avisoAds = "As cobranças do Mercado Livre estão carregadas de " + fmtDate(ads.cobreDe)
+               + " em diante. O gasto com publicidade acima cobre só essa parte do período.";
+    }
+  }
   var periodos = [["hoje","Hoje"],["7","7 dias"],["30","30 dias"],["mesatual","Mês atual"]];
   var _inpData = { background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-2)", padding:"6px 8px", borderRadius:8, fontSize:12, colorScheme:"inherit" };
   return (
@@ -10281,6 +10398,12 @@ function DashboardGeral({ enrichedOrders }) {
         <div>
           <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Dashboard</div>
           <div style={{ fontSize:13, color:"var(--text-3)" }}>Faturamento bruto e líquido, taxas, frete, impostos e lucro real do período.</div>
+          {avisoAds && (
+            <div style={{ fontSize:11.5, color:"#FFC107", marginTop:6, maxWidth:620, lineHeight:1.5 }}>
+              {avisoAds}{setTab && <> <span onClick={function(){ setTab("custos_ml"); }}
+                style={{ color:"#0e7490", cursor:"pointer", textDecoration:"underline" }}>carregar mais períodos</span></>}
+            </div>
+          )}
         </div>
         <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap", justifyContent:"flex-end" }}>
           {periodos.map(function(p){
@@ -14660,6 +14783,17 @@ export default function App() {
     definirTabelaFreteML(freteTabelaCfg && freteTabelaCfg.valores, freteTabelaCfg && freteTabelaCfg.versao);
   }, [freteTabelaCfg]);
 
+  // Cobranças do ML já carregadas da fatura, por dia e por tipo, mais quais
+  // tipos são publicidade. Alimenta o cartão de Ads do Dashboard.
+  const [custosMLCfg, setCustosMLCfg] = useState(function() {
+    try { return JSON.parse(localStorage.getItem("custos_ml_faturamento") || "{}"); } catch { return {}; }
+  });
+  function salvarCustosML(cfg) {
+    setCustosMLCfg(cfg);
+    try { localStorage.setItem("custos_ml_faturamento", JSON.stringify(cfg)); } catch {}
+    kvSyncPush("custos_ml_faturamento", cfg, { permitirVazio: true });
+  }
+
   const [custosPadrao, setCustosPadrao] = useState(function() {
     try { return JSON.parse(localStorage.getItem("custos_padrao_config") || "{}"); } catch { return {}; }
   });
@@ -15336,7 +15470,7 @@ export default function App() {
     "custos_fixos_config","impostos_config","irpj_csll_config","icms_por_estado","icms_regime_config","lancamentos",
     "mov_estoque","metaMensal","margem_alvo_config","min_stock_anuncios","real_fees_config","pedidos_compra",
     "precificacao_extras","precos_pendentes_ml","custos_extras_config","depositos_estoque","estoque_depositos",
-    "envios_full","vendas_estoque_baixadas","sku_overrides","analise_ia_config","prioridade_pagamento_config","financeiro_config","recebiveis_baixados","extrato_bancario","conciliacoes_manuais","reclamacoes_analise","tags_itens","custos_padrao_config","frete_ml_tabela",
+    "envios_full","vendas_estoque_baixadas","sku_overrides","analise_ia_config","prioridade_pagamento_config","financeiro_config","recebiveis_baixados","extrato_bancario","conciliacoes_manuais","reclamacoes_analise","tags_itens","custos_padrao_config","frete_ml_tabela","custos_ml_faturamento",
   ]).current;
   // Para os dados guardados como dicionário (chave→valor, ex: custo por anúncio), mesclar em
   // vez de substituir por inteiro — evita que um "pull" com dados parciais do servidor apague
@@ -15381,6 +15515,7 @@ export default function App() {
     custos_extras_config: mesclarSetter(setCustosExtras),
     custos_padrao_config: mesclarSetter(setCustosPadrao),
     frete_ml_tabela: function(v){ setFreteTabelaCfg(v && typeof v === "object" ? v : {}); },
+    custos_ml_faturamento: mesclarSetter(setCustosMLCfg),
     analise_ia_config: function(v){ setConfigQualidade(v); },
     prioridade_pagamento_config: mesclarSetter(setConfigPrioridadeState),
     financeiro_config: mesclarSetter(setFinanceiroConfigState),
@@ -15401,7 +15536,7 @@ export default function App() {
     precos_venda_config: "object", precos_pendentes_ml: "object", irpj_csll_config: "object",
     icms_regime_config: "object", icms_por_estado: "object",
     min_stock_anuncios: "object", real_fees_config: "object", sku_overrides: "object",
-    custos_extras_config: "object", custos_padrao_config: "object", frete_ml_tabela: "object", analise_ia_config: "object",
+    custos_extras_config: "object", custos_padrao_config: "object", frete_ml_tabela: "object", custos_ml_faturamento: "object", analise_ia_config: "object",
     prioridade_pagamento_config: "object",
     financeiro_config: "object", recebiveis_baixados: "object",
     extrato_bancario: "array", conciliacoes_manuais: "object", reclamacoes_analise: "object", tags_itens: "object",
@@ -17070,7 +17205,7 @@ export default function App() {
           <HomeTab enrichedOrders={enrichedOrders} currentUser={currentUser} setTab={setTab} />
         )}
         {tab === "dashboard" && (
-          <DashboardTab enrichedOrders={enrichedOrders} produtos={produtos} user={user} metas={metas} salvarMetas={salvarMetas} sub={dashSub} setSub={setDashSub} />
+          <DashboardTab enrichedOrders={enrichedOrders} produtos={produtos} user={user} metas={metas} salvarMetas={salvarMetas} sub={dashSub} setSub={setDashSub} custosML={custosMLCfg} setTab={setTab} />
         )}
         {tab === "backup" && <BackupTab chaves={SYNC_ALL_KEYS} ns={syncNamespace()} />}
         {tab === "reclamacoes" && <ReclamacoesTab enrichedOrders={enrichedOrdersTodos} token={token}
@@ -17078,7 +17213,7 @@ export default function App() {
           analise={reclamacoesAnalise} salvarAnalise={salvarReclamacoesAnalise} setTab={setTab} />}
         {tab === "categorias_pagar" && <CategoriasPagarTab categorias={categoriasPagar} salvar={salvarCategoriasPagar}
           contasPagar={contasPagar} salvarContasPagar={salvarContasPagar} setTab={setTab} />}
-        {tab === "custos_ml" && <CustosMLTab tab={tab} setTab={setTab} />}
+        {tab === "custos_ml" && <CustosMLTab tab={tab} setTab={setTab} cfg={custosMLCfg} salvar={salvarCustosML} />}
         {tab === "custos_padrao" && <CustosPadraoTab custosPadrao={custosPadrao} salvar={setCustosPadraoAndSave} custosExtras={custosExtras} />}
         {tab === "frete_ml" && <TabelaFreteMLTab cfg={freteTabelaCfg} salvar={salvarFreteTabela} />}
         {tab === "analise_ia" && <AnaliseIATab config={configQualidade} salvar={setConfigQualidade} enriched={enriched} />}

@@ -698,6 +698,38 @@ function PSel(props){
 
 // ── Cadastro de produto em página inteira ───────────────────────────────────
 // Substituiu o modal de 8 campos: um cadastro de produto de verdade tem mais
+// Custo por SKU, tirado dos anúncios que TÊM custo preenchido.
+//
+// O custo é guardado por ANÚNCIO, não por SKU. Então um anúncio novo de uma
+// mercadoria que você já vende nasce sem custo, e entra na margem como se fosse
+// de graça — foi o que aconteceu com 49 anúncios criados numa semana. Aqui o
+// custo do irmão de mesmo SKU serve de ponte até alguém preencher o dele.
+//
+// Quando dois anúncios do mesmo SKU têm custos DIFERENTES, não dá para saber
+// qual vale: o mapa marca conflito e nada é herdado. Escolher um dos dois em
+// silêncio seria pior do que a célula continuar pedindo o dado.
+function mapaCustoPorSku(listings, costs) {
+  var mapa = {};
+  (listings || []).forEach(function(l){
+    var c = parseFloat((costs || {})[l.id]);
+    if (!(c > 0)) return;
+    var sku = String(getSku(l) || "").trim().toLowerCase();
+    if (!sku) return;
+    if (!mapa[sku]) { mapa[sku] = { valor: c, conflito: false }; return; }
+    if (Math.abs(mapa[sku].valor - c) > 0.005) mapa[sku].conflito = true;
+  });
+  return mapa;
+}
+// O custo a usar para um anúncio: o dele, e na falta dele o do irmão de mesmo SKU.
+function custoDoAnuncio(listing, costs, porSku) {
+  var proprio = parseFloat((costs || {})[listing.id]);
+  if (proprio > 0) return { valor: proprio, herdado: false };
+  var sku = String(getSku(listing) || "").trim().toLowerCase();
+  var irmao = sku && porSku ? porSku[sku] : null;
+  if (irmao && !irmao.conflito) return { valor: irmao.valor, herdado: true };
+  return { valor: 0, herdado: false };
+}
+
 // O produto cadastrado por trás de um anúncio: pelo vínculo de MLB e, na falta
 // dele, pelo SKU. É por aqui que a Precificação alcança as medidas da caixa.
 function produtoDoAnuncioML(produtos, mlb, sku) {
@@ -12376,7 +12408,7 @@ function NovoProdutoPrecForm({ onSave, onClose, marketplaceInicial, shopeeDoc, p
   );
 }
 
-function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFretesAndSave, descontosConfig, setDescontosAndSave, precosVendaConfig, setPrecosVendaAndSave, pendentesAtualizacao, setPendentesAndSave, setSkuOverridesAndSave, rawOrders, icmsPct, buscaInicial, custosExtras, setCustosExtrasAndSave, produtos, custosPadrao, margemAlvo, salvarMargemAlvo }) {
+function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFretesAndSave, descontosConfig, setDescontosAndSave, precosVendaConfig, setPrecosVendaAndSave, pendentesAtualizacao, setPendentesAndSave, setSkuOverridesAndSave, rawOrders, icmsPct, buscaInicial, custosExtras, setCustosExtrasAndSave, produtos, custosPadrao, margemAlvo, salvarMargemAlvo, custoPorSku }) {
   // ICMS projetado da venda (Financeiro → Impostos). Aqui ainda não há comprador, então vale a
   // alíquota interestadual — o cenário da maior parte das vendas e o mais conservador no preço.
   var icmsVendaPct = parseFloat(icmsPct) || 0;
@@ -12882,7 +12914,11 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
           </thead>
           <tbody>
             {listsFiltrados.slice(0,200).map(function(l, i) {
-              var custo = custosLocais[l.id] !== undefined ? custosLocais[l.id] : (costs[l.id]||0);
+              // Mesma regra do resto do sistema: o custo do anúncio, e na falta
+              // dele o do irmão de mesmo SKU. Digitar aqui continua valendo acima de tudo.
+              var _ci = custoDoAnuncio(l, costs, custoPorSku);
+              var custo = custosLocais[l.id] !== undefined ? custosLocais[l.id] : _ci.valor;
+              var custoHerdado = custosLocais[l.id] === undefined && _ci.herdado;
               var bruto = l.price || 0;
               var taxa = l.fee || bruto * 0.13;
               var freteReal = l.freteSeller || 0;
@@ -13002,16 +13038,25 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                   {/* Custo (editável) */}
                   <td style={{ padding:"6px 8px" }}>
                     {isEditing ? (
-                      <input type="number" step="0.01" defaultValue={custo}
+                      <input type="number" step="0.01" defaultValue={custoHerdado ? "" : custo}
+                        placeholder={custoHerdado ? custo.toFixed(2) : "0,00"}
                         onChange={function(e){ var v=parseFloat(e.target.value)||0; setCustosLocais(function(c){return {...c,[l.id]:v};}); setCostsAndSave(function(c){return {...c,[l.id]:v};}); }}
                         onBlur={function(){ setSelectedId(null); }}
                         onKeyDown={function(e){ if(e.key==="Enter"){ e.target.blur(); } }}
                         autoFocus
                         style={{ width:72, background:"var(--surface)", border:"1px solid #0e7490", color:"var(--text-strong)", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none" }} />
                     ) : (
-                      <span onClick={function(){setSelectedId(l.id);}} title="Clique para editar custo"
-                        style={{ cursor:"pointer", fontSize:12, fontWeight:600, color:custo>0?"var(--text-2)":"#FF5252",
-                          background:custo>0?"transparent":"rgba(255,82,82,.12)", padding:custo>0?"0":"2px 6px", borderRadius:4 }}>
+                      <span onClick={function(){setSelectedId(l.id);}}
+                        title={custoHerdado
+                          ? "Custo de outro anúncio com o mesmo SKU (" + (l.seller_sku || l.sku || "") + "). "
+                            + "Está entrando na margem para o anúncio novo não parecer lucrativo demais. "
+                            + "Clique para informar o custo deste anúncio."
+                          : "Clique para editar custo"}
+                        style={{ cursor:"pointer", fontSize:12, fontWeight:600,
+                          color: custoHerdado ? "var(--text-3)" : custo>0 ? "var(--text-2)" : "#FF5252",
+                          background: custo>0 ? "transparent" : "rgba(255,82,82,.12)",
+                          padding: custo>0 ? "0" : "2px 6px", borderRadius:4,
+                          borderBottom: custoHerdado ? "1px dashed var(--text-4)" : "none" }}>
                         {custo>0?"R$ "+custo.toFixed(2).replace(".",","): "✎ Sem custo"}
                       </span>
                     )}
@@ -15615,8 +15660,13 @@ export default function App() {
   // têm comprador, então projetam pela alíquota interestadual (o caso mais comum da operação).
   const icmsPctProjetado = icmsPctProjecao(icmsRegime, icmsTabela);
 
+  // Montado uma vez e usado por todas as linhas: varrer os anúncios dentro do
+  // laço seria varrer 500 listas 500 vezes.
+  const custoPorSkuMapa = useMemo(function(){ return mapaCustoPorSku(listings, costs); }, [listings, costs]);
+
   const enriched = listings.map(l => {
-    const cost = costs[l.id] ?? 0;
+    const _custoInfo = custoDoAnuncio(l, costs, custoPorSkuMapa);
+    const cost = _custoInfo.valor;
     // Taxa ML padronizada por tipo de anúncio: Clássico 12% / Premium 17%.
     const feeRate = getRealFeeRate(l);
     const realFeeInfo = realFees[l.id] || null;
@@ -15644,7 +15694,7 @@ export default function App() {
     const skuOverride = skuOverrides[l.id] && String(skuOverrides[l.id]).trim();
     const sku = skuOverride || getSku(l);
     const youReceive = salePrice - margin.fee - freteSeller;
-    return { ...l, seller_sku: skuOverride || l.seller_sku, ...margin, cost, sku, salePrice, originalPrice, hasPromo, promoVerificada, freteSeller, youReceive, totalProfit: margin.profit * (l.sold_quantity ?? 0), score, checks, feeIsReal: !!realFeeInfo };
+    return { ...l, seller_sku: skuOverride || l.seller_sku, ...margin, cost, custoHerdado: _custoInfo.herdado, sku, salePrice, originalPrice, hasPromo, promoVerificada, freteSeller, youReceive, totalProfit: margin.profit * (l.sold_quantity ?? 0), score, checks, feeIsReal: !!realFeeInfo };
   });
 
   const filteredListings = useMemo(() => {
@@ -15677,7 +15727,9 @@ export default function App() {
         return fTagsAnuncio.every(function(x){ return t.indexOf(x) >= 0; });
       });
     }
-    if (filterListingExtra === "sem_custo")  results = results.filter(l => l.id === editandoCustoId || !(costs[l.id] > 0));
+    // Herdado do irmão conta como COM custo: senão o filtro mostraria como pendente
+    // um anúncio cuja margem já está correta na tela.
+    if (filterListingExtra === "sem_custo")  results = results.filter(l => l.id === editandoCustoId || !(custoDoAnuncio(l, costs, custoPorSkuMapa).valor > 0));
     if (filterListingExtra === "com_promo")  results = results.filter(l => l.hasPromo);
     // Não verificado fica de fora: melhor uma lista menor e correta do que uma
     // lista cheia que inclui anúncio em promoção.
@@ -16643,6 +16695,7 @@ export default function App() {
             custosExtras={custosExtras} setCustosExtrasAndSave={setCustosExtrasAndSave}
             custosPadrao={custosPadrao}
             margemAlvo={margemAlvo} salvarMargemAlvo={salvarMargemAlvo}
+            custoPorSku={custoPorSkuMapa}
             buscaInicial={buscaPrecificacao}
             icmsPct={icmsPctProjetado}
             enriched={enriched}

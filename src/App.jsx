@@ -5560,6 +5560,7 @@ const ABAS_FINANCEIRO = [
   { key:"dre",                   label:"DRE" },
   { key:"conciliacao",           label:"Conciliação" },
   { key:"impostos",              label:"Impostos" },
+  { key:"custos_ml",             label:"Custos do ML" },
 ];
 
 // Períodos retroativos, usados pelas telas que olham para trás. O horizonte das
@@ -5605,6 +5606,239 @@ function BlocoKpis({ itens }) {
 //   kpis              [{ rotulo, valor, cor, nota }] — sempre na mesma faixa
 //   acoes             nós da coluna da direita — sempre no mesmo lugar
 //   largura           limite de largura do corpo
+// ── Custos cobrados pelo Mercado Livre ───────────────────────────────────────
+// Vêm do faturamento do ML: cada período traz as cobranças linha a linha, com o
+// nome que o próprio ML dá a elas ("Tarifa pelo serviço de armazenamento Full",
+// tarifa de envio, retirada de estoque). São custos reais que saíram da conta e
+// que até aqui não apareciam em lugar nenhum do sistema.
+//
+// Agrupar é do ML, não meu: uso o texto que ele manda. Inventar categoria minha
+// ("logística", "operacional") criaria um nome que não existe na fatura e que
+// ninguém conseguiria conferir contra o extrato do Mercado Pago.
+
+// Um período pode ter centenas de linhas (506 no mês em curso). A busca vai em
+// páginas, com teto: melhor mostrar "parcial" do que varrer sem fim se o ML
+// mudar o formato da paginação.
+const CUSTOS_ML_PAGINA = 150;
+const CUSTOS_ML_MAX_PAGINAS = 30;
+
+async function buscarPeriodosML() {
+  const res = await fetch(ML("/billing/integration/monthly/periods?group=ML&document_type=BILL&limit=12"),
+    { headers: { "x-format-new": "true" } });
+  if (!res.ok) return { erro: "HTTP " + res.status, periodos: [] };
+  const d = await res.json();
+  return { periodos: (d && d.results) || [] };
+}
+
+async function buscarDetalhePeriodoML(chave, aoProgredir) {
+  var linhas = [];
+  var total = null;
+  for (var pagina = 0; pagina < CUSTOS_ML_MAX_PAGINAS; pagina++) {
+    var offset = pagina * CUSTOS_ML_PAGINA;
+    var url = "/billing/integration/periods/key/" + encodeURIComponent(chave)
+            + "/group/ML/details?document_type=BILL&limit=" + CUSTOS_ML_PAGINA + "&offset=" + offset;
+    var res = await fetch(ML(url), { headers: { "x-format-new": "true" } });
+    if (!res.ok) return { erro: "HTTP " + res.status + " ao buscar as cobranças", linhas: linhas, total: total, parcial: true };
+    var d = await res.json();
+    var pedaco = (d && d.results) || [];
+    if (total == null) total = d && typeof d.total === "number" ? d.total : null;
+    linhas = linhas.concat(pedaco);
+    if (aoProgredir) aoProgredir(linhas.length, total);
+    if (!pedaco.length || (total != null && linhas.length >= total)) break;
+  }
+  return { linhas: linhas, total: total, parcial: total != null && linhas.length < total };
+}
+
+// Soma por tipo de cobrança, usando o nome que o ML dá. Um desconto vem como
+// valor próprio e entra somando negativo, para o total bater com a fatura.
+function agruparCustosML(linhas) {
+  var porTipo = {};
+  var total = 0;
+  (linhas || []).forEach(function(l){
+    var nome = String((l && l.transaction_detail) || "").trim() || "(sem descrição)";
+    var v = parseFloat(l && l.detail_amount);
+    if (!isFinite(v)) v = 0;
+    // CHARGE soma, REFUND/BONIFICATION devolve. O ML já manda o sinal em alguns
+    // casos; quando o tipo diz que é devolução e o valor veio positivo, inverte.
+    var tipo = String((l && l.detail_type) || "").toUpperCase();
+    if ((tipo === "REFUND" || tipo === "BONIFICATION") && v > 0) v = -v;
+    if (!porTipo[nome]) porTipo[nome] = { nome: nome, valor: 0, qtd: 0, sub: {} };
+    porTipo[nome].valor += v;
+    porTipo[nome].qtd++;
+    var sub = String((l && l.detail_sub_type) || "").trim();
+    if (sub) porTipo[nome].sub[sub] = true;
+    total += v;
+  });
+  var lista = Object.keys(porTipo).map(function(k){
+    var x = porTipo[k];
+    return { nome: x.nome, valor: x.valor, qtd: x.qtd, subs: Object.keys(x.sub) };
+  }).sort(function(a,b){ return Math.abs(b.valor) - Math.abs(a.valor); });
+  return { lista: lista, total: total };
+}
+
+function CustosMLTab({ tab, setTab }) {
+  const [periodos, setPeriodos] = useState(null);
+  const [erroPeriodos, setErroPeriodos] = useState("");
+  const [chave, setChave] = useState("");
+  const [carregando, setCarregando] = useState(false);
+  const [progresso, setProgresso] = useState(null);
+  const [detalhe, setDetalhe] = useState(null); // { linhas, total, parcial, erro }
+
+  useEffect(function(){
+    let vivo = true;
+    buscarPeriodosML().then(function(r){
+      if (!vivo) return;
+      if (r.erro) setErroPeriodos(r.erro);
+      setPeriodos(r.periodos || []);
+      if ((r.periodos || []).length) setChave(r.periodos[0].key);
+    });
+    return function(){ vivo = false; };
+  }, []);
+
+  async function carregar() {
+    if (!chave) return;
+    setCarregando(true); setDetalhe(null); setProgresso(null);
+    var r = await buscarDetalhePeriodoML(chave, function(qtd, total){ setProgresso({ qtd: qtd, total: total }); });
+    setDetalhe(r);
+    setCarregando(false);
+  }
+
+  var periodoAtual = (periodos || []).find(function(p){ return p.key === chave; });
+  var agrupado = detalhe && detalhe.linhas ? agruparCustosML(detalhe.linhas) : null;
+
+  return (
+    <FinanceiroShell tab={tab} setTab={setTab} titulo="Custos do Mercado Livre"
+      sub="O que o ML cobrou da conta: envio, armazenamento no Full, retirada de estoque e as demais tarifas, como aparecem na fatura.">
+      <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 16px" }}>
+          {periodos === null ? (
+            <div style={{ fontSize:13, color:"var(--text-3)" }}>Buscando os períodos de faturamento...</div>
+          ) : erroPeriodos ? (
+            <div style={{ fontSize:13, color:"#FF5252" }}>
+              Não foi possível listar os períodos ({erroPeriodos}). Sem isso não dá para abrir as cobranças.
+            </div>
+          ) : !periodos.length ? (
+            <div style={{ fontSize:13, color:"var(--text-3)" }}>O Mercado Livre não devolveu nenhum período de faturamento para esta conta.</div>
+          ) : (
+            <div style={{ display:"flex", gap:12, alignItems:"flex-end", flexWrap:"wrap" }}>
+              <div style={{ minWidth:280 }}>
+                <label style={{ display:"block", fontSize:11, color:"var(--text-3)", fontWeight:600, marginBottom:4 }}>Período</label>
+                <select value={chave} onChange={function(e){ setChave(e.target.value); setDetalhe(null); }}
+                  style={{ width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)",
+                           padding:"9px 10px", borderRadius:8, fontSize:13 }}>
+                  {periodos.map(function(p){
+                    var de = p.period && p.period.date_from ? fmtDate(p.period.date_from) : p.key;
+                    var ate = p.period && p.period.date_to ? fmtDate(p.period.date_to) : "";
+                    return <option key={p.key} value={p.key}>
+                      {de}{ate ? " a " + ate : ""} · {fmt(p.amount)}{p.period_status === "OPEN" ? " · em aberto" : ""}
+                    </option>;
+                  })}
+                </select>
+              </div>
+              <button onClick={carregar} disabled={carregando || !chave}
+                style={{ background: carregando ? "var(--surface-3)" : "var(--ui-accent)", border:"none",
+                         color: carregando ? "var(--text-4)" : "var(--ui-accent-text)", fontWeight:600,
+                         padding:"10px 20px", borderRadius:8, cursor: carregando ? "wait" : "pointer", fontSize:13 }}>
+                {carregando ? "Buscando cobranças..." : "Ver cobranças do período"}
+              </button>
+              {carregando && progresso && (
+                <span style={{ fontSize:12, color:"var(--text-3)" }}>
+                  {progresso.qtd}{progresso.total ? " de " + progresso.total : ""} cobranças
+                </span>
+              )}
+            </div>
+          )}
+          {periodoAtual && (
+            <div style={{ display:"flex", gap:22, marginTop:14, flexWrap:"wrap" }}>
+              <div>
+                <div style={{ fontSize:11, color:"var(--text-3)" }}>Total do período</div>
+                <div style={{ fontSize:19, fontWeight:600, color:"var(--text-strong)" }}>{fmt(periodoAtual.amount)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:"var(--text-3)" }}>Ainda em aberto</div>
+                <div style={{ fontSize:19, fontWeight:600, color: (parseFloat(periodoAtual.unpaid_amount)||0) > 0 ? "#FFC107" : "var(--text-2)" }}>
+                  {fmt(periodoAtual.unpaid_amount)}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:"var(--text-3)" }}>Situação</div>
+                <div style={{ fontSize:19, fontWeight:600, color:"var(--text-2)" }}>
+                  {periodoAtual.period_status === "OPEN" ? "Aberto" : "Fechado"}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {detalhe && detalhe.erro && (
+          <div style={{ background:"rgba(255,82,82,.08)", border:"1px solid rgba(255,82,82,.35)", borderRadius:10,
+                        padding:"12px 14px", fontSize:13, color:"var(--text-2)" }}>
+            {detalhe.erro}. {detalhe.linhas && detalhe.linhas.length
+              ? "O que aparece abaixo é só o que deu para buscar — não é o período inteiro."
+              : "Nenhuma cobrança foi carregada."}
+          </div>
+        )}
+
+        {agrupado && (
+          <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, overflow:"hidden" }}>
+            <div style={{ padding:"12px 16px", borderBottom:"1px solid var(--border)", display:"flex",
+                          justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
+              <div>
+                <div style={{ fontWeight:600, fontSize:14, color:"var(--text-strong)" }}>Cobranças por tipo</div>
+                <div style={{ fontSize:11.5, color:"var(--text-3)", marginTop:2 }}>
+                  {detalhe.linhas.length} cobrança(s){detalhe.total ? " de " + detalhe.total : ""}
+                  {detalhe.parcial ? " — lista parcial" : ""} · agrupadas pelo nome que o Mercado Livre dá a cada uma
+                </div>
+              </div>
+              <div style={{ textAlign:"right" }}>
+                <div style={{ fontSize:11, color:"var(--text-3)" }}>Soma das cobranças carregadas</div>
+                <div style={{ fontSize:19, fontWeight:600, color:"var(--text-strong)" }}>{fmt(agrupado.total)}</div>
+              </div>
+            </div>
+            <div className="tabela-wrap">
+              <table className="tabela">
+                <thead><tr>
+                  <th className="th">Cobrança</th>
+                  <th className="th" style={{ textAlign:"right" }}>Qtd.</th>
+                  <th className="th" style={{ textAlign:"right" }}>Valor</th>
+                  <th className="th" style={{ textAlign:"right" }}>% do total</th>
+                </tr></thead>
+                <tbody>
+                  {agrupado.lista.map(function(x, i){
+                    var pct = agrupado.total !== 0 ? (x.valor / agrupado.total) * 100 : 0;
+                    return (
+                      <tr key={i}>
+                        <td className="td">
+                          <div style={{ fontSize:12.5, color:"var(--text-strong)" }}>{x.nome}</div>
+                          {x.subs.length > 0 && (
+                            <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:2 }}>código do ML: {x.subs.join(", ")}</div>
+                          )}
+                        </td>
+                        <td className="td" style={{ textAlign:"right", fontSize:12.5, color:"var(--text-3)" }}>{x.qtd}</td>
+                        <td className="td" style={{ textAlign:"right", fontSize:12.5, fontWeight:600,
+                              color: x.valor < 0 ? "#0a9d4e" : "var(--text-strong)" }}>{fmt(x.valor)}</td>
+                        <td className="td" style={{ textAlign:"right", fontSize:12, color:"var(--text-3)" }}>{pct.toFixed(1)}%</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {!detalhe && !carregando && periodos && periodos.length > 0 && (
+          <div style={{ fontSize:12.5, color:"var(--text-3)", lineHeight:1.6 }}>
+            Escolha o período e clique em <b>Ver cobranças</b>. A busca traz as cobranças em páginas e pode
+            levar alguns segundos num mês cheio — por isso não acontece sozinha ao abrir a tela.
+          </div>
+        )}
+      </div>
+    </FinanceiroShell>
+  );
+}
+
 function FinanceiroShell({ tab, setTab, titulo, sub, periodo, setPeriodo, controles, kpis, acoes, largura, children }) {
   // A coluna de ações some e volta por escolha do usuário, e a escolha fica
   // guardada: numa tela de tabela larga, 236px de lado fazem diferença. O
@@ -9933,6 +10167,7 @@ function HomeTab({ enrichedOrders, currentUser, setTab }){
       { key:"dre", label:"DRE e conciliação", desc:"Demonstrativo de resultado" },
       { key:"conciliacao", label:"Conciliação", desc:"O que caiu na conta x o que o sistema espera" },
       { key:"impostos", label:"Impostos", desc:"ICMS por destino, IRPJ, CSLL e custos fixos" },
+      { key:"custos_ml", label:"Custos do Mercado Livre", desc:"Envio, armazenamento no Full e retirada, como vêm na fatura" },
     ]},
     { titulo:"Cadastro", itens:[
       { key:"clientes", label:"Clientes", desc:"Recorrentes e novos" },
@@ -16222,6 +16457,7 @@ export default function App() {
               { key:"dre", label:"DRE e conciliação" },
               { key:"conciliacao", label:"Conciliação" },
               { key:"impostos", label:"Impostos" },
+              { key:"custos_ml", label:"Custos do Mercado Livre" },
             ]},
             { titulo:"Cadastro", itens:[
               { key:"clientes", label:"Clientes" },
@@ -16842,6 +17078,7 @@ export default function App() {
           analise={reclamacoesAnalise} salvarAnalise={salvarReclamacoesAnalise} setTab={setTab} />}
         {tab === "categorias_pagar" && <CategoriasPagarTab categorias={categoriasPagar} salvar={salvarCategoriasPagar}
           contasPagar={contasPagar} salvarContasPagar={salvarContasPagar} setTab={setTab} />}
+        {tab === "custos_ml" && <CustosMLTab tab={tab} setTab={setTab} />}
         {tab === "custos_padrao" && <CustosPadraoTab custosPadrao={custosPadrao} salvar={setCustosPadraoAndSave} custosExtras={custosExtras} />}
         {tab === "frete_ml" && <TabelaFreteMLTab cfg={freteTabelaCfg} salvar={salvarFreteTabela} />}
         {tab === "analise_ia" && <AnaliseIATab config={configQualidade} salvar={setConfigQualidade} enriched={enriched} />}

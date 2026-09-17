@@ -9465,74 +9465,6 @@ function MargemPedidoDash({ enrichedOrders }){
   );
 }
 
-// ── Sub-aba ESTOQUE DE PRODUTOS ──────────────────────────────────────────────
-function EstoqueDash({ produtos }){
-  const [busca,setBusca]=useState(""); const [pagina,setPagina]=useState(1); const [modo,setModo]=useState("todos");
-  var lista=(produtos||[]).map(function(p){ var est=parseInt(p.estoqueAtual)||0, cu=parseFloat(p.precoCusto)||0, pv=parseFloat(p.precoVenda)||0;
-    return { codigo:p.codigo||p.sku||p.id||"—", desc:nomeProd(p), est:est, custo:est*cu, valor:est*pv }; });
-  if(busca.trim()){ var qq=busca.trim().toLowerCase(); lista=lista.filter(function(x){ return String(x.codigo).toLowerCase().indexOf(qq)>=0 || x.desc.toLowerCase().indexOf(qq)>=0; }); }
-  var totEst=lista.reduce(function(s,x){return s+x.est;},0), totCusto=lista.reduce(function(s,x){return s+x.custo;},0), totValor=lista.reduce(function(s,x){return s+x.valor;},0);
-  var POR=40, totalPg=Math.max(1,Math.ceil(lista.length/POR)), pg=Math.min(pagina,totalPg), slice=lista.slice((pg-1)*POR,pg*POR);
-  var cols=["Código","Descrição","Estoque","Custo","Valor"];
-  function rowsExport(){ return lista.map(function(x){ return [x.codigo, x.desc, x.est, x.custo.toFixed(2), x.valor.toFixed(2)]; }); }
-  return (
-    <div style={{ padding:2 }}>
-      <div style={{ display:"flex", gap:14, flexWrap:"wrap", alignItems:"flex-start" }}>
-        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", flex:"1 1 520px", minWidth:340 }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:12 }}>
-            <div style={{ fontWeight:500, fontSize:15, color:"var(--text-strong)" }}>Tabela de Estoques — Todos</div>
-            <div style={{ display:"flex", gap:4, background:"var(--surface-3)", borderRadius:8, padding:2 }}>
-              {[["todos","Variações + Simples + Composições"],["produtos","Produtos"]].map(function(t){ var a=modo===t[0]; return <button key={t[0]} onClick={function(){ setModo(t[0]); }} style={{ padding:"6px 12px", borderRadius:7, border:"none", cursor:"pointer", fontSize:11.5, fontWeight:500, background:a?"var(--surface)":"transparent", color:a?"#0a9d4e":"var(--text-3)" }}>{t[1]}</button>; })}
-            </div>
-          </div>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:10 }}>
-            <BotoesExport nome="estoque-produtos" colunas={cols} linhas={rowsExport} />
-            <input value={busca} onChange={function(e){ setBusca(e.target.value); setPagina(1); }} placeholder="Procurar por código ou descrição..."
-              style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text-strong)", padding:"7px 10px", borderRadius:8, fontSize:12, minWidth:220 }} />
-          </div>
-          <div style={{ overflowX:"auto" }}>
-            <table className="tabela">
-              <thead><tr>{["Código","Descrição","Estoque","Custo","Valor"].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
-              <tbody>
-                {slice.length===0 ? <tr><td className="td" style={{ textAlign:"center", padding:"32px 12px", color:"var(--text-3)" }} colSpan={5}>{(produtos||[]).length===0?"Nenhum produto cadastrado. Importe em Produtos.":"Nada encontrado."}</td></tr> :
-                slice.map(function(x,i){ return <tr key={i}>
-                  <td className="td-num">{x.codigo}</td>
-                  <td className="td" style={{ maxWidth:360, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"var(--text-strong)", fontWeight:500 }}>{x.desc}</td>
-                  <td className="td" style={{ fontWeight:500 }}>{x.est}</td>
-                  <td className="td-num">{fmt(x.custo)}</td>
-                  <td className="td-num">{fmt(x.valor)}</td>
-                </tr>; })}
-              </tbody>
-            </table>
-          </div>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:10, fontSize:12, color:"var(--text-3)" }}>
-            <span>{lista.length} item(ns)</span>
-            <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-              <button disabled={pg<=1} onClick={function(){ setPagina(pg-1); }} className="btn-exp" style={{ opacity:pg<=1?.5:1 }}>Anterior</button>
-              <span>Pág. {pg}/{totalPg}</span>
-              <button disabled={pg>=totalPg} onClick={function(){ setPagina(pg+1); }} className="btn-exp" style={{ opacity:pg>=totalPg?.5:1 }}>Próxima</button>
-            </div>
-          </div>
-        </div>
-        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", flex:"1 1 280px", minWidth:260 }}>
-          <div style={{ fontWeight:500, fontSize:15, color:"var(--text-strong)", marginBottom:12 }}>Estoque consolidado</div>
-          <table className="tabela">
-            <thead><tr>{["Depósito","Estoque","Custo","Valor"].map(function(h){ return <th key={h} className="th">{h}</th>; })}</tr></thead>
-            <tbody>
-              <tr>
-                <td className="td" style={{ fontWeight:500, color:"var(--text-strong)" }}>Estoque geral</td>
-                <td className="td" style={{ fontWeight:500 }}>{totEst}</td>
-                <td className="td-num">{fmt(totCusto)}</td>
-                <td className="td-num">{fmt(totValor)}</td>
-              </tr>
-            </tbody>
-          </table>
-          <div style={{ fontSize:11, color:"var(--text-3)", marginTop:10, lineHeight:1.5 }}>A separação por depósito (Distribue, Full, etc.) aparece aqui quando a integração de estoque por depósito for ativada. <b>Valor</b> = estoque × preço de venda; fica R$ 0,00 nos produtos sem preço de venda cadastrado.</div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── Sub-aba CLIENTES (recorrentes × novos) ───────────────────────────────────
 function ClientesDash({ enrichedOrders, user }){
@@ -9854,7 +9786,7 @@ function HomeTab({ enrichedOrders, currentUser, setTab }){
 }
 
 function DashboardTab({ enrichedOrders, produtos, user, metas, salvarMetas, sub, setSub }){
-  var subs=[["geral","Visão geral"],["estados","Estados"],["margem","Margem por pedido"],["estoque","Estoque de produtos"],["clientes","Clientes"],["abc","Curva ABC"],["metas","Metas"]];
+  var subs=[["geral","Visão geral"],["estados","Estados"],["margem","Margem por pedido"],["clientes","Clientes"],["abc","Curva ABC"],["metas","Metas"]];
   return (
     <div style={{ padding:"2px" }}>
       <div style={{ display:"flex", gap:2, borderBottom:"2px solid var(--border)", marginBottom:14, overflowX:"auto" }}>
@@ -9864,7 +9796,6 @@ function DashboardTab({ enrichedOrders, produtos, user, metas, salvarMetas, sub,
       {sub==="geral" && <DashboardGeral enrichedOrders={enrichedOrders} />}
       {sub==="estados" && <EstadosDash enrichedOrders={enrichedOrders} />}
       {sub==="margem" && <MargemPedidoDash enrichedOrders={enrichedOrders} />}
-      {sub==="estoque" && <EstoqueDash produtos={produtos} />}
       {sub==="clientes" && <ClientesDash enrichedOrders={enrichedOrders} user={user} />}
       {sub==="abc" && <CurvaAbcDash enrichedOrders={enrichedOrders} />}
       {sub==="metas" && <MetasDash metas={metas} salvar={salvarMetas} enrichedOrders={enrichedOrders} />}
@@ -16087,7 +16018,6 @@ export default function App() {
               { sub:"geral", label:"Visão geral" },
               { sub:"estados", label:"Estados" },
               { sub:"margem", label:"Margem por pedido" },
-              { sub:"estoque", label:"Estoque de produtos" },
               { sub:"clientes", label:"Clientes" },
               { sub:"abc", label:"Curva ABC" },
               { sub:"metas", label:"Metas" },

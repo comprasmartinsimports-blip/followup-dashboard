@@ -3422,28 +3422,66 @@ function TendenciasTab({ setTab, setBuscaPrecificacao, enriched }) {
 // O painel mostra o status HTTP e o começo da resposta de cada rota, sem
 // interpretar nada: é o que permite distinguir "a conta não tem permissão" de
 // "a rota mudou de endereço".
-const ROTAS_DIAGNOSTICO = [
-  { grupo:"Publicidade (Product Ads)", nome:"Anunciante da conta",
-    caminho:"/advertising/advertisers?product_id=PADS", cabecalhos:{ "api-version":"1" },
-    porque:"Diz se a conta tem cadastro de anunciante e qual o id usado nas demais chamadas." },
-  { grupo:"Publicidade (Product Ads)", nome:"Anunciante sem cabeçalho de versão",
-    caminho:"/advertising/advertisers?product_id=PADS",
-    porque:"Mesma rota sem o Api-Version, para saber se o cabeçalho é mesmo exigido." },
-  { grupo:"Publicidade (Product Ads)", nome:"Campanhas",
-    caminho:"/advertising/product_ads/campaigns?limit=3", cabecalhos:{ "api-version":"1" },
-    porque:"Lista de campanhas. Pode exigir o id do anunciante da primeira linha." },
-  { grupo:"Custos e faturamento", nome:"Períodos de faturamento",
-    caminho:"/billing/integration/periods?group=ML&document_type=BILL&offset=0&limit=3",
-    cabecalhos:{ "x-format-new":"true" },
-    porque:"É por aqui que vêm os períodos cobrados; o detalhe de cada um traz envio, retirada e armazenamento." },
-  { grupo:"Custos e faturamento", nome:"Períodos mensais",
-    caminho:"/billing/integration/monthly/periods?group=ML&document_type=BILL&limit=3",
-    cabecalhos:{ "x-format-new":"true" },
-    porque:"Variante mensal da rota acima — uma das duas costuma responder." },
-  { grupo:"Full (estoque e armazenamento)", nome:"Operações de estoque no Full",
-    caminho:"/stock/fulfillment/operations/search?limit=3",
-    porque:"Entradas, retiradas e ajustes do estoque no galpão do ML." },
-];
+// As rotas são descobertas em cadeia: o id do anunciante sai da primeira chamada
+// e alimenta as de campanha; a chave do período sai do faturamento e alimenta o
+// detalhe, que é onde moram envio, retirada e armazenamento. Sem encadear, cada
+// rodada de diagnóstico descobriria um degrau só.
+//
+// Onde há mais de um candidato é porque a API do ML mudou de forma entre versões
+// e a documentação pública não bate com o que responde: a lista pergunta a todos
+// e a resposta diz qual vale para ESTA conta.
+function rotasDiagnostico(ctx) {
+  var adv = ctx.advertiser_id;
+  var chave = ctx.periodo_key;
+  var vendedor = ctx.seller_id;
+  var lista = [
+    { grupo:"Publicidade (Product Ads)", nome:"Anunciante da conta",
+      caminho:"/advertising/advertisers?product_id=PADS", cabecalhos:{ "api-version":"1" },
+      porque:"Dá o id do anunciante, que as demais chamadas exigem.",
+      colher: function(d){ var a = d && d.advertisers && d.advertisers[0]; return a ? { advertiser_id: a.advertiser_id } : null; } },
+  ];
+  if (adv) {
+    lista.push(
+      { grupo:"Publicidade (Product Ads)", nome:"Campanhas — por anunciante na rota",
+        caminho:"/advertising/advertisers/" + adv + "/product_ads/campaigns?limit=3", cabecalhos:{ "api-version":"1" },
+        porque:"Formato em que o anunciante faz parte do caminho." },
+      { grupo:"Publicidade (Product Ads)", nome:"Campanhas — busca com anunciante",
+        caminho:"/advertising/product_ads/campaigns/search?advertiser_id=" + adv + "&limit=3", cabecalhos:{ "api-version":"1" },
+        porque:"Formato de busca, com o anunciante como parâmetro." },
+      { grupo:"Publicidade (Product Ads)", nome:"Campanhas — rota curta",
+        caminho:"/advertising/campaigns/search?advertiser_id=" + adv + "&limit=3", cabecalhos:{ "api-version":"2" },
+        porque:"Versão mais nova, sem o product_ads no meio." }
+    );
+  }
+  lista.push(
+    { grupo:"Custos e faturamento", nome:"Períodos mensais",
+      caminho:"/billing/integration/monthly/periods?group=ML&document_type=BILL&limit=3",
+      cabecalhos:{ "x-format-new":"true" },
+      porque:"Os períodos cobrados. A chave de um deles abre o detalhe.",
+      colher: function(d){ var r = d && d.results && d.results[0]; return r && r.key ? { periodo_key: r.key } : null; } }
+  );
+  if (chave) {
+    lista.push(
+      { grupo:"Custos e faturamento", nome:"Detalhe do período " + chave,
+        caminho:"/billing/integration/periods/key/" + chave + "/group/ML/details?document_type=BILL&limit=5",
+        cabecalhos:{ "x-format-new":"true" },
+        porque:"É AQUI que devem estar envio, retirada e armazenamento, linha a linha." },
+      { grupo:"Custos e faturamento", nome:"Resumo do período " + chave,
+        caminho:"/billing/integration/periods/key/" + chave + "/group/ML/summary?document_type=BILL",
+        cabecalhos:{ "x-format-new":"true" },
+        porque:"Mesmo período somado por tipo de cobrança — se responder, já é um demonstrativo pronto." }
+    );
+  }
+  if (vendedor) {
+    lista.push(
+      { grupo:"Full (estoque e armazenamento)", nome:"Operações de estoque no Full",
+        caminho:"/stock/fulfillment/operations/search?seller_id=" + vendedor + "&limit=3",
+        porque:"Entradas, retiradas e ajustes no galpão do ML — agora com o seller_id que faltava." }
+    );
+  }
+  return lista;
+}
+
 
 function DiagnosticoApisML({ user, token }) {
   const [rodando, setRodando] = useState(false);
@@ -3452,21 +3490,36 @@ function DiagnosticoApisML({ user, token }) {
   async function rodar() {
     setRodando(true);
     var saida = [];
-    for (var i = 0; i < ROTAS_DIAGNOSTICO.length; i++) {
-      var r = ROTAS_DIAGNOSTICO[i];
-      var caminho = r.caminho.replace("{user_id}", (user && user.id) || "");
-      var linha = { nome: r.nome, grupo: r.grupo, caminho: caminho, porque: r.porque };
-      try {
-        var res = await fetch(ML(caminho), { headers: Object.assign({}, r.cabecalhos || {}) });
-        linha.status = res.status;
-        var txt = await res.text();
-        linha.corpo = txt.slice(0, 400);
-      } catch (e) {
-        linha.status = 0;
-        linha.corpo = "falhou antes de responder: " + ((e && e.message) || "erro de rede");
+    var ctx = { seller_id: (user && user.id) || null };
+    var feitas = {};
+    // Roda em passadas: cada uma pode descobrir um valor (id do anunciante, chave
+    // do período) que abre rotas novas na passada seguinte.
+    for (var passada = 0; passada < 3; passada++) {
+      var rotas = rotasDiagnostico(ctx);
+      var novas = rotas.filter(function(r){ return !feitas[r.caminho]; });
+      if (!novas.length) break;
+      for (var i = 0; i < novas.length; i++) {
+        var r = novas[i];
+        feitas[r.caminho] = true;
+        var linha = { nome: r.nome, grupo: r.grupo, caminho: r.caminho, porque: r.porque };
+        try {
+          var res = await fetch(ML(r.caminho), { headers: Object.assign({}, r.cabecalhos || {}) });
+          linha.status = res.status;
+          var txt = await res.text();
+          linha.corpo = txt.slice(0, 700);
+          if (r.colher && res.ok) {
+            try {
+              var colhido = r.colher(JSON.parse(txt));
+              if (colhido) { ctx = Object.assign({}, ctx, colhido); linha.colhido = colhido; }
+            } catch (e) {}
+          }
+        } catch (e) {
+          linha.status = 0;
+          linha.corpo = "falhou antes de responder: " + ((e && e.message) || "erro de rede");
+        }
+        saida.push(linha);
+        setResultados(saida.slice());
       }
-      saida.push(linha);
-      setResultados(saida.slice());
     }
     setRodando(false);
   }
@@ -3513,6 +3566,11 @@ function DiagnosticoApisML({ user, token }) {
                   </div>
                   <div style={{ fontSize:11, color:"var(--text-3)", marginTop:3 }}>{l.porque}</div>
                   <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:4, fontFamily:"monospace", wordBreak:"break-all" }}>{l.caminho}</div>
+                  {l.colhido && (
+                    <div style={{ fontSize:11, color:"#0a9d4e", marginTop:3 }}>
+                      Daqui saiu: {Object.keys(l.colhido).map(function(k){ return k + " = " + l.colhido[k]; }).join(", ")}
+                    </div>
+                  )}
                   <pre style={{ fontSize:10.5, color:"var(--text-2)", background:"var(--bg)", borderRadius:6,
                                 padding:"7px 9px", marginTop:6, whiteSpace:"pre-wrap", wordBreak:"break-all", maxHeight:150, overflow:"auto" }}>{l.corpo}</pre>
                 </div>

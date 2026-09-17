@@ -6,7 +6,11 @@ import {
 } from "recharts";
 import { BR_VIEWBOX, BR_ESTADOS } from "./brazilMap.js";
 
-import { freteML, FRETE_ML_TABELA_VERSAO, FRETE_ML_TABELA_FONTE } from "./freteML.js";
+import {
+  freteML, FRETE_ML_TABELA_VERSAO, FRETE_ML_TABELA_FONTE,
+  FRETE_ML_FAIXAS_PRECO, FRETE_ML_ROTULOS_PRECO, FRETE_ML_VALORES,
+  rotuloFaixaPeso, tabelaFreteValida, tabelaFreteOficial,
+} from "./freteML.js";
 
 const ML = (path) => `/api/ml${path}`;
 // Separador de milhar importa numa tela de dinheiro: "R$ 10100,00" e
@@ -743,10 +747,28 @@ function pesoConsideradoML(p) {
 // metades: o peso que o ML considera (balança ou cubagem) e a tabela de custos.
 // Devolve null quando falta o peso ou o preço — e a tela diz qual falta, em vez
 // de mostrar um frete que ninguém sabe de onde veio.
+// A tabela em uso. Fica aqui fora, atualizada num ponto só (o efeito no App que
+// observa a configuração), porque o cálculo do frete acontece em cada linha da
+// Precificação — mais de 500 delas. Ler e interpretar a configuração a cada linha
+// custaria caro, e passar a tabela de mão em mão por quatro componentes só
+// espalharia a chance de um deles ficar para trás com a tabela velha.
+var _tabelaFreteEmUso = null;   // null = a tabela oficial do arquivo
+var _versaoFreteEmUso = "";     // rótulo da versão editada, quando existir
+function definirTabelaFreteML(valores, versao) {
+  _tabelaFreteEmUso = tabelaFreteValida(valores) ? valores : null;
+  _versaoFreteEmUso = _tabelaFreteEmUso ? String(versao || "").trim() : "";
+}
+// A versão a mostrar em quem exibe frete. Uma tabela editada sem rótulo ainda
+// precisa se anunciar como editada: calar seria deixar a tela afirmar a data
+// oficial em cima de valores que já não são os oficiais.
+function versaoTabelaFreteML() {
+  if (!_tabelaFreteEmUso) return FRETE_ML_TABELA_VERSAO;
+  return _versaoFreteEmUso || "Tabela editada em Configurações";
+}
 function freteMLdoProduto(produto, preco, tabelaEditada) {
   var pm = pesoConsideradoML(produto);
   if (!pm || !(preco > 0)) return null;
-  var r = freteML(pm.peso, preco, tabelaEditada);
+  var r = freteML(pm.peso, preco, tabelaEditada || _tabelaFreteEmUso);
   if (!r) return null;
   return Object.assign({}, r, { peso: pm.peso, origemPeso: pm.origem });
 }
@@ -1010,7 +1032,7 @@ function ProdutoPagina({ produto, produtos, fornecedores, enriched, onSave, onCl
                 O custo vale para toda venda, mesmo quando o comprador paga o envio. Muda com o preço
                 do anúncio: o mesmo produto a R$ 78 e a R$ 79 cai em faixas diferentes.
               </div>
-              <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:6 }}>{FRETE_ML_TABELA_VERSAO}</div>
+              <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:6 }}>{versaoTabelaFreteML()}</div>
             </div>
           </div>}
 
@@ -1371,6 +1393,166 @@ function CampoFiltro(props){
 // a caixa que é quase sempre a mesma. Preenchidos uma vez aqui, valem para todos
 // os anúncios; a Precificação continua aceitando um valor diferente por anúncio,
 // e esse valor é que manda naquela linha.
+// Tabela de custos de envio do Mercado Livre, editável. O ML reajusta esses
+// valores de tempos em tempos e uma tabela velha não dá erro: dá um número errado
+// com cara de certo, e a margem fica furada sem ninguém perceber. Por isso a data
+// da versão aparece em toda tela que usa o frete.
+function TabelaFreteMLTab({ cfg, salvar }) {
+  const editada = tabelaFreteValida(cfg && cfg.valores);
+  const [valores, setValores] = useState(function(){
+    return editada ? (cfg.valores || []).map(function(l){ return l.slice(); }) : tabelaFreteOficial();
+  });
+  const [versao, setVersao] = useState(function(){ return (cfg && cfg.versao) || ""; });
+  const [editando, setEditando] = useState(null); // "linha|coluna"
+  const [salvo, setSalvo] = useState("");
+
+  var original = tabelaFreteOficial();
+  var alteradas = 0;
+  valores.forEach(function(l, i){ l.forEach(function(v, j){ if (parseFloat(v) !== original[i][j]) alteradas++; }); });
+  var valida = tabelaFreteValida(valores);
+  // Mudou em relação ao que está guardado?
+  var guardadas = editada ? cfg.valores : original;
+  var pendente = JSON.stringify(valores.map(function(l){ return l.map(Number); }))
+              !== JSON.stringify(guardadas.map(function(l){ return l.map(Number); }))
+              || String(versao || "") !== String((cfg && cfg.versao) || "");
+
+  function mudar(i, j, txt) {
+    setValores(function(prev){
+      var n = prev.map(function(l){ return l.slice(); });
+      n[i][j] = txt;
+      return n;
+    });
+  }
+  function aplicar() {
+    if (!valida) return;
+    salvar({
+      valores: valores.map(function(l){ return l.map(function(v){ return parseFloat(v); }); }),
+      versao: String(versao || "").trim(),
+      atualizadoEm: new Date().toISOString(),
+    });
+    setSalvo("Tabela salva. Já vale para a Precificação e para o cadastro dos produtos.");
+    setTimeout(function(){ setSalvo(""); }, 4000);
+  }
+  function restaurar() {
+    if (!window.confirm("Voltar aos valores originais da tabela oficial? As suas edições serão perdidas.")) return;
+    setValores(tabelaFreteOficial());
+    setVersao("");
+    salvar({});
+    setSalvo("Voltou para a tabela oficial do sistema.");
+    setTimeout(function(){ setSalvo(""); }, 4000);
+  }
+
+  var th = { fontSize:10.5, color:"var(--text-2)", fontWeight:600, padding:"7px 8px",
+             borderBottom:"1px solid var(--border)", whiteSpace:"nowrap", textAlign:"right", background:"var(--surface-3)" };
+  var td = { fontSize:11.5, padding:"4px 6px", borderBottom:"1px solid var(--border-soft)", textAlign:"right", whiteSpace:"nowrap" };
+
+  return (
+    <div style={{ padding:2 }}>
+      <div style={{ fontWeight:600, fontSize:20, color:"var(--text-strong)" }}>Custos de envio do Mercado Livre</div>
+      <div style={{ fontSize:13, color:"var(--text-3)", marginBottom:14, lineHeight:1.5, maxWidth:760 }}>
+        É esta tabela que preenche o frete na Precificação e no cadastro do produto. O peso usado é
+        o maior entre a balança e a cubagem (comprimento × largura × altura ÷ 4000), e a coluna é
+        a faixa de preço do anúncio.
+      </div>
+
+      <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
+        <div style={{ display:"flex", flexWrap:"wrap", gap:16, alignItems:"flex-end" }}>
+          <div style={{ flex:"1 1 320px", minWidth:260 }}>
+            <label style={{ display:"block", fontSize:11, color:"var(--text-3)", fontWeight:600, marginBottom:4 }}>
+              Versão desta tabela
+            </label>
+            <input value={versao} onChange={function(e){ setVersao(e.target.value); }}
+              placeholder={FRETE_ML_TABELA_VERSAO}
+              style={{ width:"100%", background:"var(--bg)", border:"1px solid var(--border)", color:"var(--text-strong)",
+                       padding:"9px 10px", borderRadius:8, fontSize:12.5, boxSizing:"border-box" }} />
+            <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:4 }}>
+              Aparece nas telas que mostram o frete. Escreva a data da tabela para ninguém precificar
+              em cima de valores velhos sem perceber.
+            </div>
+          </div>
+          <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+            <button onClick={aplicar} disabled={!pendente || !valida}
+              style={{ background: (pendente && valida) ? "var(--ui-accent)" : "var(--surface-3)", border:"none",
+                       color: (pendente && valida) ? "var(--ui-accent-text)" : "var(--text-4)", fontWeight:600,
+                       padding:"10px 22px", borderRadius:8, cursor: (pendente && valida) ? "pointer" : "not-allowed", fontSize:13 }}>
+              Salvar tabela
+            </button>
+            <button onClick={restaurar}
+              style={{ background:"none", border:"1px solid var(--border)", color:"var(--text-2)",
+                       padding:"10px 16px", borderRadius:8, cursor:"pointer", fontSize:12.5 }}>
+              Voltar à oficial
+            </button>
+          </div>
+        </div>
+        <div style={{ marginTop:12, fontSize:12, color: valida ? "var(--text-3)" : "#FF5252", lineHeight:1.55 }}>
+          {!valida
+            ? "Há célula vazia ou com valor inválido. Enquanto isso, a tabela não pode ser salva — meia tabela daria frete errado em parte do catálogo, sem aviso."
+            : alteradas === 0
+              ? "Nenhum valor diferente da tabela oficial."
+              : alteradas + " valor(es) diferentes da tabela oficial."}
+        </div>
+        {salvo && <div style={{ marginTop:8, fontSize:12.5, color:"#0a9d4e", fontWeight:600 }}>{salvo}</div>}
+        <div style={{ marginTop:10, fontSize:11, color:"var(--text-4)" }}>
+          Em uso agora: {editada ? ((cfg.versao || "tabela editada por você")
+            + (cfg.atualizadoEm ? " · salva em " + fmtDate(cfg.atualizadoEm) : ""))
+            : FRETE_ML_TABELA_VERSAO}
+          {" · "}
+          <a href={FRETE_ML_TABELA_FONTE} target="_blank" rel="noreferrer" style={{ color:"#0e7490" }}>ver no Mercado Livre</a>
+        </div>
+      </div>
+
+      <div className="tabela-wrap" style={{ overflowX:"auto" }}>
+        <table style={{ borderCollapse:"collapse", width:"100%", minWidth:900 }}>
+          <thead>
+            <tr>
+              <th style={Object.assign({}, th, { textAlign:"left", position:"sticky", left:0, zIndex:1 })}>Peso</th>
+              {FRETE_ML_ROTULOS_PRECO.map(function(r){ return <th key={r} style={th}>{r}</th>; })}
+            </tr>
+          </thead>
+          <tbody>
+            {valores.map(function(linha, i){
+              return (
+                <tr key={i}>
+                  <td style={Object.assign({}, td, { textAlign:"left", color:"var(--text-2)", fontWeight:500,
+                        position:"sticky", left:0, background:"var(--bg)" })}>{rotuloFaixaPeso(i)}</td>
+                  {linha.map(function(v, j){
+                    var mudou = parseFloat(v) !== original[i][j];
+                    var ruim = !(parseFloat(v) >= 0);
+                    return (
+                      <td key={j} style={td}>
+                        {editando === i + "|" + j ? (
+                          <input type="number" step="0.01" min="0" defaultValue={v} autoFocus
+                            onBlur={function(e){ mudar(i, j, e.target.value); setEditando(null); }}
+                            onKeyDown={function(e){ if (e.key === "Enter") e.target.blur(); }}
+                            style={{ width:70, background:"var(--surface)", border:"1px solid #0e7490", color:"var(--text-strong)",
+                                     padding:"2px 5px", borderRadius:5, fontSize:11.5, outline:"none", textAlign:"right" }} />
+                        ) : (
+                          <span onClick={function(){ setEditando(i + "|" + j); }}
+                            title={mudou ? "Oficial: R$ " + original[i][j].toFixed(2).replace(".",",") : "Clique para editar"}
+                            style={{ cursor:"pointer", fontWeight: mudou ? 600 : 400,
+                                     color: ruim ? "#FF5252" : mudou ? "#FFC107" : "var(--text-2)" }}>
+                            {ruim ? "—" : parseFloat(v).toFixed(2).replace(".",",")}
+                          </span>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ fontSize:11.5, color:"var(--text-4)", marginTop:12, lineHeight:1.6, maxWidth:760 }}>
+        Vale para produtos novos enviados por Full, Coleta e Agências. Categorias especiais, livros,
+        usados e Full Super têm tabelas próprias, que não estão aqui. Produto abaixo de R$ 19 paga no
+        máximo metade do preço — essa regra é aplicada sozinha, não precisa estar na tabela.
+      </div>
+    </div>
+  );
+}
+
 function CustosPadraoTab({ custosPadrao, salvar, custosExtras }) {
   const [etiqueta, setEtiqueta] = useState(function(){ var v = (custosPadrao||{}).etiqueta; return v > 0 ? String(v) : ""; });
   const [embalagem, setEmbalagem] = useState(function(){ var v = (custosPadrao||{}).embalagem; return v > 0 ? String(v) : ""; });
@@ -4084,6 +4266,7 @@ var ROTULO_DADO = {
   contas_bancarias: "Caixas e bancos",
   categorias_pagar: "Categorias de contas",
   custos_padrao_config: "Custos padrão de etiqueta e embalagem",
+  frete_ml_tabela: "Tabela de custos de envio do ML",
   lancamentos: "Lançamentos",
   custos_fixos_config: "Custos fixos",
   impostos_config: "Impostos",
@@ -9622,6 +9805,7 @@ function HomeTab({ enrichedOrders, currentUser, setTab }){
       perm.includes("admin") && { key:"admin", label:"Equipe", desc:"Usuários e permissões" },
       { key:"categorias_pagar", label:"Categorias de contas", desc:"Classificação das despesas" },
       perm.includes("listings") && { key:"custos_padrao", label:"Custos padrão por peça", desc:"Etiqueta e embalagem de toda venda" },
+      perm.includes("listings") && { key:"frete_ml", label:"Custos de envio do ML", desc:"Tabela de frete por peso e faixa de preço" },
       { key:"backup", label:"Backup e recuperação", desc:"Cópia dos dados e versões guardadas" },
       { key:"analise_ia", label:"Análise de anúncios", desc:"Critérios da nota e regras para a IA" },
       { key:"integracoes", label:"Integrações", desc:"Conexões e marketplaces" },
@@ -14072,6 +14256,21 @@ export default function App() {
   // Etiqueta e embalagem valem quase sempre o mesmo em toda a operação: a mesma
   // impressora, a mesma caixa. Estes são os valores padrão, usados em todo anúncio
   // que não tiver um valor próprio preenchido na Precificação.
+  // Tabela de custos de envio do ML, quando editada nas Configurações. Vazio
+  // significa "usar a tabela oficial do arquivo".
+  const [freteTabelaCfg, setFreteTabelaCfg] = useState(function() {
+    try { return JSON.parse(localStorage.getItem("frete_ml_tabela") || "{}"); } catch { return {}; }
+  });
+  function salvarFreteTabela(cfg) {
+    setFreteTabelaCfg(cfg);
+    try { localStorage.setItem("frete_ml_tabela", JSON.stringify(cfg)); } catch {}
+    kvSyncPush("frete_ml_tabela", cfg, { permitirVazio: true });
+  }
+  // Um ponto só decide qual tabela vale, e todo cálculo de frete lê dele.
+  useEffect(function(){
+    definirTabelaFreteML(freteTabelaCfg && freteTabelaCfg.valores, freteTabelaCfg && freteTabelaCfg.versao);
+  }, [freteTabelaCfg]);
+
   const [custosPadrao, setCustosPadrao] = useState(function() {
     try { return JSON.parse(localStorage.getItem("custos_padrao_config") || "{}"); } catch { return {}; }
   });
@@ -14748,7 +14947,7 @@ export default function App() {
     "custos_fixos_config","impostos_config","irpj_csll_config","icms_por_estado","icms_regime_config","lancamentos",
     "mov_estoque","metaMensal","margem_alvo_config","min_stock_anuncios","real_fees_config","pedidos_compra",
     "precificacao_extras","precos_pendentes_ml","custos_extras_config","depositos_estoque","estoque_depositos",
-    "envios_full","vendas_estoque_baixadas","sku_overrides","analise_ia_config","prioridade_pagamento_config","financeiro_config","recebiveis_baixados","extrato_bancario","conciliacoes_manuais","reclamacoes_analise","tags_itens","custos_padrao_config",
+    "envios_full","vendas_estoque_baixadas","sku_overrides","analise_ia_config","prioridade_pagamento_config","financeiro_config","recebiveis_baixados","extrato_bancario","conciliacoes_manuais","reclamacoes_analise","tags_itens","custos_padrao_config","frete_ml_tabela",
   ]).current;
   // Para os dados guardados como dicionário (chave→valor, ex: custo por anúncio), mesclar em
   // vez de substituir por inteiro — evita que um "pull" com dados parciais do servidor apague
@@ -14792,6 +14991,7 @@ export default function App() {
     sku_overrides: mesclarSetter(setSkuOverrides),
     custos_extras_config: mesclarSetter(setCustosExtras),
     custos_padrao_config: mesclarSetter(setCustosPadrao),
+    frete_ml_tabela: function(v){ setFreteTabelaCfg(v && typeof v === "object" ? v : {}); },
     analise_ia_config: function(v){ setConfigQualidade(v); },
     prioridade_pagamento_config: mesclarSetter(setConfigPrioridadeState),
     financeiro_config: mesclarSetter(setFinanceiroConfigState),
@@ -14812,7 +15012,7 @@ export default function App() {
     precos_venda_config: "object", precos_pendentes_ml: "object", irpj_csll_config: "object",
     icms_regime_config: "object", icms_por_estado: "object",
     min_stock_anuncios: "object", real_fees_config: "object", sku_overrides: "object",
-    custos_extras_config: "object", custos_padrao_config: "object", analise_ia_config: "object",
+    custos_extras_config: "object", custos_padrao_config: "object", frete_ml_tabela: "object", analise_ia_config: "object",
     prioridade_pagamento_config: "object",
     financeiro_config: "object", recebiveis_baixados: "object",
     extrato_bancario: "array", conciliacoes_manuais: "object", reclamacoes_analise: "object", tags_itens: "object",
@@ -15876,6 +16076,7 @@ export default function App() {
               currentUser?.permissoes?.includes("admin") && { key:"admin", label:"Equipe" },
               { key:"categorias_pagar", label:"Categorias de contas" },
               currentUser?.permissoes?.includes("listings") && { key:"custos_padrao", label:"Custos padrão por peça" },
+              currentUser?.permissoes?.includes("listings") && { key:"frete_ml", label:"Custos de envio do ML" },
               { key:"backup", label:"Backup e recuperação" },
               { key:"analise_ia", label:"Análise de anúncios" },
               { key:"integracoes", label:"Integrações" },
@@ -16481,6 +16682,7 @@ export default function App() {
         {tab === "categorias_pagar" && <CategoriasPagarTab categorias={categoriasPagar} salvar={salvarCategoriasPagar}
           contasPagar={contasPagar} salvarContasPagar={salvarContasPagar} setTab={setTab} />}
         {tab === "custos_padrao" && <CustosPadraoTab custosPadrao={custosPadrao} salvar={setCustosPadraoAndSave} custosExtras={custosExtras} />}
+        {tab === "frete_ml" && <TabelaFreteMLTab cfg={freteTabelaCfg} salvar={salvarFreteTabela} />}
         {tab === "analise_ia" && <AnaliseIATab config={configQualidade} salvar={setConfigQualidade} enriched={enriched} />}
         {tab === "produtos" && <ProdutosTab produtos={produtos} salvar={salvarProdutos} fornecedores={fornecedores} enriched={enriched} tags={tagsItens} salvarTags={salvarTagsItens} />}
         {tab === "estoque" && <EstoqueTab produtos={produtos} />}

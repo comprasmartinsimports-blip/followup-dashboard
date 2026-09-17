@@ -117,3 +117,25 @@ export function freteML(peso, preco, valores) {
     observacao: observacao,
   };
 }
+
+// Uma tabela editada só entra em uso se estiver íntegra: mesmo número de linhas e
+// colunas da oficial, e todo valor um número não negativo. Meia tabela aplicada é
+// pior do que tabela nenhuma — daria frete errado em parte do catálogo, sem aviso.
+export function tabelaFreteValida(valores) {
+  if (!Array.isArray(valores) || valores.length !== FRETE_ML_VALORES.length) return false;
+  for (var i = 0; i < valores.length; i++) {
+    var linha = valores[i];
+    if (!Array.isArray(linha) || linha.length !== FRETE_ML_FAIXAS_PRECO.length) return false;
+    for (var j = 0; j < linha.length; j++) {
+      var v = parseFloat(linha[j]);
+      if (!isFinite(v) || v < 0) return false;
+    }
+  }
+  return true;
+}
+
+// Cópia da tabela oficial, para a tela de edição começar de algum lugar e para o
+// botão de restaurar ter o que restaurar.
+export function tabelaFreteOficial() {
+  return FRETE_ML_VALORES.map(function(l){ return l.slice(); });
+}

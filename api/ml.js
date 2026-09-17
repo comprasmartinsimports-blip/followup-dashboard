@@ -73,6 +73,7 @@ const SYNC_KEYS_PERMITIDAS = [
   "analise_ia_config",
   "custos_extras_config",
   "custos_padrao_config",
+  "frete_ml_tabela",
 ];
 
 // "Vazio" é o que não carrega informação nenhuma: nulo, lista sem itens ou

@@ -740,15 +740,28 @@ function custoDoAnuncio(listing, costs, porSku) {
 
 // O produto cadastrado por trás de um anúncio: pelo vínculo de MLB e, na falta
 // dele, pelo SKU. É por aqui que a Precificação alcança as medidas da caixa.
-function produtoDoAnuncioML(produtos, mlb, sku) {
-  var lista = produtos || [];
-  var p = lista.find(function(x){ return (x.mlbsVinculados || []).indexOf(mlb) >= 0 || x.mlbVinculado === mlb; });
+//
+// A pergunta é feita uma vez por linha da tabela, a cada redesenho. Varrendo o
+// cadastro duas vezes por linha, 200 linhas e algumas centenas de produtos viram
+// dezenas de milhares de comparações a cada tecla digitada num campo de preço.
+// Por isso a busca é feita sobre um índice montado uma vez.
+function indiceProdutosML(produtos) {
+  var porMlb = {}, porSku = {};
+  (produtos || []).forEach(function(x){
+    // O primeiro do cadastro vence, como vencia na varredura.
+    (x.mlbsVinculados || []).forEach(function(m){ if (m && porMlb[m] === undefined) porMlb[m] = x; });
+    if (x.mlbVinculado && porMlb[x.mlbVinculado] === undefined) porMlb[x.mlbVinculado] = x;
+    var sk = x.sku ? String(x.sku).toLowerCase() : "";
+    if (sk && porSku[sk] === undefined) porSku[sk] = x;
+  });
+  return { porMlb: porMlb, porSku: porSku };
+}
+function produtoDoAnuncioML(indice, mlb, sku) {
+  if (!indice) return null;
+  var p = indice.porMlb[mlb];
   if (p) return p;
-  if (sku) {
-    var q = lista.find(function(x){ return x.sku && String(x.sku).toLowerCase() === String(sku).toLowerCase(); });
-    if (q) return q;
-  }
-  return null;
+  var sk = sku ? String(sku).toLowerCase() : "";
+  return (sk && indice.porSku[sk]) || null;
 }
 
 // ── Peso que o Mercado Livre usa para cobrar o frete ─────────────────────────
@@ -13291,6 +13304,10 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
   const [editingDescId, setEditingDescId] = useState(null);
   const [editingSkuId, setEditingSkuId] = useState(null);
   const [custosLocais, setCustosLocais] = useState({});
+  // Índice do cadastro por MLB e por SKU. A linha procurava o produto varrendo a
+  // lista inteira duas vezes; com 200 linhas na tela e centenas de produtos, isso
+  // rodava a cada tecla digitada num campo de preço ou desconto.
+  const indiceProdutos = useMemo(function(){ return indiceProdutosML(produtos); }, [produtos]);
   // Sub-aba do marketplace (Mercado Livre / Shopee) e tipo de documento p/ a taxa da Shopee.
   const [mktSel, setMktSel] = useState("ml");
   const [shopeeDoc, setShopeeDoc] = useState(function(){ try { return localStorage.getItem("shopee_doc") || "CNPJ"; } catch { return "CNPJ"; } });
@@ -13767,7 +13784,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
               // que o ML cobrou de fato neste anúncio; e, na falta dos dois, a tabela de
               // custos de envio, aplicada às medidas do produto e ao preço desta simulação.
               // A tabela depende do preço, então o valor acompanha o que você está simulando.
-              var prodDoAnuncio = produtoDoAnuncioML(produtos, l.id, l.seller_sku || l.sku);
+              var prodDoAnuncio = produtoDoAnuncioML(indiceProdutos, l.id, l.seller_sku || l.sku);
               var freteTabela = freteMLdoProduto(prodDoAnuncio, precoComDesc);
               var frete = freteConfig > 0 ? freteConfig
                         : freteReal > 0 ? freteReal
@@ -13867,7 +13884,20 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                     {isEditing ? (
                       <input type="number" step="0.01" defaultValue={custoHerdado ? "" : custo}
                         placeholder={custoHerdado ? custo.toFixed(2) : "0,00"}
-                        onChange={function(e){ var v=parseFloat(e.target.value)||0; setCustosLocais(function(c){return {...c,[l.id]:v};}); setCostsAndSave(function(c){return {...c,[l.id]:v};}); }}
+                        onChange={function(e){
+                          var v=parseFloat(e.target.value)||0;
+                          setCustosLocais(function(c){return {...c,[l.id]:v};});
+                          setCostsAndSave(function(c){return {...c,[l.id]:v};});
+                          // Produto precificado aqui guarda o custo DENTRO do item, e a
+                          // coluna usa esse valor quando o mapa não tem o anúncio. Sem
+                          // atualizar os dois, zerar o custo não zerava nada: o valor
+                          // digitado no modal voltava no recarregamento.
+                          if (l._isExtra) {
+                            saveProdutosExtras(produtosExtras.map(function(x){
+                              return x.id === l.id ? Object.assign({}, x, { custo: v }) : x;
+                            }));
+                          }
+                        }}
                         onBlur={function(){ setSelectedId(null); }}
                         onKeyDown={function(e){ if(e.key==="Enter"){ e.target.blur(); } }}
                         autoFocus
@@ -14044,7 +14074,15 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                           value={_rDesc !== null ? _rDesc : (descPct||"")}
                           placeholder="0"
                           autoFocus
-                          onChange={function(e){ setRascunho({ campo:"desc", id:l.id, texto:e.target.value }); }}
+                          onChange={function(e){
+                            // Trava em 0–80 já na digitação: o campo mostrava 95 enquanto a
+                            // linha calculava com 80, e ao sair virava 80 sem aviso.
+                            var t = e.target.value;
+                            var n = parseFloat(t);
+                            if (isFinite(n) && n > 80) t = "80";
+                            if (isFinite(n) && n < 0) t = "0";
+                            setRascunho({ campo:"desc", id:l.id, texto:t });
+                          }}
                           onBlur={function(e){ var v=Math.min(80,Math.max(0,parseFloat(e.target.value)||0)); setRascunho(null); setDesconto(l.id,v); setEditingDescId(null); }}
                           onKeyDown={function(e){ if(e.key==="Enter"||e.key==="Escape") e.target.blur(); }}
                           style={{ width:46, background:"var(--surface)", border:"1px solid #768592", color:"var(--text-strong)", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none", textAlign:"center" }} />
@@ -15962,7 +16000,16 @@ export default function App() {
     // sumiram: um aparelho anotou o carimbo de uma leitura que descartou e
     // depois regravou a lista antiga dele no servidor.
     function aplicarDoServidor(key, v, carimboServidor) {
-      if (v == null) return true; // servidor não tem essa chave: nada a rever
+      if (v == null) {
+        // Nulo tem dois significados e eles não podem ser confundidos: o servidor
+        // não ter a chave, e a leitura não ter chegado (kvSyncPull devolve null em
+        // qualquer erro de rede, e o lote normaliza para null o que não resolveu).
+        // O carimbo desempata — só existe carimbo para chave que existe no servidor.
+        // Tratar leitura falha como "nada a rever" marcaria a versão do servidor
+        // como vista sem nunca tê-la recebido, que é exatamente o caminho que
+        // apagou 104 produtos.
+        return !carimboServidor;
+      }
       // Há algo editado aqui que ainda não foi enviado? Se houver, a resposta do
       // servidor não pode substituir a nossa cópia — só somar ao que temos.
       var rawLocalAntes = null;

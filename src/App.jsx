@@ -721,9 +721,17 @@ function mapaCustoPorSku(listings, costs) {
   return mapa;
 }
 // O custo a usar para um anúncio: o dele, e na falta dele o do irmão de mesmo SKU.
+//
+// Entre os dois entra o custo que o PRÓPRIO item carrega (produto precificado
+// aqui, ainda sem anúncio: o valor digitado no modal fica dentro dele). O custo
+// era lido só do mapa por id, e uma linha cujo mapa se perdeu aparecia sem
+// custo mesmo com o número guardado no item — foi o que deixou 78 produtos
+// precificados em 16 e 17/09 com a coluna Custo vazia depois de voltarem.
 function custoDoAnuncio(listing, costs, porSku) {
   var proprio = parseFloat((costs || {})[listing.id]);
   if (proprio > 0) return { valor: proprio, herdado: false };
+  var doItem = parseFloat(listing.custoProprio);
+  if (doItem > 0) return { valor: doItem, herdado: false };
   var sku = String(getSku(listing) || "").trim().toLowerCase();
   var irmao = sku && porSku ? porSku[sku] : null;
   if (irmao && !irmao.conflito) return { valor: irmao.valor, herdado: true };
@@ -13431,6 +13439,7 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
       price: parseFloat(p.precoVenda) || 0,
       listing_type_id: (parseFloat(p.taxaMl||12) >= 17) ? "gold_pro" : "gold_special",
       freteSeller: parseFloat(p.frete) || 0,
+      custoProprio: parseFloat(p.custo) || 0, // o custo digitado no modal, que mora no próprio item
       status: "active", _isExtra: true, marketplace: p.marketplace || "ml",
     };
   });

@@ -15926,8 +15926,18 @@ export default function App() {
       });
     }
     // Aplica neste navegador o valor que o servidor tem para uma chave.
+    //
+    // Devolve TRUE quando a versão do servidor pode ser dada por vista aqui —
+    // ou porque foi aplicada, ou porque foi recusada de propósito. Devolve
+    // FALSE quando só adiamos a decisão (leitura que cruzou com um envio
+    // nosso, vazio sem carimbo que prove). A diferença não é detalhe: quem
+    // anota o carimbo de uma versão que NÃO aplicou passa a se considerar em
+    // dia com um dado que não tem — e, na primeira edição local, reenvia a
+    // cópia velha por cima da boa. Foi assim que 104 produtos precificados
+    // sumiram: um aparelho anotou o carimbo de uma leitura que descartou e
+    // depois regravou a lista antiga dele no servidor.
     function aplicarDoServidor(key, v, carimboServidor) {
-      if (v == null) return;
+      if (v == null) return true; // servidor não tem essa chave: nada a rever
       // Há algo editado aqui que ainda não foi enviado? Se houver, a resposta do
       // servidor não pode substituir a nossa cópia — só somar ao que temos.
       var rawLocalAntes = null;
@@ -15941,13 +15951,13 @@ export default function App() {
       // mesclagem não sabe apagar, um item removido voltaria para sempre.
       // Dentro da janela abaixo, só aceitamos o que bate com o que enviamos.
       var envio = ultimoEnvioLocal[key];
-      if (envio && Date.now() - envio.em < 20000 && JSON.stringify(v) !== envio.raw) return;
+      if (envio && Date.now() - envio.em < 20000 && JSON.stringify(v) !== envio.raw) return false;
       // Blindagem: se a chave tem um tipo esperado (lista/objeto) e o valor que veio do
       // servidor não bate, ignora — evita aplicar um dado corrompido/incompatível que
       // quebraria qualquer tela que faça .filter()/.map()/.forEach() nele.
       var tipoEsperado = SYNC_TIPO_ESPERADO[key];
-      if (tipoEsperado === "array" && !Array.isArray(v)) return;
-      if (tipoEsperado === "object" && (Array.isArray(v) || typeof v !== "object" || v === null)) return;
+      if (tipoEsperado === "array" && !Array.isArray(v)) return true;      // recusa consciente
+      if (tipoEsperado === "object" && (Array.isArray(v) || typeof v !== "object" || v === null)) return true;
       // Aqui havia uma mescla para "precificacao_extras" que preservava os extras
       // deste navegador que o servidor da conta atual não tinha. A intenção era não
       // perder precificação ao trocar de conta — e o efeito foi o oposto: um
@@ -15972,10 +15982,10 @@ export default function App() {
       if (valorVazio(v)) {
         var localAtual = null;
         try { localAtual = JSON.parse(localStorage.getItem(key) || "null"); } catch(e) {}
-        if (!valorVazio(localAtual) && !servidorMaisNovo) return;
+        if (!valorVazio(localAtual) && !servidorMaisNovo) return false;
       }
       var raw = JSON.stringify(v);
-      if (lastSyncRef.current[key] === raw) return; // já é o que temos
+      if (lastSyncRef.current[key] === raw) return true; // já é o que temos
       lastSyncRef.current[key] = raw;
       try { localStorage.setItem(key, raw); } catch(e) {}
       var setter = SYNC_ROOT_SETTERS[key];
@@ -15983,21 +15993,23 @@ export default function App() {
       // Avisa componentes que leem essa chave direto do localStorage (ex: produtos extras
       // da Precificação) para que a mudança de outro usuário apareça na hora, sem reload.
       try { window.dispatchEvent(new CustomEvent("mlmargem-sync", { detail: { key: key, value: v } })); } catch(e) {}
+      return true;
     }
     // Baixa estas chaves e aplica. Uma requisição para todas; se o servidor não
     // souber responder em lote, volta ao modo uma por chave — ficar sem
     // sincronizar seria pior do que gastar requisições.
     function baixarEAplicar(keys, carimbos) {
-      if (!keys.length) return Promise.resolve();
+      if (!keys.length) return Promise.resolve([]);
       var carimboDe = function(k){ return carimbos ? carimbos[k] : null; };
       return kvSyncPullMuitos(keys).then(function(lote){
         if (lote) {
-          keys.forEach(function(key){ aplicarDoServidor(key, lote[key], carimboDe(key)); });
-          return;
+          return keys.filter(function(key){ return aplicarDoServidor(key, lote[key], carimboDe(key)); });
         }
         return Promise.all(keys.map(function(key){
-          return kvSyncPull(key).then(function(v){ aplicarDoServidor(key, v, carimboDe(key)); });
-        }));
+          return kvSyncPull(key).then(function(v){
+            return aplicarDoServidor(key, v, carimboDe(key)) ? key : null;
+          });
+        })).then(function(r){ return r.filter(Boolean); });
       });
     }
     // Qual versão do servidor cada chave já tem aplicada aqui. Guardado no
@@ -16017,8 +16029,11 @@ export default function App() {
           return !(k in carimbosVistos) || carimbosVistos[k] !== carimbos[k];
         });
         if (!mudaram.length) return;
-        return baixarEAplicar(mudaram, carimbos).then(function(){
-          mudaram.forEach(function(k){ carimbosVistos[k] = carimbos[k]; });
+        return baixarEAplicar(mudaram, carimbos).then(function(aplicadas){
+          // Só entra aqui a chave cuja versão do servidor este navegador de fato
+          // resolveu. O que ficou de fora volta a ser baixado no próximo ciclo,
+          // em vez de ser esquecido como se já estivesse em dia.
+          (aplicadas || []).forEach(function(k){ carimbosVistos[k] = carimbos[k]; });
           guardarCarimbos();
         });
       });

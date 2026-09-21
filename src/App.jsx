@@ -13310,6 +13310,15 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
   }
   // Preços de venda sugeridos (digitados pelo usuário)
   const [editingPrecoId, setEditingPrecoId] = useState(null);
+  // O que está sendo digitado AGORA numa célula de preço ou de desconto, antes de
+  // ser salvo. Os dois campos eram não-controlados e só gravavam ao sair da célula:
+  // quem trocava o desconto de 15% para 20% via lucro e margem parados no 15% até
+  // clicar fora, e concluía — com razão — que a conta não estava acompanhando.
+  // Aqui o valor digitado já entra na conta da linha; sair da célula é que grava.
+  const [rascunho, setRascunho] = useState(null); // { campo:"desc"|"preco", id, texto }
+  function rascunhoDe(campo, id) {
+    return rascunho && rascunho.campo === campo && rascunho.id === id ? rascunho.texto : null;
+  }
   const [showNovoProdutoPrec, setShowNovoProdutoPrec] = useState(false);
   const [produtosExtras, setProdutosExtras] = useState(function(){
     try { return JSON.parse(localStorage.getItem("precificacao_extras")||"[]"); } catch { return []; }
@@ -13736,8 +13745,13 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
               var taxa = l.fee || bruto * 0.13;
               var freteReal = l.freteSeller || 0;
               var freteConfig = parseFloat(fretesConfig&&fretesConfig[l.id]||0);
-              var precoVendaDesejado = parseFloat(precosVendaConfig&&precosVendaConfig[l.id]||0);
-              var descPct = parseFloat(descontosConfig&&descontosConfig[l.id]||0);
+              var _rPreco = rascunhoDe("preco", l.id), _rDesc = rascunhoDe("desc", l.id);
+              var precoVendaDesejado = _rPreco !== null
+                ? (parseFloat(_rPreco) || 0)
+                : parseFloat(precosVendaConfig&&precosVendaConfig[l.id]||0);
+              var descPct = _rDesc !== null
+                ? Math.min(80, Math.max(0, parseFloat(_rDesc) || 0))
+                : parseFloat(descontosConfig&&descontosConfig[l.id]||0);
 
               // Preço a ANUNCIAR: se o usuário definiu o preço de venda desejado (o que o cliente
               // deve pagar depois do desconto), calculamos o preço de anúncio necessário para que,
@@ -13987,10 +14001,11 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                         <div style={{ display:"flex", alignItems:"center", gap:3 }}>
                           <span style={{ fontSize:10, color:"var(--text-3)" }}>R$</span>
                           <input type="number" step="0.01" min="0"
-                            defaultValue={precoVendaDesejado||""}
+                            value={_rPreco !== null ? _rPreco : (precoVendaDesejado||"")}
                             placeholder={bruto.toFixed(2)}
                             autoFocus
-                            onBlur={function(e){ var v=parseFloat(e.target.value)||0; setPrecoVenda(l.id,v); setEditingPrecoId(null); }}
+                            onChange={function(e){ setRascunho({ campo:"preco", id:l.id, texto:e.target.value }); }}
+                            onBlur={function(e){ var v=parseFloat(e.target.value)||0; setRascunho(null); setPrecoVenda(l.id,v); setEditingPrecoId(null); }}
                             onKeyDown={function(e){ if(e.key==="Enter"||e.key==="Escape") e.target.blur(); }}
                             style={{ width:78, background:"var(--surface)", border:"1px solid #768592", color:"var(--text-strong)", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none", textAlign:"right" }} />
                         </div>
@@ -14026,10 +14041,11 @@ function PrecificacaoTab({ enriched, costs, setCostsAndSave, fretesConfig, setFr
                     {editingDescId === l.id ? (
                       <div style={{ display:"flex", alignItems:"center", gap:3 }}>
                         <input type="number" min="0" max="80" step="1"
-                          defaultValue={descPct||""}
+                          value={_rDesc !== null ? _rDesc : (descPct||"")}
                           placeholder="0"
                           autoFocus
-                          onBlur={function(e){ var v=Math.min(80,Math.max(0,parseFloat(e.target.value)||0)); setDesconto(l.id,v); setEditingDescId(null); }}
+                          onChange={function(e){ setRascunho({ campo:"desc", id:l.id, texto:e.target.value }); }}
+                          onBlur={function(e){ var v=Math.min(80,Math.max(0,parseFloat(e.target.value)||0)); setRascunho(null); setDesconto(l.id,v); setEditingDescId(null); }}
                           onKeyDown={function(e){ if(e.key==="Enter"||e.key==="Escape") e.target.blur(); }}
                           style={{ width:46, background:"var(--surface)", border:"1px solid #768592", color:"var(--text-strong)", padding:"3px 6px", borderRadius:6, fontSize:12, outline:"none", textAlign:"center" }} />
                         <span style={{ fontSize:11, color:"var(--text-3)" }}>%</span>

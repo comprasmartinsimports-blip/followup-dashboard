@@ -16089,17 +16089,53 @@ export default function App() {
     // servidor mudou desde a cópia que este aparelho carrega.
     var carimbosVistos = {};
     try { carimbosVistos = JSON.parse(localStorage.getItem("sync_carimbos_vistos") || "{}") || {}; } catch(e) { carimbosVistos = {}; }
+    // Os carimbos anotados pela versão que dava por vista uma leitura descartada
+    // não valem nada: o aparelho pode estar "em dia" com um dado que nunca
+    // recebeu, e essa anotação fica no localStorage dele para sempre. Uma vez por
+    // aparelho, joga fora e baixa tudo de novo, agora com anotação honesta.
+    var SELO_CARIMBOS = "2026-09-21";
+    try {
+      if (localStorage.getItem("sync_carimbos_selo") !== SELO_CARIMBOS) {
+        carimbosVistos = {};
+        localStorage.removeItem("sync_carimbos_vistos");
+        localStorage.setItem("sync_carimbos_selo", SELO_CARIMBOS);
+      }
+    } catch(e) {}
     function guardarCarimbos(){
       try { localStorage.setItem("sync_carimbos_vistos", JSON.stringify(carimbosVistos)); } catch(e) {}
+    }
+    // Abrir o sistema não pode valer como "editei tudo". Antes da primeira leva
+    // de envios, toda chave que o servidor JÁ TEM e que não precisou ser baixada
+    // entra como sincronizada: o envio só carrega o que mudar daqui para frente.
+    //
+    // Sem isto, lastSyncRef começava vazio a cada carga da página e o primeiro
+    // envio mandava a cópia local INTEIRA por cima do servidor — 17 chaves
+    // gravadas no mesmo segundo, toda vez que alguém abria o sistema. Era assim
+    // que um aparelho parado desde antevéspera reescrevia o painel de todo mundo,
+    // e foi assim que os produtos precificados sumiram duas vezes.
+    //
+    // Chave que o servidor não tem (carimbo nulo) fica de fora: essa a cópia
+    // daqui precisa mesmo subir, senão um aparelho novo nunca publicaria nada.
+    var primeiraPuxada = true;
+    function marcarJaSincronizadas(carimbos, baixadas) {
+      SYNC_ALL_KEYS.forEach(function(k){
+        if (baixadas.indexOf(k) >= 0) return;
+        if (!carimbos || !carimbos[k]) return;
+        try {
+          var raw = localStorage.getItem(k);
+          if (raw != null) lastSyncRef.current[k] = raw;
+        } catch(e) {}
+      });
     }
     function puxarDoServidor() {
       // Primeiro pergunta o que mudou (resposta minúscula), depois baixa só isso.
       // Na maioria dos ciclos nada mudou e nenhum dado trafega.
       return kvSyncCarimbos(SYNC_ALL_KEYS).then(function(carimbos){
-        if (!carimbos) return baixarEAplicar(SYNC_ALL_KEYS, null); // servidor sem carimbos: baixa tudo
+        if (!carimbos) { primeiraPuxada = false; return baixarEAplicar(SYNC_ALL_KEYS, null); } // servidor sem carimbos: baixa tudo
         var mudaram = SYNC_ALL_KEYS.filter(function(k){
           return !(k in carimbosVistos) || carimbosVistos[k] !== carimbos[k];
         });
+        if (primeiraPuxada) { marcarJaSincronizadas(carimbos, mudaram); primeiraPuxada = false; }
         if (!mudaram.length) return;
         return baixarEAplicar(mudaram, carimbos).then(function(aplicadas){
           // Só entra aqui a chave cuja versão do servidor este navegador de fato
